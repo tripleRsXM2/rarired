@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supabase } from './supabase.js';
 
 const PILOT_VENUE = { id: "sydney-boys", name: "Sydney Boys High School", suburb: "Moore Park", address: "556 Cleveland St, Moore Park", url: "[https://www.tennisvenues.com.au/booking/sydney-boys-high-school](https://www.tennisvenues.com.au/booking/sydney-boys-high-school)", courts: ["Court 1","Court 2","Court 3","Court 4"], hours: "6am-11pm", emoji: "SB" };
 
@@ -62,6 +63,40 @@ document.head.appendChild(el);
 return function() { var o = document.getElementById("cs-css"); if (o) o.remove(); };
 }, []);
 
+// ── Supabase: session restore + auth listener ──────────────────────────────
+useEffect(function() {
+  supabase.auth.getSession().then(function(r) {
+    var session = r.data.session;
+    if (session) loadUserData(session.user);
+  });
+  var sub = supabase.auth.onAuthStateChange(function(_event, session) {
+    if (session) { loadUserData(session.user); } else { setAuthUser(null); }
+  });
+  return function() { sub.data.subscription.unsubscribe(); };
+}, []);
+
+// ── Supabase: load tournaments on mount ────────────────────────────────────
+useEffect(function() {
+  supabase.from('tournaments').select('*').then(function(r) {
+    if (r.data && r.data.length > 0) setTournaments(r.data);
+  });
+}, []);
+
+async function loadUserData(user) {
+  var init = (user.user_metadata.name || user.email).split(" ").map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();
+  setAuthUser({ id: user.id, name: user.user_metadata.name || user.email.split("@")[0], email: user.email, avatar: init });
+  var r = await supabase.from('profiles').select('*').eq('id', user.id).single();
+  if (r.data) {
+    setProfile(r.data);
+  } else {
+    var defaults = { id: user.id, name: user.user_metadata.name || user.email.split("@")[0], suburb: "Sydney", skill: "Intermediate", style: "All-Court", bio: "", avatar: init, availability: {} };
+    setProfile(defaults);
+    await supabase.from('profiles').upsert(defaults);
+  }
+  var hr = await supabase.from('match_history').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+  if (hr.data) setHistory(hr.data);
+}
+
 var [tab, setTab] = useState("home");
 var [authUser, setAuthUser] = useState(null);
 var [showAuth, setShowAuth] = useState(false);
@@ -79,11 +114,7 @@ var [editingAvail, setEditingAvail] = useState(false);
 var [profileDraft, setProfileDraft] = useState(profile);
 var [availDraft, setAvailDraft] = useState({});
 
-var [tournaments, setTournaments] = useState([
-{ id: "t1", name: "Sydney Spring Open", skill: "Intermediate", size: 16, status: "enrolling", entrants: [], startDate: "2026-05-10", deadlineDays: 14, rounds: [], city: "Sydney" },
-{ id: "t2", name: "Moore Park Beginner Cup", skill: "Beginner", size: 8, status: "enrolling", entrants: [], startDate: "2026-04-26", deadlineDays: 14, rounds: [], city: "Sydney" },
-{ id: "t3", name: "Eastern Suburbs Open", skill: "Advanced", size: 32, status: "enrolling", entrants: [], startDate: "2026-05-24", deadlineDays: 14, rounds: [], city: "Sydney" },
-]);
+var [tournaments, setTournaments] = useState([]);
 var [selectedTournId, setSelectedTournId] = useState(null);
 var [filterSkill, setFilterSkill] = useState("All");
 var [history, setHistory] = useState([]);
@@ -106,9 +137,8 @@ setTournaments(function(prev) {
 return prev.map(function(t2) {
 if (t2.id !== tournId || t2.entrants.some(function(e) { return e.id === myId; })) return t2;
 var newE = { id: myId, name: profile.name, avatar: profile.avatar || "YN", skill: profile.skill };
-var updated = {};
-Object.keys(t2).forEach(function(k) { updated[k] = t2[k]; });
-updated.entrants = t2.entrants.concat([newE]);
+var updated = Object.assign({}, t2, { entrants: t2.entrants.concat([newE]) });
+supabase.from('tournaments').upsert(updated);
 return updated;
 });
 });
@@ -134,9 +164,8 @@ for (var k = 0; k < entrants.length; k += 2) {
 var dl = new Date(); dl.setDate(dl.getDate() + t2.deadlineDays);
 matches.push({ id: "m" + Date.now() + k, p1: entrants[k] || null, p2: entrants[k + 1] || null, winner: null, sets: [], status: "scheduled", deadline: dl.toISOString().split("T")[0], scheduledDate: "", scheduledTime: "", scheduledCourt: "" });
 }
-var updated = {}; Object.keys(t2).forEach(function(k) { updated[k] = t2[k]; });
-updated.status = "active";
-updated.rounds = [{ round: 1, matches: matches }];
+var updated = Object.assign({}, t2, { status: "active", rounds: [{ round: 1, matches: matches }] });
+supabase.from('tournaments').upsert(updated);
 return updated;
 });
 });
@@ -174,8 +203,8 @@ fin.status = "completed"; fin.rounds = newRounds; fin.winner = winners[0];
 return fin;
 }
 }
-var fin2 = {}; Object.keys(t2).forEach(function(k) { fin2[k] = t2[k]; });
-fin2.rounds = newRounds;
+var fin2 = Object.assign({}, t2, { rounds: newRounds });
+supabase.from('tournaments').upsert(fin2);
 return fin2;
 });
 });
@@ -185,16 +214,15 @@ var scheduleMatch = function(tournId, roundIdx, matchId, date, time, court) {
 setTournaments(function(prev) {
 return prev.map(function(t2) {
 if (t2.id !== tournId) return t2;
-var updated = {}; Object.keys(t2).forEach(function(k) { updated[k] = t2[k]; });
-updated.rounds = t2.rounds.map(function(r, ri) {
+var newRounds = t2.rounds.map(function(r, ri) {
 if (ri !== roundIdx) return r;
 return { round: r.round, matches: r.matches.map(function(m) {
 if (m.id !== matchId) return m;
-var mu = {}; Object.keys(m).forEach(function(k) { mu[k] = m[k]; });
-mu.scheduledDate = date; mu.scheduledTime = time; mu.scheduledCourt = court;
-return mu;
+return Object.assign({}, m, { scheduledDate: date, scheduledTime: time, scheduledCourt: court });
 })};
 });
+var updated = Object.assign({}, t2, { rounds: newRounds });
+supabase.from('tournaments').upsert(updated);
 return updated;
 });
 });
@@ -227,7 +255,7 @@ return (
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button onClick={function() { setDark(function(d) { return !d; }); }} style={{ background: "transparent", border: "1px solid " + t.border, borderRadius: 9, padding: "5px 10px", fontSize: 12, color: t.textSecondary }}>{dark ? "Light" : "Dark"}</button>
         {authUser
-          ? <button onClick={function() { setAuthUser(null); }} style={{ width: 32, height: 32, borderRadius: "50%", background: t.accent, border: "none", fontSize: 11, fontWeight: 800, color: t.accentText, cursor: "pointer" }} title="Tap to sign out">{profile.avatar}</button>
+          ? <button onClick={function() { supabase.auth.signOut(); }} style={{ width: 32, height: 32, borderRadius: "50%", background: t.accent, border: "none", fontSize: 11, fontWeight: 800, color: t.accentText, cursor: "pointer" }} title="Tap to sign out">{profile.avatar}</button>
           : <button onClick={function() { setShowAuth(true); setAuthMode("login"); setAuthStep("choose"); }} style={{ background: "transparent", border: "1px solid " + t.accent, borderRadius: 9, padding: "5px 12px", fontSize: 12, fontWeight: 600, color: t.accent, cursor: "pointer" }}>Log in</button>
         }
       </div>
@@ -681,7 +709,7 @@ return (
           })}
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button onClick={function(){setEditingProfile(false);}} style={{flex:1,padding:"13px",borderRadius:13,border:"none",background:t.bgTertiary,color:t.text,fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
-            <button onClick={function(){var init=(profileDraft.name||"YN").split(" ").map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();var nd={};Object.keys(profileDraft).forEach(function(k){nd[k]=profileDraft[k];});nd.avatar=init;setProfile(nd);setEditingProfile(false);}} style={{flex:2,padding:"13px",borderRadius:13,border:"none",background:t.accent,color:t.accentText,fontSize:14,fontWeight:600,cursor:"pointer"}}>Save</button>
+            <button onClick={function(){var init=(profileDraft.name||"YN").split(" ").map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();var nd=Object.assign({},profileDraft,{avatar:init});setProfile(nd);setEditingProfile(false);if(authUser){supabase.from('profiles').upsert(Object.assign({},nd,{id:authUser.id}));}}} style={{flex:2,padding:"13px",borderRadius:13,border:"none",background:t.accent,color:t.accentText,fontSize:14,fontWeight:600,cursor:"pointer"}}>Save</button>
           </div>
         </div>
       )}
@@ -733,6 +761,7 @@ return (
               if (!newTourn.name) return;
               var nt = { id: "t"+Date.now(), name: newTourn.name, skill: newTourn.skill, size: newTourn.size, status: "enrolling", entrants: [], startDate: newTourn.startDate, deadlineDays: newTourn.deadlineDays, rounds: [], city: "Sydney" };
               setTournaments(function(prev){return prev.concat([nt]);});
+              supabase.from('tournaments').insert(nt);
               setNewTourn({name:"",skill:"Intermediate",size:16,startDate:"",deadlineDays:14});
             }} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:t.accent,color:t.accentText,fontSize:14,fontWeight:700,cursor:"pointer"}}>Create Tournament</button>
           </div>
@@ -750,7 +779,7 @@ return (
                       <div style={{ fontSize: 12, color: t.textSecondary }}>{t2.skill + " - " + t2.size + " players - $" + fee + " entry - " + t2.entrants.length + " enrolled"}</div>
                       <div style={{ fontSize: 12, color: t.accent, marginTop: 2 }}>{"Revenue so far: $" + revenue}</div>
                     </div>
-                    <select value={t2.status} onChange={function(e){var v=e.target.value;var id=t2.id;setTournaments(function(prev){return prev.map(function(x){if(x.id!==id)return x;var n={};Object.keys(x).forEach(function(k){n[k]=x[k];});n.status=v;return n;});});}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid "+sc,background:"transparent",color:sc,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                    <select value={t2.status} onChange={function(e){var v=e.target.value;var id=t2.id;setTournaments(function(prev){return prev.map(function(x){if(x.id!==id)return x;var n=Object.assign({},x,{status:v});supabase.from('tournaments').upsert(n);return n;});});}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid "+sc,background:"transparent",color:sc,fontSize:12,fontWeight:600,cursor:"pointer"}}>
                       <option value="enrolling">Enrolling</option>
                       <option value="active">Active</option>
                       <option value="completed">Completed</option>
@@ -898,8 +927,9 @@ return (
           <button onClick={function(){setScoreModal(null);}} style={{flex:1,padding:"13px",borderRadius:13,border:"none",background:t.bgTertiary,color:t.text,fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
           <button onClick={function(){
             var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
-            var nm={id:Date.now(),oppName:scoreModal.oppName,tournName:scoreModal.tournName,date:fmtShort(new Date()),sets:clean,result:scoreDraft.result,notes:""};
+            var nm={id:"h"+Date.now(),oppName:scoreModal.oppName,tournName:scoreModal.tournName,date:fmtShort(new Date()),sets:clean,result:scoreDraft.result,notes:""};
             setHistory(function(h){return[nm].concat(h);});
+            if(authUser){supabase.from('match_history').insert(Object.assign({},nm,{user_id:authUser.id,match_date:nm.date}));}
             if(scoreModal.winnerId1&&scoreModal.winnerId2){
               var winnerId=scoreDraft.result==="win"?scoreModal.winnerId1:scoreModal.winnerId2;
               recordResult(scoreModal.tournId,scoreModal.roundIdx,scoreModal.matchId,winnerId);
@@ -934,16 +964,16 @@ return (
             <div style={{marginBottom:12}}><label style={{fontSize:12,fontWeight:600,color:t.textSecondary,display:"block",marginBottom:6}}>Email</label><input type="email" value={authEmail} onChange={function(e){setAuthEmail(e.target.value);setAuthError("");}} placeholder="you@example.com" style={{width:"100%",padding:"13px 16px",borderRadius:12,border:"1px solid "+(authError?t.red:t.border),background:t.inputBg,color:t.text,fontSize:15}} /></div>
             <div style={{marginBottom:20}}><label style={{fontSize:12,fontWeight:600,color:t.textSecondary,display:"block",marginBottom:6}}>Password</label><input type="password" value={authPassword} onChange={function(e){setAuthPassword(e.target.value);setAuthError("");}} placeholder={authMode==="signup"?"Min 6 characters":"Your password"} style={{width:"100%",padding:"13px 16px",borderRadius:12,border:"1px solid "+(authError?t.red:t.border),background:t.inputBg,color:t.text,fontSize:15}} /></div>
             {authError&&<p style={{fontSize:13,color:t.red,marginBottom:12,textAlign:"center"}}>{authError}</p>}
-            <button onClick={function(){
+            <button onClick={async function(){
               if(!authEmail||!authPassword){setAuthError("Please fill in all fields.");return;}
               if(authMode==="signup"&&!authName){setAuthError("Please enter your name.");return;}
-              setAuthLoading(true);
-              setTimeout(function(){
-                var init=(authName||authEmail).split(" ").map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();
-                setAuthUser({id:"u"+Date.now(),name:authName||authEmail.split("@")[0],email:authEmail,avatar:init});
-                setProfile(function(p){var n={};Object.keys(p).forEach(function(k){n[k]=p[k];});n.name=authName||p.name;n.avatar=init;return n;});
-                setAuthLoading(false);setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthPassword("");setAuthName("");
-              },900);
+              setAuthLoading(true);setAuthError("");
+              var r = authMode==="signup"
+                ? await supabase.auth.signUp({email:authEmail,password:authPassword,options:{data:{name:authName}}})
+                : await supabase.auth.signInWithPassword({email:authEmail,password:authPassword});
+              setAuthLoading(false);
+              if(r.error){setAuthError(r.error.message);return;}
+              setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthPassword("");setAuthName("");
             }} disabled={authLoading} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:t.accent,color:t.accentText,fontSize:15,fontWeight:700,cursor:authLoading?"default":"pointer",opacity:authLoading?0.7:1}}>
               {authLoading?"Please wait...":(authMode==="signup"?"Create account":"Log in")}
             </button>
