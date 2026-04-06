@@ -19,6 +19,24 @@ const DAYS_SHORT   = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const TIME_BLOCKS  = ["Morning","Afternoon","Evening","Late"];
 const AV_COLORS    = ["#0071e3","#34c759","#ff9500","#ff3b30","#5856d6","#af52de","#ff2d55"];
 
+const BOT_PLAYERS = [
+  {id:"bot-1",  name:"Alex Chen",     avatar:"AC", skill:"Intermediate"},
+  {id:"bot-2",  name:"Jordan Smith",  avatar:"JS", skill:"Intermediate"},
+  {id:"bot-3",  name:"Sam Williams",  avatar:"SW", skill:"Intermediate"},
+  {id:"bot-4",  name:"Riley Brown",   avatar:"RB", skill:"Intermediate"},
+  {id:"bot-5",  name:"Morgan Davis",  avatar:"MD", skill:"Intermediate"},
+  {id:"bot-6",  name:"Taylor Wilson", avatar:"TW", skill:"Intermediate"},
+  {id:"bot-7",  name:"Casey Moore",   avatar:"CM", skill:"Intermediate"},
+  {id:"bot-8",  name:"Jamie Taylor",  avatar:"JT", skill:"Intermediate"},
+  {id:"bot-9",  name:"Drew Anderson", avatar:"DA", skill:"Intermediate"},
+  {id:"bot-10", name:"Quinn Thomas",  avatar:"QT", skill:"Intermediate"},
+  {id:"bot-11", name:"Blake Jackson", avatar:"BJ", skill:"Intermediate"},
+  {id:"bot-12", name:"Reese White",   avatar:"RW", skill:"Intermediate"},
+  {id:"bot-13", name:"Avery Harris",  avatar:"AH", skill:"Intermediate"},
+  {id:"bot-14", name:"Parker Martin", avatar:"PM", skill:"Intermediate"},
+  {id:"bot-15", name:"Skyler Lee",    avatar:"SL", skill:"Intermediate"},
+];
+
 function makeTheme(dark) {
   if (dark) return {
     bg:"#080f1c", bgCard:"#0d1a2e", bgTertiary:"#121f35", surfaceSolid:"#0d1a2e",
@@ -71,6 +89,85 @@ function roundLabel(roundNum,size){
   if(m===1)return"Final";if(m===2)return"Semifinals";if(m===4)return"Quarterfinals";
   return"Round of "+(m*2);
 }
+// Fully resolves all bot-vs-bot matches in a tournament object (mutates a deep copy).
+// Also auto-generates semis and final when conditions are met.
+function autoResolveBots(tournament, realUserId) {
+  var t2 = JSON.parse(JSON.stringify(tournament));
+
+  function resolvePass() {
+    var changed = false;
+    t2.rounds = t2.rounds.map(function(r) {
+      return Object.assign({}, r, { matches: r.matches.map(function(m) {
+        if (m.status === "complete" || !m.p1 || !m.p2) return m;
+        if (m.p1.id === realUserId || m.p2.id === realUserId) return m;
+        changed = true;
+        var winner = Math.random() > 0.5 ? m.p1.id : m.p2.id;
+        return Object.assign({}, m, { winner: winner, status: "complete" });
+      })});
+    });
+    return changed;
+  }
+
+  function checkLeagueComplete() {
+    var leagueRounds = t2.rounds.filter(function(r) { return r.type === "league"; });
+    if (!leagueRounds.length) return false;
+    return leagueRounds.every(function(r) {
+      return r.matches.every(function(m) { return m.status === "complete" || !m.p2; });
+    });
+  }
+
+  function checkSemiComplete() {
+    var sr = t2.rounds.find(function(r) { return r.type === "semi"; });
+    return sr && sr.matches.every(function(m) { return m.status === "complete"; });
+  }
+
+  // Run resolution passes; after each pass check if we should generate next stage
+  for (var iter = 0; iter < 20; iter++) {
+    resolvePass();
+
+    var hasSemi = t2.rounds.find(function(r) { return r.type === "semi"; });
+    var hasFinal = t2.rounds.find(function(r) { return r.type === "final"; });
+
+    if (checkLeagueComplete() && !hasSemi) {
+      var standings = computeStandings(t2);
+      var top4 = standings.slice(0, 4);
+      if (top4.length >= 2) {
+        var dl = new Date(); dl.setDate(dl.getDate() + (t2.deadlineDays || 14));
+        var dlStr = dl.toISOString().split("T")[0];
+        t2.rounds.push({ round: t2.rounds.length + 1, type: "semi", matches: [
+          { id: "sf1"+Date.now()+Math.random(), p1: top4[0], p2: top4[3] || null, winner: null, sets: [], status: "scheduled", deadline: dlStr, scheduledDate: "", scheduledTime: "", scheduledCourt: "" },
+          { id: "sf2"+Date.now()+Math.random(), p1: top4[1], p2: top4[2] || null, winner: null, sets: [], status: "scheduled", deadline: dlStr, scheduledDate: "", scheduledTime: "", scheduledCourt: "" },
+        ]});
+      }
+      continue;
+    }
+
+    if (checkSemiComplete() && !hasFinal) {
+      var sr = t2.rounds.find(function(r) { return r.type === "semi"; });
+      var sf1 = sr.matches[0], sf2 = sr.matches[1];
+      var w1 = sf1.winner === sf1.p1.id ? sf1.p1 : sf1.p2;
+      var w2 = sf2 && sf2.winner ? (sf2.winner === sf2.p1.id ? sf2.p1 : sf2.p2) : null;
+      var dl2 = new Date(); dl2.setDate(dl2.getDate() + (t2.deadlineDays || 14));
+      t2.rounds.push({ round: t2.rounds.length + 1, type: "final", matches: [
+        { id: "f1"+Date.now()+Math.random(), p1: w1, p2: w2, winner: null, sets: [], status: "scheduled", deadline: dl2.toISOString().split("T")[0], scheduledDate: "", scheduledTime: "", scheduledCourt: "" }
+      ]});
+      continue;
+    }
+
+    var finalRound = t2.rounds.find(function(r) { return r.type === "final"; });
+    if (finalRound && finalRound.matches[0] && finalRound.matches[0].status === "complete") {
+      var fm = finalRound.matches[0];
+      var champ = fm.winner === fm.p1.id ? fm.p1 : fm.p2;
+      t2.status = "completed";
+      t2.winner = champ;
+    }
+
+    break;
+  }
+
+  return t2;
+}
+
 function computeStandings(tournament){
   var players={};
   (tournament.entrants||[]).forEach(function(e){
@@ -443,6 +540,26 @@ export default function App() {
     });
   };
 
+  var seedTournament=function(tournId){
+    requireAuth(function(){
+      setTournaments(function(prev){
+        return prev.map(function(t2){
+          if(t2.id!==tournId)return t2;
+          var existing=(t2.entrants||[]).map(function(e){return e.id;});
+          var me={id:myId,name:profile.name,avatar:profile.avatar||"YN",skill:profile.skill};
+          var toAdd=BOT_PLAYERS.filter(function(b){return!existing.includes(b.id);}).slice(0,15);
+          var allEntrants=(t2.entrants||[]).concat(toAdd);
+          if(!existing.includes(myId))allEntrants=[me].concat(toAdd);
+          // cap at tournament size
+          allEntrants=allEntrants.slice(0,t2.size);
+          var updated=Object.assign({},t2,{entrants:allEntrants});
+          supabase.from('tournaments').upsert(updated);
+          return updated;
+        });
+      });
+    });
+  };
+
   var generateDraw=function(tournId){
     setTournaments(function(prev){
       return prev.map(function(t2){
@@ -475,6 +592,8 @@ export default function App() {
             })});
           }
           updated=Object.assign({},t2,{status:"active",rounds:newRounds});
+          // auto-resolve all bot-vs-bot league matches immediately
+          updated=autoResolveBots(updated,myId);
         } else {
           var matches=[];
           for(var k=0;k<entrants.length;k+=2){
@@ -482,6 +601,7 @@ export default function App() {
             matches.push({id:"m"+Date.now()+k,p1:entrants[k]||null,p2:entrants[k+1]||null,winner:null,sets:[],status:"scheduled",deadline:dl2.toISOString().split("T")[0],scheduledDate:"",scheduledTime:"",scheduledCourt:""});
           }
           updated=Object.assign({},t2,{status:"active",rounds:[{round:1,matches:matches}]});
+          updated=autoResolveBots(updated,myId);
         }
         supabase.from('tournaments').upsert(updated);
         return updated;
@@ -539,7 +659,7 @@ export default function App() {
               return fin;
             }
           }
-          var fin2=Object.assign({},t2,{rounds:newRounds});
+          var fin2=autoResolveBots(Object.assign({},t2,{rounds:newRounds}),myId);
           supabase.from('tournaments').upsert(fin2);
           return fin2;
         } else {
@@ -560,7 +680,7 @@ export default function App() {
               return finE;
             }
           }
-          var finE2=Object.assign({},t2,{rounds:newRounds});
+          var finE2=autoResolveBots(Object.assign({},t2,{rounds:newRounds}),myId);
           supabase.from('tournaments').upsert(finE2);
           return finE2;
         }
@@ -1521,7 +1641,15 @@ export default function App() {
                   var fillPct2=Math.round((t2.entrants||[]).length/t2.size*100);
                   return(
                     <div key={t2.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:14,padding:"14px 16px"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:3}}>{t2.name}</div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                        <div style={{fontSize:13,fontWeight:700,color:t.text}}>{t2.name}</div>
+                        {(t2.entrants||[]).length<t2.size&&(
+                          <button onClick={function(){seedTournament(t2.id);}}
+                            style={{padding:"5px 12px",borderRadius:8,border:"1px solid "+t.purple+"55",background:t.purpleSubtle,color:t.purple,fontSize:11,fontWeight:700}}>
+                            + Seed players
+                          </button>
+                        )}
+                      </div>
                       <div style={{fontSize:12,color:t.textSecondary,marginBottom:10}}>{(t2.entrants||[]).length+" of "+t2.size+" enrolled · "+(t2.format==="league"?"League":"Elimination")}</div>
                       <div style={{height:5,background:t.bgTertiary,borderRadius:3,overflow:"hidden",marginBottom:10}}>
                         <div style={{height:"100%",width:fillPct2+"%",background:full?t.green:t.accent,borderRadius:3}}/>
