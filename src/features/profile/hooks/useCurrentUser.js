@@ -37,15 +37,16 @@ export function useCurrentUser(){
     setShowOnboarding(true);
   }
 
-  function bumpMatchStats(authUserId, friendResult){
-    setProfile(function(p){
-      var newWins=(p.wins||0)+(friendResult==="win"?1:0);
-      var newLosses=(p.losses||0)+(friendResult==="loss"?1:0);
-      var newPlayed=(p.matches_played||0)+1;
-      var newPts=Math.max(0,1000+newWins*15-newLosses*10);
-      upsertProfile({id:authUserId,wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
-      return Object.assign({},p,{wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
-    });
+  async function bumpMatchStats(authUserId, friendResult){
+    // Fetch ground truth from DB so multi-device state doesn't drift
+    var r=await fetchProfile(authUserId);
+    var p=r.data||{};
+    var newWins=(p.wins||0)+(friendResult==="win"?1:0);
+    var newLosses=(p.losses||0)+(friendResult==="loss"?1:0);
+    var newPlayed=(p.matches_played||0)+1;
+    var newPts=Math.max(0,1000+newWins*15-newLosses*10);
+    await upsertProfile({id:authUserId,wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
+    setProfile(function(prev){return Object.assign({},prev,{wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});});
   }
 
   function resetProfile(){

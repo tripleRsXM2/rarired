@@ -7,9 +7,7 @@ export function fetchFriendRequests(userId){
 export function fetchBlocks(userId){
   return supabase.from('blocks').select('blocked_id').eq('blocker_id',userId);
 }
-export function fetchProfilesByIds(ids, fields){
-  return supabase.from('profiles').select(fields||'id,name,avatar').in('id',ids);
-}
+export { fetchProfilesByIds } from "../../../lib/db.js";
 export function fetchSuggestedPlayers(userId, suburb, excludeIds){
   return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played')
     .neq('id',userId).eq('suburb',suburb||"Sydney")

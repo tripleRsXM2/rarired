@@ -1,12 +1,13 @@
 // src/features/notifications/hooks/useNotifications.js
 import { useState } from "react";
 import * as N from "../services/notificationService.js";
-import { fetchProfilesByIds } from "../../people/services/socialService.js";
-import { markMatchTagStatus } from "../../scoring/services/matchService.js";
+import { fetchProfilesByIds } from "../../../lib/db.js";
 
 export function useNotifications(opts){
   var authUser=(opts&&opts.authUser)||null;
   var onMatchTagAccepted=opts&&opts.onMatchTagAccepted;
+  // Callback to update tag status on the match row — supplied by App.jsx to avoid cross-feature import
+  var updateMatchTagStatus=(opts&&opts.updateMatchTagStatus)||null;
 
   var [notifications,setNotifications]=useState([]);
   var [showNotifications,setShowNotifications]=useState(false);
@@ -37,7 +38,8 @@ export function useNotifications(opts){
   }
 
   async function acceptMatchTag(n){
-    var mr=await markMatchTagStatus(n.match_id,'accepted',true);
+    if(!updateMatchTagStatus){console.error('[acceptMatchTag] updateMatchTagStatus callback not provided');return;}
+    var mr=await updateMatchTagStatus(n.match_id,'accepted',true);
     await N.deleteNotification(n.id);
     setNotifications(function(ns){return ns.filter(function(x){return x.id!==n.id;});});
     setShowNotifications(false);
@@ -45,7 +47,8 @@ export function useNotifications(opts){
     if(mr.data&&onMatchTagAccepted) onMatchTagAccepted(mr.data);
   }
   async function declineMatchTag(n){
-    await markMatchTagStatus(n.match_id,'declined',false);
+    if(!updateMatchTagStatus){console.error('[declineMatchTag] updateMatchTagStatus callback not provided');return;}
+    await updateMatchTagStatus(n.match_id,'declined',false);
     await N.deleteNotification(n.id);
     setNotifications(function(ns){return ns.filter(function(x){return x.id!==n.id;});});
   }

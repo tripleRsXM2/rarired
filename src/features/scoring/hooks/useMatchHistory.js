@@ -1,12 +1,13 @@
 // src/features/scoring/hooks/useMatchHistory.js
 import { useState } from "react";
 import * as M from "../services/matchService.js";
-import { fetchProfilesByIds } from "../../people/services/socialService.js";
-import { insertNotification } from "../../notifications/services/notificationService.js";
-import { normalizeMatch } from "../utils/matchUtils.js";
+import { fetchProfilesByIds } from "../../../lib/db.js";
+import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
 
 export function useMatchHistory(opts){
   var authUser=(opts&&opts.authUser)||null;
+  var sendNotification=(opts&&opts.sendNotification)||null;
+  var bumpStats=(opts&&opts.bumpStats)||null;
 
   var [history,setHistory]=useState([]);
   var [feedLikes,setFeedLikes]=useState({});
@@ -15,11 +16,14 @@ export function useMatchHistory(opts){
   var [commentModal,setCommentModal]=useState(null);
   var [commentDraft,setCommentDraft]=useState("");
   var [casualOppName,setCasualOppName]=useState("");
+  var [casualOppId,setCasualOppId]=useState(null);
   var [showOppDrop,setShowOppDrop]=useState(false);
   var [scoreModal,setScoreModal]=useState(null);
   var [scoreDraft,setScoreDraft]=useState({sets:[{you:"",them:""}],result:"win",notes:"",date:""});
 
   async function loadHistory(userId){
+    // Expire any stale pending matches on the client side (no pg_cron available)
+    await M.expireStalePendingMatches(userId);
     var hr=await M.fetchOwnMatches(userId);
     var tr=await M.fetchTaggedMatches(userId);
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
@@ -51,14 +55,87 @@ export function useMatchHistory(opts){
     setHistory([]); setFeedLikes({}); setFeedLikeCounts({}); setFeedComments({});
   }
 
+  // Submit a new match result.
+  // Verified (opponent is a registered friend) → pending_confirmation, no stats yet.
+  // Casual (free-text opponent) → confirmed immediately, stats fire now.
+  async function submitMatch(params){
+    var scoreModal=params.scoreModal;
+    var scoreDraft=params.scoreDraft;
+    var oppName=params.oppName;
+    var opponentId=params.opponentId||null;
+
+    if(!authUser) return {error:'not_authenticated'};
+
+    var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
+    var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
+    var isVerified=!!opponentId;
+    var status=isVerified?'pending_confirmation':'confirmed';
+    var tournName=scoreModal.casual?'Casual Match':(scoreModal.tournName||'Casual Match');
+
+    // Compute hash for duplicate detection on verified matches
+    var hash=null;
+    if(isVerified){
+      hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
+    }
+
+    // Optimistic local entry
+    var localId='local-'+Date.now();
+    var nm={
+      id:localId, oppName, tournName,
+      date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
+      sets:clean, result:scoreDraft.result, notes:'',
+      status, opponent_id:opponentId, isTagged:false,
+    };
+    setHistory(function(h){return [nm].concat(h);});
+
+    // Build DB payload
+    var payload={
+      user_id:authUser.id,
+      opp_name:oppName,
+      tourn_name:tournName,
+      sets:clean,
+      result:scoreDraft.result,
+      notes:'',
+      match_date:matchDate,
+      status:status,
+      submitted_at:new Date().toISOString(),
+    };
+    if(opponentId) payload.opponent_id=opponentId;
+    if(hash) payload.match_hash=hash;
+    if(isVerified) payload.expires_at=new Date(Date.now()+72*60*60*1000).toISOString();
+
+    var ins=await M.insertMatch(payload);
+    if(ins.error){
+      setHistory(function(h){return h.filter(function(m){return m.id!==localId;});});
+      if(ins.error.code==='23505') return {error:'duplicate',message:'This match has already been logged.'};
+      return {error:ins.error.message};
+    }
+
+    var matchId=ins.data.id;
+    setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
+
+    // Notify opponent for verified matches
+    if(isVerified&&sendNotification){
+      await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
+    }
+
+    // Stats fire immediately only for casual/auto-confirmed matches
+    if(!isVerified&&bumpStats){
+      await bumpStats(authUser.id, scoreDraft.result);
+    }
+
+    return {error:null, matchId, status};
+  }
+
   async function deleteMatch(m){
     if(!authUser)return;
-    if(m.tagged_user_id&&m.tag_status==='accepted'){
-      await insertNotification({user_id:m.tagged_user_id,type:'match_deleted',from_user_id:authUser.id,match_id:m.id});
+    if((m.opponent_id||m.tagged_user_id)&&m.status==='confirmed'&&sendNotification){
+      await sendNotification({user_id:m.opponent_id||m.tagged_user_id,type:'match_deleted',from_user_id:authUser.id,match_id:m.id});
     }
     await M.deleteMatchRow(m.id, authUser.id);
     setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
   }
+
   async function removeTaggedMatch(m){
     await M.markMatchTagStatus(m.id,'declined',false);
     setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
@@ -78,7 +155,9 @@ export function useMatchHistory(opts){
       sets:m.sets||[],
       result:friendResult,
       notes:m.notes||"",
+      status:'confirmed',
       isTagged:true,
+      opponent_id:m.opponent_id||m.tagged_user_id,
       tagged_user_id:m.tagged_user_id,
       tag_status:'accepted',
     };
@@ -91,9 +170,10 @@ export function useMatchHistory(opts){
     feedLikes, setFeedLikes, feedLikeCounts, setFeedLikeCounts,
     feedComments, setFeedComments,
     commentModal, setCommentModal, commentDraft, setCommentDraft,
-    casualOppName, setCasualOppName, showOppDrop, setShowOppDrop,
+    casualOppName, setCasualOppName, casualOppId, setCasualOppId,
+    showOppDrop, setShowOppDrop,
     scoreModal, setScoreModal, scoreDraft, setScoreDraft,
     loadHistory, resetHistory,
-    deleteMatch, removeTaggedMatch, applyAcceptedTagMatch,
+    submitMatch, deleteMatch, removeTaggedMatch, applyAcceptedTagMatch,
   };
 }

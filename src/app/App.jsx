@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/helpers.js";
 import { TABS } from "../lib/constants.js";
+import { insertNotification } from "../features/notifications/services/notificationService.js";
+import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 
 import Providers from "./providers.jsx";
 
@@ -47,11 +49,12 @@ export default function App(){
   });
 
   var currentUser=useCurrentUser();
-  var matchHistory=useMatchHistory({ authUser:auth.authUser });
+  var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats });
   var social=useSocialGraph({ authUser:auth.authUser });
   var dms=useDMs({ authUser:auth.authUser });
   var notifications=useNotifications({
     authUser:auth.authUser,
+    updateMatchTagStatus:markMatchTagStatus,
     onMatchTagAccepted:function(matchRow){
       var friendResult=matchHistory.applyAcceptedTagMatch(matchRow);
       if(auth.authUser)currentUser.bumpMatchStats(auth.authUser.id, friendResult);
@@ -242,10 +245,10 @@ export default function App(){
           t={t} authUser={auth.authUser} scoreModal={matchHistory.scoreModal} setScoreModal={matchHistory.setScoreModal}
           scoreDraft={matchHistory.scoreDraft} setScoreDraft={matchHistory.setScoreDraft}
           casualOppName={matchHistory.casualOppName} setCasualOppName={matchHistory.setCasualOppName}
+          casualOppId={matchHistory.casualOppId} setCasualOppId={matchHistory.setCasualOppId}
           showOppDrop={matchHistory.showOppDrop} setShowOppDrop={matchHistory.setShowOppDrop}
           friends={social.friends} suggestedPlayers={social.suggestedPlayers}
-          history={matchHistory.history} setHistory={matchHistory.setHistory}
-          profile={currentUser.profile} setProfile={currentUser.setProfile}
+          submitMatch={matchHistory.submitMatch}
           recordResult={tournaments.recordResult}
         />
         <CommentModal
