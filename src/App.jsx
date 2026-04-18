@@ -501,7 +501,10 @@ export default function App() {
         date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",
         sets:m.sets||[],
         result:m.result||"loss",
-        notes:m.notes||""
+        notes:m.notes||"",
+        tagged_user_id:m.tagged_user_id||null,
+        tag_status:m.tag_status||null,
+        isTagged:m.tagged_user_id===user.id
       };
     });
     var matchIds=normalizedHistory.map(function(m){return m.id;});
@@ -794,6 +797,22 @@ export default function App() {
     setSearchLoading(false);
   }
 
+  async function deleteMatch(m){
+    if(!authUser)return;
+    // If a friend accepted this match, notify them it's been removed
+    if(m.tagged_user_id&&m.tag_status==='accepted'){
+      await supabase.from('notifications').insert({user_id:m.tagged_user_id,type:'match_deleted',from_user_id:authUser.id,match_id:m.id});
+    }
+    await supabase.from('match_history').delete().eq('id',m.id).eq('user_id',authUser.id);
+    setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
+  }
+
+  async function removeTaggedMatch(m){
+    // Friend removes an accepted tagged match from their own feed
+    await supabase.from('match_history').update({tag_status:'declined'}).eq('id',m.id);
+    setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
+  }
+
   async function acceptMatchTag(n){
     await supabase.from('match_history').update({tag_status:'accepted'}).eq('id',n.match_id);
     await supabase.from('notifications').update({read:true}).eq('id',n.id);
@@ -817,6 +836,7 @@ export default function App() {
     if(n.type==='friend_request')return n.fromName+' sent you a friend request';
     if(n.type==='request_accepted')return n.fromName+' accepted your friend request';
     if(n.type==='match_tag')return n.fromName+' tagged you in a match';
+    if(n.type==='match_deleted')return n.fromName+' removed a match from your feed';
     if(n.type==='like')return n.fromName+' liked your match';
     if(n.type==='comment')return n.fromName+' commented on your match';
     return'New notification';
@@ -1258,7 +1278,7 @@ export default function App() {
         }
 
         function FeedCard(props){
-          var m=props.m,isOwn=props.isOwn,pName=props.pName,pAvatar=props.pAvatar,demo=props.demo;
+          var m=props.m,isOwn=props.isOwn,pName=props.pName,pAvatar=props.pAvatar,demo=props.demo,onDelete=props.onDelete,onRemove=props.onRemove;
           var isWin=m.result==="win";
           var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join("  ");
           var liked=!!feedLikes[m.id];
@@ -1278,6 +1298,16 @@ export default function App() {
                   <div style={{fontSize:14,fontWeight:700,color:t.text,lineHeight:1.2}}>{pName}{isOwn&&<span style={{fontSize:11,color:t.textTertiary,fontWeight:400}}> · You</span>}</div>
                   <div style={{fontSize:11,color:t.textTertiary,marginTop:1}}>{timeAgo(m.date)}</div>
                 </div>
+                {isOwn&&onDelete&&(
+                  <button onClick={function(){if(window.confirm("Delete this match?"))onDelete(m);}}
+                    style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:"4px 6px",cursor:"pointer",lineHeight:1}}
+                    title="Delete match">✕</button>
+                )}
+                {m.isTagged&&onRemove&&(
+                  <button onClick={function(){if(window.confirm("Remove from your feed?"))onRemove(m);}}
+                    style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:"4px 6px",cursor:"pointer",lineHeight:1}}
+                    title="Remove from feed">✕</button>
+                )}
                 {m.tournName&&m.tournName!=="Casual Match"&&(
                   <span style={{fontSize:10,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 8px",borderRadius:20,flexShrink:0}}>{m.tournName}</span>
                 )}
@@ -1446,7 +1476,8 @@ export default function App() {
                   </button>
                 </div>
                 :history.map(function(m){
-                  return<FeedCard key={m.id} m={m} isOwn={true} pName={profile.name} pAvatar={profile.avatar} demo={false}/>;
+                  var isOwn=!m.isTagged;
+                  return<FeedCard key={m.id} m={m} isOwn={isOwn} pName={isOwn?profile.name:(m.friendName||m.oppName)} pAvatar={isOwn?profile.avatar:""} demo={false} onDelete={isOwn?deleteMatch:null} onRemove={m.isTagged?removeTaggedMatch:null}/>;
                 })
               }
 
