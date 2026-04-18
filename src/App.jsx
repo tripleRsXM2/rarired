@@ -821,14 +821,15 @@ export default function App() {
   }
 
   async function acceptMatchTag(n){
-    console.log('[accept] notification:',n);
-    var u1=await supabase.from('match_history').update({tag_status:'accepted'}).eq('id',n.match_id);
-    console.log('[accept] update result:',u1.error||'ok');
+    // Update tag_status and return the updated row in one call
+    var mr=await supabase.from('match_history')
+      .update({tag_status:'accepted'})
+      .eq('id',n.match_id)
+      .select('*')
+      .single();
     await supabase.from('notifications').update({read:true}).eq('id',n.id);
     setNotifications(function(ns){return ns.map(function(x){return x.id===n.id?Object.assign({},x,{tag_status:'accepted',read:true}):x;});});
-    // Load the tagged match and add to feed with inverted result
-    var mr=await supabase.from('match_history').select('*').eq('id',n.match_id).single();
-    console.log('[accept] match fetch:',mr.data,'error:',mr.error);
+    if(mr.error){console.error('[accept] failed:',mr.error);return;}
     if(mr.data){
       var m=mr.data;
       var ownerResult=m.result||"loss";
@@ -3267,11 +3268,9 @@ export default function App() {
                       setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
                       // If opponent is a friend, tag them and notify
                       var taggedFriend=friends.find(function(f){return f.name&&f.name.toLowerCase()===resolvedOpp.toLowerCase();});
-                      console.log('[tag] resolvedOpp:',resolvedOpp,'taggedFriend:',taggedFriend,'matchId:',matchId);
                       if(taggedFriend){
-                        var tu=await supabase.from('match_history').update({tagged_user_id:taggedFriend.id}).eq('id',matchId);
-                        var ni=await supabase.from('notifications').insert({user_id:taggedFriend.id,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
-                        console.log('[tag] update:',tu.error||'ok','notif insert:',ni.error||'ok');
+                        await supabase.from('match_history').update({tagged_user_id:taggedFriend.id}).eq('id',matchId);
+                        await supabase.from('notifications').insert({user_id:taggedFriend.id,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
                       }
                       // Only update stats if the row actually saved
                       var newWins=newHistory.filter(function(m){return m.result==="win";}).length;
