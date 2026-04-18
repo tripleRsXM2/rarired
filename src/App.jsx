@@ -484,7 +484,7 @@ export default function App() {
     if(r.data){
       setProfile(r.data);
     } else {
-      var defaults={id:user.id,name:user.user_metadata.name||user.email.split("@")[0],suburb:"",skill:"Intermediate",style:"All-Court",bio:"",avatar:init,availability:{}};
+      var defaults={id:user.id,name:user.user_metadata.name||user.email.split("@")[0],suburb:"",skill:"Intermediate",style:"All-Court",bio:"",avatar:init,availability:{},ranking_points:1000,wins:0,losses:0,matches_played:0,streak_count:0,streak_type:null};
       setProfile(defaults);
       await supabase.from('profiles').upsert(defaults);
     }
@@ -1698,32 +1698,30 @@ export default function App() {
 
       {/* ── PROFILE ── */}
       {tab==="profile"&&(function(){
-        var wins=history.filter(function(m){return m.result==="win";}).length;
-        var losses=history.length-wins;
-        var winRate=history.length?Math.round(wins/history.length*100):0;
-        var rankPts=Math.max(0,1000+wins*15-losses*10);
-        // Streak
-        var streakCount=0,streakType=null;
-        if(history.length){
+        // Prefer stored stats from Supabase; fall back to computing from local history
+        var wins=profile.wins!=null?profile.wins:history.filter(function(m){return m.result==="win";}).length;
+        var losses=profile.losses!=null?profile.losses:history.length-wins;
+        var played=profile.matches_played!=null?profile.matches_played:history.length;
+        var winRate=played?Math.round(wins/played*100):0;
+        var rankPts=profile.ranking_points!=null?profile.ranking_points:Math.max(0,1000+wins*15-losses*10);
+        var streakCount=profile.streak_count!=null?profile.streak_count:0;
+        var streakType=profile.streak_type!=null?profile.streak_type:null;
+        if(profile.streak_count==null&&history.length){
           streakType=history[0].result;
-          for(var si=0;si<history.length;si++){
-            if(history[si].result===streakType)streakCount++;else break;
-          }
+          for(var si=0;si<history.length;si++){if(history[si].result===streakType)streakCount++;else break;}
         }
-        var streakLabel=streakCount>0?(streakCount+"W"+(streakType==="win"?" W":" L").trim()):(""+streakCount+(streakType==="win"?" W":" L"));
-        if(streakCount===0)streakLabel="—";
-        else streakLabel=streakCount+(streakType==="win"?" W":" L");
+        var streakLabel=streakCount===0?"—":streakCount+(streakType==="win"?" W":" L");
 
         // Achievements
         var BADGES=[
           {id:"first",label:"First Match",desc:"Play your first match",icon:"🎾",unlocked:history.length>=1},
           {id:"win1",label:"First Win",desc:"Win your first match",icon:"🏆",unlocked:wins>=1},
           {id:"hat",label:"Hat Trick",desc:"Win 3 matches",icon:"🔥",unlocked:wins>=3},
-          {id:"ded",label:"Dedicated",desc:"Play 10 matches",icon:"💪",unlocked:history.length>=10},
-          {id:"sharp",label:"Sharp",desc:"70%+ win rate (5+ matches)",icon:"⚡",unlocked:history.length>=5&&winRate>=70},
+          {id:"ded",label:"Dedicated",desc:"Play 10 matches",icon:"💪",unlocked:played>=10},
+          {id:"sharp",label:"Sharp",desc:"70%+ win rate (5+ matches)",icon:"⚡",unlocked:played>=5&&winRate>=70},
           {id:"fire",label:"On Fire",desc:"3-match win streak",icon:"🚀",unlocked:streakType==="win"&&streakCount>=3},
           {id:"beast",label:"Unstoppable",desc:"5-match win streak",icon:"👑",unlocked:streakType==="win"&&streakCount>=5},
-          {id:"vet",label:"Veteran",desc:"Play 25 matches",icon:"🎖️",unlocked:history.length>=25},
+          {id:"vet",label:"Veteran",desc:"Play 25 matches",icon:"🎖️",unlocked:played>=25},
         ];
         var unlockedCount=BADGES.filter(function(b){return b.unlocked;}).length;
 
@@ -2506,11 +2504,30 @@ export default function App() {
                 Cancel
               </button>
               <button
-                onClick={function(){
+                onClick={async function(){
                   var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
                   var nm={id:"h"+Date.now(),oppName:scoreModal.oppName,tournName:scoreModal.tournName,date:fmtDate(new Date()),sets:clean,result:scoreDraft.result,notes:""};
-                  setHistory(function(h){return[nm].concat(h);});
-                  if(authUser)supabase.from('match_history').insert(Object.assign({},nm,{user_id:authUser.id,match_date:nm.date}));
+                  var newHistory=[nm].concat(history);
+                  setHistory(newHistory);
+                  if(authUser){
+                    await supabase.from('match_history').insert(Object.assign({},nm,{user_id:authUser.id,match_date:nm.date}));
+                    // Recompute stats from full history and persist to profiles
+                    var newWins=newHistory.filter(function(m){return m.result==="win";}).length;
+                    var newLosses=newHistory.length-newWins;
+                    var newPts=Math.max(0,1000+newWins*15-newLosses*10);
+                    var sc=0,st=null;
+                    if(newHistory.length){st=newHistory[0].result;for(var si=0;si<newHistory.length;si++){if(newHistory[si].result===st)sc++;else break;}}
+                    await supabase.from('profiles').upsert({
+                      id:authUser.id,
+                      ranking_points:newPts,
+                      wins:newWins,
+                      losses:newLosses,
+                      matches_played:newHistory.length,
+                      streak_count:sc,
+                      streak_type:st
+                    },{onConflict:'id'});
+                    setProfile(function(p){return Object.assign({},p,{ranking_points:newPts,wins:newWins,losses:newLosses,matches_played:newHistory.length,streak_count:sc,streak_type:st});});
+                  }
                   if(scoreModal.winnerId1&&scoreModal.winnerId2){
                     var winnerId=scoreDraft.result==="win"?scoreModal.winnerId1:scoreModal.winnerId2;
                     recordResult(scoreModal.tournId,scoreModal.roundIdx,scoreModal.matchId,winnerId);
