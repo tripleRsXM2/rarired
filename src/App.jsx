@@ -489,7 +489,40 @@ export default function App() {
       await supabase.from('profiles').upsert(defaults);
     }
     var hr=await supabase.from('match_history').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
+    var matchIds=(hr.data||[]).map(function(m){return m.id;});
     if(hr.data)setHistory(hr.data);
+
+    if(matchIds.length){
+      // Load which matches the current user has liked
+      var lr=await supabase.from('feed_likes').select('match_id').eq('user_id',user.id).in('match_id',matchIds);
+      if(lr.data){
+        var likedMap={};
+        lr.data.forEach(function(l){likedMap[l.match_id]=true;});
+        setFeedLikes(likedMap);
+      }
+      // Load total like counts
+      var lcr=await supabase.from('feed_likes').select('match_id').in('match_id',matchIds);
+      if(lcr.data){
+        var countMap={};
+        lcr.data.forEach(function(l){countMap[l.match_id]=(countMap[l.match_id]||0)+1;});
+        setFeedLikeCounts(countMap);
+      }
+      // Load comments + author names
+      var cr=await supabase.from('feed_comments').select('id,match_id,user_id,body,created_at').in('match_id',matchIds).order('created_at',{ascending:true});
+      if(cr.data&&cr.data.length){
+        var uids=[...new Set(cr.data.map(function(c){return c.user_id;}))];
+        var pr=await supabase.from('profiles').select('id,name,avatar').in('id',uids);
+        var nameMap={};
+        (pr.data||[]).forEach(function(p){nameMap[p.id]={name:p.name,avatar:p.avatar};});
+        var grouped={};
+        cr.data.forEach(function(c){
+          var author=nameMap[c.user_id]||{name:"Player",avatar:"?"};
+          if(!grouped[c.match_id])grouped[c.match_id]=[];
+          grouped[c.match_id].push({id:c.id,author:author.name,avatar:author.avatar,text:c.body,ts:new Date(c.created_at).getTime()});
+        });
+        setFeedComments(grouped);
+      }
+    }
     setAuthInitialized(true);
     // Show onboarding for brand-new users
     if(isNewUser&&isNewSignIn){
@@ -543,6 +576,7 @@ export default function App() {
   var [history,setHistory]=useState([]);
   var [profileTab,setProfileTab]=useState("overview");
   var [feedLikes,setFeedLikes]=useState({});
+  var [feedLikeCounts,setFeedLikeCounts]=useState({});
   var [feedComments,setFeedComments]=useState({});
   var [commentModal,setCommentModal]=useState(null);
   var [commentDraft,setCommentDraft]=useState("");
@@ -931,6 +965,7 @@ export default function App() {
           var isWin=m.result==="win";
           var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join("  ");
           var liked=!!feedLikes[m.id];
+          var likeCount=feedLikeCounts[m.id]||0;
           var comments=feedComments[m.id]||[];
           return(
             <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
@@ -978,9 +1013,19 @@ export default function App() {
               {!demo&&(
                 <div style={{borderTop:"1px solid "+t.border,display:"flex"}}>
                   <button
-                    onClick={function(){setFeedLikes(function(l){var n=Object.assign({},l);n[m.id]=!n[m.id];return n;});}}
+                    onClick={async function(){
+                      if(!authUser)return;
+                      var nowLiked=!liked;
+                      setFeedLikes(function(l){var n=Object.assign({},l);n[m.id]=nowLiked;return n;});
+                      setFeedLikeCounts(function(c){var n=Object.assign({},c);n[m.id]=Math.max(0,(n[m.id]||0)+(nowLiked?1:-1));return n;});
+                      if(nowLiked){
+                        await supabase.from('feed_likes').insert({match_id:m.id,user_id:authUser.id});
+                      } else {
+                        await supabase.from('feed_likes').delete().eq('match_id',m.id).eq('user_id',authUser.id);
+                      }
+                    }}
                     style={{flex:1,padding:"11px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:liked?t.accent:t.textSecondary,fontSize:12,fontWeight:liked?700:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
-                    <span style={{fontSize:15}}>👍</span>{liked?"Liked":"Like"}{comments.length===0&&liked?"":""}</button>
+                    <span style={{fontSize:15}}>👍</span>{liked?"Liked":"Like"}{likeCount>0?" · "+likeCount:""}</button>
                   <button
                     onClick={function(){setCommentModal(m.id);setCommentDraft("");}}
                     style={{flex:1,padding:"11px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
@@ -2620,20 +2665,27 @@ export default function App() {
                 value={commentDraft}
                 placeholder="Add a comment…"
                 onChange={function(e){setCommentDraft(e.target.value);}}
-                onKeyDown={function(e){
-                  if(e.key==="Enter"&&commentDraft.trim()){
-                    var c={id:"c"+Date.now(),author:profile.name,text:commentDraft.trim(),ts:Date.now()};
-                    setFeedComments(function(fc){var cur=fc[commentModal]||[];return Object.assign({},fc,{[commentModal]:cur.concat([c])});});
-                    setCommentDraft("");
-                  }
-                }}
+                onKeyDown={function(e){if(e.key==="Enter")document.getElementById("comment-post-btn").click();}}
                 style={Object.assign({},inputStyle,{flex:1,fontSize:13,padding:"9px 14px"})}/>
               <button
-                onClick={function(){
-                  if(!commentDraft.trim())return;
-                  var c={id:"c"+Date.now(),author:profile.name,text:commentDraft.trim(),ts:Date.now()};
-                  setFeedComments(function(fc){var cur=fc[commentModal]||[];return Object.assign({},fc,{[commentModal]:cur.concat([c])});});
+                id="comment-post-btn"
+                onClick={async function(){
+                  if(!commentDraft.trim()||!authUser)return;
+                  var text=commentDraft.trim();
                   setCommentDraft("");
+                  // Optimistic update
+                  var tempId="c"+Date.now();
+                  var c={id:tempId,author:profile.name,avatar:profile.avatar,text:text,ts:Date.now()};
+                  setFeedComments(function(fc){var cur=fc[commentModal]||[];return Object.assign({},fc,{[commentModal]:cur.concat([c])});});
+                  // Persist to Supabase
+                  var res=await supabase.from('feed_comments').insert({match_id:commentModal,user_id:authUser.id,body:text}).select('id').single();
+                  // Replace temp id with real id
+                  if(res.data){
+                    setFeedComments(function(fc){
+                      var cur=(fc[commentModal]||[]).map(function(x){return x.id===tempId?Object.assign({},x,{id:res.data.id}):x;});
+                      return Object.assign({},fc,{[commentModal]:cur});
+                    });
+                  }
                 }}
                 style={{padding:"9px 16px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,flexShrink:0}}>
                 Post
