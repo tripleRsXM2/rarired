@@ -490,7 +490,8 @@ export default function App() {
       setProfileDraft(defaults);
       await supabase.from('profiles').upsert(defaults);
     }
-    var hr=await supabase.from('match_history').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
+    // Own matches + matches tagged to this user that were accepted
+    var hr=await supabase.from('match_history').select('*').or('user_id.eq.'+user.id+',and(tagged_user_id.eq.'+user.id+',tag_status.eq.accepted)').order('created_at',{ascending:false});
     // Normalize column names: Postgres lowercases camelCase keys (oppName→oppname)
     var normalizedHistory=(hr.data||[]).map(function(m){
       return {
@@ -793,9 +794,29 @@ export default function App() {
     setSearchLoading(false);
   }
 
+  async function acceptMatchTag(n){
+    await supabase.from('match_history').update({tag_status:'accepted'}).eq('id',n.match_id);
+    await supabase.from('notifications').update({read:true}).eq('id',n.id);
+    setNotifications(function(ns){return ns.map(function(x){return x.id===n.id?Object.assign({},x,{tag_status:'accepted',read:true}):x;});});
+    // Load the tagged match into local feed
+    var mr=await supabase.from('match_history').select('*').eq('id',n.match_id).single();
+    if(mr.data){
+      var m=mr.data;
+      var nm={id:m.id,oppName:m.opp_name||"Unknown",tournName:m.tourn_name||"",date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",sets:m.sets||[],result:m.result||"loss",notes:m.notes||"",fromFriend:true,friendName:n.fromName};
+      setHistory(function(h){return h.some(function(x){return x.id===m.id;})?h:[nm].concat(h);});
+    }
+  }
+
+  async function declineMatchTag(n){
+    await supabase.from('match_history').update({tag_status:'declined'}).eq('id',n.match_id);
+    await supabase.from('notifications').update({read:true}).eq('id',n.id);
+    setNotifications(function(ns){return ns.map(function(x){return x.id===n.id?Object.assign({},x,{tag_status:'declined',read:true}):x;});});
+  }
+
   function notifLabel(n){
     if(n.type==='friend_request')return n.fromName+' sent you a friend request';
     if(n.type==='request_accepted')return n.fromName+' accepted your friend request';
+    if(n.type==='match_tag')return n.fromName+' tagged you in a match';
     if(n.type==='like')return n.fromName+' liked your match';
     if(n.type==='comment')return n.fromName+' commented on your match';
     return'New notification';
@@ -1157,8 +1178,22 @@ export default function App() {
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,color:t.text,lineHeight:1.4}}>{notifLabel(n)}</div>
                         <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{timeStr}</div>
+                        {n.type==='match_tag'&&!n.tag_status&&(
+                          <div style={{display:"flex",gap:6,marginTop:8}}>
+                            <button onMouseDown={function(){acceptMatchTag(n);}}
+                              style={{padding:"5px 12px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                              Accept
+                            </button>
+                            <button onMouseDown={function(){declineMatchTag(n);}}
+                              style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,cursor:"pointer"}}>
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                        {n.type==='match_tag'&&n.tag_status==='accepted'&&<div style={{fontSize:11,color:t.green,marginTop:4,fontWeight:600}}>✓ Added to your feed</div>}
+                        {n.type==='match_tag'&&n.tag_status==='declined'&&<div style={{fontSize:11,color:t.textTertiary,marginTop:4}}>Declined</div>}
                       </div>
-                      {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:t.accent,flexShrink:0,marginTop:4}}/>}
+                      {!n.read&&!n.tag_status&&<div style={{width:7,height:7,borderRadius:"50%",background:t.accent,flexShrink:0,marginTop:4}}/>}
                     </div>
                   );
                 })
@@ -3175,8 +3210,15 @@ export default function App() {
                       console.error('match_history insert failed:',ins.error);
                       alert('Save failed: '+ins.error.message+'\nCode: '+ins.error.code);
                     } else {
+                      var matchId=ins.data.id;
                       // Replace local temp id with real Supabase id
-                      setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:ins.data.id}):m;});});
+                      setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
+                      // If opponent is a friend, tag them and notify
+                      var taggedFriend=friends.find(function(f){return f.name&&f.name.toLowerCase()===resolvedOpp.toLowerCase();});
+                      if(taggedFriend){
+                        await supabase.from('match_history').update({tagged_user_id:taggedFriend.id}).eq('id',matchId);
+                        await supabase.from('notifications').insert({user_id:taggedFriend.id,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
+                      }
                       // Only update stats if the row actually saved
                       var newWins=newHistory.filter(function(m){return m.result==="win";}).length;
                       var newLosses=newHistory.length-newWins;
