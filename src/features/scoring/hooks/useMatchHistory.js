@@ -26,9 +26,15 @@ export function useMatchHistory(opts){
     await M.expireStalePendingMatches(userId);
     var hr=await M.fetchOwnMatches(userId);
     var tr=await M.fetchTaggedMatches(userId);
+    var pr=await M.fetchPendingOpponentMatches(userId);
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
     var taggedNorm=(tr.data||[]).map(function(m){return normalizeMatch(m,true);});
-    var normalized=ownNorm.concat(taggedNorm).sort(function(a,b){return b.date<a.date?-1:1;});
+    var pendingNorm=(pr.data||[]).map(function(m){return normalizeMatch(m,true);});
+    // Merge tagged and pending, dedup by id in case a match confirms between queries
+    var allOpponent=taggedNorm.concat(pendingNorm).filter(function(m,i,arr){
+      return arr.findIndex(function(x){return x.id===m.id;})===i;
+    });
+    var normalized=ownNorm.concat(allOpponent).sort(function(a,b){return b.date<a.date?-1:1;});
     var matchIds=normalized.map(function(m){return m.id;});
     setHistory(normalized);
     if(!matchIds.length) return;
@@ -39,8 +45,8 @@ export function useMatchHistory(opts){
     var cr=await M.fetchFeedComments(matchIds);
     if(cr.data&&cr.data.length){
       var uids=[...new Set(cr.data.map(function(c){return c.user_id;}))];
-      var pr=await fetchProfilesByIds(uids,'id,name,avatar');
-      var nameMap={};(pr.data||[]).forEach(function(p){nameMap[p.id]={name:p.name,avatar:p.avatar};});
+      var fpr=await fetchProfilesByIds(uids,'id,name,avatar');
+      var nameMap={};(fpr.data||[]).forEach(function(p){nameMap[p.id]={name:p.name,avatar:p.avatar};});
       var grouped={};
       cr.data.forEach(function(c){
         var author=nameMap[c.user_id]||{name:"Player",avatar:"?"};
@@ -57,7 +63,7 @@ export function useMatchHistory(opts){
 
   // Submit a new match result.
   // Verified (opponent is a registered friend) → pending_confirmation, no stats yet.
-  // Casual (free-text opponent) → confirmed immediately, stats fire now.
+  // Casual (free-text opponent) → confirmed, no stats (no verified opponent).
   async function submitMatch(params){
     var scoreModal=params.scoreModal;
     var scoreDraft=params.scoreDraft;
@@ -72,23 +78,20 @@ export function useMatchHistory(opts){
     var status=isVerified?'pending_confirmation':'confirmed';
     var tournName=scoreModal.casual?'Casual Match':(scoreModal.tournName||'Casual Match');
 
-    // Compute hash for duplicate detection on verified matches
     var hash=null;
     if(isVerified){
       hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
     }
 
-    // Optimistic local entry
     var localId='local-'+Date.now();
     var nm={
       id:localId, oppName, tournName,
       date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
       sets:clean, result:scoreDraft.result, notes:'',
-      status, opponent_id:opponentId, isTagged:false,
+      status, opponent_id:opponentId, submitterId:authUser.id, isTagged:false,
     };
     setHistory(function(h){return [nm].concat(h);});
 
-    // Build DB payload
     var payload={
       user_id:authUser.id,
       opp_name:oppName,
@@ -114,15 +117,48 @@ export function useMatchHistory(opts){
     var matchId=ins.data.id;
     setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
 
-    // Notify opponent for verified matches
     if(isVerified&&sendNotification){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
 
-    // Stats never update for free-text casual matches (no real opponent to verify).
-    // For verified matches, stats fire when opponent confirms (handled in applyAcceptedTagMatch).
-
     return {error:null, matchId, status};
+  }
+
+  // Opponent confirms the match — both players' stats update.
+  async function confirmOpponentMatch(match){
+    if(!authUser) return;
+    var mr=await M.confirmMatch(match.id);
+    if(mr.error){console.error('[confirmOpponentMatch]',mr.error);return;}
+    setHistory(function(h){return h.map(function(m){return m.id===match.id?Object.assign({},m,{status:'confirmed'}):m;});});
+    // match.result is already from the opponent's perspective (inverted by normalizeMatch)
+    if(bumpStats){
+      await bumpStats(authUser.id, match.result);
+      var submitterResult=match.result==="win"?"loss":"win";
+      if(match.submitterId) await bumpStats(match.submitterId, submitterResult);
+    }
+    if(sendNotification&&match.submitterId){
+      await sendNotification({user_id:match.submitterId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
+    }
+  }
+
+  // Opponent disputes — flags for admin review, no stats.
+  async function disputeOpponentMatch(match, reason){
+    if(!authUser) return;
+    await M.disputeMatch(match.id, authUser.id, reason||null);
+    setHistory(function(h){return h.map(function(m){return m.id===match.id?Object.assign({},m,{status:'disputed'}):m;});});
+    if(sendNotification&&match.submitterId){
+      await sendNotification({user_id:match.submitterId,type:'match_disputed',from_user_id:authUser.id,match_id:match.id});
+    }
+  }
+
+  // Opponent requests a correction — notifies submitter to re-edit.
+  async function requestMatchCorrection(match, reason){
+    if(!authUser) return;
+    var snapshot={result:match.result,sets:match.sets};
+    await M.requestMatchRevision(match.id, authUser.id, reason||null, snapshot);
+    if(sendNotification&&match.submitterId){
+      await sendNotification({user_id:match.submitterId,type:'match_correction_requested',from_user_id:authUser.id,match_id:match.id});
+    }
   }
 
   async function deleteMatch(m){
@@ -139,8 +175,6 @@ export function useMatchHistory(opts){
     setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
   }
 
-  // Apply an accepted tagged match (returned from notifications flow) to local history.
-  // Returns the "friend-perspective" result so profile stats can be bumped.
   function applyAcceptedTagMatch(matchRow){
     var m=matchRow;
     var ownerResult=m.result||"loss";
@@ -154,6 +188,7 @@ export function useMatchHistory(opts){
       result:friendResult,
       notes:m.notes||"",
       status:'confirmed',
+      submitterId:m.user_id||null,
       isTagged:true,
       opponent_id:m.opponent_id||m.tagged_user_id,
       tagged_user_id:m.tagged_user_id,
@@ -173,5 +208,6 @@ export function useMatchHistory(opts){
     scoreModal, setScoreModal, scoreDraft, setScoreDraft,
     loadHistory, resetHistory,
     submitMatch, deleteMatch, removeTaggedMatch, applyAcceptedTagMatch,
+    confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection,
   };
 }

@@ -7,7 +7,10 @@ export default function NotificationsPanel({
   function notifLabel(n) {
     if(n.type==='friend_request') return n.fromName+' sent you a friend request';
     if(n.type==='request_accepted') return n.fromName+' accepted your friend request';
-    if(n.type==='match_tag') return n.fromName+' tagged you in a match';
+    if(n.type==='match_tag') return n.fromName+' tagged you in a match — confirm or dispute';
+    if(n.type==='match_confirmed') return n.fromName+' confirmed your match result ✓';
+    if(n.type==='match_disputed') return n.fromName+' disputed your match — under review';
+    if(n.type==='match_correction_requested') return n.fromName+' requested a correction on your match';
     if(n.type==='match_deleted') return n.fromName+' removed a match from your feed';
     if(n.type==='like') return n.fromName+' liked your match';
     if(n.type==='comment') return n.fromName+' commented on your match';
@@ -46,11 +49,13 @@ export default function NotificationsPanel({
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:13,color:t.text,lineHeight:1.4}}>{notifLabel(n)}</div>
                     <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{timeStr}</div>
+
+                    {/* match_tag: confirm/dispute actions (check feed instead) */}
                     {n.type==='match_tag'&&!n.tag_status&&(
                       <div style={{display:"flex",gap:6,marginTop:8}}>
                         <button onMouseDown={function(){acceptMatchTag(n);}}
-                          style={{padding:"5px 12px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                          Accept
+                          style={{padding:"5px 12px",borderRadius:6,border:"none",background:t.green,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                          Confirm
                         </button>
                         <button onMouseDown={function(){declineMatchTag(n);}}
                           style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,cursor:"pointer"}}>
@@ -58,10 +63,24 @@ export default function NotificationsPanel({
                         </button>
                       </div>
                     )}
-                    {n.type==='match_tag'&&n.tag_status==='accepted'&&<div style={{fontSize:11,color:t.green,marginTop:4,fontWeight:600}}>✓ Added to your feed</div>}
+                    {n.type==='match_tag'&&n.tag_status==='accepted'&&<div style={{fontSize:11,color:t.green,marginTop:4,fontWeight:600}}>✓ Confirmed</div>}
                     {n.type==='match_tag'&&n.tag_status==='declined'&&<div style={{fontSize:11,color:t.textTertiary,marginTop:4}}>Declined</div>}
+
+                    {/* match_confirmed: positive feedback */}
+                    {n.type==='match_confirmed'&&(
+                      <div style={{fontSize:11,color:t.green,marginTop:4,fontWeight:600}}>Stats updated</div>
+                    )}
+
+                    {/* match_disputed / correction: direct to feed */}
+                    {(n.type==='match_disputed'||n.type==='match_correction_requested')&&(
+                      <button
+                        onClick={function(){setTab("home");setShowNotifications(false);}}
+                        style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                        View in feed →
+                      </button>
+                    )}
                   </div>
-                  {!n.read&&!n.tag_status&&<div style={{width:7,height:7,borderRadius:"50%",background:t.accent,flexShrink:0,marginTop:4}}/>}
+                  {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:t.accent,flexShrink:0,marginTop:4}}/>}
                 </div>
               );
             })

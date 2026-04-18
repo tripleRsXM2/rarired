@@ -46,7 +46,13 @@ export function useCurrentUser(){
     var newPlayed=(p.matches_played||0)+1;
     var newPts=Math.max(0,1000+newWins*15-newLosses*10);
     await upsertProfile({id:authUserId,wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
-    setProfile(function(prev){return Object.assign({},prev,{wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});});
+    // Only update the displayed profile for the current logged-in user.
+    // If called for a remote user (e.g. bumping submitter stats on confirmation),
+    // the DB is updated but the UI is left untouched.
+    setProfile(function(prev){
+      if(!prev.id||prev.id!==authUserId) return prev;
+      return Object.assign({},prev,{wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
+    });
   }
 
   function resetProfile(){

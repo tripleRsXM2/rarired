@@ -4,22 +4,39 @@ import { avColor } from "../lib/helpers.js";
 // ── FeedCard ─────────────────────────────────────────────────────────────────
 function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
-  setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft}) {
+  setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
+  confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection}) {
+
   var isWin=m.result==="win";
   var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join("  ");
   var liked=!!feedLikes[m.id];
   var likeCount=feedLikeCounts[m.id]||0;
   var comments=feedComments[m.id]||[];
 
-  function timeAgo(dateStr) {
+  var status=m.status||"confirmed";
+  var isExpired=status==="expired";
+  var isPending=status==="pending_confirmation";
+  var isDisputed=status==="disputed";
+  var isOpponentView=isPending&&m.isTagged; // current user is the opponent waiting to confirm
+
+  function timeAgo(dateStr){
     if(!dateStr) return "";
     if(dateStr==="Today") return "Today";
     if(dateStr==="Yesterday") return "Yesterday";
     return dateStr;
   }
 
+  function handleDispute(){
+    var reason=window.prompt("Reason for dispute (optional):")||"";
+    disputeOpponentMatch(m, reason);
+  }
+  function handleCorrection(){
+    var reason=window.prompt("What needs to be corrected?")||"";
+    requestMatchCorrection(m, reason);
+  }
+
   return (
-    <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:t.r2,overflow:"hidden",marginBottom:10}}>
+    <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:t.r2,overflow:"hidden",marginBottom:10,opacity:isExpired?0.5:1}}>
       {/* Card header */}
       <div style={{padding:"14px 16px 10px",display:"flex",gap:10,alignItems:"center"}}>
         <div style={{
@@ -32,23 +49,38 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
           <div style={{fontSize:13,fontWeight:700,color:t.text,letterSpacing:"-0.2px"}}>{pName}{isOwn&&<span style={{fontSize:10,color:t.textSecondary,fontWeight:500}}> · You</span>}</div>
           <div style={{fontSize:10,color:t.textSecondary,marginTop:1,letterSpacing:"0.02em"}}>{timeAgo(m.date)}</div>
         </div>
+
+        {/* Tournament badge */}
         {m.tournName&&m.tournName!=="Casual Match"&&(
           <span style={{fontSize:9,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>{m.tournName}</span>
         )}
         {m.tournName==="Casual Match"&&(
           <span style={{fontSize:9,fontWeight:600,color:t.textSecondary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Casual</span>
         )}
-        {isOwn&&onDelete&&(
+
+        {/* Status badges */}
+        {isPending&&!isOpponentView&&(
+          <span style={{fontSize:9,fontWeight:700,color:t.orange,background:t.orangeSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Pending</span>
+        )}
+        {isDisputed&&(
+          <span style={{fontSize:9,fontWeight:700,color:t.red,background:t.redSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Disputed</span>
+        )}
+        {isExpired&&(
+          <span style={{fontSize:9,fontWeight:700,color:t.textTertiary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Unverified</span>
+        )}
+
+        {/* Delete / remove buttons */}
+        {isOwn&&onDelete&&status!=="disputed"&&(
           <button onClick={function(){if(window.confirm("Delete this match?"))onDelete(m);}}
             style={{background:"none",border:"none",color:t.textTertiary,fontSize:14,padding:"4px 4px",cursor:"pointer",lineHeight:1,flexShrink:0}}>✕</button>
         )}
-        {m.isTagged&&onRemove&&(
+        {m.isTagged&&onRemove&&status==="confirmed"&&(
           <button onClick={function(){if(window.confirm("Remove from your feed?"))onRemove(m);}}
             style={{background:"none",border:"none",color:t.textTertiary,fontSize:14,padding:"4px 4px",cursor:"pointer",lineHeight:1,flexShrink:0}}>✕</button>
         )}
       </div>
 
-      {/* Match result block — editorial */}
+      {/* Match result block */}
       <div style={{margin:"0 12px 12px",borderRadius:t.r,border:"1px solid "+(isWin?t.green:t.red)+"28",background:isWin?t.greenSubtle:t.redSubtle,padding:"16px"}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
           <div>
@@ -67,8 +99,56 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
         </div>
       </div>
 
-      {/* Actions */}
-      {!demo&&(
+      {/* Pending — awaiting submitter view */}
+      {isPending&&!isOpponentView&&(
+        <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:12,color:t.orange}}>⏳</span>
+          <span style={{fontSize:12,color:t.textSecondary}}>Awaiting opponent confirmation — stats not counted yet</span>
+        </div>
+      )}
+
+      {/* Pending — opponent action buttons */}
+      {isOpponentView&&!demo&&(
+        <div style={{borderTop:"1px solid "+t.border,padding:"12px 16px",display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{fontSize:11,color:t.textSecondary,width:"100%",marginBottom:6,fontWeight:500}}>
+            {pName} logged this match — does it look right?
+          </div>
+          <button
+            onClick={function(){confirmOpponentMatch(m);}}
+            style={{flex:1,padding:"9px 8px",borderRadius:8,border:"none",background:t.green,color:"#fff",fontSize:12,fontWeight:700,minWidth:80}}>
+            ✓ Confirm
+          </button>
+          <button
+            onClick={handleCorrection}
+            style={{flex:1,padding:"9px 8px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:12,fontWeight:500,minWidth:80}}>
+            Request edit
+          </button>
+          <button
+            onClick={handleDispute}
+            style={{flex:1,padding:"9px 8px",borderRadius:8,border:"1px solid "+t.red+"44",background:t.redSubtle,color:t.red,fontSize:12,fontWeight:600,minWidth:80}}>
+            Dispute
+          </button>
+        </div>
+      )}
+
+      {/* Disputed notice */}
+      {isDisputed&&(
+        <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:12,color:t.red}}>⚠</span>
+          <span style={{fontSize:12,color:t.textSecondary}}>Under review — stats on hold until resolved</span>
+        </div>
+      )}
+
+      {/* Expired notice */}
+      {isExpired&&(
+        <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:12,color:t.textTertiary}}>⏱</span>
+          <span style={{fontSize:12,color:t.textTertiary}}>Confirmation window expired — does not count</span>
+        </div>
+      )}
+
+      {/* Standard actions — only for confirmed matches */}
+      {status==="confirmed"&&!demo&&(
         <div style={{borderTop:"1px solid "+t.border,display:"flex"}}>
           <button
             onClick={async function(){
@@ -103,8 +183,8 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
         </div>
       )}
 
-      {/* Comments preview */}
-      {comments.length>0&&(
+      {/* Comments preview — only on confirmed */}
+      {status==="confirmed"&&comments.length>0&&(
         <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",flexDirection:"column",gap:6}}>
           {comments.slice(-2).map(function(c){
             return (
@@ -132,14 +212,15 @@ export default function HomeTab({
   setShowAuth, setAuthMode, setAuthStep,
   setCasualOppName, setScoreModal, setScoreDraft,
   deleteMatch, removeTaggedMatch,
+  confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection,
 }) {
   var DEMO_FEED=[
-    {id:"demo-1",oppName:"Alex Chen",tournName:"Summer Open",date:"Today",sets:[{you:6,them:3},{you:6,them:4}],result:"win",playerName:"Jordan Smith",playerAvatar:"JS",isOwn:false},
-    {id:"demo-2",oppName:"Sam Williams",tournName:"Casual Match",date:"Yesterday",sets:[{you:4,them:6},{you:3,them:6}],result:"loss",playerName:"Riley Brown",playerAvatar:"RB",isOwn:false},
-    {id:"demo-3",oppName:"Morgan Davis",tournName:"Moore Park Open",date:"Mon",sets:[{you:7,them:5},{you:6,them:3}],result:"win",playerName:"Casey Moore",playerAvatar:"CM",isOwn:false},
+    {id:"demo-1",oppName:"Alex Chen",tournName:"Summer Open",date:"Today",sets:[{you:6,them:3},{you:6,them:4}],result:"win",playerName:"Jordan Smith",playerAvatar:"JS",isOwn:false,status:"confirmed"},
+    {id:"demo-2",oppName:"Sam Williams",tournName:"Casual Match",date:"Yesterday",sets:[{you:4,them:6},{you:3,them:6}],result:"loss",playerName:"Riley Brown",playerAvatar:"RB",isOwn:false,status:"confirmed"},
+    {id:"demo-3",oppName:"Morgan Davis",tournName:"Moore Park Open",date:"Mon",sets:[{you:7,them:5},{you:6,them:3}],result:"win",playerName:"Casey Moore",playerAvatar:"CM",isOwn:false,status:"confirmed"},
   ];
 
-  var feedCardProps={t,authUser,feedLikes,feedLikeCounts,feedComments,setFeedLikes,setFeedLikeCounts,setCommentModal,setCommentDraft};
+  var feedCardProps={t,authUser,feedLikes,feedLikeCounts,feedComments,setFeedLikes,setFeedLikeCounts,setCommentModal,setCommentDraft,confirmOpponentMatch,disputeOpponentMatch,requestMatchCorrection};
 
   if(!authUser) {
     return (

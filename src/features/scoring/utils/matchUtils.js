@@ -21,6 +21,7 @@ export function normalizeMatch(m, isTagged){
     result:isTagged?(ownerResult==="win"?"loss":"win"):ownerResult,
     notes:m.notes||"",
     status:status,
+    submitterId:m.user_id||null,
     opponent_id:m.opponent_id||m.tagged_user_id||null,
     tagged_user_id:m.tagged_user_id||null,
     tag_status:m.tag_status||null,

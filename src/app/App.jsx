@@ -177,6 +177,9 @@ export default function App(){
             setCasualOppName={matchHistory.setCasualOppName}
             setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
             deleteMatch={matchHistory.deleteMatch} removeTaggedMatch={matchHistory.removeTaggedMatch}
+            confirmOpponentMatch={matchHistory.confirmOpponentMatch}
+            disputeOpponentMatch={matchHistory.disputeOpponentMatch}
+            requestMatchCorrection={matchHistory.requestMatchCorrection}
           />
         )}
         {tab==="tournaments"&&(

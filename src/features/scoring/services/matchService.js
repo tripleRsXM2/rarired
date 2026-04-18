@@ -4,6 +4,9 @@ import { supabase } from "../../../supabase.js";
 export function fetchOwnMatches(userId){
   return supabase.from('match_history').select('*').eq('user_id',userId).order('created_at',{ascending:false});
 }
+export function fetchPendingOpponentMatches(userId){
+  return supabase.from('match_history').select('*').eq('opponent_id',userId).eq('status','pending_confirmation').order('created_at',{ascending:false});
+}
 export function fetchTaggedMatches(userId){
   return supabase.from('match_history').select('*').eq('opponent_id',userId).eq('status','confirmed').order('created_at',{ascending:false});
 }
