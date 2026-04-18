@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from './supabase.js';
 
 const PILOT_VENUE = {
@@ -524,6 +524,9 @@ export default function App() {
       }
     }
     setAuthInitialized(true);
+    // Load social graph
+    var profileForSocial=r.data||defaults;
+    loadSocialData(user.id,profileForSocial);
     // Show onboarding for brand-new users
     if(isNewUser&&isNewSignIn){
       setOnboardDraft({skill:"Intermediate",style:"All-Court",suburb:""});
@@ -588,11 +591,198 @@ export default function App() {
   var [adminTab,setAdminTab]=useState("tournaments");
   var [newTourn,setNewTourn]=useState({name:"",skill:"Intermediate",size:16,startDate:"",deadlineDays:14,format:"league",surface:"Hard Court"});
 
+  // Social graph
+  var [friends,setFriends]=useState([]);
+  var [sentRequests,setSentRequests]=useState([]);
+  var [receivedRequests,setReceivedRequests]=useState([]);
+  var [blockedUsers,setBlockedUsers]=useState([]);
+  var [notifications,setNotifications]=useState([]);
+  var [showNotifications,setShowNotifications]=useState(false);
+  var [peopleTab,setPeopleTab]=useState("friends");
+  var [peopleSearch,setPeopleSearch]=useState("");
+  var [searchResults,setSearchResults]=useState([]);
+  var [searchLoading,setSearchLoading]=useState(false);
+  var [suggestedPlayers,setSuggestedPlayers]=useState([]);
+  var [socialLoading,setSocialLoading]=useState({});
+  var searchTimer=useRef(null);
+
   var myId=authUser?authUser.id:"local-user";
 
   var requireAuth=function(cb){
     if(authUser)cb();else{setShowAuth(true);setAuthMode("login");setAuthStep("choose");}
   };
+
+  // ── SOCIAL GRAPH ──────────────────────────────────────────────────────────
+
+  async function loadSocialData(userId,userProfile){
+    try{
+      // All friend requests involving this user
+      var fr=await supabase.from('friend_requests').select('*').or('sender_id.eq.'+userId+',receiver_id.eq.'+userId);
+      var allReqs=fr.data||[];
+      var accepted=allReqs.filter(function(r){return r.status==='accepted';});
+      var sentPend=allReqs.filter(function(r){return r.status==='pending'&&r.sender_id===userId;});
+      var recvPend=allReqs.filter(function(r){return r.status==='pending'&&r.receiver_id===userId;});
+
+      // Collect all other user IDs to fetch profiles for
+      var otherIds=[...new Set([
+        ...accepted.map(function(r){return r.sender_id===userId?r.receiver_id:r.sender_id;}),
+        ...sentPend.map(function(r){return r.receiver_id;}),
+        ...recvPend.map(function(r){return r.sender_id;}),
+      ])].filter(function(id){return id&&id!==userId;});
+
+      var pMap={};
+      if(otherIds.length){
+        var pr=await supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy').in('id',otherIds);
+        (pr.data||[]).forEach(function(p){pMap[p.id]=p;});
+      }
+
+      setFriends(accepted.map(function(r){
+        var oid=r.sender_id===userId?r.receiver_id:r.sender_id;
+        return Object.assign({requestId:r.id},pMap[oid]||{id:oid,name:"Player"});
+      }));
+      setSentRequests(sentPend.map(function(r){
+        return Object.assign({requestId:r.id},pMap[r.receiver_id]||{id:r.receiver_id,name:"Player"});
+      }));
+      setReceivedRequests(recvPend.map(function(r){
+        return Object.assign({requestId:r.id},pMap[r.sender_id]||{id:r.sender_id,name:"Player"});
+      }));
+
+      // Blocked users
+      var bl=await supabase.from('blocks').select('blocked_id').eq('blocker_id',userId);
+      var blockedIds=(bl.data||[]).map(function(b){return b.blocked_id;});
+      if(blockedIds.length){
+        var bpr=await supabase.from('profiles').select('id,name,avatar,suburb').in('id',blockedIds);
+        setBlockedUsers(bpr.data||[]);
+      } else {setBlockedUsers([]);}
+
+      // Notifications (last 20)
+      var nr=await supabase.from('notifications').select('*').eq('user_id',userId).order('created_at',{ascending:false}).limit(20);
+      if(nr.data&&nr.data.length){
+        var fromIds=[...new Set(nr.data.map(function(n){return n.from_user_id;}).filter(Boolean))];
+        var fpr=fromIds.length?await supabase.from('profiles').select('id,name,avatar').in('id',fromIds):{data:[]};
+        var fpMap={};(fpr.data||[]).forEach(function(p){fpMap[p.id]=p;});
+        setNotifications(nr.data.map(function(n){
+          var fp=fpMap[n.from_user_id]||{};
+          return Object.assign({},n,{fromName:fp.name||"Someone",fromAvatar:fp.avatar||"?"});
+        }));
+      } else {setNotifications([]);}
+
+      // Suggested: same suburb/skill, not friends, not blocked, not self
+      var friendIds=accepted.map(function(r){return r.sender_id===userId?r.receiver_id:r.sender_id;});
+      var excludeIds=[userId,...friendIds,...blockedIds];
+      var sq=await supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played')
+        .neq('id',userId)
+        .eq('suburb',userProfile.suburb||"Sydney")
+        .not('id','in','('+excludeIds.join(',')+')')
+        .limit(6);
+      setSuggestedPlayers(sq.data||[]);
+    } catch(e){console.error('loadSocialData',e);}
+  }
+
+  function isFriend(uid){return friends.some(function(f){return f.id===uid;});}
+  function sentReq(uid){return sentRequests.find(function(r){return r.id===uid;});}
+  function recvReq(uid){return receivedRequests.find(function(r){return r.id===uid;});}
+  function isBlocked(uid){return blockedUsers.some(function(b){return b.id===uid;});}
+  function unreadCount(){return notifications.filter(function(n){return!n.read;}).length;}
+
+  function friendRelationLabel(uid){
+    if(isFriend(uid))return"friends";
+    if(sentReq(uid))return"sent";
+    if(recvReq(uid))return"received";
+    if(isBlocked(uid))return"blocked";
+    return"none";
+  }
+
+  async function sendFriendRequest(target){
+    if(!authUser||isFriend(target.id)||sentReq(target.id)||isBlocked(target.id))return;
+    setSocialLoading(function(l){return Object.assign({},l,{[target.id]:true});});
+    var r=await supabase.from('friend_requests').insert({sender_id:authUser.id,receiver_id:target.id}).select('id').single();
+    if(!r.error){
+      setSentRequests(function(s){return s.concat([Object.assign({requestId:r.data.id},target)]);});
+      await supabase.from('notifications').insert({user_id:target.id,type:'friend_request',from_user_id:authUser.id});
+    }
+    setSocialLoading(function(l){return Object.assign({},l,{[target.id]:false});});
+  }
+
+  async function acceptRequest(req){
+    setSocialLoading(function(l){return Object.assign({},l,{[req.id]:true});});
+    await supabase.from('friend_requests').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',req.requestId);
+    setReceivedRequests(function(r){return r.filter(function(x){return x.requestId!==req.requestId;});});
+    setFriends(function(f){return f.concat([req]);});
+    await supabase.from('notifications').insert({user_id:req.id,type:'request_accepted',from_user_id:authUser.id});
+    setSocialLoading(function(l){return Object.assign({},l,{[req.id]:false});});
+  }
+
+  async function declineRequest(req){
+    setSocialLoading(function(l){return Object.assign({},l,{[req.id]:true});});
+    await supabase.from('friend_requests').update({status:'declined',updated_at:new Date().toISOString()}).eq('id',req.requestId);
+    setReceivedRequests(function(r){return r.filter(function(x){return x.requestId!==req.requestId;});});
+    setSocialLoading(function(l){return Object.assign({},l,{[req.id]:false});});
+  }
+
+  async function cancelRequest(req){
+    setSocialLoading(function(l){return Object.assign({},l,{[req.id]:true});});
+    await supabase.from('friend_requests').delete().eq('id',req.requestId);
+    setSentRequests(function(s){return s.filter(function(x){return x.requestId!==req.requestId;});});
+    setSocialLoading(function(l){return Object.assign({},l,{[req.id]:false});});
+  }
+
+  async function unfriend(target){
+    setSocialLoading(function(l){return Object.assign({},l,{[target.id]:true});});
+    await supabase.from('friend_requests').delete()
+      .or('and(sender_id.eq.'+authUser.id+',receiver_id.eq.'+target.id+'),and(sender_id.eq.'+target.id+',receiver_id.eq.'+authUser.id+')');
+    setFriends(function(f){return f.filter(function(x){return x.id!==target.id;});});
+    setSocialLoading(function(l){return Object.assign({},l,{[target.id]:false});});
+  }
+
+  async function blockUser(target){
+    setSocialLoading(function(l){return Object.assign({},l,{[target.id]:true});});
+    // Unfriend if needed
+    if(isFriend(target.id)){await unfriend(target);}
+    // Cancel any pending requests both ways
+    var sr=sentReq(target.id);if(sr)await cancelRequest(sr);
+    var rr=recvReq(target.id);if(rr)await declineRequest(rr);
+    await supabase.from('blocks').insert({blocker_id:authUser.id,blocked_id:target.id});
+    setBlockedUsers(function(b){return b.concat([target]);});
+    setSearchResults(function(r){return r.filter(function(x){return x.id!==target.id;});});
+    setSuggestedPlayers(function(s){return s.filter(function(x){return x.id!==target.id;});});
+    setSocialLoading(function(l){return Object.assign({},l,{[target.id]:false});});
+  }
+
+  async function unblockUser(target){
+    await supabase.from('blocks').delete().eq('blocker_id',authUser.id).eq('blocked_id',target.id);
+    setBlockedUsers(function(b){return b.filter(function(x){return x.id!==target.id;});});
+  }
+
+  async function markNotificationsRead(){
+    var unread=notifications.filter(function(n){return!n.read;});
+    if(!unread.length||!authUser)return;
+    await supabase.from('notifications').update({read:true}).eq('user_id',authUser.id).eq('read',false);
+    setNotifications(function(ns){return ns.map(function(n){return Object.assign({},n,{read:true});});});
+  }
+
+  async function searchUsers(query){
+    if(!query.trim()||!authUser){setSearchResults([]);setSearchLoading(false);return;}
+    setSearchLoading(true);
+    var r=await supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,privacy')
+      .ilike('name','%'+query.trim()+'%')
+      .neq('id',authUser.id)
+      .limit(12);
+    // Filter out blocked users
+    var blockedIds=blockedUsers.map(function(b){return b.id;});
+    setSearchResults((r.data||[]).filter(function(u){return!blockedIds.includes(u.id);}));
+    setSearchLoading(false);
+  }
+
+  function notifLabel(n){
+    if(n.type==='friend_request')return n.fromName+' sent you a friend request';
+    if(n.type==='request_accepted')return n.fromName+' accepted your friend request';
+    if(n.type==='like')return n.fromName+' liked your match';
+    if(n.type==='comment')return n.fromName+' commented on your match';
+    return'New notification';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   var isEntered=function(tournId){
     var t2=tournaments.find(function(x){return x.id===tournId;});
@@ -833,11 +1023,11 @@ export default function App() {
   }
 
   var TABS=[
-    {id:"home",    label:"Home"},
+    {id:"home",        label:"Feed"},
     {id:"tournaments", label:"Compete"},
-    {id:"scorebook",   label:"Scores"},
-    {id:"profile", label:"Profile"},
-    {id:"admin",   label:"Admin"},
+    {id:"people",      label:"People"},
+    {id:"profile",     label:"Profile"},
+    {id:"admin",       label:"Admin"},
   ];
 
   // Shared input style
@@ -884,36 +1074,89 @@ export default function App() {
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <button
               onClick={function(){setDark(function(d){return!d;});}}
-              style={{
-                background:"transparent", border:"1px solid "+t.border,
-                borderRadius:7, padding:"5px 10px",
-                fontSize:11, color:t.textSecondary, fontWeight:500
-              }}>
+              style={{background:"transparent",border:"1px solid "+t.border,borderRadius:7,padding:"5px 10px",fontSize:11,color:t.textSecondary,fontWeight:500}}>
               {dark?"Light":"Dark"}
             </button>
+            {authUser&&(
+              <button
+                onClick={function(){setShowNotifications(function(v){return!v;});if(!showNotifications)markNotificationsRead();}}
+                style={{position:"relative",width:34,height:34,borderRadius:"50%",background:unreadCount()>0?t.accentSubtle:t.bgTertiary,border:"1px solid "+(unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+                🔔
+                {unreadCount()>0&&(
+                  <div style={{position:"absolute",top:-3,right:-3,width:16,height:16,borderRadius:"50%",background:t.red,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:"#fff"}}>
+                    {unreadCount()>9?"9+":unreadCount()}
+                  </div>
+                )}
+              </button>
+            )}
             {authUser
               ?<button
-                  onClick={function(){setTab("profile");}}
-                  style={{
-                    width:32, height:32, borderRadius:"50%",
-                    background:avColor(profile.name),
-                    border:"none", fontSize:11, fontWeight:700, color:"#fff"
-                  }}>
+                  onClick={function(){setTab("profile");setProfileTab("overview");}}
+                  style={{width:32,height:32,borderRadius:"50%",background:avColor(profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff"}}>
                   {profile.avatar}
                 </button>
               :<button
                   onClick={function(){setShowAuth(true);setAuthMode("login");setAuthStep("choose");}}
-                  style={{
-                    background:t.accent, border:"none",
-                    borderRadius:8, padding:"7px 16px",
-                    fontSize:13, fontWeight:600, color:"#fff"
-                  }}>
+                  style={{background:t.accent,border:"none",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:600,color:"#fff"}}>
                   Log in
                 </button>
             }
           </div>
         </div>
       </nav>
+
+      {/* ── NOTIFICATIONS PANEL ── */}
+      {showNotifications&&authUser&&(
+        <div style={{position:"fixed",inset:0,zIndex:45}} onClick={function(){setShowNotifications(false);}}>
+          <div
+            onClick={function(e){e.stopPropagation();}}
+            style={{
+              position:"absolute",top:58,right:12,width:320,maxWidth:"calc(100vw - 24px)",
+              background:t.modalBg,border:"1px solid "+t.border,borderRadius:14,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.14)",overflow:"hidden",maxHeight:480
+            }}>
+            <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:14,fontWeight:700,color:t.text}}>Notifications</span>
+              {notifications.some(function(n){return!n.read;})&&(
+                <button onClick={markNotificationsRead} style={{background:"none",border:"none",color:t.accent,fontSize:12,fontWeight:600}}>Mark all read</button>
+              )}
+            </div>
+            <div style={{overflowY:"auto",maxHeight:400}}>
+              {notifications.length===0
+                ?<div style={{padding:"28px 20px",textAlign:"center",color:t.textTertiary,fontSize:13}}>No notifications yet</div>
+                :notifications.map(function(n){
+                  var timeStr=new Date(n.created_at).toLocaleDateString("en-AU",{day:"numeric",month:"short"});
+                  return(
+                    <div key={n.id} style={{
+                      padding:"12px 16px",borderBottom:"1px solid "+t.border,
+                      background:n.read?"transparent":t.accentSubtle,
+                      display:"flex",gap:10,alignItems:"flex-start"
+                    }}>
+                      <div style={{width:34,height:34,borderRadius:"50%",background:avColor(n.fromName||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>
+                        {(n.fromAvatar||"?").slice(0,2).toUpperCase()}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,color:t.text,lineHeight:1.4}}>{notifLabel(n)}</div>
+                        <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{timeStr}</div>
+                      </div>
+                      {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:t.accent,flexShrink:0,marginTop:4}}/>}
+                    </div>
+                  );
+                })
+              }
+            </div>
+            {notifications.length>0&&(
+              <div style={{padding:"10px 16px",borderTop:"1px solid "+t.border}}>
+                <button
+                  onClick={function(){setTab("people");setPeopleTab("requests");setShowNotifications(false);}}
+                  style={{background:"none",border:"none",color:t.accent,fontSize:12,fontWeight:600}}>
+                  View friend requests →
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── TAB BAR ── */}
       <div style={{
@@ -1702,79 +1945,270 @@ export default function App() {
         );
       })()}
 
-      {/* ── SCOREBOOK ── */}
-      {tab==="scorebook"&&(
-        <div style={{maxWidth:680,margin:"0 auto",padding:"32px 20px"}}>
-          <div style={{marginBottom:28}}>
-            <h1 style={{fontSize:28,fontWeight:700,letterSpacing:"-0.6px",color:t.text,marginBottom:6}}>Scorebook</h1>
-            <p style={{fontSize:15,color:t.textSecondary}}>Your match history.</p>
+      {/* ── PEOPLE ── */}
+      {tab==="people"&&(function(){
+        if(!authUser)return(
+          <div style={{maxWidth:680,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:12}}>🎾</div>
+            <div style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:8}}>Find your people</div>
+            <div style={{fontSize:14,color:t.textSecondary,marginBottom:24}}>Connect with other players, follow their results, and build your tennis community.</div>
+            <button onClick={function(){setShowAuth(true);setAuthMode("signup");setAuthStep("choose");}} style={{padding:"13px 28px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:700}}>Join free</button>
           </div>
-          {history.length===0
-            ?<div style={{textAlign:"center",padding:"60px 0",color:t.textTertiary,fontSize:14}}>No matches logged yet.</div>
-            :(
+        );
+
+        function PlayerCard(props){
+          var u=props.u,rel=friendRelationLabel(u.id),loading=!!socialLoading[u.id];
+          var wr=u.matches_played?Math.round((u.wins||0)/u.matches_played*100):null;
+          return(
+            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
+                {(u.avatar||(u.name||"?").slice(0,2)).slice(0,2).toUpperCase()}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:700,color:t.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name}</div>
+                <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>
+                  {u.suburb&&<span>{u.suburb}</span>}
+                  {u.skill&&<span>{u.suburb?" · ":""}{u.skill}</span>}
+                  {wr!==null&&<span> · {wr}% wins</span>}
+                </div>
+                {u.ranking_points!=null&&<div style={{fontSize:10,color:t.textTertiary,marginTop:1}}>{u.ranking_points} pts · {u.matches_played||0} matches</div>}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                {rel==="none"&&(
+                  <button disabled={loading} onClick={function(){sendFriendRequest(u);}}
+                    style={{padding:"6px 14px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:12,fontWeight:600,opacity:loading?0.6:1}}>
+                    {loading?"…":"Add"}
+                  </button>
+                )}
+                {rel==="sent"&&(
+                  <button disabled={loading} onClick={function(){var r=sentReq(u.id);if(r)cancelRequest(r);}}
+                    style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
+                    {loading?"…":"Pending"}
+                  </button>
+                )}
+                {rel==="received"&&(
+                  <div style={{display:"flex",gap:5}}>
+                    <button disabled={loading} onClick={function(){var r=recvReq(u.id);if(r)acceptRequest(r);}}
+                      style={{padding:"6px 12px",borderRadius:8,border:"none",background:t.green,color:"#fff",fontSize:12,fontWeight:600,opacity:loading?0.6:1}}>
+                      {loading?"…":"Accept"}
+                    </button>
+                    <button disabled={loading} onClick={function(){var r=recvReq(u.id);if(r)declineRequest(r);}}
+                      style={{padding:"6px 10px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,opacity:loading?0.6:1}}>
+                      ✕
+                    </button>
+                  </div>
+                )}
+                {rel==="friends"&&(
+                  <button disabled={loading} onClick={function(){if(window.confirm("Unfriend "+u.name+"?"))unfriend(u);}}
+                    style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
+                    {loading?"…":"Friends ✓"}
+                  </button>
+                )}
+                <button onClick={function(){blockUser(u);}}
+                  style={{padding:"4px 10px",borderRadius:7,border:"1px solid "+t.border,background:"transparent",color:t.textTertiary,fontSize:10,fontWeight:500}}>
+                  Block
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return(
+          <div style={{maxWidth:680,margin:"0 auto"}}>
+            {/* Search */}
+            <div style={{padding:"20px 20px 0"}}>
+              <div style={{position:"relative",marginBottom:16}}>
+                <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:15,pointerEvents:"none"}}>🔍</span>
+                <input
+                  value={peopleSearch}
+                  placeholder="Search players by name…"
+                  onChange={function(e){
+                    var q=e.target.value;setPeopleSearch(q);
+                    clearTimeout(searchTimer.current);
+                    if(!q.trim()){setSearchResults([]);setSearchLoading(false);return;}
+                    setSearchLoading(true);
+                    searchTimer.current=setTimeout(function(){searchUsers(q);},350);
+                  }}
+                  style={Object.assign({},inputStyle,{paddingLeft:38,fontSize:14})}/>
+                {searchLoading&&<span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:11,color:t.textTertiary}}>…</span>}
+              </div>
+
+              {/* Search results */}
+              {peopleSearch.trim()&&(
+                <div style={{marginBottom:16}}>
+                  {searchResults.length===0&&!searchLoading
+                    ?<div style={{textAlign:"center",padding:"24px 0",color:t.textTertiary,fontSize:13}}>No players found for "{peopleSearch}"</div>
+                    :searchResults.map(function(u){return<PlayerCard key={u.id} u={u}/>;})
+                  }
+                </div>
+              )}
+            </div>
+
+            {/* Sub-tabs */}
+            {!peopleSearch.trim()&&(
               <div>
-                {/* Stats */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:24}}>
+                <div style={{display:"flex",borderBottom:"1px solid "+t.border,padding:"0 20px"}}>
                   {[
-                    {l:"Played",v:history.length,c:t.text},
-                    {l:"Won",v:history.filter(function(m){return m.result==="win";}).length,c:t.green},
-                    {l:"Lost",v:history.filter(function(m){return m.result==="loss";}).length,c:t.red},
-                    {l:"Win %",v:history.length?Math.round(history.filter(function(m){return m.result==="win";}).length/history.length*100)+"%":"—",c:t.accent},
-                  ].map(function(s){
+                    {id:"friends",label:"Friends",count:friends.length},
+                    {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
+                    {id:"suggested",label:"Suggested",count:null},
+                    {id:"blocked",label:"Blocked",count:blockedUsers.length||null},
+                  ].map(function(tb){
+                    var on=peopleTab===tb.id;
                     return(
-                      <div key={s.l} style={{
-                        background:t.bgCard, border:"1px solid "+t.border,
-                        borderRadius:10, padding:"14px 10px", textAlign:"center"
-                      }}>
-                        <div style={{fontSize:22,fontWeight:800,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px"}}>{s.v}</div>
-                        <div style={{fontSize:10,color:t.textTertiary,marginTop:3,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{s.l}</div>
-                      </div>
+                      <button key={tb.id} onClick={function(){setPeopleTab(tb.id);}}
+                        style={{padding:"10px 0",marginRight:20,border:"none",background:"transparent",color:on?t.accent:t.textTertiary,fontSize:13,fontWeight:on?700:400,borderBottom:"2px solid "+(on?t.accent:"transparent"),marginBottom:"-1px",display:"flex",gap:5,alignItems:"center"}}>
+                        {tb.label}
+                        {tb.count>0&&<span style={{fontSize:10,fontWeight:800,color:on?t.accent:t.textTertiary,background:on?t.accentSubtle:t.bgTertiary,padding:"1px 6px",borderRadius:10}}>{tb.count}</span>}
+                      </button>
                     );
                   })}
                 </div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {history.map(function(m){
-                    var isWin=m.result==="win";
-                    var rc=isWin?t.green:t.red;
-                    return(
-                      <div key={m.id} className="fade-up" style={{
-                        background:t.bgCard, border:"1px solid "+t.border,
-                        borderLeft:"3px solid "+rc,
-                        borderRadius:10, padding:"14px 16px",
-                        display:"flex", gap:12, alignItems:"center"
-                      }}>
-                        <div style={{
-                          width:36,height:36,borderRadius:9,
-                          background:rc+"18",border:"1px solid "+rc+"30",
-                          display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
-                        }}>
-                          <span style={{fontSize:13,fontWeight:800,color:rc}}>{isWin?"W":"L"}</span>
-                        </div>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:13,fontWeight:600,color:t.text}}>vs {m.oppName}</div>
-                          <div style={{fontSize:11,color:t.textTertiary,marginTop:1}}>{m.tournName} · {m.date}</div>
-                        </div>
-                        <div style={{display:"flex",gap:4}}>
-                          {(m.sets||[]).map(function(set,si){
-                            return(
-                              <div key={si} style={{
-                                background:t.bgTertiary,border:"1px solid "+t.border,
-                                borderRadius:6,padding:"3px 7px",textAlign:"center"
-                              }}>
-                                <div style={{fontSize:12,fontWeight:700,color:t.text,fontVariantNumeric:"tabular-nums"}}>{set.you}-{set.them}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
+
+                <div style={{padding:"16px 20px 100px"}} className="fade-up">
+
+                  {/* Friends tab */}
+                  {peopleTab==="friends"&&(
+                    friends.length===0
+                      ?<div style={{textAlign:"center",padding:"48px 20px"}}>
+                        <div style={{fontSize:36,marginBottom:12}}>🤝</div>
+                        <div style={{fontSize:16,fontWeight:700,color:t.text,marginBottom:6}}>No friends yet</div>
+                        <div style={{fontSize:13,color:t.textSecondary,marginBottom:20}}>Search for players above or check Suggested players.</div>
+                        <button onClick={function(){setPeopleTab("suggested");}} style={{padding:"10px 20px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>See suggestions</button>
                       </div>
-                    );
-                  })}
+                      :<div>
+                        <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>{friends.length} friend{friends.length!==1?"s":""}</div>
+                        {friends.map(function(u){return<PlayerCard key={u.id} u={u}/>;})}</div>
+                  )}
+
+                  {/* Requests tab */}
+                  {peopleTab==="requests"&&(
+                    receivedRequests.length===0&&sentRequests.length===0
+                      ?<div style={{textAlign:"center",padding:"48px 20px"}}>
+                        <div style={{fontSize:36,marginBottom:12}}>📬</div>
+                        <div style={{fontSize:16,fontWeight:700,color:t.text,marginBottom:6}}>No pending requests</div>
+                        <div style={{fontSize:13,color:t.textSecondary}}>When someone adds you, it'll show up here.</div>
+                      </div>
+                      :<div>
+                        {receivedRequests.length>0&&(
+                          <div style={{marginBottom:20}}>
+                            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Received · {receivedRequests.length}</div>
+                            {receivedRequests.map(function(u){
+                              var loading=!!socialLoading[u.id];
+                              return(
+                                <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+t.accent,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
+                                  <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
+                                    {(u.avatar||"?").slice(0,2).toUpperCase()}
+                                  </div>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:14,fontWeight:700,color:t.text}}>{u.name}</div>
+                                    <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>{u.suburb} {u.skill&&"· "+u.skill}</div>
+                                  </div>
+                                  <div style={{display:"flex",gap:6}}>
+                                    <button disabled={loading} onClick={function(){acceptRequest(u);}}
+                                      style={{padding:"8px 16px",borderRadius:8,border:"none",background:t.green,color:"#fff",fontSize:13,fontWeight:600,opacity:loading?0.6:1}}>
+                                      {loading?"…":"Accept"}
+                                    </button>
+                                    <button disabled={loading} onClick={function(){declineRequest(u);}}
+                                      style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:13,opacity:loading?0.6:1}}>
+                                      Decline
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {sentRequests.length>0&&(
+                          <div>
+                            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Sent · {sentRequests.length}</div>
+                            {sentRequests.map(function(u){
+                              var loading=!!socialLoading[u.id];
+                              return(
+                                <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
+                                  <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
+                                    {(u.avatar||"?").slice(0,2).toUpperCase()}
+                                  </div>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:14,fontWeight:700,color:t.text}}>{u.name}</div>
+                                    <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>{u.suburb} {u.skill&&"· "+u.skill}</div>
+                                    <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>Request pending</div>
+                                  </div>
+                                  <button disabled={loading} onClick={function(){cancelRequest(u);}}
+                                    style={{padding:"7px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
+                                    {loading?"…":"Cancel"}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                  )}
+
+                  {/* Suggested tab */}
+                  {peopleTab==="suggested"&&(
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Players near you</div>
+                      <div style={{fontSize:12,color:t.textSecondary,marginBottom:14}}>Same suburb or skill level as you.</div>
+                      {suggestedPlayers.length===0
+                        ?<div style={{textAlign:"center",padding:"40px 20px"}}>
+                          <div style={{fontSize:32,marginBottom:10}}>🎾</div>
+                          <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:6}}>No suggestions yet</div>
+                          <div style={{fontSize:13,color:t.textSecondary}}>As more players join your area, they'll appear here.</div>
+                        </div>
+                        :suggestedPlayers.map(function(u){return<PlayerCard key={u.id} u={u}/>;})
+                      }
+                      {/* Invite via share link */}
+                      <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"16px",marginTop:16,textAlign:"center"}}>
+                        <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>Invite friends</div>
+                        <div style={{fontSize:12,color:t.textSecondary,marginBottom:14}}>Share CourtSync with people you play with.</div>
+                        <button
+                          onClick={function(){
+                            var url="https://rarired.vercel.app";
+                            if(navigator.share){navigator.share({title:"Join CourtSync",text:"Track your tennis matches and compete in tournaments.",url:url});}
+                            else{navigator.clipboard.writeText(url);alert("Link copied!");};
+                          }}
+                          style={{padding:"10px 24px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
+                          Share invite link
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Blocked tab */}
+                  {peopleTab==="blocked"&&(
+                    blockedUsers.length===0
+                      ?<div style={{textAlign:"center",padding:"48px 20px"}}>
+                        <div style={{fontSize:13,color:t.textTertiary}}>You haven't blocked anyone.</div>
+                      </div>
+                      :<div>
+                        <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>{blockedUsers.length} blocked</div>
+                        {blockedUsers.map(function(u){
+                          return(
+                            <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
+                              <div style={{width:44,height:44,borderRadius:"50%",background:t.bgTertiary,border:"1px solid "+t.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:t.textTertiary,flexShrink:0}}>
+                                {(u.avatar||"?").slice(0,2).toUpperCase()}
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:14,fontWeight:600,color:t.textSecondary}}>{u.name}</div>
+                                {u.suburb&&<div style={{fontSize:11,color:t.textTertiary,marginTop:1}}>{u.suburb}</div>}
+                              </div>
+                              <button onClick={function(){unblockUser(u);}}
+                                style={{padding:"7px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.accent,fontSize:12,fontWeight:600}}>
+                                Unblock
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                  )}
                 </div>
               </div>
-            )
-          }
-        </div>
-      )}
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── PROFILE ── */}
       {tab==="profile"&&(function(){
@@ -2207,6 +2641,31 @@ export default function App() {
                 )}
               </div>
 
+              {/* Privacy */}
+              <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,overflow:"hidden",marginBottom:12}}>
+                <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
+                  <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>Profile Privacy</div>
+                  <div style={{fontSize:11,color:t.textTertiary}}>Controls who can see your profile and matches.</div>
+                </div>
+                <div style={{padding:"14px 16px",display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {[{v:"public",l:"Public",d:"Everyone"},{v:"friends",l:"Friends only",d:"Only friends"},{v:"private",l:"Private",d:"Only you"}].map(function(opt){
+                    var on=(profile.privacy||"public")===opt.v;
+                    return(
+                      <button key={opt.v}
+                        onClick={function(){
+                          var nd=Object.assign({},profile,{privacy:opt.v});
+                          setProfile(nd);
+                          if(authUser)supabase.from('profiles').upsert({id:authUser.id,privacy:opt.v},{onConflict:'id'});
+                        }}
+                        style={{flex:1,padding:"10px 8px",borderRadius:9,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textSecondary,fontSize:12,fontWeight:on?700:400,textAlign:"center"}}>
+                        <div>{opt.l}</div>
+                        <div style={{fontSize:10,opacity:0.7,marginTop:1}}>{opt.d}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Account */}
               {authUser&&(
                 <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,overflow:"hidden",marginBottom:12}}>
@@ -2214,6 +2673,10 @@ export default function App() {
                     <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Account</div>
                     <div style={{fontSize:14,color:t.text,fontWeight:500}}>{authUser.email}</div>
                   </div>
+                  <button onClick={function(){setTab("people");setPeopleTab("requests");}} style={{width:"100%",padding:"12px 16px",border:"none",borderBottom:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:13,fontWeight:500,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>Friend requests</span>
+                    <span style={{fontSize:12,color:receivedRequests.length>0?t.accent:t.textTertiary}}>{receivedRequests.length>0?receivedRequests.length+" pending":"›"}</span>
+                  </button>
                   <button
                     onClick={function(){supabase.auth.signOut();}}
                     style={{width:"100%",padding:"14px 16px",border:"none",background:"transparent",color:t.red,fontSize:13,fontWeight:600,textAlign:"left",cursor:"pointer"}}>
