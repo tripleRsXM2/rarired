@@ -119,10 +119,8 @@ export function useMatchHistory(opts){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
 
-    // Stats fire immediately only for casual/auto-confirmed matches
-    if(!isVerified&&bumpStats){
-      await bumpStats(authUser.id, scoreDraft.result);
-    }
+    // Stats never update for free-text casual matches (no real opponent to verify).
+    // For verified matches, stats fire when opponent confirms (handled in applyAcceptedTagMatch).
 
     return {error:null, matchId, status};
   }

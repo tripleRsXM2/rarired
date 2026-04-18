@@ -124,7 +124,7 @@ export default function ScoreModal({
                   <div style={{fontSize:10,color:t.textTertiary,marginTop:1}}>
                     {isVerified
                       ?"Opponent will confirm — stats update after they accept"
-                      :"Counts immediately, no confirmation needed"}
+                      :"Logged for records only — does not affect ELO or W/L"}
                   </div>
                 </div>
               </div>
