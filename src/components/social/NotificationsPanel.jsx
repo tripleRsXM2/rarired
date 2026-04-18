@@ -12,6 +12,7 @@ export default function NotificationsPanel({
     if(n.type==='match_disputed') return n.fromName+' disputed your match — under review';
     if(n.type==='match_correction_requested') return n.fromName+' requested a correction on your match';
     if(n.type==='match_deleted') return n.fromName+' removed a match from your feed';
+    if(n.type==='match_reminder') return 'A pending match expires in less than 24h — check your feed';
     if(n.type==='like') return n.fromName+' liked your match';
     if(n.type==='comment') return n.fromName+' commented on your match';
     return 'New notification';
@@ -69,6 +70,15 @@ export default function NotificationsPanel({
                     {/* match_confirmed: positive feedback */}
                     {n.type==='match_confirmed'&&(
                       <div style={{fontSize:11,color:t.green,marginTop:4,fontWeight:600}}>Stats updated</div>
+                    )}
+
+                    {/* match_reminder: direct to feed */}
+                    {n.type==='match_reminder'&&(
+                      <button
+                        onClick={function(){setTab("home");setShowNotifications(false);}}
+                        style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.orange,background:t.orangeSubtle,color:t.orange,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                        View in feed →
+                      </button>
                     )}
 
                     {/* match_disputed / correction: direct to feed */}

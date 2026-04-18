@@ -177,6 +177,7 @@ export default function App(){
             setCasualOppName={matchHistory.setCasualOppName}
             setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
             deleteMatch={matchHistory.deleteMatch} removeTaggedMatch={matchHistory.removeTaggedMatch}
+            resubmitMatch={matchHistory.resubmitMatch}
             confirmOpponentMatch={matchHistory.confirmOpponentMatch}
             disputeOpponentMatch={matchHistory.disputeOpponentMatch}
             requestMatchCorrection={matchHistory.requestMatchCorrection}
@@ -251,7 +252,7 @@ export default function App(){
           casualOppId={matchHistory.casualOppId} setCasualOppId={matchHistory.setCasualOppId}
           showOppDrop={matchHistory.showOppDrop} setShowOppDrop={matchHistory.setShowOppDrop}
           friends={social.friends} suggestedPlayers={social.suggestedPlayers}
-          submitMatch={matchHistory.submitMatch}
+          submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
         />
         <CommentModal

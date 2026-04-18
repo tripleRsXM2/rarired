@@ -46,6 +46,9 @@ export function requestMatchRevision(matchId, requestedBy, reason, snapshot){
     .update({revision_requested_by:requestedBy, revision_reason:reason||null, original_snapshot:snapshot})
     .eq('id',matchId);
 }
+export function updateMatch(matchId, payload){
+  return supabase.from('match_history').update(payload).eq('id',matchId);
+}
 export function expireStalePendingMatches(userId){
   // Client-side expiry check since we don't have pg_cron
   return supabase.from('match_history')

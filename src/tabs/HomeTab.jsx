@@ -5,7 +5,8 @@ import { avColor } from "../lib/helpers.js";
 function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
-  confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection}) {
+  setScoreModal, setScoreDraft,
+  confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection, resubmitMatch}) {
 
   var isWin=m.result==="win";
   var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join("  ");
@@ -24,6 +25,26 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
     if(dateStr==="Today") return "Today";
     if(dateStr==="Yesterday") return "Yesterday";
     return dateStr;
+  }
+
+  function timeRemaining(expiresAt){
+    if(!expiresAt) return null;
+    var ms=new Date(expiresAt)-Date.now();
+    if(ms<=0) return null;
+    var h=Math.floor(ms/3600000);
+    if(h>=48) return Math.floor(h/24)+"d left to confirm";
+    if(h>=1) return h+"h left to confirm";
+    return "< 1h left to confirm";
+  }
+
+  function handleResubmit(){
+    setScoreDraft({
+      sets:m.sets&&m.sets.length?m.sets.map(function(s){return Object.assign({},s);}):[{you:"",them:""}],
+      result:m.result,
+      notes:m.notes||"",
+      date:m.rawDate||new Date().toISOString().slice(0,10),
+    });
+    setScoreModal({resubmit:true,match:m,oppName:m.oppName,opponentId:m.opponent_id});
   }
 
   function handleDispute(){
@@ -101,9 +122,32 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
 
       {/* Pending — awaiting submitter view */}
       {isPending&&!isOpponentView&&(
-        <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:12,color:t.orange}}>⏳</span>
-          <span style={{fontSize:12,color:t.textSecondary}}>Awaiting opponent confirmation — stats not counted yet</span>
+        <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px"}}>
+          {m.revisionRequestedBy
+            ?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+               <div style={{display:"flex",alignItems:"center",gap:8}}>
+                 <span style={{fontSize:12,color:t.orange}}>✏️</span>
+                 <span style={{fontSize:12,color:t.orange,fontWeight:600}}>Opponent requested a correction</span>
+               </div>
+               {!demo&&(
+                 <button onClick={handleResubmit}
+                   style={{alignSelf:"flex-start",padding:"7px 14px",borderRadius:7,border:"1px solid "+t.accent,background:t.accentSubtle,color:t.accent,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                   Edit &amp; resubmit
+                 </button>
+               )}
+             </div>
+            :<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+               <div style={{display:"flex",alignItems:"center",gap:8}}>
+                 <span style={{fontSize:12,color:t.orange}}>⏳</span>
+                 <span style={{fontSize:12,color:t.textSecondary}}>Awaiting opponent confirmation</span>
+               </div>
+               {timeRemaining(m.expiresAt)&&(
+                 <span style={{fontSize:10,fontWeight:700,color:t.orange,background:t.orangeSubtle,padding:"2px 8px",borderRadius:20,letterSpacing:"0.04em",flexShrink:0}}>
+                   {timeRemaining(m.expiresAt)}
+                 </span>
+               )}
+             </div>
+          }
         </div>
       )}
 
@@ -211,7 +255,7 @@ export default function HomeTab({
   feedComments, commentModal, setCommentModal, commentDraft, setCommentDraft,
   setShowAuth, setAuthMode, setAuthStep,
   setCasualOppName, setScoreModal, setScoreDraft,
-  deleteMatch, removeTaggedMatch,
+  deleteMatch, removeTaggedMatch, resubmitMatch,
   confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection,
 }) {
   var DEMO_FEED=[
@@ -220,7 +264,7 @@ export default function HomeTab({
     {id:"demo-3",oppName:"Morgan Davis",tournName:"Moore Park Open",date:"Mon",sets:[{you:7,them:5},{you:6,them:3}],result:"win",playerName:"Casey Moore",playerAvatar:"CM",isOwn:false,status:"confirmed"},
   ];
 
-  var feedCardProps={t,authUser,feedLikes,feedLikeCounts,feedComments,setFeedLikes,setFeedLikeCounts,setCommentModal,setCommentDraft,confirmOpponentMatch,disputeOpponentMatch,requestMatchCorrection};
+  var feedCardProps={t,authUser,feedLikes,feedLikeCounts,feedComments,setFeedLikes,setFeedLikeCounts,setCommentModal,setCommentDraft,setScoreModal,setScoreDraft,confirmOpponentMatch,disputeOpponentMatch,requestMatchCorrection,resubmitMatch};
 
   if(!authUser) {
     return (

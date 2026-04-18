@@ -37,6 +37,18 @@ export function useMatchHistory(opts){
     var normalized=ownNorm.concat(allOpponent).sort(function(a,b){return b.date<a.date?-1:1;});
     var matchIds=normalized.map(function(m){return m.id;});
     setHistory(normalized);
+    // Client-side reminder: notify opponent when <24h left on pending match
+    normalized.forEach(function(m){
+      if(m.status!=='pending_confirmation'||!m.expiresAt||!m.opponent_id||m.isTagged) return;
+      var msLeft=new Date(m.expiresAt)-Date.now();
+      if(msLeft>0&&msLeft<24*60*60*1000){
+        var key='reminded_'+m.id;
+        if(!localStorage.getItem(key)){
+          localStorage.setItem(key,'1');
+          if(sendNotification) sendNotification({user_id:m.opponent_id,type:'match_reminder',from_user_id:userId,match_id:m.id});
+        }
+      }
+    });
     if(!matchIds.length) return;
     var lr=await M.fetchFeedLikes(userId, matchIds);
     if(lr.data){var likedMap={};lr.data.forEach(function(l){likedMap[l.match_id]=true;});setFeedLikes(likedMap);}
@@ -170,6 +182,41 @@ export function useMatchHistory(opts){
     setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
   }
 
+  // Submitter edits and resubmits after opponent requested a correction.
+  async function resubmitMatch(match, scoreDraft){
+    if(!authUser) return;
+    var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
+    if(!clean.length) return {error:'no_sets'};
+    var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
+    var newExpiresAt=new Date(Date.now()+72*60*60*1000).toISOString();
+    var payload={
+      sets:clean, result:scoreDraft.result, match_date:matchDate,
+      expires_at:newExpiresAt,
+      revision_requested_by:null, revision_reason:null,
+      status:'pending_confirmation',
+    };
+    if(match.opponent_id){
+      payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, clean);
+    }
+    var r=await M.updateMatch(match.id, payload);
+    if(r.error){console.error('[resubmitMatch]',r.error);return {error:r.error.message};}
+    setHistory(function(h){
+      return h.map(function(m){
+        if(m.id!==match.id) return m;
+        return Object.assign({},m,{
+          sets:clean, result:scoreDraft.result,
+          date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
+          expiresAt:newExpiresAt, revisionRequestedBy:null, status:'pending_confirmation',
+        });
+      });
+    });
+    // Re-notify opponent so they see the updated match
+    if(sendNotification&&match.opponent_id){
+      await sendNotification({user_id:match.opponent_id,type:'match_tag',from_user_id:authUser.id,match_id:match.id});
+    }
+    return {error:null};
+  }
+
   async function removeTaggedMatch(m){
     await M.markMatchTagStatus(m.id,'declined',false);
     setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
@@ -207,7 +254,7 @@ export function useMatchHistory(opts){
     showOppDrop, setShowOppDrop,
     scoreModal, setScoreModal, scoreDraft, setScoreDraft,
     loadHistory, resetHistory,
-    submitMatch, deleteMatch, removeTaggedMatch, applyAcceptedTagMatch,
+    submitMatch, deleteMatch, resubmitMatch, removeTaggedMatch, applyAcceptedTagMatch,
     confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection,
   };
 }

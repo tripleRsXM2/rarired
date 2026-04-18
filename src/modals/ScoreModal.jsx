@@ -9,7 +9,7 @@ export default function ScoreModal({
   casualOppId, setCasualOppId,
   showOppDrop, setShowOppDrop,
   friends, suggestedPlayers,
-  submitMatch, recordResult,
+  submitMatch, resubmitMatch, recordResult,
 }) {
   var iStyle=inputStyle(t);
   var [saving,setSaving]=useState(false);
@@ -17,17 +17,27 @@ export default function ScoreModal({
 
   if(!scoreModal) return null;
 
-  var isVerified=!!casualOppId;
+  var isResubmit=!!scoreModal.resubmit;
+  var isVerified=isResubmit?true:!!casualOppId;
 
   async function handleSave(){
     setSaveError("");
     var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
     if(!clean.length){setSaveError("Add at least one set score.");return;}
 
+    setSaving(true);
+
+    if(isResubmit){
+      var res=await resubmitMatch(scoreModal.match, scoreDraft);
+      setSaving(false);
+      if(res&&res.error){setSaveError("Failed to resubmit. Try again.");return;}
+      setScoreModal(null);
+      return;
+    }
+
     var oppName=scoreModal.casual?(casualOppName.trim()||"Unknown"):scoreModal.oppName;
     var opponentId=scoreModal.casual?casualOppId:(scoreModal.opponentId||null);
 
-    setSaving(true);
     var res=await submitMatch({
       scoreModal,
       scoreDraft,
@@ -58,17 +68,26 @@ export default function ScoreModal({
 
   return (
     <div
-      onClick={function(){setScoreModal(null);setCasualOppName("");setCasualOppId(null);}}
+      onClick={function(){setScoreModal(null);if(!isResubmit){setCasualOppName("");setCasualOppId(null);}}}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}}>
       <div
         onClick={function(e){e.stopPropagation();}}
         className="slide-up"
         style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"24px 22px 48px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
         <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 20px"}}/>
-        <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>Log Result</h2>
+        <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>{isResubmit?"Edit & Resubmit":"Log Result"}</h2>
 
-        {/* Opponent field */}
-        {scoreModal.casual
+        {/* Resubmit mode: locked opponent */}
+        {isResubmit&&(
+          <div style={{marginBottom:16,padding:"10px 14px",borderRadius:8,background:t.bgTertiary,border:"1px solid "+t.border}}>
+            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Opponent</div>
+            <div style={{fontSize:14,fontWeight:600,color:t.text}}>{scoreModal.oppName}</div>
+            <div style={{fontSize:11,color:t.textSecondary,marginTop:2}}>Corrected result will be sent to your opponent to confirm again</div>
+          </div>
+        )}
+
+        {/* Opponent field — new match only */}
+        {!isResubmit&&scoreModal.casual
           ?<div style={{marginBottom:16}}>
             <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Opponent</label>
             <div style={{position:"relative"}}>
@@ -130,7 +149,7 @@ export default function ScoreModal({
               </div>
             )}
           </div>
-          :<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>
+          :(!isResubmit&&<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>)
         }
 
         {/* Date */}
@@ -200,7 +219,7 @@ export default function ScoreModal({
         {/* Actions */}
         <div style={{display:"flex",gap:8}}>
           <button
-            onClick={function(){setScoreModal(null);setCasualOppName("");setCasualOppId(null);}}
+            onClick={function(){setScoreModal(null);if(!isResubmit){setCasualOppName("");setCasualOppId(null);}}}
             style={{flex:1,padding:"12px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:13,fontWeight:500}}>
             Cancel
           </button>
@@ -208,7 +227,7 @@ export default function ScoreModal({
             onClick={handleSave}
             disabled={saving}
             style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:saving?t.border:t.accent,color:"#fff",fontSize:13,fontWeight:600,opacity:saving?0.7:1}}>
-            {saving?"Saving…":(isVerified&&scoreModal.casual?"Submit for confirmation":"Save result")}
+            {saving?"Saving…":isResubmit?"Resubmit for confirmation":(isVerified&&scoreModal.casual?"Submit for confirmation":"Save result")}
           </button>
         </div>
       </div>
