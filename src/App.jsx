@@ -495,9 +495,9 @@ export default function App() {
     var normalizedHistory=(hr.data||[]).map(function(m){
       return {
         id:m.id,
-        oppName:m.oppName||m.oppname||m.opp_name||"Unknown",
-        tournName:m.tournName||m.tournname||m.tourn_name||"",
-        date:m.date||m.match_date||"",
+        oppName:m.opp_name||"Unknown",
+        tournName:m.tourn_name||"",
+        date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",
         sets:m.sets||[],
         result:m.result||"loss",
         notes:m.notes||""
@@ -598,10 +598,11 @@ export default function App() {
   var [commentModal,setCommentModal]=useState(null);
   var [commentDraft,setCommentDraft]=useState("");
   var [casualOppName,setCasualOppName]=useState("");
+  var [showOppDrop,setShowOppDrop]=useState(false);
   var [scheduleModal,setScheduleModal]=useState(null);
   var [scheduleDraft,setScheduleDraft]=useState({date:"",time:"6:00 PM",court:"Court 1"});
   var [scoreModal,setScoreModal]=useState(null);
-  var [scoreDraft,setScoreDraft]=useState({sets:[{you:"",them:""}],result:"win",notes:""});
+  var [scoreDraft,setScoreDraft]=useState({sets:[{you:"",them:""}],result:"win",notes:"",date:""});
   var [adminTab,setAdminTab]=useState("tournaments");
   var [newTourn,setNewTourn]=useState({name:"",skill:"Intermediate",size:16,startDate:"",deadlineDays:14,format:"league",surface:"Hard Court"});
 
@@ -616,6 +617,7 @@ export default function App() {
   var [peopleSearch,setPeopleSearch]=useState("");
   var [searchResults,setSearchResults]=useState([]);
   var [searchLoading,setSearchLoading]=useState(false);
+  var [showSearchDrop,setShowSearchDrop]=useState(false);
   var [suggestedPlayers,setSuggestedPlayers]=useState([]);
   var [socialLoading,setSocialLoading]=useState({});
   var searchTimer=useRef(null);
@@ -776,15 +778,18 @@ export default function App() {
   }
 
   async function searchUsers(query){
-    if(!query.trim()||!authUser){setSearchResults([]);setSearchLoading(false);return;}
-    setSearchLoading(true);
-    var r=await supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,privacy')
-      .ilike('name','%'+query.trim()+'%')
+    if(!query.trim()||!authUser){setSearchResults([]);setSearchLoading(false);setShowSearchDrop(false);return;}
+    var q=query.trim();
+    var r=await supabase.from('profiles')
+      .select('id,name,avatar,skill,suburb,ranking_points,matches_played,wins,privacy')
+      .ilike('name','%'+q+'%')
       .neq('id',authUser.id)
-      .limit(12);
-    // Filter out blocked users
+      .limit(10);
+    if(r.error){setSearchLoading(false);return;}
     var blockedIds=blockedUsers.map(function(b){return b.id;});
-    setSearchResults((r.data||[]).filter(function(u){return!blockedIds.includes(u.id);}));
+    var filtered=(r.data||[]).filter(function(u){return!blockedIds.includes(u.id);});
+    setSearchResults(filtered);
+    setShowSearchDrop(true);
     setSearchLoading(false);
   }
 
@@ -1380,7 +1385,7 @@ export default function App() {
                 <div style={{fontSize:12,color:t.textTertiary,marginTop:1}}>{history.length} match{history.length!==1?"es":""} logged</div>
               </div>
               <button
-                onClick={function(){setCasualOppName("");setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:""}); }}
+                onClick={function(){setCasualOppName("");setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10)}); }}
                 style={{padding:"9px 16px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
                 + Log match
               </button>
@@ -1400,7 +1405,7 @@ export default function App() {
                   <div style={{fontSize:17,fontWeight:700,color:t.text,marginBottom:8}}>Nothing here yet</div>
                   <div style={{fontSize:13,color:t.textSecondary,lineHeight:1.6,marginBottom:24}}>Log your first match and it'll show up in your feed. Your friends' matches will appear here too.</div>
                   <button
-                    onClick={function(){setCasualOppName("");setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:""}); }}
+                    onClick={function(){setCasualOppName("");setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10)}); }}
                     style={{padding:"13px 28px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:700}}>
                     Log your first match
                   </button>
@@ -1892,7 +1897,7 @@ export default function App() {
                                   {m.scheduledDate?"Edit":"Schedule"}
                                 </button>
                                 <button
-                                  onClick={function(){setScoreModal({oppName:item.opponent?item.opponent.name:"Opponent",tournName:t2.name,tournId:t2.id,roundIdx:item.roundIdx,matchId:m.id,winnerId1:myId,winnerId2:item.opponent?item.opponent.id:null});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:""}); }}
+                                  onClick={function(){setScoreModal({oppName:item.opponent?item.opponent.name:"Opponent",tournName:t2.name,tournId:t2.id,roundIdx:item.roundIdx,matchId:m.id,winnerId1:myId,winnerId2:item.opponent?item.opponent.id:null});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10)}); }}
                                   style={{flex:1,padding:"9px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:12,fontWeight:600}}>
                                   Log result
                                 </button>
@@ -2039,28 +2044,55 @@ export default function App() {
                   onChange={function(e){
                     var q=e.target.value;setPeopleSearch(q);
                     clearTimeout(searchTimer.current);
-                    if(!q.trim()){setSearchResults([]);setSearchLoading(false);return;}
+                    if(!q.trim()){setSearchResults([]);setSearchLoading(false);setShowSearchDrop(false);return;}
                     setSearchLoading(true);
-                    searchTimer.current=setTimeout(function(){searchUsers(q);},350);
+                    setShowSearchDrop(true);
+                    searchTimer.current=setTimeout(function(){searchUsers(q);},400);
                   }}
+                  onFocus={function(){if(searchResults.length>0)setShowSearchDrop(true);}}
+                  onBlur={function(){setTimeout(function(){setShowSearchDrop(false);},180);}}
                   style={Object.assign({},inputStyle,{paddingLeft:38,fontSize:14})}/>
                 {searchLoading&&<span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:11,color:t.textTertiary}}>…</span>}
-              </div>
 
-              {/* Search results */}
-              {peopleSearch.trim()&&(
-                <div style={{marginBottom:16}}>
-                  {searchResults.length===0&&!searchLoading
-                    ?<div style={{textAlign:"center",padding:"24px 0",color:t.textTertiary,fontSize:13}}>No players found for "{peopleSearch}"</div>
-                    :searchResults.map(function(u){return<PlayerCard key={u.id} u={u}/>;})
-                  }
-                </div>
-              )}
+                {/* Floating dropdown */}
+                {showSearchDrop&&peopleSearch.trim()&&(
+                  <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:t.card,borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.13)",border:"1px solid "+t.border,zIndex:200,overflow:"hidden",maxHeight:320,overflowY:"auto"}}>
+                    {searchLoading
+                      ?<div style={{padding:"18px 16px",textAlign:"center",color:t.textTertiary,fontSize:13}}>Searching…</div>
+                      :searchResults.length===0
+                      ?<div style={{padding:"18px 16px",textAlign:"center",color:t.textTertiary,fontSize:13}}>No players found for "{peopleSearch}"</div>
+                      :searchResults.map(function(u){
+                        var isFriend=friends.some(function(f){return f.id===u.id;});
+                        var isPending=sentRequests.some(function(r){return r.id===u.id;});
+                        var isReceived=receivedRequests.some(function(r){return r.id===u.id;});
+                        return(
+                          <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid "+t.border,cursor:"default"}}>
+                            <div style={{width:36,height:36,borderRadius:"50%",background:t.accentSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,overflow:"hidden"}}>
+                              {u.avatar?<img src={u.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎾"}
+                            </div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:14,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.name}</div>
+                              <div style={{fontSize:11,color:t.textTertiary}}>{[u.suburb,u.skill].filter(Boolean).join(" · ")}</div>
+                            </div>
+                            {isFriend
+                              ?<span style={{fontSize:11,color:t.accent,fontWeight:600}}>Friends</span>
+                              :isReceived
+                                ?<button onMouseDown={function(){acceptRequest(u.id);setShowSearchDrop(false);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontWeight:600,cursor:"pointer"}}>Accept</button>
+                                :isPending
+                                  ?<button onMouseDown={function(){cancelRequest(u.id);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontWeight:600,cursor:"pointer"}}>Pending</button>
+                                  :<button onMouseDown={function(){sendFriendRequest(u.id);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontWeight:600,cursor:"pointer"}}>Add</button>
+                            }
+                          </div>
+                        );
+                      })
+                    }
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Sub-tabs */}
-            {!peopleSearch.trim()&&(
-              <div>
+            {/* Sub-tabs — always visible */}
+            <div>
                 <div style={{display:"flex",borderBottom:"1px solid "+t.border,padding:"0 20px"}}>
                   {[
                     {id:"friends",label:"Friends",count:friends.length},
@@ -2219,8 +2251,7 @@ export default function App() {
                   )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
         );
       })()}
 
@@ -3016,15 +3047,52 @@ export default function App() {
           <div
             onClick={function(e){e.stopPropagation();}}
             className="slide-up"
-            style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"24px 22px 48px",width:"100%",maxWidth:540}}>
+            style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"24px 22px 48px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
             <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 20px"}}/>
-            <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.3px"}}>Log Result</h2>
+            <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>Log Result</h2>
             {scoreModal.casual
-              ?<input value={casualOppName} placeholder="Opponent name"
-                  onChange={function(e){setCasualOppName(e.target.value);}}
-                  style={Object.assign({},inputStyle,{marginBottom:20,fontSize:13})}/>
-              :<p style={{fontSize:12,color:t.textSecondary,marginBottom:20}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>
+              ?<div style={{marginBottom:16}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Opponent</label>
+                  <div style={{position:"relative"}}>
+                    <input value={casualOppName} placeholder="Type a name…"
+                      onChange={function(e){setCasualOppName(e.target.value);setShowOppDrop(true);}}
+                      onFocus={function(){setShowOppDrop(true);}}
+                      onBlur={function(){setTimeout(function(){setShowOppDrop(false);},180);}}
+                      style={Object.assign({},inputStyle,{fontSize:14,marginBottom:0})}/>
+                    {showOppDrop&&(function(){
+                      var q=(casualOppName||"").trim().toLowerCase();
+                      var all=friends.concat(suggestedPlayers.filter(function(s){return!friends.some(function(f){return f.id===s.id;});}));
+                      var hits=q?all.filter(function(u){return u.name&&u.name.toLowerCase().includes(q);}):friends.slice(0,6);
+                      if(!hits.length)return null;
+                      return(
+                        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:t.card,border:"1px solid "+t.border,borderRadius:10,boxShadow:"0 8px 28px rgba(0,0,0,0.14)",zIndex:400,overflow:"hidden"}}>
+                          {hits.map(function(u){
+                            return(
+                              <div key={u.id} onMouseDown={function(){setCasualOppName(u.name);setShowOppDrop(false);}}
+                                style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid "+t.border,background:"transparent"}}>
+                                <div style={{width:30,height:30,borderRadius:"50%",background:t.accentSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,overflow:"hidden",flexShrink:0}}>
+                                  {u.avatar?<img src={u.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎾"}
+                                </div>
+                                <div style={{flex:1}}>
+                                  <div style={{fontSize:13,fontWeight:600,color:t.text}}>{u.name}</div>
+                                  {u.skill&&<div style={{fontSize:11,color:t.textTertiary}}>{u.skill}</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              :<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>
             }
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Date</label>
+              <input type="date" value={scoreDraft.date}
+                onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{date:e.target.value});});}}
+                style={Object.assign({},inputStyle,{fontSize:14,marginBottom:0})}/>
+            </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase"}}>Result</label>
               <div style={{display:"flex",gap:8}}>
@@ -3088,16 +3156,15 @@ export default function App() {
                 onClick={async function(){
                   var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
                   var resolvedOpp=scoreModal.casual?(casualOppName.trim()||"Unknown"):scoreModal.oppName;
+                  var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
                   var localId="local-"+Date.now();
-                  var nm={id:localId,oppName:resolvedOpp,tournName:scoreModal.casual?"Casual Match":scoreModal.tournName,date:fmtDate(new Date()),sets:clean,result:scoreDraft.result,notes:""};
+                  var nm={id:localId,oppName:resolvedOpp,tournName:scoreModal.casual?"Casual Match":scoreModal.tournName,date:matchDate,sets:clean,result:scoreDraft.result,notes:""};
                   var newHistory=[nm].concat(history);
                   setHistory(newHistory);
                   if(authUser){
-                    // Insert without local id — let Supabase generate a proper UUID
                     var ins=await supabase.from('match_history').insert({
-                      oppName:resolvedOpp,
-                      tournName:nm.tournName,
-                      date:nm.date,
+                      opp_name:resolvedOpp,
+                      tourn_name:nm.tournName,
                       sets:clean,
                       result:nm.result,
                       notes:"",
