@@ -3173,6 +3173,7 @@ export default function App() {
                     }).select('id').single();
                     if(ins.error){
                       console.error('match_history insert failed:',ins.error);
+                      alert('Save failed: '+ins.error.message+'\nCode: '+ins.error.code);
                     } else {
                       // Replace local temp id with real Supabase id
                       setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:ins.data.id}):m;});});
