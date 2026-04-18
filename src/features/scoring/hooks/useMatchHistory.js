@@ -8,6 +8,7 @@ export function useMatchHistory(opts){
   var authUser=(opts&&opts.authUser)||null;
   var sendNotification=(opts&&opts.sendNotification)||null;
   var bumpStats=(opts&&opts.bumpStats)||null;
+  var refreshProfile=(opts&&opts.refreshProfile)||null;
 
   var [history,setHistory]=useState([]);
   var [feedLikes,setFeedLikes]=useState({});
@@ -136,18 +137,14 @@ export function useMatchHistory(opts){
     return {error:null, matchId, status};
   }
 
-  // Opponent confirms the match — both players' stats update.
+  // Opponent confirms the match — DB function updates both players atomically.
   async function confirmOpponentMatch(match){
     if(!authUser) return;
-    var mr=await M.confirmMatch(match.id);
+    var mr=await M.confirmMatchAndUpdateStats(match.id);
     if(mr.error){console.error('[confirmOpponentMatch]',mr.error);return;}
     setHistory(function(h){return h.map(function(m){return m.id===match.id?Object.assign({},m,{status:'confirmed'}):m;});});
-    // match.result is already from the opponent's perspective (inverted by normalizeMatch)
-    if(bumpStats){
-      await bumpStats(authUser.id, match.result);
-      var submitterResult=match.result==="win"?"loss":"win";
-      if(match.submitterId) await bumpStats(match.submitterId, submitterResult);
-    }
+    // Refresh current user's profile UI from DB (stats already written by the function)
+    if(refreshProfile) await refreshProfile(authUser.id);
     if(sendNotification&&match.submitterId){
       await sendNotification({user_id:match.submitterId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }

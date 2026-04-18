@@ -30,11 +30,8 @@ export function markMatchTagStatus(matchId, status, returnData){
   if(returnData) return q.select('*').single();
   return q;
 }
-export function confirmMatch(matchId){
-  return supabase.from('match_history')
-    .update({status:'confirmed', confirmed_at:new Date().toISOString()})
-    .eq('id',matchId)
-    .select('*').single();
+export function confirmMatchAndUpdateStats(matchId){
+  return supabase.rpc('confirm_match_and_update_stats',{p_match_id:matchId});
 }
 export function disputeMatch(matchId, raisedBy, reason){
   return supabase.from('match_history')

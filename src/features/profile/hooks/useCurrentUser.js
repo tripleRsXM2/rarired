@@ -55,6 +55,14 @@ export function useCurrentUser(){
     });
   }
 
+  async function refreshProfileUI(userId){
+    var r=await fetchProfile(userId);
+    if(r.data) setProfile(function(prev){
+      if(!prev.id||prev.id!==userId) return prev;
+      return r.data;
+    });
+  }
+
   function resetProfile(){
     setProfile(INITIAL_PROFILE);
     setProfileDraft(INITIAL_PROFILE);
@@ -65,6 +73,6 @@ export function useCurrentUser(){
     editingAvail, setEditingAvail, availDraft, setAvailDraft,
     showOnboarding, setShowOnboarding,
     onboardStep, setOnboardStep, onboardDraft, setOnboardDraft,
-    loadProfile, triggerOnboarding, bumpMatchStats, resetProfile,
+    loadProfile, triggerOnboarding, bumpMatchStats, refreshProfileUI, resetProfile,
   };
 }

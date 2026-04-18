@@ -49,7 +49,7 @@ export default function App(){
   });
 
   var currentUser=useCurrentUser();
-  var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats });
+  var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats, refreshProfile:currentUser.refreshProfileUI });
   var social=useSocialGraph({ authUser:auth.authUser });
   var dms=useDMs({ authUser:auth.authUser });
   var notifications=useNotifications({
