@@ -483,9 +483,11 @@ export default function App() {
     var isNewUser=!r.data;
     if(r.data){
       setProfile(r.data);
+      setProfileDraft(r.data);
     } else {
       var defaults={id:user.id,name:user.user_metadata.name||user.email.split("@")[0],suburb:"",skill:"Intermediate",style:"All-Court",bio:"",avatar:init,availability:{},ranking_points:1000,wins:0,losses:0,matches_played:0,streak_count:0,streak_type:null};
       setProfile(defaults);
+      setProfileDraft(defaults);
       await supabase.from('profiles').upsert(defaults);
     }
     var hr=await supabase.from('match_history').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
@@ -2304,7 +2306,7 @@ export default function App() {
                 var on=profileTab===pt;
                 return(
                   <button key={pt}
-                    onClick={function(){setProfileTab(pt);setEditingProfile(false);setEditingAvail(false);}}
+                    onClick={function(){setProfileTab(pt);setEditingProfile(false);setEditingAvail(false);if(pt==="settings")setProfileDraft(profile);}}
                     style={{
                       padding:"10px 16px",border:"none",background:"transparent",
                       color:on?t.accent:t.textTertiary,
