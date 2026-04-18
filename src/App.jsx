@@ -542,6 +542,11 @@ export default function App() {
   var [filterSkill,setFilterSkill]=useState("All");
   var [history,setHistory]=useState([]);
   var [profileTab,setProfileTab]=useState("overview");
+  var [feedLikes,setFeedLikes]=useState({});
+  var [feedComments,setFeedComments]=useState({});
+  var [commentModal,setCommentModal]=useState(null);
+  var [commentDraft,setCommentDraft]=useState("");
+  var [casualOppName,setCasualOppName]=useState("");
   var [scheduleModal,setScheduleModal]=useState(null);
   var [scheduleDraft,setScheduleDraft]=useState({date:"",time:"6:00 PM",court:"Court 1"});
   var [scoreModal,setScoreModal]=useState(null);
@@ -906,185 +911,215 @@ export default function App() {
       </div>
 
       {/* ── HOME TAB ── */}
-      {tab==="home"&&(
-        <div style={{maxWidth:680,margin:"0 auto",padding:"32px 20px"}}>
+      {tab==="home"&&(function(){
+        // Demo feed cards shown to guests
+        var DEMO_FEED=[
+          {id:"demo-1",oppName:"Alex Chen",tournName:"Summer Open",date:"Today",sets:[{you:6,them:3},{you:6,them:4}],result:"win",playerName:"Jordan Smith",playerAvatar:"JS",isOwn:false},
+          {id:"demo-2",oppName:"Sam Williams",tournName:"Casual Match",date:"Yesterday",sets:[{you:4,them:6},{you:3,them:6}],result:"loss",playerName:"Riley Brown",playerAvatar:"RB",isOwn:false},
+          {id:"demo-3",oppName:"Morgan Davis",tournName:"Moore Park Open",date:"Mon",sets:[{you:7,them:5},{you:6,them:3}],result:"win",playerName:"Casey Moore",playerAvatar:"CM",isOwn:false},
+        ];
 
-          <div style={{marginBottom:32}}>
-            <h1 style={{fontSize:28,fontWeight:700,letterSpacing:"-0.6px",color:t.text,marginBottom:6,lineHeight:1.2}}>
-              {authUser?"Good to see you, "+profile.name.split(" ")[0]+".":"Sydney Tennis."}
-            </h1>
-            <p style={{fontSize:15,color:t.textSecondary,lineHeight:1.5}}>
-              {authUser?"Here's what's happening with your tournaments.":"League format. Real prizes. Compete today."}
-            </p>
-          </div>
+        function timeAgo(dateStr){
+          if(!dateStr)return"";
+          if(dateStr==="Today")return"Today";
+          if(dateStr==="Yesterday")return"Yesterday";
+          return dateStr;
+        }
 
-          {/* My Tournaments */}
-          {authUser&&myTournaments.length>0&&(
-            <div style={{marginBottom:32}}>
-              <div style={{fontSize:11,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>My Tournaments</div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {myTournaments.map(function(t2){
-                  var entered=isEntered(t2.id),waitlisted=isWaitlisted(t2.id),wlP=waitlistPos(t2.id);
-                  var prize=PRIZES[t2.size]||PRIZES[16];
-                  var dl=daysUntil(t2.startDate);
-                  var dSt=tournStatus(t2);
-                  return(
-                    <div key={t2.id} className="fade-up"
-                      onClick={function(){setTab("tournaments");setSelectedTournId(t2.id);setTournDetailTab("overview");}}
-                      style={{
-                        background:t.bgCard, border:"1px solid "+t.border,
-                        borderLeft:"3px solid "+(entered?t.accent:t.purple),
-                        borderRadius:10, padding:"14px 16px",
-                        cursor:"pointer", display:"flex", alignItems:"center", gap:14
-                      }}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",gap:5,marginBottom:6,flexWrap:"wrap"}}>
-                          {entered&&<Pill label="Enrolled" color={t.green}/>}
-                          {waitlisted&&<Pill label={"Waitlist #"+wlP} color={t.purple}/>}
-                          {t2.status==="active"&&<Pill label="Live" color={t.accent}/>}
-                        </div>
-                        <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t2.name}</div>
-                        <div style={{fontSize:12,color:t.textSecondary}}>{prize.item}</div>
-                      </div>
-                      {dl!==null&&t2.status==="enrolling"&&(
-                        <div style={{textAlign:"right",flexShrink:0}}>
-                          <div style={{fontSize:15,fontWeight:700,color:t.orange,fontVariantNumeric:"tabular-nums"}}>{dl}d</div>
-                          <div style={{fontSize:10,color:t.textTertiary}}>to start</div>
-                        </div>
-                      )}
-                      <div style={{color:t.textTertiary,fontSize:14,flexShrink:0}}>›</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Next Matches */}
-          {myUpcoming.length>0&&(
-            <div style={{marginBottom:32}}>
-              <div style={{fontSize:11,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>Next Matches</div>
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {myUpcoming.map(function(item){
-                  var m=item.match,t2=item.tournament;
-                  var dl=daysUntil(m.deadline),urgent=dl!==null&&dl<=3;
-                  return(
-                    <div key={m.id} className="fade-up" style={{
-                      background:t.bgCard,
-                      border:"1px solid "+t.border,
-                      borderLeft:"3px solid "+(urgent?t.orange:t.accent),
-                      borderRadius:10, padding:"16px"
-                    }}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                        <div>
-                          <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>{t2.name} · {item.roundLabel}</div>
-                          <div style={{fontSize:18,fontWeight:700,color:t.text,letterSpacing:"-0.3px"}}>vs {item.opponent?item.opponent.name:"TBD"}</div>
-                        </div>
-                        {dl!==null&&(
-                          <div style={{textAlign:"right",flexShrink:0}}>
-                            <div style={{fontSize:13,fontWeight:700,color:urgent?t.orange:t.textSecondary,fontVariantNumeric:"tabular-nums"}}>
-                              {dl===0?"Today":dl<0?"Overdue":dl+"d"}
-                            </div>
-                            <div style={{fontSize:10,color:t.textTertiary}}>deadline</div>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{background:t.bgTertiary,borderRadius:8,padding:"9px 12px",marginBottom:12}}>
-                        <div style={{fontSize:11,color:t.textSecondary,marginBottom:1}}>{PILOT_VENUE.name}</div>
-                        {m.scheduledDate
-                          ?<div style={{fontSize:12,color:t.accent,fontWeight:600}}>{m.scheduledDate} · {m.scheduledTime} · {m.scheduledCourt}</div>
-                          :<div style={{fontSize:12,color:t.orange}}>Not yet scheduled — arrange with your opponent</div>
-                        }
-                      </div>
-                      <div style={{display:"flex",gap:8}}>
-                        <button
-                          onClick={function(){setScheduleModal({tournId:t2.id,roundIdx:item.roundIdx,matchId:m.id});setScheduleDraft({date:m.scheduledDate||"",time:m.scheduledTime||"6:00 PM",court:m.scheduledCourt||"Court 1"});}}
-                          style={{flex:1,padding:"10px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:12,fontWeight:500}}>
-                          {m.scheduledDate?"Edit time":"Schedule"}
-                        </button>
-                        <button
-                          onClick={function(){setScoreModal({oppName:item.opponent?item.opponent.name:"Opponent",tournName:t2.name,tournId:t2.id,roundIdx:item.roundIdx,matchId:m.id,winnerId1:myId,winnerId2:item.opponent?item.opponent.id:null});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:""}); }}
-                          style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:12,fontWeight:600}}>
-                          Log result
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Guest CTA */}
-          {!authUser&&(
-            <div style={{
-              background:t.bgCard, border:"1px solid "+t.border,
-              borderRadius:10, padding:"24px", marginBottom:28
-            }}>
-              <div style={{fontSize:20,fontWeight:700,color:t.text,marginBottom:6,letterSpacing:"-0.3px"}}>Start competing</div>
-              <div style={{fontSize:14,color:t.textSecondary,lineHeight:1.6,marginBottom:20}}>
-                Enter a skill bracket, play 5 league matches, qualify for semis, and compete for a brand new racket.
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <button
-                  onClick={function(){setShowAuth(true);setAuthMode("signup");setAuthStep("choose");}}
-                  style={{flex:1,padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600}}>
-                  Sign up free
-                </button>
-                <button
-                  onClick={function(){setTab("tournaments");}}
-                  style={{flex:1,padding:"12px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:14,fontWeight:500}}>
-                  Browse
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Venue info */}
-          <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"16px",marginBottom:10}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Pilot Venue</div>
-            <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{
-                width:40, height:40, borderRadius:9,
-                background:t.accentSubtle, border:"1px solid "+t.accent+"30",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:12, fontWeight:700, color:t.accent, flexShrink:0
-              }}>SB</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:2}}>{PILOT_VENUE.name}</div>
-                <div style={{fontSize:12,color:t.textSecondary}}>{PILOT_VENUE.address}</div>
-                <div style={{fontSize:12,color:t.textSecondary}}>{PILOT_VENUE.courts.length} courts · {PILOT_VENUE.hours}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* How it works */}
-          <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"16px"}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>How it works</div>
-            {[
-              ["1","Join a tournament","Pay entry, choose your skill bracket."],
-              ["2","League stage","Play 5 matches against other entrants."],
-              ["3","Top 4 qualify","Points from wins determine your seed."],
-              ["4","Semifinals & Final","Top 4 compete for the prize racket."],
-            ].map(function(s){
-              return(
-                <div key={s[0]} style={{display:"flex",gap:12,marginBottom:s[0]==="4"?0:12}}>
-                  <div style={{
-                    width:20, height:20, borderRadius:"50%",
-                    background:t.accentSubtle, border:"1px solid "+t.accent+"30",
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:10, fontWeight:700, color:t.accent, flexShrink:0, marginTop:1
-                  }}>{s[0]}</div>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600,color:t.text,marginBottom:1}}>{s[1]}</div>
-                    <div style={{fontSize:12,color:t.textSecondary}}>{s[2]}</div>
-                  </div>
+        function FeedCard(props){
+          var m=props.m,isOwn=props.isOwn,pName=props.pName,pAvatar=props.pAvatar,demo=props.demo;
+          var isWin=m.result==="win";
+          var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join("  ");
+          var liked=!!feedLikes[m.id];
+          var comments=feedComments[m.id]||[];
+          return(
+            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
+              {/* Card header */}
+              <div style={{padding:"14px 16px 12px",display:"flex",gap:11,alignItems:"center"}}>
+                <div style={{
+                  width:40,height:40,borderRadius:"50%",flexShrink:0,
+                  background:avColor(pName),
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:13,fontWeight:700,color:"#fff"
+                }}>{pAvatar}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text,lineHeight:1.2}}>{pName}{isOwn&&<span style={{fontSize:11,color:t.textTertiary,fontWeight:400}}> · You</span>}</div>
+                  <div style={{fontSize:11,color:t.textTertiary,marginTop:1}}>{timeAgo(m.date)}</div>
                 </div>
-              );
-            })}
+                {m.tournName&&m.tournName!=="Casual Match"&&(
+                  <span style={{fontSize:10,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 8px",borderRadius:20,flexShrink:0}}>{m.tournName}</span>
+                )}
+                {m.tournName==="Casual Match"&&(
+                  <span style={{fontSize:10,fontWeight:600,color:t.textTertiary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,flexShrink:0}}>Casual</span>
+                )}
+              </div>
+
+              {/* Match result block */}
+              <div style={{
+                margin:"0 12px 12px",
+                background:isWin?t.greenSubtle:t.redSubtle,
+                border:"1px solid "+(isWin?t.green:t.red)+"33",
+                borderRadius:10,padding:"14px 16px"
+              }}>
+                <div style={{fontSize:11,fontWeight:700,color:isWin?t.green:t.red,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>
+                  {isWin?"Victory":"Defeat"}
+                </div>
+                <div style={{fontSize:18,fontWeight:800,color:t.text,letterSpacing:"-0.3px",marginBottom:2}}>
+                  vs {m.oppName}
+                </div>
+                {scoreStr&&(
+                  <div style={{fontSize:22,fontWeight:800,color:isWin?t.green:t.red,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px"}}>
+                    {scoreStr}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              {!demo&&(
+                <div style={{borderTop:"1px solid "+t.border,display:"flex"}}>
+                  <button
+                    onClick={function(){setFeedLikes(function(l){var n=Object.assign({},l);n[m.id]=!n[m.id];return n;});}}
+                    style={{flex:1,padding:"11px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:liked?t.accent:t.textSecondary,fontSize:12,fontWeight:liked?700:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
+                    <span style={{fontSize:15}}>👍</span>{liked?"Liked":"Like"}{comments.length===0&&liked?"":""}</button>
+                  <button
+                    onClick={function(){setCommentModal(m.id);setCommentDraft("");}}
+                    style={{flex:1,padding:"11px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
+                    <span style={{fontSize:15}}>💬</span>Comment{comments.length>0?" ("+comments.length+")":""}
+                  </button>
+                  <button
+                    onClick={function(){if(navigator.share){navigator.share({title:"Match result",text:pName+(isWin?" won ":" lost ")+"vs "+m.oppName+" "+scoreStr});}}}
+                    style={{flex:1,padding:"11px 8px",border:"none",background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
+                    <span style={{fontSize:15}}>↗</span>Share
+                  </button>
+                </div>
+              )}
+              {demo&&(
+                <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",gap:16}}>
+                  {["👍 Like","💬 Comment","↗ Share"].map(function(a){return<span key={a} style={{fontSize:12,color:t.textTertiary,fontWeight:500}}>{a}</span>;})}
+                </div>
+              )}
+
+              {/* Comments preview */}
+              {comments.length>0&&(
+                <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",flexDirection:"column",gap:6}}>
+                  {comments.slice(-2).map(function(c){
+                    return(
+                      <div key={c.id} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                        <div style={{width:24,height:24,borderRadius:"50%",background:avColor(c.author),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"#fff",flexShrink:0}}>{c.author.slice(0,2).toUpperCase()}</div>
+                        <div style={{flex:1}}>
+                          <span style={{fontSize:12,fontWeight:700,color:t.text}}>{c.author} </span>
+                          <span style={{fontSize:12,color:t.textSecondary}}>{c.text}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {comments.length>2&&<button onClick={function(){setCommentModal(m.id);}} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600,textAlign:"left",padding:0}}>View all {comments.length} comments</button>}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        if(!authUser){
+          return(
+            <div style={{maxWidth:680,margin:"0 auto"}}>
+              {/* Guest header */}
+              <div style={{padding:"28px 20px 20px"}}>
+                <div style={{fontSize:26,fontWeight:800,color:t.text,letterSpacing:"-0.5px",marginBottom:6}}>Sydney Tennis.</div>
+                <div style={{fontSize:14,color:t.textSecondary,lineHeight:1.5,marginBottom:20}}>See how your friends are playing. Track your wins. Own your suburbs.</div>
+                <div style={{display:"flex",gap:10,marginBottom:28}}>
+                  <button
+                    onClick={function(){setShowAuth(true);setAuthMode("signup");setAuthStep("choose");}}
+                    style={{flex:1,padding:"13px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:700}}>
+                    Join free
+                  </button>
+                  <button
+                    onClick={function(){setShowAuth(true);setAuthMode("login");setAuthStep("choose");}}
+                    style={{flex:1,padding:"13px",borderRadius:9,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:14,fontWeight:500}}>
+                    Log in
+                  </button>
+                </div>
+              </div>
+              {/* Demo feed — blurred CTA overlay */}
+              <div style={{position:"relative",padding:"0 20px 40px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Recent activity</div>
+                <div style={{filter:"blur(3px)",pointerEvents:"none",userSelect:"none"}}>
+                  {DEMO_FEED.map(function(m){
+                    return<FeedCard key={m.id} m={m} isOwn={false} pName={m.playerName} pAvatar={m.playerAvatar} demo={true}/>;
+                  })}
+                </div>
+                <div style={{
+                  position:"absolute",top:"40%",left:"50%",transform:"translate(-50%,-50%)",
+                  textAlign:"center",background:t.bgCard,border:"1px solid "+t.border,
+                  borderRadius:14,padding:"20px 24px",boxShadow:"0 8px 32px rgba(0,0,0,0.08)",
+                  width:"calc(100% - 80px)",maxWidth:320
+                }}>
+                  <div style={{fontSize:20,marginBottom:8}}>🎾</div>
+                  <div style={{fontSize:15,fontWeight:700,color:t.text,marginBottom:6}}>Your community feed</div>
+                  <div style={{fontSize:13,color:t.textSecondary,lineHeight:1.5,marginBottom:16}}>Sign up to see matches from players you follow and share your own results.</div>
+                  <button
+                    onClick={function(){setShowAuth(true);setAuthMode("signup");setAuthStep("choose");}}
+                    style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:700}}>
+                    Get started
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // Logged-in feed
+        return(
+          <div style={{maxWidth:680,margin:"0 auto"}}>
+            {/* Feed header */}
+            <div style={{padding:"24px 20px 0",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div>
+                <div style={{fontSize:22,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Feed</div>
+                <div style={{fontSize:12,color:t.textTertiary,marginTop:1}}>{history.length} match{history.length!==1?"es":""} logged</div>
+              </div>
+              <button
+                onClick={function(){setCasualOppName("");setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:""}); }}
+                style={{padding:"9px 16px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                + Log match
+              </button>
+            </div>
+
+            {/* Filter pills */}
+            <div style={{display:"flex",gap:6,padding:"0 20px 16px"}}>
+              <span style={{fontSize:12,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"5px 14px",borderRadius:20}}>Everyone</span>
+              <span style={{fontSize:12,fontWeight:500,color:t.textTertiary,background:t.bgCard,border:"1px solid "+t.border,padding:"5px 14px",borderRadius:20,opacity:0.6}}>Friends</span>
+            </div>
+
+            {/* Feed */}
+            <div style={{padding:"0 20px 100px"}}>
+              {history.length===0
+                ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"40px 24px",textAlign:"center"}}>
+                  <div style={{fontSize:40,marginBottom:12}}>🎾</div>
+                  <div style={{fontSize:17,fontWeight:700,color:t.text,marginBottom:8}}>Nothing here yet</div>
+                  <div style={{fontSize:13,color:t.textSecondary,lineHeight:1.6,marginBottom:24}}>Log your first match and it'll show up in your feed. Your friends' matches will appear here too.</div>
+                  <button
+                    onClick={function(){setCasualOppName("");setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:""}); }}
+                    style={{padding:"13px 28px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:700}}>
+                    Log your first match
+                  </button>
+                </div>
+                :history.map(function(m){
+                  return<FeedCard key={m.id} m={m} isOwn={true} pName={profile.name} pAvatar={profile.avatar} demo={false}/>;
+                })
+              }
+
+              {/* Find friends nudge */}
+              {history.length>0&&(
+                <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"18px 20px",textAlign:"center",marginTop:4}}>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>Find players to follow</div>
+                  <div style={{fontSize:12,color:t.textSecondary,marginBottom:14}}>See your friends' matches in your feed when the community grows.</div>
+                  <span style={{fontSize:12,fontWeight:600,color:t.textTertiary,background:t.bgTertiary,border:"1px solid "+t.border,padding:"7px 16px",borderRadius:8}}>Coming soon</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── TOURNAMENTS LIST ── */}
       {tab==="tournaments"&&!selectedTournId&&(
@@ -2443,7 +2478,12 @@ export default function App() {
             style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"24px 22px 48px",width:"100%",maxWidth:540}}>
             <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 20px"}}/>
             <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.3px"}}>Log Result</h2>
-            <p style={{fontSize:12,color:t.textSecondary,marginBottom:20}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>
+            {scoreModal.casual
+              ?<input value={casualOppName} placeholder="Opponent name"
+                  onChange={function(e){setCasualOppName(e.target.value);}}
+                  style={Object.assign({},inputStyle,{marginBottom:20,fontSize:13})}/>
+              :<p style={{fontSize:12,color:t.textSecondary,marginBottom:20}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>
+            }
             <div style={{marginBottom:16}}>
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase"}}>Result</label>
               <div style={{display:"flex",gap:8}}>
@@ -2506,7 +2546,8 @@ export default function App() {
               <button
                 onClick={async function(){
                   var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
-                  var nm={id:"h"+Date.now(),oppName:scoreModal.oppName,tournName:scoreModal.tournName,date:fmtDate(new Date()),sets:clean,result:scoreDraft.result,notes:""};
+                  var resolvedOpp=scoreModal.casual?(casualOppName.trim()||"Unknown"):scoreModal.oppName;
+                  var nm={id:"h"+Date.now(),oppName:resolvedOpp,tournName:scoreModal.casual?"Casual Match":scoreModal.tournName,date:fmtDate(new Date()),sets:clean,result:scoreDraft.result,notes:""};
                   var newHistory=[nm].concat(history);
                   setHistory(newHistory);
                   if(authUser){
@@ -2532,10 +2573,70 @@ export default function App() {
                     var winnerId=scoreDraft.result==="win"?scoreModal.winnerId1:scoreModal.winnerId2;
                     recordResult(scoreModal.tournId,scoreModal.roundIdx,scoreModal.matchId,winnerId);
                   }
-                  setScoreModal(null);
+                  setScoreModal(null);setCasualOppName("");
                 }}
                 style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
                 Save result
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── COMMENT MODAL ── */}
+      {commentModal&&(
+        <div
+          onClick={function(){setCommentModal(null);}}
+          style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:250}}>
+          <div
+            onClick={function(e){e.stopPropagation();}}
+            className="slide-up"
+            style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"20px 20px 48px",width:"100%",maxWidth:540,maxHeight:"70vh",display:"flex",flexDirection:"column"}}>
+            <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 16px"}}/>
+            <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:16}}>Comments</div>
+            {/* Comment list */}
+            <div style={{flex:1,overflowY:"auto",marginBottom:16,display:"flex",flexDirection:"column",gap:12}}>
+              {(feedComments[commentModal]||[]).length===0
+                ?<div style={{textAlign:"center",padding:"24px 0"}}>
+                  <div style={{fontSize:13,color:t.textTertiary}}>No comments yet. Be first.</div>
+                </div>
+                :(feedComments[commentModal]||[]).map(function(c){
+                  return(
+                    <div key={c.id} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:32,height:32,borderRadius:"50%",background:avColor(c.author),display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",flexShrink:0}}>{c.author.slice(0,2).toUpperCase()}</div>
+                      <div style={{flex:1,background:t.bgTertiary,borderRadius:10,padding:"8px 12px"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:t.text,marginBottom:2}}>{c.author}</div>
+                        <div style={{fontSize:13,color:t.textSecondary,lineHeight:1.4}}>{c.text}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </div>
+            {/* Comment input */}
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:avColor(profile.name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",flexShrink:0}}>{profile.avatar}</div>
+              <input
+                value={commentDraft}
+                placeholder="Add a comment…"
+                onChange={function(e){setCommentDraft(e.target.value);}}
+                onKeyDown={function(e){
+                  if(e.key==="Enter"&&commentDraft.trim()){
+                    var c={id:"c"+Date.now(),author:profile.name,text:commentDraft.trim(),ts:Date.now()};
+                    setFeedComments(function(fc){var cur=fc[commentModal]||[];return Object.assign({},fc,{[commentModal]:cur.concat([c])});});
+                    setCommentDraft("");
+                  }
+                }}
+                style={Object.assign({},inputStyle,{flex:1,fontSize:13,padding:"9px 14px"})}/>
+              <button
+                onClick={function(){
+                  if(!commentDraft.trim())return;
+                  var c={id:"c"+Date.now(),author:profile.name,text:commentDraft.trim(),ts:Date.now()};
+                  setFeedComments(function(fc){var cur=fc[commentModal]||[];return Object.assign({},fc,{[commentModal]:cur.concat([c])});});
+                  setCommentDraft("");
+                }}
+                style={{padding:"9px 16px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,flexShrink:0}}>
+                Post
               </button>
             </div>
           </div>
