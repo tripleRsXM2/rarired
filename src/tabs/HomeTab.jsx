@@ -19,55 +19,52 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
   }
 
   return (
-    <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
+    <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:t.r2,overflow:"hidden",marginBottom:10}}>
       {/* Card header */}
-      <div style={{padding:"14px 16px 12px",display:"flex",gap:11,alignItems:"center"}}>
+      <div style={{padding:"14px 16px 10px",display:"flex",gap:10,alignItems:"center"}}>
         <div style={{
-          width:40,height:40,borderRadius:"50%",flexShrink:0,
+          width:36,height:36,borderRadius:t.r,flexShrink:0,
           background:avColor(pName),
           display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:13,fontWeight:700,color:"#fff"
+          fontSize:12,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"
         }}>{pAvatar}</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:14,fontWeight:700,color:t.text,lineHeight:1.2}}>{pName}{isOwn&&<span style={{fontSize:11,color:t.textTertiary,fontWeight:400}}> · You</span>}</div>
-          <div style={{fontSize:11,color:t.textTertiary,marginTop:1}}>{timeAgo(m.date)}</div>
+          <div style={{fontSize:13,fontWeight:700,color:t.text,letterSpacing:"-0.2px"}}>{pName}{isOwn&&<span style={{fontSize:10,color:t.textSecondary,fontWeight:500}}> · You</span>}</div>
+          <div style={{fontSize:10,color:t.textSecondary,marginTop:1,letterSpacing:"0.02em"}}>{timeAgo(m.date)}</div>
         </div>
+        {m.tournName&&m.tournName!=="Casual Match"&&(
+          <span style={{fontSize:9,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>{m.tournName}</span>
+        )}
+        {m.tournName==="Casual Match"&&(
+          <span style={{fontSize:9,fontWeight:600,color:t.textSecondary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Casual</span>
+        )}
         {isOwn&&onDelete&&(
           <button onClick={function(){if(window.confirm("Delete this match?"))onDelete(m);}}
-            style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:"4px 6px",cursor:"pointer",lineHeight:1}}
-            title="Delete match">✕</button>
+            style={{background:"none",border:"none",color:t.textTertiary,fontSize:14,padding:"4px 4px",cursor:"pointer",lineHeight:1,flexShrink:0}}>✕</button>
         )}
         {m.isTagged&&onRemove&&(
           <button onClick={function(){if(window.confirm("Remove from your feed?"))onRemove(m);}}
-            style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:"4px 6px",cursor:"pointer",lineHeight:1}}
-            title="Remove from feed">✕</button>
-        )}
-        {m.tournName&&m.tournName!=="Casual Match"&&(
-          <span style={{fontSize:10,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 8px",borderRadius:20,flexShrink:0}}>{m.tournName}</span>
-        )}
-        {m.tournName==="Casual Match"&&(
-          <span style={{fontSize:10,fontWeight:600,color:t.textTertiary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,flexShrink:0}}>Casual</span>
+            style={{background:"none",border:"none",color:t.textTertiary,fontSize:14,padding:"4px 4px",cursor:"pointer",lineHeight:1,flexShrink:0}}>✕</button>
         )}
       </div>
 
-      {/* Match result block */}
-      <div style={{
-        margin:"0 12px 12px",
-        background:isWin?t.greenSubtle:t.redSubtle,
-        border:"1px solid "+(isWin?t.green:t.red)+"33",
-        borderRadius:10,padding:"14px 16px"
-      }}>
-        <div style={{fontSize:11,fontWeight:700,color:isWin?t.green:t.red,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>
-          {isWin?"Victory":"Defeat"}
-        </div>
-        <div style={{fontSize:18,fontWeight:800,color:t.text,letterSpacing:"-0.3px",marginBottom:2}}>
-          vs {m.oppName}
-        </div>
-        {scoreStr&&(
-          <div style={{fontSize:22,fontWeight:800,color:isWin?t.green:t.red,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px"}}>
-            {scoreStr}
+      {/* Match result block — editorial */}
+      <div style={{margin:"0 12px 12px",borderRadius:t.r,border:"1px solid "+(isWin?t.green:t.red)+"28",background:isWin?t.greenSubtle:t.redSubtle,padding:"16px"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,color:isWin?t.green:t.red,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>
+              {isWin?"Victory":"Defeat"}
+            </div>
+            <div style={{fontSize:22,fontWeight:700,color:t.text,letterSpacing:"-0.5px",lineHeight:1.1}}>
+              vs {m.oppName}
+            </div>
           </div>
-        )}
+          {scoreStr&&(
+            <div style={{fontSize:28,fontWeight:700,color:isWin?t.green:t.red,fontVariantNumeric:"tabular-nums",letterSpacing:"-1px",lineHeight:1,flexShrink:0}}>
+              {scoreStr}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Actions */}
@@ -85,24 +82,24 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
                 await supabase.from('feed_likes').delete().eq('match_id',m.id).eq('user_id',authUser.id);
               }
             }}
-            style={{flex:1,padding:"11px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:liked?t.accent:t.textSecondary,fontSize:12,fontWeight:liked?700:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
-            <span style={{fontSize:15}}>👍</span>{liked?"Liked":"Like"}{likeCount>0?" · "+likeCount:""}
+            style={{flex:1,padding:"10px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:liked?t.accent:t.textSecondary,fontSize:11,fontWeight:liked?700:500,display:"flex",alignItems:"center",justifyContent:"center",gap:4,cursor:"pointer",letterSpacing:"0.02em"}}>
+            <span style={{fontSize:13}}>👍</span>{liked?"Liked":"Like"}{likeCount>0?" · "+likeCount:""}
           </button>
           <button
             onClick={function(){setCommentModal(m.id);setCommentDraft("");}}
-            style={{flex:1,padding:"11px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
-            <span style={{fontSize:15}}>💬</span>Comment{comments.length>0?" ("+comments.length+")":""}
+            style={{flex:1,padding:"10px 8px",border:"none",borderRight:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:11,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:4,cursor:"pointer",letterSpacing:"0.02em"}}>
+            <span style={{fontSize:13}}>💬</span>Comment{comments.length>0?" ("+comments.length+")":""}
           </button>
           <button
             onClick={function(){if(navigator.share){navigator.share({title:"Match result",text:pName+(isWin?" won ":" lost ")+"vs "+m.oppName+" "+scoreStr});}}}
-            style={{flex:1,padding:"11px 8px",border:"none",background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer"}}>
-            <span style={{fontSize:15}}>↗</span>Share
+            style={{flex:1,padding:"10px 8px",border:"none",background:"transparent",color:t.textSecondary,fontSize:11,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:4,cursor:"pointer",letterSpacing:"0.02em"}}>
+            <span style={{fontSize:13}}>↗</span>Share
           </button>
         </div>
       )}
       {demo&&(
         <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",gap:16}}>
-          {["👍 Like","💬 Comment","↗ Share"].map(function(a){return <span key={a} style={{fontSize:12,color:t.textTertiary,fontWeight:500}}>{a}</span>;})}
+          {["👍 Like","💬 Comment","↗ Share"].map(function(a){return <span key={a} style={{fontSize:11,color:t.textTertiary,fontWeight:500,letterSpacing:"0.02em"}}>{a}</span>;})}
         </div>
       )}
 

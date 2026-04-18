@@ -19,7 +19,7 @@ import ScoreModal from "./modals/ScoreModal.jsx";
 import CommentModal from "./modals/CommentModal.jsx";
 
 export default function App() {
-  var [dark,setDark]=useState(function(){return localStorage.getItem("theme")==="dark";});
+  var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
   var t=makeTheme(dark);
 
   // ── Global CSS ──────────────────────────────────────────────────────────────
@@ -27,23 +27,24 @@ export default function App() {
     var el=document.createElement("style");
     el.id="cs-css";
     el.textContent=[
-      "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}",
-      "html,body{height:100%}",
-      "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}",
-      "@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}",
-      "@keyframes pop{0%{transform:scale(.96);opacity:0}100%{transform:scale(1);opacity:1}}",
-      "@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}",
-      ".fade-up{animation:fadeUp .25s ease both}",
-      ".pop{animation:pop .2s ease both}",
-      ".slide-up{animation:slideUp .28s ease both}",
-      "button{cursor:pointer;font-family:inherit}",
-      "::-webkit-scrollbar{width:0;height:0}",
-      "input,select,textarea{font-family:inherit}",
+      "body{background:"+t.bg+";color:"+t.text+";font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif}",
+      "@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}",
+      "@keyframes pop{0%{transform:scale(.97);opacity:0}100%{transform:scale(1);opacity:1}}",
+      "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}",
+      "@keyframes reveal{from{clip-path:inset(100% 0 0 0)}to{clip-path:inset(0 0 0 0)}}",
+      ".fade-up{animation:fadeUp .3s cubic-bezier(.32,.72,0,1) both}",
+      ".pop{animation:pop .22s cubic-bezier(.34,2.27,.64,1) both}",
+      ".slide-up{animation:slideUp .36s cubic-bezier(.32,.72,0,1) both}",
+      ".reveal{animation:reveal .4s cubic-bezier(.32,.72,0,1) both}",
+      "button{cursor:pointer;font-family:inherit;letter-spacing:0.01em}",
+      "input,select,textarea{font-family:inherit;letter-spacing:0.01em}",
       "input:focus,select:focus,textarea:focus{outline:none}",
+      "::-webkit-scrollbar{width:0;height:0}",
     ].join("");
     document.head.appendChild(el);
+    document.body.style.background=t.bg;
     return function(){var o=document.getElementById("cs-css");if(o)o.remove();};
-  },[]);
+  },[dark]);
 
   // ── Auth init ───────────────────────────────────────────────────────────────
   useEffect(function(){
@@ -498,28 +499,30 @@ export default function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{minHeight:"100vh",background:t.bg,color:t.text,paddingBottom:88,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:t.bg,color:t.text,paddingBottom:80}}>
 
       {/* Nav */}
-      <nav style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>
-        <div style={{maxWidth:680,margin:"0 auto",padding:"0 20px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:30,height:30,borderRadius:8,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff",letterSpacing:"-0.5px"}}>CS</div>
-            <span style={{fontSize:16,fontWeight:700,letterSpacing:"-0.4px",color:t.text}}>CourtSync</span>
+      <nav style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>
+        <div style={{maxWidth:680,margin:"0 auto",padding:"0 20px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          {/* Logo */}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:26,height:26,borderRadius:4,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:t.accentText,letterSpacing:"-0.5px",flexShrink:0}}>CS</div>
+            <span style={{fontSize:15,fontWeight:700,letterSpacing:"-0.5px",color:t.text}}>CourtSync</span>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {/* Right actions */}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
             <button
               onClick={function(){setDark(function(d){var next=!d;localStorage.setItem("theme",next?"dark":"light");return next;});}}
-              style={{background:"transparent",border:"1px solid "+t.border,borderRadius:7,padding:"5px 10px",fontSize:11,color:t.textSecondary,fontWeight:500}}>
+              style={{background:"transparent",border:"1px solid "+t.border,borderRadius:t.r,padding:"4px 10px",fontSize:10,fontWeight:600,color:t.textSecondary,letterSpacing:"0.05em",textTransform:"uppercase"}}>
               {dark?"Light":"Dark"}
             </button>
             {authUser&&(
               <button
                 onClick={function(){setShowNotifications(function(v){return!v;});if(!showNotifications)markNotificationsRead();}}
-                style={{position:"relative",width:34,height:34,borderRadius:"50%",background:unreadCount()>0?t.accentSubtle:t.bgTertiary,border:"1px solid "+(unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+                style={{position:"relative",width:32,height:32,borderRadius:t.r,background:unreadCount()>0?t.accentSubtle:"transparent",border:"1px solid "+(unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all 0.2s"}}>
                 🔔
                 {unreadCount()>0&&(
-                  <div style={{position:"absolute",top:-3,right:-3,width:16,height:16,borderRadius:"50%",background:t.red,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:"#fff"}}>
+                  <div style={{position:"absolute",top:-4,right:-4,width:15,height:15,borderRadius:"50%",background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontWeight:800,color:t.accentText}}>
                     {unreadCount()>9?"9+":unreadCount()}
                   </div>
                 )}
@@ -528,12 +531,12 @@ export default function App() {
             {authUser
               ?<button
                   onClick={function(){setTab("profile");setProfileTab("overview");}}
-                  style={{width:32,height:32,borderRadius:"50%",background:avColor(profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff"}}>
+                  style={{width:32,height:32,borderRadius:t.r,background:avColor(profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
                   {profile.avatar}
                 </button>
               :<button
                   onClick={function(){setShowAuth(true);setAuthMode("login");setAuthStep("choose");}}
-                  style={{background:t.accent,border:"none",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:600,color:"#fff"}}>
+                  style={{background:t.accent,border:"none",borderRadius:t.r,padding:"7px 16px",fontSize:12,fontWeight:700,color:t.accentText,letterSpacing:"0.02em"}}>
                   Log in
                 </button>
             }
@@ -553,16 +556,16 @@ export default function App() {
       )}
 
       {/* Tab bar */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
-        <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"10px 0 16px"}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
+        <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"8px 0 calc(8px + env(safe-area-inset-bottom))"}}>
           {TABS.map(function(tb){
             var on=tab===tb.id;
             return (
               <button key={tb.id}
                 onClick={function(){setTab(tb.id);if(tb.id!=="tournaments")setSelectedTournId(null);}}
-                style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:4,color:on?t.accent:t.textTertiary,padding:"2px 0"}}>
-                <div style={{width:4,height:4,borderRadius:"50%",background:on?t.accent:"transparent",marginBottom:1,transition:"background 0.15s"}}/>
-                <span style={{fontSize:10,fontWeight:on?700:400}}>{tb.label}</span>
+                style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"4px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary}}>
+                <div style={{width:16,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
+                <span style={{fontSize:10,fontWeight:on?700:500,letterSpacing:"0.05em",textTransform:"uppercase"}}>{tb.label}</span>
               </button>
             );
           })}
