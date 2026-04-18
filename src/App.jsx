@@ -829,6 +829,8 @@ export default function App() {
       .single();
     await supabase.from('notifications').delete().eq('id',n.id);
     setNotifications(function(ns){return ns.filter(function(x){return x.id!==n.id;});});
+    setShowNotifications(false);
+    setTab("home");
     if(mr.error){console.error('[accept] failed:',mr.error);return;}
     if(mr.data){
       var m=mr.data;
