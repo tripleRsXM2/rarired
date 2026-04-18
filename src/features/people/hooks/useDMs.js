@@ -1,5 +1,6 @@
 // src/features/people/hooks/useDMs.js
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "../../../supabase.js";
 import * as D from "../services/dmService.js";
 import { fetchProfilesByIds } from "../services/socialService.js";
 
@@ -12,6 +13,10 @@ export function useDMs(opts){
   var [threadLoading,setThreadLoading]=useState(false);
   var [msgDraft,setMsgDraft]=useState("");
   var [sending,setSending]=useState(false);
+
+  // Keep a ref so the realtime handler always sees the current thread
+  // without needing to be re-subscribed every time it changes.
+  var activeThreadRef=useRef(null);
 
   async function loadConversations(){
     if(!authUser)return;
@@ -42,6 +47,7 @@ export function useDMs(opts){
 
   async function openThread(partner){
     if(!authUser)return;
+    activeThreadRef.current=partner;
     setActiveThread(partner);
     setThreadLoading(true);
     var r=await D.fetchThread(authUser.id,partner.id);
@@ -69,9 +75,67 @@ export function useDMs(opts){
     setSending(false);
   }
 
-  function closeThread(){setActiveThread(null);setThreadMessages([]);setMsgDraft("");}
-  function resetDMs(){setConversations([]);setActiveThread(null);setThreadMessages([]);setMsgDraft("");}
+  function closeThread(){
+    activeThreadRef.current=null;
+    setActiveThread(null);
+    setThreadMessages([]);
+    setMsgDraft("");
+  }
+
+  function resetDMs(){
+    activeThreadRef.current=null;
+    setConversations([]);setActiveThread(null);setThreadMessages([]);setMsgDraft("");
+  }
+
   function totalUnread(){return conversations.reduce(function(s,c){return s+(c.unread||0);},0);}
+
+  // Realtime — subscribe once per logged-in user, listen for incoming messages.
+  useEffect(function(){
+    if(!authUser)return;
+
+    var channel=supabase
+      .channel('dms:'+authUser.id)
+      .on('postgres_changes',{
+        event:'INSERT',schema:'public',table:'direct_messages',
+        filter:'receiver_id=eq.'+authUser.id,
+      },async function(payload){
+        var msg=payload.new;
+        var senderId=msg.sender_id;
+        var thread=activeThreadRef.current;
+
+        // Append to open thread immediately + mark read
+        if(thread&&thread.id===senderId){
+          setThreadMessages(function(m){return m.concat([msg]);});
+          D.markThreadRead(authUser.id,senderId);
+        }
+
+        // Update conversation list
+        setConversations(function(c){
+          var isActive=thread&&thread.id===senderId;
+          var exists=c.some(function(cv){return cv.partner.id===senderId;});
+          if(exists){
+            return c.map(function(cv){
+              if(cv.partner.id!==senderId)return cv;
+              return Object.assign({},cv,{
+                lastMessage:msg,
+                unread:isActive?0:(cv.unread||0)+1,
+              });
+            });
+          }
+          // First message from this person — fetch their profile async
+          fetchProfilesByIds([senderId],'id,name,avatar,skill,suburb').then(function(pr){
+            var partner=(pr.data&&pr.data[0])||{id:senderId,name:"Player",avatar:"PL"};
+            setConversations(function(prev){
+              return [{partner,lastMessage:msg,unread:isActive?0:1}].concat(prev);
+            });
+          });
+          return c;
+        });
+      })
+      .subscribe();
+
+    return function(){supabase.removeChannel(channel);};
+  },[authUser&&authUser.id]);
 
   return {
     conversations,activeThread,threadMessages,threadLoading,
