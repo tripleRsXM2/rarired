@@ -428,7 +428,7 @@ function BracketView({tournament, myId, t}){
 }
 
 export default function App() {
-  var [dark,setDark]=useState(false);
+  var [dark,setDark]=useState(function(){return localStorage.getItem("theme")==="dark";});
   var t=makeTheme(dark);
 
   useEffect(function(){
@@ -1092,7 +1092,7 @@ export default function App() {
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <button
-              onClick={function(){setDark(function(d){return!d;});}}
+              onClick={function(){setDark(function(d){var next=!d;localStorage.setItem("theme",next?"dark":"light");return next;});}}
               style={{background:"transparent",border:"1px solid "+t.border,borderRadius:7,padding:"5px 10px",fontSize:11,color:t.textSecondary,fontWeight:500}}>
               {dark?"Light":"Dark"}
             </button>
