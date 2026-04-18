@@ -491,8 +491,20 @@ export default function App() {
       await supabase.from('profiles').upsert(defaults);
     }
     var hr=await supabase.from('match_history').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
-    var matchIds=(hr.data||[]).map(function(m){return m.id;});
-    if(hr.data)setHistory(hr.data);
+    // Normalize column names: Postgres lowercases camelCase keys (oppName→oppname)
+    var normalizedHistory=(hr.data||[]).map(function(m){
+      return {
+        id:m.id,
+        oppName:m.oppName||m.oppname||m.opp_name||"Unknown",
+        tournName:m.tournName||m.tournname||m.tourn_name||"",
+        date:m.date||m.match_date||"",
+        sets:m.sets||[],
+        result:m.result||"loss",
+        notes:m.notes||""
+      };
+    });
+    var matchIds=normalizedHistory.map(function(m){return m.id;});
+    setHistory(normalizedHistory);
 
     if(matchIds.length){
       // Load which matches the current user has liked
@@ -3057,27 +3069,36 @@ export default function App() {
                 onClick={async function(){
                   var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
                   var resolvedOpp=scoreModal.casual?(casualOppName.trim()||"Unknown"):scoreModal.oppName;
-                  var nm={id:"h"+Date.now(),oppName:resolvedOpp,tournName:scoreModal.casual?"Casual Match":scoreModal.tournName,date:fmtDate(new Date()),sets:clean,result:scoreDraft.result,notes:""};
+                  var localId="local-"+Date.now();
+                  var nm={id:localId,oppName:resolvedOpp,tournName:scoreModal.casual?"Casual Match":scoreModal.tournName,date:fmtDate(new Date()),sets:clean,result:scoreDraft.result,notes:""};
                   var newHistory=[nm].concat(history);
                   setHistory(newHistory);
                   if(authUser){
-                    await supabase.from('match_history').insert(Object.assign({},nm,{user_id:authUser.id,match_date:nm.date}));
-                    // Recompute stats from full history and persist to profiles
-                    var newWins=newHistory.filter(function(m){return m.result==="win";}).length;
-                    var newLosses=newHistory.length-newWins;
-                    var newPts=Math.max(0,1000+newWins*15-newLosses*10);
-                    var sc=0,st=null;
-                    if(newHistory.length){st=newHistory[0].result;for(var si=0;si<newHistory.length;si++){if(newHistory[si].result===st)sc++;else break;}}
-                    await supabase.from('profiles').upsert({
-                      id:authUser.id,
-                      ranking_points:newPts,
-                      wins:newWins,
-                      losses:newLosses,
-                      matches_played:newHistory.length,
-                      streak_count:sc,
-                      streak_type:st
-                    },{onConflict:'id'});
-                    setProfile(function(p){return Object.assign({},p,{ranking_points:newPts,wins:newWins,losses:newLosses,matches_played:newHistory.length,streak_count:sc,streak_type:st});});
+                    // Insert without local id — let Supabase generate a proper UUID
+                    var ins=await supabase.from('match_history').insert({
+                      oppName:resolvedOpp,
+                      tournName:nm.tournName,
+                      date:nm.date,
+                      sets:clean,
+                      result:nm.result,
+                      notes:"",
+                      user_id:authUser.id,
+                      match_date:nm.date
+                    }).select('id').single();
+                    if(ins.error){
+                      console.error('match_history insert failed:',ins.error);
+                    } else {
+                      // Replace local temp id with real Supabase id
+                      setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:ins.data.id}):m;});});
+                      // Only update stats if the row actually saved
+                      var newWins=newHistory.filter(function(m){return m.result==="win";}).length;
+                      var newLosses=newHistory.length-newWins;
+                      var newPts=Math.max(0,1000+newWins*15-newLosses*10);
+                      var sc=0,st=null;
+                      if(newHistory.length){st=newHistory[0].result;for(var si=0;si<newHistory.length;si++){if(newHistory[si].result===st)sc++;else break;}}
+                      await supabase.from('profiles').upsert({id:authUser.id,ranking_points:newPts,wins:newWins,losses:newLosses,matches_played:newHistory.length,streak_count:sc,streak_type:st},{onConflict:'id'});
+                      setProfile(function(p){return Object.assign({},p,{ranking_points:newPts,wins:newWins,losses:newLosses,matches_played:newHistory.length,streak_count:sc,streak_type:st});});
+                    }
                   }
                   if(scoreModal.winnerId1&&scoreModal.winnerId2){
                     var winnerId=scoreDraft.result==="win"?scoreModal.winnerId1:scoreModal.winnerId2;
