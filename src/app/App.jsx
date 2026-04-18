@@ -11,6 +11,7 @@ import { useAuthController } from "../features/auth/hooks/useAuthController.js";
 import { useCurrentUser } from "../features/profile/hooks/useCurrentUser.js";
 import { useMatchHistory } from "../features/scoring/hooks/useMatchHistory.js";
 import { useSocialGraph } from "../features/people/hooks/useSocialGraph.js";
+import { useDMs } from "../features/people/hooks/useDMs.js";
 import { useNotifications } from "../features/notifications/hooks/useNotifications.js";
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
 
@@ -48,6 +49,7 @@ export default function App(){
   var currentUser=useCurrentUser();
   var matchHistory=useMatchHistory({ authUser:auth.authUser });
   var social=useSocialGraph({ authUser:auth.authUser });
+  var dms=useDMs({ authUser:auth.authUser });
   var notifications=useNotifications({
     authUser:auth.authUser,
     onMatchTagAccepted:function(matchRow){
@@ -75,6 +77,7 @@ export default function App(){
           matchHistory.loadHistory(supabaseUser.id),
           social.loadSocial(supabaseUser.id, res.profile),
           notifications.loadNotifications(supabaseUser.id),
+          dms.loadConversations(),
         ]);
         if(res.isNew&&isFresh)currentUser.triggerOnboarding();
       },
@@ -202,6 +205,7 @@ export default function App(){
             searchUsers={social.searchUsers}
             friendRelationLabel={social.friendRelationLabel} sentReq={social.sentReq} recvReq={social.recvReq}
             setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
+            dms={dms}
           />
         )}
         {tab==="profile"&&(
