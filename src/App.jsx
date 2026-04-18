@@ -459,6 +459,11 @@ export default function App() {
       else setAuthInitialized(true);
     });
     var sub=supabase.auth.onAuthStateChange(function(ev,session){
+      if(ev==="PASSWORD_RECOVERY"){
+        setAuthNewPassword("");setAuthNewPassword2("");
+        setAuthStep("set-password");setShowAuth(true);
+        return;
+      }
       if(session)loadUserData(session.user,ev==="SIGNED_IN");
       else{setAuthUser(null);setAuthInitialized(true);}
     });
@@ -519,6 +524,8 @@ export default function App() {
   var [authPassword,setAuthPassword]=useState("");
   var [authName,setAuthName]=useState("");
   var [authLoading,setAuthLoading]=useState(false);
+  var [authNewPassword,setAuthNewPassword]=useState("");
+  var [authNewPassword2,setAuthNewPassword2]=useState("");
   var [authError,setAuthError]=useState("");
   var [authFieldErrors,setAuthFieldErrors]=useState({});
   var [showOnboarding,setShowOnboarding]=useState(false);
@@ -2272,7 +2279,7 @@ export default function App() {
       {/* ── AUTH MODAL ── */}
       {showAuth&&(
         <div
-          onClick={function(){setShowAuth(false);setAuthError("");setAuthFieldErrors({});setAuthStep("choose");}}
+          onClick={function(){if(authStep==="set-password")return;setShowAuth(false);setAuthError("");setAuthFieldErrors({});setAuthStep("choose");}}
           style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
           <div
             onClick={function(e){e.stopPropagation();}}
@@ -2281,7 +2288,7 @@ export default function App() {
             <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 24px"}}/>
 
             {/* Header — hidden on forgot-sent */}
-            {authStep!=="forgot-sent"&&(
+            {authStep!=="forgot-sent"&&authStep!=="set-password"&&(
               <div style={{marginBottom:24}}>
                 <div style={{width:36,height:36,borderRadius:9,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",marginBottom:12}}>CS</div>
                 <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>
@@ -2423,6 +2430,46 @@ export default function App() {
                   onClick={function(){setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthError("");}}
                   style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600}}>
                   Done
+                </button>
+              </div>
+            )}
+
+            {/* ── SET NEW PASSWORD (recovery flow) ── */}
+            {authStep==="set-password"&&(
+              <div className="fade-up">
+                <div style={{width:36,height:36,borderRadius:9,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",marginBottom:12}}>CS</div>
+                <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>Set new password</h2>
+                <p style={{fontSize:13,color:t.textSecondary,marginBottom:24}}>Choose a new password for your account.</p>
+                <div style={{marginBottom:12}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>New password</label>
+                  <input type="password" value={authNewPassword} placeholder="Min 6 characters"
+                    onChange={function(e){setAuthNewPassword(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{np:null});});}}
+                    style={Object.assign({},inputStyle,{borderColor:authFieldErrors.np?t.red:t.border})}/>
+                  {authFieldErrors.np&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.np}</div>}
+                </div>
+                <div style={{marginBottom:20}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Confirm password</label>
+                  <input type="password" value={authNewPassword2} placeholder="Repeat password"
+                    onChange={function(e){setAuthNewPassword2(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{np2:null});});}}
+                    style={Object.assign({},inputStyle,{borderColor:authFieldErrors.np2?t.red:t.border})}/>
+                  {authFieldErrors.np2&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.np2}</div>}
+                </div>
+                {authError&&<div style={{fontSize:12,color:t.red,marginBottom:12,padding:"10px 12px",background:t.redSubtle,border:"1px solid "+t.red+"33",borderRadius:7}}>{authError}</div>}
+                <button
+                  disabled={authLoading}
+                  onClick={async function(){
+                    var fe={};
+                    if(!authNewPassword||authNewPassword.length<6)fe.np="Password must be at least 6 characters.";
+                    if(authNewPassword!==authNewPassword2)fe.np2="Passwords don't match.";
+                    if(Object.keys(fe).length){setAuthFieldErrors(fe);return;}
+                    setAuthLoading(true);setAuthError("");
+                    var r=await supabase.auth.updateUser({password:authNewPassword});
+                    setAuthLoading(false);
+                    if(r.error){setAuthError(mapAuthError(r.error.message));return;}
+                    setShowAuth(false);setAuthStep("choose");setAuthNewPassword("");setAuthNewPassword2("");setAuthError("");setAuthFieldErrors({});
+                  }}
+                  style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,opacity:authLoading?0.65:1}}>
+                  {authLoading?"Updating…":"Update password"}
                 </button>
               </div>
             )}
