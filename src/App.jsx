@@ -2581,11 +2581,23 @@ export default function App() {
                     );
                   })}
                   <button
-                    onClick={function(){
+                    onClick={async function(){
                       var init2=initials(profileDraft.name||"YN");
                       var nd=Object.assign({},profileDraft,{avatar:init2});
-                      setProfile(nd);setEditingProfile(false);
-                      if(authUser)supabase.from('profiles').upsert(Object.assign({},nd,{id:authUser.id}));
+                      setProfile(nd);
+                      if(authUser){
+                        var res=await supabase.from('profiles').upsert({
+                          id:authUser.id,
+                          name:nd.name||"",
+                          suburb:nd.suburb||"",
+                          bio:nd.bio||"",
+                          skill:nd.skill||"Intermediate",
+                          style:nd.style||"All-Court",
+                          avatar:nd.avatar||"",
+                          availability:nd.availability||{}
+                        },{onConflict:'id'});
+                        if(res.error)console.error('Profile save error:',res.error);
+                      }
                     }}
                     style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,marginTop:4}}>
                     Save changes
@@ -2629,7 +2641,14 @@ export default function App() {
                       );
                     })}
                     <button
-                      onClick={function(){setProfile(function(p){return Object.assign({},p,{availability:availDraft});});setEditingAvail(false);if(authUser)supabase.from('profiles').upsert(Object.assign({},profile,{availability:availDraft,id:authUser.id}));}}
+                      onClick={async function(){
+                        setProfile(function(p){return Object.assign({},p,{availability:availDraft});});
+                        setEditingAvail(false);
+                        if(authUser){
+                          var res=await supabase.from('profiles').upsert({id:authUser.id,availability:availDraft},{onConflict:'id'});
+                          if(res.error)console.error('Availability save error:',res.error);
+                        }
+                      }}
                       style={{width:"100%",marginTop:12,padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
                       Save availability
                     </button>
@@ -3461,7 +3480,19 @@ export default function App() {
                   onClick={async function(){
                     var updated=Object.assign({},profile,{skill:onboardDraft.skill,style:onboardDraft.style,suburb:onboardDraft.suburb||"Sydney",bio:onboardDraft.bio||""});
                     setProfile(updated);
-                    if(authUser)await supabase.from('profiles').upsert(Object.assign({},updated,{id:authUser.id}));
+                    setProfileDraft(updated);
+                    if(authUser){
+                      var res=await supabase.from('profiles').upsert({
+                        id:authUser.id,
+                        name:updated.name||"",
+                        suburb:updated.suburb||"",
+                        bio:updated.bio||"",
+                        skill:updated.skill||"Intermediate",
+                        style:updated.style||"All-Court",
+                        avatar:updated.avatar||""
+                      },{onConflict:'id'});
+                      if(res.error)console.error('Onboarding save error:',res.error);
+                    }
                     setShowOnboarding(false);
                   }}
                   style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,marginBottom:8}}>
