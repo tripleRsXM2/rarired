@@ -827,8 +827,8 @@ export default function App() {
       .eq('id',n.match_id)
       .select('*')
       .single();
-    await supabase.from('notifications').update({read:true}).eq('id',n.id);
-    setNotifications(function(ns){return ns.map(function(x){return x.id===n.id?Object.assign({},x,{tag_status:'accepted',read:true}):x;});});
+    await supabase.from('notifications').delete().eq('id',n.id);
+    setNotifications(function(ns){return ns.filter(function(x){return x.id!==n.id;});});
     if(mr.error){console.error('[accept] failed:',mr.error);return;}
     if(mr.data){
       var m=mr.data;
@@ -850,8 +850,8 @@ export default function App() {
 
   async function declineMatchTag(n){
     await supabase.from('match_history').update({tag_status:'declined'}).eq('id',n.match_id);
-    await supabase.from('notifications').update({read:true}).eq('id',n.id);
-    setNotifications(function(ns){return ns.map(function(x){return x.id===n.id?Object.assign({},x,{tag_status:'declined',read:true}):x;});});
+    await supabase.from('notifications').delete().eq('id',n.id);
+    setNotifications(function(ns){return ns.filter(function(x){return x.id!==n.id;});});
   }
 
   function notifLabel(n){
