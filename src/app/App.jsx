@@ -34,8 +34,11 @@ export default function App(){
   var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
   var t=makeTheme(dark);
 
-  var [tab,setTab]=useState("home");
+  var validTabs=["home","tournaments","people","profile","admin"];
+  var [tab,setTab]=useState(function(){var s=localStorage.getItem("tab");return s&&validTabs.includes(s)?s:"home";});
   var [profileTab,setProfileTab]=useState("overview");
+
+  useEffect(function(){localStorage.setItem("tab",tab);},[tab]);
 
   // Coordinator ref — lets useAuthController callbacks reach feature hooks
   // that are declared after it without stale closures.
