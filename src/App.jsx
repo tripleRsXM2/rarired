@@ -490,23 +490,30 @@ export default function App() {
       setProfileDraft(defaults);
       await supabase.from('profiles').upsert(defaults);
     }
-    // Own matches + matches tagged to this user that were accepted
-    var hr=await supabase.from('match_history').select('*').or('user_id.eq.'+user.id+',and(tagged_user_id.eq.'+user.id+',tag_status.eq.accepted)').order('created_at',{ascending:false});
-    // Normalize column names: Postgres lowercases camelCase keys (oppName→oppname)
-    var normalizedHistory=(hr.data||[]).map(function(m){
+    // Own matches
+    var hr=await supabase.from('match_history').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
+    // Accepted tagged matches (logged by a friend who tagged this user)
+    var tr=await supabase.from('match_history').select('*').eq('tagged_user_id',user.id).eq('tag_status','accepted').order('created_at',{ascending:false});
+    function normMatch(m,isTagged){
+      var ownerResult=m.result||"loss";
       return {
         id:m.id,
         oppName:m.opp_name||"Unknown",
         tournName:m.tourn_name||"",
         date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",
         sets:m.sets||[],
-        result:m.result||"loss",
+        // For tagged matches, invert result (owner won = friend lost)
+        result:isTagged?(ownerResult==="win"?"loss":"win"):ownerResult,
         notes:m.notes||"",
         tagged_user_id:m.tagged_user_id||null,
         tag_status:m.tag_status||null,
-        isTagged:m.tagged_user_id===user.id
+        isTagged:isTagged
       };
-    });
+    }
+    var ownNorm=(hr.data||[]).map(function(m){return normMatch(m,false);});
+    var taggedNorm=(tr.data||[]).map(function(m){return normMatch(m,true);});
+    // Merge and sort by match_date descending
+    var normalizedHistory=ownNorm.concat(taggedNorm).sort(function(a,b){return b.date<a.date?-1:1;});
     var matchIds=normalizedHistory.map(function(m){return m.id;});
     setHistory(normalizedHistory);
 
@@ -817,12 +824,23 @@ export default function App() {
     await supabase.from('match_history').update({tag_status:'accepted'}).eq('id',n.match_id);
     await supabase.from('notifications').update({read:true}).eq('id',n.id);
     setNotifications(function(ns){return ns.map(function(x){return x.id===n.id?Object.assign({},x,{tag_status:'accepted',read:true}):x;});});
-    // Load the tagged match into local feed
+    // Load the tagged match and add to feed with inverted result
     var mr=await supabase.from('match_history').select('*').eq('id',n.match_id).single();
     if(mr.data){
       var m=mr.data;
-      var nm={id:m.id,oppName:m.opp_name||"Unknown",tournName:m.tourn_name||"",date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",sets:m.sets||[],result:m.result||"loss",notes:m.notes||"",fromFriend:true,friendName:n.fromName};
+      var ownerResult=m.result||"loss";
+      var friendResult=ownerResult==="win"?"loss":"win";
+      var nm={id:m.id,oppName:m.opp_name||"Unknown",tournName:m.tourn_name||"",date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",sets:m.sets||[],result:friendResult,notes:m.notes||"",isTagged:true,tagged_user_id:m.tagged_user_id,tag_status:'accepted'};
       setHistory(function(h){return h.some(function(x){return x.id===m.id;})?h:[nm].concat(h);});
+      // Update friend's stats
+      setProfile(function(p){
+        var newWins=(p.wins||0)+(friendResult==="win"?1:0);
+        var newLosses=(p.losses||0)+(friendResult==="loss"?1:0);
+        var newPlayed=(p.matches_played||0)+1;
+        var newPts=Math.max(0,1000+newWins*15-newLosses*10);
+        supabase.from('profiles').upsert({id:authUser.id,wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts},{onConflict:'id'});
+        return Object.assign({},p,{wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
+      });
     }
   }
 
