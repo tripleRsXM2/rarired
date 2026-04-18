@@ -455,10 +455,12 @@ export default function App() {
 
   useEffect(function(){
     supabase.auth.getSession().then(function(r){
-      if(r.data.session)loadUserData(r.data.session.user);
+      if(r.data.session)loadUserData(r.data.session.user,false);
+      else setAuthInitialized(true);
     });
-    var sub=supabase.auth.onAuthStateChange(function(_ev,session){
-      if(session)loadUserData(session.user);else setAuthUser(null);
+    var sub=supabase.auth.onAuthStateChange(function(ev,session){
+      if(session)loadUserData(session.user,ev==="SIGNED_IN");
+      else{setAuthUser(null);setAuthInitialized(true);}
     });
     return function(){sub.data.subscription.unsubscribe();};
   },[]);
@@ -469,23 +471,47 @@ export default function App() {
     });
   },[]);
 
-  async function loadUserData(user){
+  async function loadUserData(user,isNewSignIn){
     var init=initials(user.user_metadata.name||user.email);
     setAuthUser({id:user.id,name:user.user_metadata.name||user.email.split("@")[0],email:user.email,avatar:init});
     var r=await supabase.from('profiles').select('*').eq('id',user.id).single();
+    var isNewUser=!r.data;
     if(r.data){
       setProfile(r.data);
     } else {
-      var defaults={id:user.id,name:user.user_metadata.name||user.email.split("@")[0],suburb:"Sydney",skill:"Intermediate",style:"All-Court",bio:"",avatar:init,availability:{}};
+      var defaults={id:user.id,name:user.user_metadata.name||user.email.split("@")[0],suburb:"",skill:"Intermediate",style:"All-Court",bio:"",avatar:init,availability:{}};
       setProfile(defaults);
       await supabase.from('profiles').upsert(defaults);
     }
     var hr=await supabase.from('match_history').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
     if(hr.data)setHistory(hr.data);
+    setAuthInitialized(true);
+    // Show onboarding for brand-new users
+    if(isNewUser&&isNewSignIn){
+      setOnboardDraft({skill:"Intermediate",style:"All-Court",suburb:""});
+      setOnboardStep(1);
+      setShowOnboarding(true);
+    }
+  }
+
+  // Validation helpers
+  function validateEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());}
+  function validatePassword(pw){return pw.length>=6;}
+  function mapAuthError(msg){
+    if(!msg)return"Something went wrong. Please try again.";
+    if(msg.includes("Invalid login credentials")||msg.includes("invalid_credentials"))return"Incorrect email or password.";
+    if(msg.includes("User already registered")||msg.includes("already been registered"))return"An account with this email already exists.";
+    if(msg.includes("Email not confirmed"))return"Please check your email to confirm your account first.";
+    if(msg.includes("Password should be at least"))return"Password must be at least 6 characters.";
+    if(msg.includes("Unable to validate email"))return"Please enter a valid email address.";
+    if(msg.includes("signup_disabled"))return"Sign ups are currently disabled. Contact support.";
+    if(msg.includes("network")||msg.includes("fetch"))return"Connection error. Check your internet and try again.";
+    return msg;
   }
 
   var [tab,setTab]=useState("home");
   var [authUser,setAuthUser]=useState(null);
+  var [authInitialized,setAuthInitialized]=useState(false);
   var [showAuth,setShowAuth]=useState(false);
   var [authMode,setAuthMode]=useState("login");
   var [authStep,setAuthStep]=useState("choose");
@@ -494,6 +520,10 @@ export default function App() {
   var [authName,setAuthName]=useState("");
   var [authLoading,setAuthLoading]=useState(false);
   var [authError,setAuthError]=useState("");
+  var [authFieldErrors,setAuthFieldErrors]=useState({});
+  var [showOnboarding,setShowOnboarding]=useState(false);
+  var [onboardStep,setOnboardStep]=useState(1);
+  var [onboardDraft,setOnboardDraft]=useState({skill:"Intermediate",style:"All-Court",suburb:""});
   var [profile,setProfile]=useState({name:"Your Name",suburb:"Sydney",skill:"Intermediate",style:"All-Court",bio:"",avatar:"YN",availability:{}});
   var [editingProfile,setEditingProfile]=useState(false);
   var [editingAvail,setEditingAvail]=useState(false);
@@ -2242,35 +2272,39 @@ export default function App() {
       {/* ── AUTH MODAL ── */}
       {showAuth&&(
         <div
-          onClick={function(){setShowAuth(false);setAuthError("");setAuthStep("choose");}}
+          onClick={function(){setShowAuth(false);setAuthError("");setAuthFieldErrors({});setAuthStep("choose");}}
           style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
           <div
             onClick={function(e){e.stopPropagation();}}
             className="slide-up"
             style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"28px 24px 48px",width:"100%",maxWidth:480}}>
             <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 24px"}}/>
-            <div style={{marginBottom:24}}>
-              <div style={{
-                width:36,height:36,borderRadius:9,
-                background:t.accent,display:"flex",alignItems:"center",
-                justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",
-                marginBottom:12
-              }}>CS</div>
-              <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>{authMode==="signup"?"Create account":"Welcome back"}</h2>
-              <p style={{fontSize:13,color:t.textSecondary}}>Enter tournaments. Compete for prizes.</p>
-            </div>
 
+            {/* Header — hidden on forgot-sent */}
+            {authStep!=="forgot-sent"&&(
+              <div style={{marginBottom:24}}>
+                <div style={{width:36,height:36,borderRadius:9,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",marginBottom:12}}>CS</div>
+                <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>
+                  {authStep==="forgot"?"Reset password":authMode==="signup"?"Create account":"Welcome back"}
+                </h2>
+                <p style={{fontSize:13,color:t.textSecondary}}>
+                  {authStep==="forgot"?"We'll send a reset link to your email.":"Enter tournaments. Compete for prizes."}
+                </p>
+              </div>
+            )}
+
+            {/* ── CHOOSE ── */}
             {authStep==="choose"&&(
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 <button
-                  onClick={function(){setAuthStep("email");}}
+                  onClick={function(){setAuthStep("email");setAuthError("");setAuthFieldErrors({});}}
                   style={{width:"100%",padding:"14px",borderRadius:9,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:14,fontWeight:500}}>
                   Continue with Email
                 </button>
                 <p style={{textAlign:"center",fontSize:13,color:t.textSecondary,marginTop:4}}>
                   {authMode==="login"?"No account? ":"Have an account? "}
                   <button
-                    onClick={function(){setAuthMode(authMode==="login"?"signup":"login");setAuthError("");}}
+                    onClick={function(){setAuthMode(authMode==="login"?"signup":"login");setAuthError("");setAuthFieldErrors({});}}
                     style={{background:"none",border:"none",color:t.accent,fontWeight:600,fontSize:13}}>
                     {authMode==="login"?"Sign up":"Log in"}
                   </button>
@@ -2278,53 +2312,212 @@ export default function App() {
               </div>
             )}
 
+            {/* ── EMAIL FORM ── */}
             {authStep==="email"&&(
               <div className="fade-up">
                 {authMode==="signup"&&(
-                  <div style={{marginBottom:10}}>
+                  <div style={{marginBottom:12}}>
                     <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Full name</label>
                     <input value={authName} placeholder="Your name"
-                      onChange={function(e){setAuthName(e.target.value);setAuthError("");}}
-                      style={Object.assign({},inputStyle,{borderColor:authError?t.red:t.border})}/>
+                      onChange={function(e){setAuthName(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{name:null});});}}
+                      style={Object.assign({},inputStyle,{borderColor:authFieldErrors.name?t.red:t.border})}/>
+                    {authFieldErrors.name&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.name}</div>}
                   </div>
                 )}
-                <div style={{marginBottom:10}}>
+                <div style={{marginBottom:12}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Email</label>
+                  <input type="email" value={authEmail} placeholder="you@example.com"
+                    onChange={function(e){setAuthEmail(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{email:null});});}}
+                    style={Object.assign({},inputStyle,{borderColor:authFieldErrors.email?t.red:t.border})}/>
+                  {authFieldErrors.email&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.email}</div>}
+                </div>
+                <div style={{marginBottom:6}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Password</label>
+                  <input type="password" value={authPassword}
+                    placeholder={authMode==="signup"?"Min 6 characters":"Your password"}
+                    onChange={function(e){setAuthPassword(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{password:null});});}}
+                    style={Object.assign({},inputStyle,{borderColor:authFieldErrors.password?t.red:t.border})}/>
+                  {authFieldErrors.password&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.password}</div>}
+                </div>
+                {authMode==="login"&&(
+                  <div style={{textAlign:"right",marginBottom:18}}>
+                    <button
+                      onClick={function(){setAuthStep("forgot");setAuthError("");setAuthFieldErrors({});}}
+                      style={{background:"none",border:"none",color:t.accent,fontSize:12,fontWeight:500}}>
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+                {authMode==="signup"&&<div style={{height:18}}/>}
+                {authError&&<div style={{fontSize:12,color:t.red,marginBottom:12,padding:"10px 12px",background:t.redSubtle,border:"1px solid "+t.red+"33",borderRadius:7}}>{authError}</div>}
+                <button
+                  disabled={authLoading}
+                  onClick={async function(){
+                    // Field-level validation
+                    var fe={};
+                    if(authMode==="signup"&&!authName.trim())fe.name="Please enter your name.";
+                    if(!authEmail.trim())fe.email="Email is required.";
+                    else if(!validateEmail(authEmail))fe.email="Please enter a valid email address.";
+                    if(!authPassword)fe.password="Password is required.";
+                    else if(authMode==="signup"&&!validatePassword(authPassword))fe.password="Password must be at least 6 characters.";
+                    if(Object.keys(fe).length){setAuthFieldErrors(fe);return;}
+                    setAuthLoading(true);setAuthError("");setAuthFieldErrors({});
+                    var r=authMode==="signup"
+                      ?await supabase.auth.signUp({email:authEmail.trim(),password:authPassword,options:{data:{name:authName.trim()}}})
+                      :await supabase.auth.signInWithPassword({email:authEmail.trim(),password:authPassword});
+                    setAuthLoading(false);
+                    if(r.error){setAuthError(mapAuthError(r.error.message));return;}
+                    setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthPassword("");setAuthName("");setAuthError("");setAuthFieldErrors({});
+                  }}
+                  style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,opacity:authLoading?0.65:1}}>
+                  {authLoading?"Please wait…":authMode==="signup"?"Create account":"Log in"}
+                </button>
+                <button
+                  onClick={function(){setAuthStep("choose");setAuthError("");setAuthFieldErrors({});}}
+                  style={{width:"100%",marginTop:8,padding:"10px",background:"none",border:"none",color:t.textSecondary,fontSize:12}}>
+                  Back
+                </button>
+              </div>
+            )}
+
+            {/* ── FORGOT PASSWORD ── */}
+            {authStep==="forgot"&&(
+              <div className="fade-up">
+                <div style={{marginBottom:12}}>
                   <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Email</label>
                   <input type="email" value={authEmail} placeholder="you@example.com"
                     onChange={function(e){setAuthEmail(e.target.value);setAuthError("");}}
                     style={Object.assign({},inputStyle,{borderColor:authError?t.red:t.border})}/>
                 </div>
-                <div style={{marginBottom:20}}>
-                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Password</label>
-                  <input type="password" value={authPassword}
-                    placeholder={authMode==="signup"?"Min 6 characters":"Your password"}
-                    onChange={function(e){setAuthPassword(e.target.value);setAuthError("");}}
-                    style={Object.assign({},inputStyle,{borderColor:authError?t.red:t.border})}/>
-                </div>
-                {authError&&<p style={{fontSize:12,color:t.red,marginBottom:12,textAlign:"center"}}>{authError}</p>}
+                {authError&&<div style={{fontSize:12,color:t.red,marginBottom:12,padding:"10px 12px",background:t.redSubtle,border:"1px solid "+t.red+"33",borderRadius:7}}>{authError}</div>}
                 <button
                   disabled={authLoading}
                   onClick={async function(){
-                    if(!authEmail||!authPassword){setAuthError("Please fill in all fields.");return;}
-                    if(authMode==="signup"&&!authName){setAuthError("Please enter your name.");return;}
+                    if(!authEmail.trim()||!validateEmail(authEmail)){setAuthError("Please enter a valid email address.");return;}
                     setAuthLoading(true);setAuthError("");
-                    var r=authMode==="signup"
-                      ?await supabase.auth.signUp({email:authEmail,password:authPassword,options:{data:{name:authName}}})
-                      :await supabase.auth.signInWithPassword({email:authEmail,password:authPassword});
+                    var r=await supabase.auth.resetPasswordForEmail(authEmail.trim(),{redirectTo:window.location.origin});
                     setAuthLoading(false);
-                    if(r.error){setAuthError(r.error.message);return;}
-                    setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthPassword("");setAuthName("");
+                    if(r.error){setAuthError(mapAuthError(r.error.message));return;}
+                    setAuthStep("forgot-sent");
                   }}
-                  style={{
-                    width:"100%",padding:"14px",borderRadius:9,border:"none",
-                    background:t.accent,color:"#fff",fontSize:14,fontWeight:600,
-                    opacity:authLoading?0.65:1
-                  }}>
-                  {authLoading?"Please wait…":authMode==="signup"?"Create account":"Log in"}
+                  style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,opacity:authLoading?0.65:1,marginBottom:8}}>
+                  {authLoading?"Sending…":"Send reset link"}
                 </button>
                 <button
-                  onClick={function(){setAuthStep("choose");setAuthError("");}}
-                  style={{width:"100%",marginTop:8,padding:"10px",background:"none",border:"none",color:t.textSecondary,fontSize:12}}>
+                  onClick={function(){setAuthStep("email");setAuthError("");}}
+                  style={{width:"100%",padding:"10px",background:"none",border:"none",color:t.textSecondary,fontSize:12}}>
+                  Back to login
+                </button>
+              </div>
+            )}
+
+            {/* ── FORGOT SENT ── */}
+            {authStep==="forgot-sent"&&(
+              <div className="fade-up" style={{textAlign:"center",padding:"12px 0 8px"}}>
+                <div style={{width:52,height:52,borderRadius:"50%",background:t.greenSubtle,border:"1px solid "+t.green+"44",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:22}}>✓</div>
+                <h2 style={{fontSize:20,fontWeight:700,color:t.text,marginBottom:8,letterSpacing:"-0.3px"}}>Check your email</h2>
+                <p style={{fontSize:14,color:t.textSecondary,lineHeight:1.6,marginBottom:24}}>
+                  We sent a reset link to <strong style={{color:t.text}}>{authEmail}</strong>. Check your inbox and follow the link.
+                </p>
+                <button
+                  onClick={function(){setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthError("");}}
+                  style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600}}>
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── ONBOARDING MODAL ── */}
+      {showOnboarding&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:400}}>
+          <div className="slide-up" style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"28px 24px 48px",width:"100%",maxWidth:480}}>
+            <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 28px"}}/>
+
+            {/* Step indicator */}
+            <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:24}}>
+              {[1,2].map(function(s){
+                return<div key={s} style={{width:s===onboardStep?20:6,height:6,borderRadius:3,background:s===onboardStep?t.accent:t.border,transition:"width 0.2s ease"}}/>;
+              })}
+            </div>
+
+            {onboardStep===1&&(
+              <div className="fade-up">
+                <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:6,letterSpacing:"-0.4px"}}>Your game, your way.</h2>
+                <p style={{fontSize:13,color:t.textSecondary,marginBottom:24,lineHeight:1.6}}>Tell us your level and style so we can match you to the right tournaments.</p>
+
+                <div style={{marginBottom:20}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase"}}>Skill level</label>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {SKILL_LEVELS.map(function(s){
+                      var on=onboardDraft.skill===s;
+                      return(
+                        <button key={s} onClick={function(){setOnboardDraft(function(d){return Object.assign({},d,{skill:s});});}}
+                          style={{padding:"9px 16px",borderRadius:8,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textSecondary,fontSize:13,fontWeight:on?600:400}}>
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{marginBottom:28}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase"}}>Play style</label>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {PLAY_STYLES.map(function(s){
+                      var on=onboardDraft.style===s;
+                      return(
+                        <button key={s} onClick={function(){setOnboardDraft(function(d){return Object.assign({},d,{style:s});});}}
+                          style={{padding:"9px 16px",borderRadius:8,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textSecondary,fontSize:13,fontWeight:on?600:400}}>
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button
+                  onClick={function(){setOnboardStep(2);}}
+                  style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600}}>
+                  Next →
+                </button>
+              </div>
+            )}
+
+            {onboardStep===2&&(
+              <div className="fade-up">
+                <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:6,letterSpacing:"-0.4px"}}>Where do you play?</h2>
+                <p style={{fontSize:13,color:t.textSecondary,marginBottom:24,lineHeight:1.6}}>Helps us surface local tournaments near you.</p>
+
+                <div style={{marginBottom:16}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Suburb</label>
+                  <input value={onboardDraft.suburb} placeholder="e.g. Bondi, Newtown, Parramatta"
+                    onChange={function(e){var v=e.target.value;setOnboardDraft(function(d){return Object.assign({},d,{suburb:v});});}}
+                    style={inputStyle}/>
+                </div>
+
+                <div style={{marginBottom:28}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Short bio <span style={{color:t.textTertiary,fontWeight:400,textTransform:"none"}}>(optional)</span></label>
+                  <input value={onboardDraft.bio||""} placeholder="e.g. Weekend warrior, ex-uni player…"
+                    onChange={function(e){var v=e.target.value;setOnboardDraft(function(d){return Object.assign({},d,{bio:v});});}}
+                    style={inputStyle}/>
+                </div>
+
+                <button
+                  onClick={async function(){
+                    var updated=Object.assign({},profile,{skill:onboardDraft.skill,style:onboardDraft.style,suburb:onboardDraft.suburb||"Sydney",bio:onboardDraft.bio||""});
+                    setProfile(updated);
+                    if(authUser)await supabase.from('profiles').upsert(Object.assign({},updated,{id:authUser.id}));
+                    setShowOnboarding(false);
+                  }}
+                  style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,marginBottom:8}}>
+                  Get started
+                </button>
+                <button
+                  onClick={function(){setOnboardStep(1);}}
+                  style={{width:"100%",padding:"10px",background:"none",border:"none",color:t.textSecondary,fontSize:12}}>
                   Back
                 </button>
               </div>
