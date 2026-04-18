@@ -29,6 +29,7 @@ import OnboardingModal from "../modals/OnboardingModal.jsx";
 import ScheduleModal from "../modals/ScheduleModal.jsx";
 import ScoreModal from "../modals/ScoreModal.jsx";
 import CommentModal from "../modals/CommentModal.jsx";
+import DisputeModal from "../modals/DisputeModal.jsx";
 
 export default function App(){
   var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
@@ -176,11 +177,12 @@ export default function App(){
             setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
             setCasualOppName={matchHistory.setCasualOppName}
             setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
+            setDisputeModal={matchHistory.setDisputeModal} setDisputeDraft={matchHistory.setDisputeDraft}
             deleteMatch={matchHistory.deleteMatch} removeTaggedMatch={matchHistory.removeTaggedMatch}
             resubmitMatch={matchHistory.resubmitMatch}
             confirmOpponentMatch={matchHistory.confirmOpponentMatch}
-            disputeOpponentMatch={matchHistory.disputeOpponentMatch}
-            requestMatchCorrection={matchHistory.requestMatchCorrection}
+            acceptCorrection={matchHistory.acceptCorrection}
+            voidMatchAction={matchHistory.voidMatchAction}
           />
         )}
         {tab==="tournaments"&&(
@@ -254,6 +256,14 @@ export default function App(){
           friends={social.friends} suggestedPlayers={social.suggestedPlayers}
           submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
+        />
+        <DisputeModal
+          t={t}
+          disputeModal={matchHistory.disputeModal} setDisputeModal={matchHistory.setDisputeModal}
+          disputeDraft={matchHistory.disputeDraft} setDisputeDraft={matchHistory.setDisputeDraft}
+          disputeWithProposal={matchHistory.disputeWithProposal}
+          counterPropose={matchHistory.counterPropose}
+          voidMatchAction={matchHistory.voidMatchAction}
         />
         <CommentModal
           t={t} authUser={auth.authUser} profile={currentUser.profile}

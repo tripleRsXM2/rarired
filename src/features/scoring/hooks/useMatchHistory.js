@@ -20,22 +20,18 @@ export function useMatchHistory(opts){
   var [casualOppId,setCasualOppId]=useState(null);
   var [showOppDrop,setShowOppDrop]=useState(false);
   var [scoreModal,setScoreModal]=useState(null);
-  var [scoreDraft,setScoreDraft]=useState({sets:[{you:"",them:""}],result:"win",notes:"",date:""});
+  var [scoreDraft,setScoreDraft]=useState({sets:[{you:"",them:""}],result:"win",notes:"",date:"",venue:"",court:""});
+  var [disputeModal,setDisputeModal]=useState(null);
+  var [disputeDraft,setDisputeDraft]=useState({reasonCode:"",reasonDetail:"",sets:[{you:"",them:""}],result:"win",date:"",venue:"",court:""});
 
   async function loadHistory(userId){
-    // Expire any stale pending matches on the client side (no pg_cron available)
     await M.expireStalePendingMatches(userId);
+    await M.expireDisputedMatches(userId);
     var hr=await M.fetchOwnMatches(userId);
-    var tr=await M.fetchTaggedMatches(userId);
-    var pr=await M.fetchPendingOpponentMatches(userId);
+    var or=await M.fetchOpponentMatches(userId);
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
-    var taggedNorm=(tr.data||[]).map(function(m){return normalizeMatch(m,true);});
-    var pendingNorm=(pr.data||[]).map(function(m){return normalizeMatch(m,true);});
-    // Merge tagged and pending, dedup by id in case a match confirms between queries
-    var allOpponent=taggedNorm.concat(pendingNorm).filter(function(m,i,arr){
-      return arr.findIndex(function(x){return x.id===m.id;})===i;
-    });
-    var normalized=ownNorm.concat(allOpponent).sort(function(a,b){return b.date<a.date?-1:1;});
+    var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true);});
+    var normalized=ownNorm.concat(oppNorm).sort(function(a,b){return b.date<a.date?-1:1;});
     var matchIds=normalized.map(function(m){return m.id;});
     setHistory(normalized);
     // Client-side reminder: notify opponent when <24h left on pending match
@@ -75,8 +71,7 @@ export function useMatchHistory(opts){
   }
 
   // Submit a new match result.
-  // Verified (opponent is a registered friend) → pending_confirmation, no stats yet.
-  // Casual (free-text opponent) → confirmed, no stats (no verified opponent).
+  // Verified → pending_confirmation. Casual → confirmed, no ELO impact.
   async function submitMatch(params){
     var scoreModal=params.scoreModal;
     var scoreDraft=params.scoreDraft;
@@ -92,29 +87,23 @@ export function useMatchHistory(opts){
     var tournName=scoreModal.casual?'Casual Match':(scoreModal.tournName||'Casual Match');
 
     var hash=null;
-    if(isVerified){
-      hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
-    }
+    if(isVerified) hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
 
     var localId='local-'+Date.now();
     var nm={
       id:localId, oppName, tournName,
       date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
       sets:clean, result:scoreDraft.result, notes:'',
+      venue:scoreDraft.venue||'', court:scoreDraft.court||'',
       status, opponent_id:opponentId, submitterId:authUser.id, isTagged:false,
     };
     setHistory(function(h){return [nm].concat(h);});
 
     var payload={
-      user_id:authUser.id,
-      opp_name:oppName,
-      tourn_name:tournName,
-      sets:clean,
-      result:scoreDraft.result,
-      notes:'',
-      match_date:matchDate,
-      status:status,
-      submitted_at:new Date().toISOString(),
+      user_id:authUser.id, opp_name:oppName, tourn_name:tournName,
+      sets:clean, result:scoreDraft.result, notes:'', match_date:matchDate,
+      status:status, submitted_at:new Date().toISOString(),
+      venue:scoreDraft.venue||null, court:scoreDraft.court||null,
     };
     if(opponentId) payload.opponent_id=opponentId;
     if(hash) payload.match_hash=hash;
@@ -129,45 +118,122 @@ export function useMatchHistory(opts){
 
     var matchId=ins.data.id;
     setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
-
     if(isVerified&&sendNotification){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
-
     return {error:null, matchId, status};
   }
 
-  // Opponent confirms the match — DB function updates both players atomically.
+  // Opponent confirms — DB function handles both players atomically.
   async function confirmOpponentMatch(match){
     if(!authUser) return;
     var mr=await M.confirmMatchAndUpdateStats(match.id);
     if(mr.error){console.error('[confirmOpponentMatch]',mr.error);return;}
     setHistory(function(h){return h.map(function(m){return m.id===match.id?Object.assign({},m,{status:'confirmed'}):m;});});
-    // Refresh current user's profile UI from DB (stats already written by the function)
     if(refreshProfile) await refreshProfile(authUser.id);
     if(sendNotification&&match.submitterId){
       await sendNotification({user_id:match.submitterId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }
   }
 
-  // Opponent disputes — flags for admin review, no stats.
-  async function disputeOpponentMatch(match, reason){
+  // Internal: submit a correction proposal (dispute or counter-propose).
+  // isOpponentView=true: current user is the opponent (result must be inverted for storage).
+  // isOpponentView=false: current user is the submitter (result already in submitter frame).
+  async function _submitProposal(match, reasonCode, reasonDetail, formProposal, isOpponentView){
+    if(!authUser) return {error:'not_authenticated'};
+    var newRevisionCount=(match.revisionCount||0)+1;
+    var pendingActionBy=isOpponentView?match.submitterId:match.opponent_id;
+    // Store result in submitter's frame
+    var storedResult=isOpponentView
+      ?(formProposal.result==='win'?'loss':'win')
+      :formProposal.result;
+    var cleanSets=(formProposal.sets||[]).filter(function(s){return s.you!==''||s.them!=='';});
+    var proposal={
+      result:storedResult,
+      sets:cleanSets,
+      match_date:formProposal.date||match.rawDate,
+      venue:formProposal.venue||'',
+      court:formProposal.court||'',
+    };
+    var r=await M.proposeCorrection(match.id,authUser.id,pendingActionBy,proposal,reasonCode,reasonDetail,newRevisionCount);
+    if(r.error){console.error('[_submitProposal]',r.error);return {error:r.error.message};}
+    // Version history
+    await M.insertRevision({
+      match_id:match.id,
+      revision_number:newRevisionCount,
+      changed_by:authUser.id,
+      action:isOpponentView?'disputed':'counter_proposed',
+      snapshot_before:{result:match.result,sets:match.sets,match_date:match.rawDate,venue:match.venue,court:match.court},
+      snapshot_after:proposal,
+      reason_code:reasonCode,
+      reason_detail:reasonDetail||null,
+    });
+    // Local state update — proposal result in current user's frame
+    setHistory(function(h){
+      return h.map(function(m){
+        if(m.id!==match.id) return m;
+        return Object.assign({},m,{
+          status:'disputed',
+          disputeReasonCode:reasonCode,
+          disputeReasonDetail:reasonDetail||null,
+          currentProposal:{result:formProposal.result,sets:cleanSets,match_date:proposal.match_date,venue:proposal.venue,court:proposal.court},
+          proposalBy:authUser.id,
+          pendingActionBy:pendingActionBy,
+          revisionCount:newRevisionCount,
+        });
+      });
+    });
+    var notifyId=isOpponentView?match.submitterId:match.opponent_id;
+    if(sendNotification&&notifyId){
+      await sendNotification({user_id:notifyId,type:isOpponentView?'match_disputed':'match_counter_proposed',from_user_id:authUser.id,match_id:match.id});
+    }
+    return {error:null};
+  }
+
+  async function disputeWithProposal(match, reasonCode, reasonDetail, formProposal){
+    return _submitProposal(match, reasonCode, reasonDetail, formProposal, true);
+  }
+
+  async function counterPropose(match, reasonCode, reasonDetail, formProposal){
+    return _submitProposal(match, reasonCode, reasonDetail, formProposal, false);
+  }
+
+  // Accept the other party's proposed correction — DB updates both players atomically.
+  async function acceptCorrection(match){
     if(!authUser) return;
-    await M.disputeMatch(match.id, authUser.id, reason||null);
-    setHistory(function(h){return h.map(function(m){return m.id===match.id?Object.assign({},m,{status:'disputed'}):m;});});
-    if(sendNotification&&match.submitterId){
-      await sendNotification({user_id:match.submitterId,type:'match_disputed',from_user_id:authUser.id,match_id:match.id});
+    var r=await M.acceptCorrectionRpc(match.id);
+    if(r.error){console.error('[acceptCorrection]',r.error);return;}
+    var acceptedResult=match.currentProposal?match.currentProposal.result:match.result;
+    var acceptedSets=match.currentProposal?match.currentProposal.sets:match.sets;
+    setHistory(function(h){
+      return h.map(function(m){
+        if(m.id!==match.id) return m;
+        return Object.assign({},m,{status:'confirmed',result:acceptedResult,sets:acceptedSets,currentProposal:null,proposalBy:null,pendingActionBy:null});
+      });
+    });
+    if(refreshProfile) await refreshProfile(authUser.id);
+    var otherId=match.isTagged?match.submitterId:match.opponent_id;
+    if(sendNotification&&otherId){
+      await sendNotification({user_id:otherId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }
   }
 
-  // Opponent requests a correction — notifies submitter to re-edit.
-  async function requestMatchCorrection(match, reason){
-    if(!authUser) return;
-    var snapshot={result:match.result,sets:match.sets};
-    await M.requestMatchRevision(match.id, authUser.id, reason||null, snapshot);
-    if(sendNotification&&match.submitterId){
-      await sendNotification({user_id:match.submitterId,type:'match_correction_requested',from_user_id:authUser.id,match_id:match.id});
+  // Void a disputed match — both parties can do this.
+  async function voidMatchAction(match, reason){
+    if(!authUser) return {error:'not_authenticated'};
+    var r=await M.voidMatchRpc(match.id, reason||'voided');
+    if(r.error){console.error('[voidMatchAction]',r.error);return {error:r.error.message};}
+    setHistory(function(h){
+      return h.map(function(m){
+        if(m.id!==match.id) return m;
+        return Object.assign({},m,{status:'voided',currentProposal:null,proposalBy:null,pendingActionBy:null});
+      });
+    });
+    var otherId=match.isTagged?match.submitterId:match.opponent_id;
+    if(sendNotification&&otherId){
+      await sendNotification({user_id:otherId,type:'match_voided',from_user_id:authUser.id,match_id:match.id});
     }
+    return {error:null};
   }
 
   async function deleteMatch(m){
@@ -188,13 +254,12 @@ export function useMatchHistory(opts){
     var newExpiresAt=new Date(Date.now()+72*60*60*1000).toISOString();
     var payload={
       sets:clean, result:scoreDraft.result, match_date:matchDate,
+      venue:scoreDraft.venue||null, court:scoreDraft.court||null,
       expires_at:newExpiresAt,
       revision_requested_by:null, revision_reason:null,
       status:'pending_confirmation',
     };
-    if(match.opponent_id){
-      payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, clean);
-    }
+    if(match.opponent_id) payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, clean);
     var r=await M.updateMatch(match.id, payload);
     if(r.error){console.error('[resubmitMatch]',r.error);return {error:r.error.message};}
     setHistory(function(h){
@@ -203,11 +268,11 @@ export function useMatchHistory(opts){
         return Object.assign({},m,{
           sets:clean, result:scoreDraft.result,
           date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
+          venue:scoreDraft.venue||'', court:scoreDraft.court||'',
           expiresAt:newExpiresAt, revisionRequestedBy:null, status:'pending_confirmation',
         });
       });
     });
-    // Re-notify opponent so they see the updated match
     if(sendNotification&&match.opponent_id){
       await sendNotification({user_id:match.opponent_id,type:'match_tag',from_user_id:authUser.id,match_id:match.id});
     }
@@ -224,19 +289,12 @@ export function useMatchHistory(opts){
     var ownerResult=m.result||"loss";
     var friendResult=ownerResult==="win"?"loss":"win";
     var nm={
-      id:m.id,
-      oppName:m.opp_name||"Unknown",
-      tournName:m.tourn_name||"",
+      id:m.id, oppName:m.opp_name||"Unknown", tournName:m.tourn_name||"",
       date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",
-      sets:m.sets||[],
-      result:friendResult,
-      notes:m.notes||"",
-      status:'confirmed',
-      submitterId:m.user_id||null,
-      isTagged:true,
-      opponent_id:m.opponent_id||m.tagged_user_id,
-      tagged_user_id:m.tagged_user_id,
-      tag_status:'accepted',
+      sets:m.sets||[], result:friendResult, notes:m.notes||"",
+      status:'confirmed', submitterId:m.user_id||null, isTagged:true,
+      opponent_id:m.opponent_id||m.tagged_user_id, tagged_user_id:m.tagged_user_id, tag_status:'accepted',
+      venue:m.venue||"", court:m.court||"",
     };
     setHistory(function(h){return h.some(function(x){return x.id===m.id;})?h:[nm].concat(h);});
     return friendResult;
@@ -250,8 +308,9 @@ export function useMatchHistory(opts){
     casualOppName, setCasualOppName, casualOppId, setCasualOppId,
     showOppDrop, setShowOppDrop,
     scoreModal, setScoreModal, scoreDraft, setScoreDraft,
+    disputeModal, setDisputeModal, disputeDraft, setDisputeDraft,
     loadHistory, resetHistory,
     submitMatch, deleteMatch, resubmitMatch, removeTaggedMatch, applyAcceptedTagMatch,
-    confirmOpponentMatch, disputeOpponentMatch, requestMatchCorrection,
+    confirmOpponentMatch, disputeWithProposal, counterPropose, acceptCorrection, voidMatchAction,
   };
 }

@@ -12,6 +12,14 @@ export function normalizeMatch(m, isTagged){
   var ownerResult=m.result||"loss";
   // Map legacy tag_status to new status if status column not yet populated
   var status=m.status||(m.tag_status==='accepted'?'confirmed':m.tag_status==='pending'?'pending_confirmation':'confirmed');
+  // Normalize proposal — result is inverted for tagged view, sets stay in submitter frame
+  var proposal=m.current_proposal?{
+    result:isTagged?(m.current_proposal.result==='win'?'loss':'win'):m.current_proposal.result,
+    sets:m.current_proposal.sets||[],
+    match_date:m.current_proposal.match_date||'',
+    venue:m.current_proposal.venue||'',
+    court:m.current_proposal.court||'',
+  }:null;
   return {
     id:m.id,
     oppName:m.opp_name||"Unknown",
@@ -29,5 +37,16 @@ export function normalizeMatch(m, isTagged){
     isTagged:isTagged,
     expiresAt:m.expires_at||null,
     revisionRequestedBy:m.revision_requested_by||null,
+    venue:m.venue||"",
+    court:m.court||"",
+    disputeReasonCode:m.dispute_reason_code||null,
+    disputeReasonDetail:m.dispute_reason_detail||null,
+    currentProposal:proposal,
+    proposalBy:m.proposal_by||null,
+    pendingActionBy:m.pending_action_by||null,
+    revisionCount:m.revision_count||0,
+    disputeExpiresAt:m.dispute_expires_at||null,
+    voidedAt:m.voided_at||null,
+    voidedReason:m.voided_reason||null,
   };
 }

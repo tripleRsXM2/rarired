@@ -13,6 +13,8 @@ export default function NotificationsPanel({
     if(n.type==='match_correction_requested') return n.fromName+' requested a correction on your match';
     if(n.type==='match_deleted') return n.fromName+' removed a match from your feed';
     if(n.type==='match_reminder') return 'A pending match expires in less than 24h — check your feed';
+    if(n.type==='match_counter_proposed') return n.fromName+' counter-proposed a correction — review in feed';
+    if(n.type==='match_voided') return n.fromName+' voided a disputed match';
     if(n.type==='like') return n.fromName+' liked your match';
     if(n.type==='comment') return n.fromName+' commented on your match';
     return 'New notification';
@@ -81,8 +83,8 @@ export default function NotificationsPanel({
                       </button>
                     )}
 
-                    {/* match_disputed / correction: direct to feed */}
-                    {(n.type==='match_disputed'||n.type==='match_correction_requested')&&(
+                    {/* match_disputed / counter / correction: direct to feed */}
+                    {(n.type==='match_disputed'||n.type==='match_correction_requested'||n.type==='match_counter_proposed'||n.type==='match_voided')&&(
                       <button
                         onClick={function(){setTab("home");setShowNotifications(false);}}
                         style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>

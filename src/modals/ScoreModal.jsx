@@ -209,6 +209,22 @@ export default function ScoreModal({
           })}
         </div>
 
+        {/* Venue + Court */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+          <div>
+            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Venue</label>
+            <input value={scoreDraft.venue||""} placeholder="e.g. Moore Park"
+              onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{venue:e.target.value});});}}
+              style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
+          </div>
+          <div>
+            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Court</label>
+            <input value={scoreDraft.court||""} placeholder="e.g. Court 3"
+              onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{court:e.target.value});});}}
+              style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
+          </div>
+        </div>
+
         {/* Error */}
         {saveError&&(
           <div style={{marginBottom:12,padding:"10px 14px",borderRadius:8,background:t.redSubtle,border:"1px solid "+t.red+"44",fontSize:12,color:t.red,fontWeight:500}}>
