@@ -1,17 +1,17 @@
 export function makeTheme(dark) {
   if (dark) return {
-    bg:"#080808", bgCard:"#0F0F0F", bgTertiary:"#161616", surfaceSolid:"#0F0F0F",
-    border:"#1C1C1C", borderStrong:"#2A2A2A",
-    text:"#EFEFEF", textSecondary:"#666666", textTertiary:"#333333",
-    accent:"#C8F535", accentText:"#080808", accentSubtle:"rgba(200,245,53,0.07)",
-    green:"#4ADE80", greenSubtle:"rgba(74,222,128,0.07)",
-    red:"#FF6B6B", redSubtle:"rgba(255,107,107,0.07)",
-    orange:"#FB923C", orangeSubtle:"rgba(251,146,60,0.07)",
-    gold:"#FBBF24", goldSubtle:"rgba(251,191,36,0.07)",
-    purple:"#A78BFA", purpleSubtle:"rgba(167,139,250,0.07)",
-    inputBg:"#111111", modalBg:"#0F0F0F",
+    bg:"#080808", bgCard:"#111111", bgTertiary:"#1A1A1A", surfaceSolid:"#111111",
+    border:"#242424", borderStrong:"#333333",
+    text:"#EDEDED", textSecondary:"#A0A0A0", textTertiary:"#666666",
+    accent:"#4A90E2", accentText:"#FFFFFF", accentSubtle:"rgba(74,144,226,0.12)",
+    green:"#3D9970", greenSubtle:"rgba(61,153,112,0.12)",
+    red:"#E74C3C", redSubtle:"rgba(231,76,60,0.12)",
+    orange:"#E67E22", orangeSubtle:"rgba(230,126,34,0.12)",
+    gold:"#F39C12", goldSubtle:"rgba(243,156,18,0.12)",
+    purple:"#8E44AD", purpleSubtle:"rgba(142,68,173,0.12)",
+    inputBg:"#1A1A1A", modalBg:"#111111",
     navBg:"rgba(8,8,8,0.92)", tabBar:"rgba(8,8,8,0.95)",
-    qualified:"rgba(74,222,128,0.05)",
+    qualified:"rgba(61,153,112,0.07)",
     r:6, r2:10
   };
   return {
