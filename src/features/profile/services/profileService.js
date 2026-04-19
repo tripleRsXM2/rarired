@@ -1,5 +1,5 @@
 // src/features/profile/services/profileService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export function fetchProfile(userId){
   return supabase.from('profiles').select('*').eq('id',userId).single();

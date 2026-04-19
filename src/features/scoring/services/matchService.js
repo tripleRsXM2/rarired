@@ -1,5 +1,5 @@
 // src/features/scoring/services/matchService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export function fetchOwnMatches(userId){
   return supabase.from('match_history').select('*').eq('user_id',userId).order('created_at',{ascending:false});

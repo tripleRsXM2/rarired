@@ -1,5 +1,5 @@
-import PlayerAvatar from "../common/PlayerAvatar.jsx";
-import { computeStandings } from "../../lib/helpers.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { computeStandings } from "../utils/tournamentMath.js";
 
 export default function StandingsTable({tournament, myId, t}) {
   var rows=computeStandings(tournament);

@@ -1,5 +1,5 @@
 // src/features/people/services/socialService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export function fetchFriendRequests(userId){
   return supabase.from('friend_requests').select('*').or('sender_id.eq.'+userId+',receiver_id.eq.'+userId);

@@ -1,5 +1,5 @@
 // src/features/people/services/dmService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 // ── Conversations ──────────────────────────────────────────────────────────────
 

@@ -1,25 +1,7 @@
-import { AV_COLORS, ENTRY_FEES, PRIZES } from "./constants.js";
-
-export function avColor(name) {
-  return AV_COLORS[(name||"A").charCodeAt(0) % AV_COLORS.length];
-}
-
-export function initials(name) {
-  return (name||"?").split(" ").map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();
-}
-
-export function fmtDate(d) {
-  return d.toLocaleDateString("en-AU",{weekday:"short",day:"numeric",month:"short"});
-}
-
-export function daysUntil(dateStr) {
-  if(!dateStr) return null;
-  var parts=dateStr.split("-");
-  if(parts.length!==3) return null;
-  var target=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
-  var now=new Date(); now.setHours(0,0,0,0);
-  return Math.ceil((target-now)/86400000);
-}
+// src/features/tournaments/utils/tournamentMath.js
+// Tournament-specific math: revenue, round naming, league standings,
+// and bot auto-resolution that advances league → semis → final.
+import { ENTRY_FEES, PRIZES } from "../constants.js";
 
 export function netRevenue(size) {
   var rev=size*ENTRY_FEES[size], prize=PRIZES[size].value;

@@ -10,7 +10,7 @@
 //  • If profile.show_last_seen === false     → no "Last seen…" label for others
 //  • Both default to true (back-compat with rows that don't have the columns yet).
 
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export var PRESENCE_FIELDS = "last_active,show_online_status,show_last_seen";
 export var ONLINE_WINDOW_MS = 5 * 60 * 1000;       // < 5 min → online

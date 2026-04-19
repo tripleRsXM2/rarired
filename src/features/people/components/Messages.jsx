@@ -1,6 +1,6 @@
 // src/features/people/components/Messages.jsx
 import { useRef, useEffect, useState } from "react";
-import { avColor } from "../../../lib/helpers.js";
+import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
 import { getPresence } from "../services/presenceService.js";

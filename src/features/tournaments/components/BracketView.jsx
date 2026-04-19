@@ -1,5 +1,5 @@
-import PlayerAvatar from "../common/PlayerAvatar.jsx";
-import { computeStandings, roundLabel } from "../../lib/helpers.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { computeStandings, roundLabel } from "../utils/tournamentMath.js";
 
 export default function BracketView({tournament, myId, t}) {
   var isLeague=tournament.format==="league";

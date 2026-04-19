@@ -1,5 +1,5 @@
 // src/features/tournaments/services/tournamentService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export function fetchAllTournaments(){
   return supabase.from('tournaments').select('*');

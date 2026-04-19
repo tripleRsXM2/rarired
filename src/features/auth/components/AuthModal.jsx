@@ -1,5 +1,5 @@
-import { supabase } from "../supabase.js";
-import { inputStyle } from "../lib/theme.js";
+import { supabase } from "../../../lib/supabase.js";
+import { inputStyle } from "../../../lib/theme.js";
 
 export default function AuthModal({
   t, showAuth, setShowAuth,

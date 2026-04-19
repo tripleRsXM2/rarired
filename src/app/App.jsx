@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 
 import { makeTheme } from "../lib/theme.js";
-import { avColor } from "../lib/helpers.js";
-import { TABS } from "../lib/constants.js";
+import { avColor } from "../lib/utils/avatar.js";
+import { TABS } from "../lib/constants/ui.js";
 import { insertNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 
@@ -18,20 +18,20 @@ import { usePresenceHeartbeat } from "../features/people/hooks/usePresenceHeartb
 import { useNotifications } from "../features/notifications/hooks/useNotifications.js";
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
 
-import HomeTab from "../tabs/HomeTab.jsx";
-import TournamentsTab from "../tabs/TournamentsTab.jsx";
-import PeopleTab from "../tabs/PeopleTab.jsx";
-import ProfileTab from "../tabs/ProfileTab.jsx";
-import AdminTab from "../tabs/AdminTab.jsx";
-import SettingsScreen from "../screens/SettingsScreen.jsx";
+import HomeTab from "../features/home/pages/HomeTab.jsx";
+import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
+import PeopleTab from "../features/people/pages/PeopleTab.jsx";
+import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
+import AdminTab from "../features/admin/pages/AdminTab.jsx";
+import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
-import NotificationsPanel from "../components/social/NotificationsPanel.jsx";
-import AuthModal from "../modals/AuthModal.jsx";
-import OnboardingModal from "../modals/OnboardingModal.jsx";
-import ScheduleModal from "../modals/ScheduleModal.jsx";
-import ScoreModal from "../modals/ScoreModal.jsx";
-import CommentModal from "../modals/CommentModal.jsx";
-import DisputeModal from "../modals/DisputeModal.jsx";
+import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
+import AuthModal from "../features/auth/components/AuthModal.jsx";
+import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
+import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
+import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
+import CommentModal from "../features/tournaments/components/CommentModal.jsx";
+import DisputeModal from "../features/tournaments/components/DisputeModal.jsx";
 
 export default function App(){
   var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
