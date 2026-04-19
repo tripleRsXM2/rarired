@@ -85,19 +85,6 @@ export default function DisputeModal({
           })}
         </div>
 
-        {/* Detail text */}
-        {disputeDraft.reasonCode&&!isNotMyMatch&&(
-          <div style={{marginBottom:16}}>
-            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:'block',marginBottom:6,letterSpacing:'0.06em',textTransform:'uppercase'}}>Detail (optional)</label>
-            <textarea
-              value={disputeDraft.reasonDetail}
-              onChange={function(e){setDraft('reasonDetail',e.target.value);}}
-              placeholder="Briefly explain..."
-              rows={2}
-              style={Object.assign({},iStyle,{fontSize:13,resize:'none',marginBottom:0})}/>
-          </div>
-        )}
-
         {/* Void-only shortcut for not_my_match */}
         {isNotMyMatch&&(
           <div style={{marginBottom:16,padding:'10px 14px',borderRadius:8,background:t.redSubtle,border:'1px solid '+t.red+'44'}}>
@@ -113,7 +100,7 @@ export default function DisputeModal({
           </div>
         )}
 
-        {/* Correction form */}
+        {/* Correction form — shown before detail textarea so it's visible before keyboard opens */}
         {disputeDraft.reasonCode&&!isNotMyMatch&&!wouldAutoVoid&&(
           <>
             {/* Result */}
@@ -187,6 +174,17 @@ export default function DisputeModal({
                   onChange={function(e){setDraft('court',e.target.value);}}
                   style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
               </div>
+            </div>
+
+            {/* Detail text — last so keyboard doesn't hide form above */}
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:'block',marginBottom:6,letterSpacing:'0.06em',textTransform:'uppercase'}}>Detail (optional)</label>
+              <textarea
+                value={disputeDraft.reasonDetail}
+                onChange={function(e){setDraft('reasonDetail',e.target.value);}}
+                placeholder="Briefly explain..."
+                rows={2}
+                style={Object.assign({},iStyle,{fontSize:13,resize:'none',marginBottom:0})}/>
             </div>
           </>
         )}
