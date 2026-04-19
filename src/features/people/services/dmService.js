@@ -11,17 +11,13 @@ export function fetchConversations(userId){
     .order('last_message_at',{ascending:false});
 }
 
-export function fetchConversationBetween(userId,otherId){
-  return supabase.from('conversations')
-    .select('*')
-    .or('and(user1_id.eq.'+userId+',user2_id.eq.'+otherId+'),and(user1_id.eq.'+otherId+',user2_id.eq.'+userId+')')
-    .maybeSingle();
-}
-
-export function createConversation(userId,otherId){
-  return supabase.from('conversations')
-    .insert({user1_id:userId,user2_id:otherId,status:'pending'})
-    .select('*').single();
+// Atomic, race-safe get-or-create for the canonical conversation between
+// auth.uid() and otherId. Backed by an RPC that uses the unique index on
+// `pair_key`; guaranteed to return exactly one canonical row regardless of
+// who calls first or how many clients race. See migration
+// dm_canonical_conversation.sql.
+export function getOrCreateConversation(otherId){
+  return supabase.rpc('get_or_create_conversation',{other_id:otherId}).single();
 }
 
 export function updateConversationStatus(convId,status){

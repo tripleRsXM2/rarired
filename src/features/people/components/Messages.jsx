@@ -143,7 +143,9 @@ export default function Messages({t,authUser,dms}){
   var conv=dms.activeConv;
   var myId2=myId;
   var isPending=conv.status==='pending';
-  var iAmSender=conv.user1_id===myId2;
+  // After pair canonicalisation, requester_id is the source of truth for
+  // "who initiated this conversation" (user1/user2 are now uuid-sorted).
+  var iAmSender=conv.requester_id===myId2;
   var presence=getPresence(conv.partner);
 
   // UNREAD divider — first message from other person after my last read
