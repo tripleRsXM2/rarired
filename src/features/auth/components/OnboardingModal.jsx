@@ -1,5 +1,5 @@
 import { supabase } from "../../../lib/supabase.js";
-import { SKILL_LEVELS, PLAY_STYLES } from "../../../lib/constants.js";
+import { SKILL_LEVELS, PLAY_STYLES } from "../../../lib/constants/domain.js";
 import { inputStyle } from "../../../lib/theme.js";
 
 export default function OnboardingModal({

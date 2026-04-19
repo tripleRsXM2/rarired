@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 
 import { makeTheme } from "../lib/theme.js";
-import { avColor } from "../lib/helpers.js";
-import { TABS } from "../lib/constants.js";
+import { avColor } from "../lib/utils/avatar.js";
+import { TABS } from "../lib/constants/ui.js";
 import { insertNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 

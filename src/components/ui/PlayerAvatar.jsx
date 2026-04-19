@@ -1,4 +1,4 @@
-import { avColor, initials } from "../../lib/helpers.js";
+import { avColor, initials } from "../../lib/utils/avatar.js";
 
 export default function PlayerAvatar({name, avatar, size=36}) {
   return (

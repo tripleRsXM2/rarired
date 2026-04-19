@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { avColor } from "../../../lib/helpers.js";
+import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";

@@ -1,6 +1,6 @@
 // src/features/profile/hooks/useCurrentUser.js
 import { useState } from "react";
-import { initials } from "../../../lib/helpers.js";
+import { initials } from "../../../lib/utils/avatar.js";
 import { fetchProfile, upsertProfile, defaultProfile } from "../services/profileService.js";
 
 var INITIAL_PROFILE={name:"Your Name",suburb:"Sydney",skill:"Intermediate",style:"All-Court",bio:"",avatar:"YN",availability:{}};

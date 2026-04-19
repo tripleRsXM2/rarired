@@ -1,4 +1,4 @@
-import { avColor } from "../../../lib/helpers.js";
+import { avColor } from "../../../lib/utils/avatar.js";
 
 export default function NotificationsPanel({
   t, notifications, markNotificationsRead, acceptMatchTag, declineMatchTag,

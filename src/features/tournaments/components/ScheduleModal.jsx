@@ -1,4 +1,4 @@
-import { PILOT_VENUE } from "../../../lib/constants.js";
+import { PILOT_VENUE } from "../constants.js";
 import { inputStyle } from "../../../lib/theme.js";
 
 export default function ScheduleModal({

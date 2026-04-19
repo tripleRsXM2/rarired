@@ -3,8 +3,9 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FormatExplainer from "../components/FormatExplainer.jsx";
 import StandingsTable from "../components/StandingsTable.jsx";
 import BracketView from "../components/BracketView.jsx";
-import { PILOT_VENUE, ENTRY_FEES, PRIZES, SKILL_LEVELS } from "../../../lib/constants.js";
-import { daysUntil } from "../../../lib/helpers.js";
+import { PILOT_VENUE, ENTRY_FEES, PRIZES } from "../constants.js";
+import { SKILL_LEVELS } from "../../../lib/constants/domain.js";
+import { daysUntil } from "../../../lib/utils/dates.js";
 
 // ── Tournament list ───────────────────────────────────────────────────────────
 function TournamentList({

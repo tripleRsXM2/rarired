@@ -1,3 +1,6 @@
+// src/features/tournaments/constants.js
+// Tournament-domain constants: pilot venue, fee/prize tables, bot player roster.
+
 export const PILOT_VENUE = {
   id:"sydney-boys", name:"Sydney Boys High School", suburb:"Moore Park",
   address:"556 Cleveland St, Moore Park",
@@ -12,12 +15,6 @@ export const PRIZES = {
   16:{item:"Wilson Clash 100 v2",value:419},
   32:{item:"Head Speed Pro 2024",value:499}
 };
-
-export const SKILL_LEVELS = ["Beginner","Intermediate","Advanced","Competitive"];
-export const PLAY_STYLES  = ["Baseline","Serve and Volley","All-Court","Defensive"];
-export const DAYS_SHORT   = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-export const TIME_BLOCKS  = ["Morning","Afternoon","Evening","Late"];
-export const AV_COLORS    = ["#4A90E2","#3D9970","#E67E22","#E74C3C","#8E44AD","#2980B9","#D35400"];
 
 export const BOT_PLAYERS = [
   {id:"bot-1",  name:"Alex Chen",     avatar:"AC", skill:"Intermediate"},
@@ -35,12 +32,4 @@ export const BOT_PLAYERS = [
   {id:"bot-13", name:"Avery Harris",  avatar:"AH", skill:"Intermediate"},
   {id:"bot-14", name:"Parker Martin", avatar:"PM", skill:"Intermediate"},
   {id:"bot-15", name:"Skyler Lee",    avatar:"SL", skill:"Intermediate"},
-];
-
-export const TABS = [
-  {id:"home",        label:"Feed"},
-  {id:"tournaments", label:"Compete"},
-  {id:"people",      label:"People"},
-  {id:"profile",     label:"Profile"},
-  {id:"admin",       label:"Admin"},
 ];

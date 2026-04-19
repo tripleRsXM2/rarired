@@ -1,6 +1,6 @@
 // src/features/tournaments/utils/bracketUtils.js
 // Pure tournament logic — takes a tournament, returns a new tournament.
-import { autoResolveBots, computeStandings } from "../../../lib/helpers.js";
+import { autoResolveBots, computeStandings } from "./tournamentMath.js";
 
 function shuffle(arr){
   var a=arr.slice();
