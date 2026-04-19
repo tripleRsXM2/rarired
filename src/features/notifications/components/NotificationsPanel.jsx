@@ -9,6 +9,9 @@ export default function NotificationsPanel({
   function notifLabel(n) {
     if(n.type==='friend_request') return n.fromName+' sent you a friend request';
     if(n.type==='request_accepted') return n.fromName+' accepted your friend request';
+    if(n.type==='message_request') return n.fromName+' wants to message you';
+    if(n.type==='message_request_accepted') return n.fromName+' accepted your message request';
+    if(n.type==='message') return n.fromName+' sent you a message';
     if(n.type==='match_tag') return n.fromName+' tagged you in a match — confirm or dispute';
     if(n.type==='match_confirmed') return n.fromName+' confirmed your match result ✓';
     if(n.type==='match_disputed') return n.fromName+' disputed your match — under review';
@@ -54,6 +57,31 @@ export default function NotificationsPanel({
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:13,color:t.text,lineHeight:1.4}}>{notifLabel(n)}</div>
                     <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{timeStr}</div>
+
+                    {/* friend_request: go to requests tab */}
+                    {n.type==='friend_request'&&(
+                      <button
+                        onClick={function(){navigate("/people/requests");setShowNotifications(false);}}
+                        style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                        View request →
+                      </button>
+                    )}
+
+                    {/* message / message_request / message_request_accepted: go to messages tab */}
+                    {(n.type==='message'||n.type==='message_request'||n.type==='message_request_accepted')&&(
+                      <div>
+                        {n.type==='message'&&n.metadata&&n.metadata.preview&&(
+                          <div style={{fontSize:12,color:t.textSecondary,marginTop:4,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            "{n.metadata.preview}"
+                          </div>
+                        )}
+                        <button
+                          onClick={function(){navigate("/people/messages");setShowNotifications(false);}}
+                          style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                          View message →
+                        </button>
+                      </div>
+                    )}
 
                     {/* match_tag: confirm/dispute actions (check feed instead) */}
                     {n.type==='match_tag'&&!n.tag_status&&(

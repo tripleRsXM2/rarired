@@ -214,6 +214,18 @@ export function useDMs(opts){
       setThreadMessages(function(ms){return ms.concat([msg]);});
       var preview=content.trim().slice(0,80);
       D.updateConversationLastMessage(conv.id,preview,uid);
+      // Notify the other participant — one notification per conversation
+      // (upsert deletes any existing unread message notification first).
+      var partnerId=conv.user1_id===uid?conv.user2_id:conv.user1_id;
+      if(conv.status==='accepted'){
+        upsertMessageNotification({
+          user_id:partnerId,
+          type:'message',
+          from_user_id:uid,
+          entity_id:conv.id,
+          metadata:{preview:preview.slice(0,60)},
+        });
+      }
       setConversations(function(cs){
         var updated=Object.assign({},conv,{
           last_message_preview:preview,
