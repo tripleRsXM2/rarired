@@ -14,16 +14,14 @@ export function deleteNotification(id){
   return supabase.from('notifications').delete().eq('id',id);
 }
 
-// Upsert-style message notification: removes any existing unread message
-// notification for this conversation → inserts a fresh one with latest preview.
-// Keeps the panel clean (one notification per conversation, not one per message).
-export async function upsertMessageNotification(payload){
-  if(payload.entity_id){
-    await supabase.from('notifications')
-      .delete()
-      .eq('user_id', payload.user_id)
-      .eq('type', 'message')
-      .eq('entity_id', payload.entity_id);
-  }
-  return supabase.from('notifications').insert(payload);
+// Upsert-style message notification via security-definer RPC.
+// The RPC owns the delete+re-insert atomically so the sender can replace
+// the recipient's existing notification without hitting cross-user RLS.
+export function upsertMessageNotification(payload){
+  return supabase.rpc('upsert_message_notification',{
+    p_user_id:      payload.user_id,
+    p_from_user_id: payload.from_user_id,
+    p_entity_id:    payload.entity_id,
+    p_metadata:     payload.metadata||null,
+  });
 }
