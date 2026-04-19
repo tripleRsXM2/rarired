@@ -1,6 +1,6 @@
 // src/features/notifications/hooks/useNotifications.js
 import { useState, useEffect } from "react";
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 import * as N from "../services/notificationService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 

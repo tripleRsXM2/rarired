@@ -1,5 +1,5 @@
 // src/features/auth/services/authService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 import { initials } from "../../../lib/helpers.js";
 
 export function getSession(){ return supabase.auth.getSession(); }

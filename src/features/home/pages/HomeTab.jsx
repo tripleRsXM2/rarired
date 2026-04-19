@@ -1,5 +1,5 @@
-import { supabase } from "../supabase.js";
-import { avColor } from "../lib/helpers.js";
+import { supabase } from "../../../lib/supabase.js";
+import { avColor } from "../../../lib/helpers.js";
 
 var REASON_LABELS={
   wrong_score:'Score is wrong',

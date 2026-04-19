@@ -5,11 +5,11 @@
 //
 // Owns all account/preferences content that was previously buried in ProfileTab.
 
-import { supabase } from "../supabase.js";
-import { initials } from "../lib/helpers.js";
-import { avColor } from "../lib/helpers.js";
-import { inputStyle } from "../lib/theme.js";
-import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../lib/constants.js";
+import { supabase } from "../../../lib/supabase.js";
+import { initials } from "../../../lib/helpers.js";
+import { avColor } from "../../../lib/helpers.js";
+import { inputStyle } from "../../../lib/theme.js";
+import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants.js";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,

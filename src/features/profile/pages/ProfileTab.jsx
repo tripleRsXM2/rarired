@@ -3,8 +3,8 @@
 // Public-facing profile view: stats, match history, achievements, availability.
 // Settings have been moved to SettingsScreen (accessible via top-bar avatar).
 
-import { avColor } from "../lib/helpers.js";
-import { DAYS_SHORT } from "../lib/constants.js";
+import { avColor } from "../../../lib/helpers.js";
+import { DAYS_SHORT } from "../../../lib/constants.js";
 
 var BADGES=[
   {id:"first", label:"First Match",   desc:"Play your first match",             icon:"🎾", check:function(w,p){return p>=1;}},

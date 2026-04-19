@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { avColor } from "../lib/helpers.js";
-import { inputStyle } from "../lib/theme.js";
+import { avColor } from "../../../lib/helpers.js";
+import { inputStyle } from "../../../lib/theme.js";
 
 export default function ScoreModal({
   t, authUser, scoreModal, setScoreModal,

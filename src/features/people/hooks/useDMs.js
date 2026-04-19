@@ -1,9 +1,9 @@
 // src/features/people/hooks/useDMs.js
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 import * as D from "../services/dmService.js";
 import { fetchProfilesByIds } from "../services/socialService.js";
-import { insertNotification } from "../../notifications/services/notificationService.js";
+import { insertNotification, upsertMessageNotification } from "../../notifications/services/notificationService.js";
 
 export function useDMs(opts){
   var authUser=(opts&&opts.authUser)||null;
@@ -128,7 +128,7 @@ export function useDMs(opts){
         activeConvRef.current=newConv;
         setThreadMessages([]);
         setConversations(function(cs){return cs.concat([newConv]);});
-        insertNotification({user_id:partner.id,type:'message_request',from_user_id:uid});
+        insertNotification({user_id:partner.id,type:'message_request',from_user_id:uid,entity_id:cr.data.id});
       }
     }
   }

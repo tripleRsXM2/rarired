@@ -1,6 +1,6 @@
 // src/features/people/hooks/useSocialGraph.js
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 import * as S from "../services/socialService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
@@ -80,7 +80,7 @@ export function useSocialGraph(opts){
     console.debug('[sendFriendRequest] insertFriendRequest result:', r.data, r.error||'no error');
     if(!r.error){
       setSentRequests(function(s){return s.concat([Object.assign({requestId:r.data.id},target)]);});
-      var notifPayload={user_id:target.id,type:'friend_request',from_user_id:authUser.id};
+      var notifPayload={user_id:target.id,type:'friend_request',from_user_id:authUser.id,entity_id:r.data.id};
       console.debug('[sendFriendRequest] inserting notification:', notifPayload);
       var nr=await insertNotification(notifPayload);
       if(nr.error) console.error('[sendFriendRequest] notification insert FAILED:', nr.error);

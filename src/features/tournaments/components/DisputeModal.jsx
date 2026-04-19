@@ -1,6 +1,6 @@
 // src/modals/DisputeModal.jsx
 import { useState } from "react";
-import { inputStyle } from "../lib/theme.js";
+import { inputStyle } from "../../../lib/theme.js";
 
 var REASONS=[
   {code:'wrong_score',  label:'Score is wrong'},

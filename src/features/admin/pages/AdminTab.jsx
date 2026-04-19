@@ -1,8 +1,8 @@
-import { supabase } from "../supabase.js";
-import PlayerAvatar from "../components/common/PlayerAvatar.jsx";
-import { ENTRY_FEES, PRIZES, SKILL_LEVELS } from "../lib/constants.js";
-import { netRevenue } from "../lib/helpers.js";
-import { inputStyle } from "../lib/theme.js";
+import { supabase } from "../../../lib/supabase.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { ENTRY_FEES, PRIZES, SKILL_LEVELS } from "../../../lib/constants.js";
+import { netRevenue } from "../../../lib/helpers.js";
+import { inputStyle } from "../../../lib/theme.js";
 
 export default function AdminTab({
   t, tournaments, setTournaments, adminTab, setAdminTab,

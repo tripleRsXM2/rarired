@@ -1,6 +1,6 @@
-import { supabase } from "../supabase.js";
-import { avColor } from "../lib/helpers.js";
-import { inputStyle } from "../lib/theme.js";
+import { supabase } from "../../../lib/supabase.js";
+import { avColor } from "../../../lib/helpers.js";
+import { inputStyle } from "../../../lib/theme.js";
 
 export default function CommentModal({
   t, authUser, profile,
