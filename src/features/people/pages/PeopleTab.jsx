@@ -137,7 +137,9 @@ export default function PeopleTab({
   var dmUnread=dms?dms.totalUnread():0;
   var dmBadge=(dms?(dms.requests||[]).length:0)+(dms&&dms.conversations?dms.conversations.filter(function(c){return c.hasUnread;}).length:0);
 
-  function handleMessageFriend(u){
+  // Works for both friends (bypasses request gate via useDMs friendship
+  // override) and non-friends (creates a normal DM request).
+  function handleMessage(u){
     navigate("/people/messages");
     if(dms)dms.openOrStartConversation(u);
   }
@@ -241,7 +243,7 @@ export default function PeopleTab({
               </div>
               :<div>
                 <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>{friends.length} friend{friends.length!==1?"s":""}</div>
-                {friends.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessageFriend}/>;})}</div>
+                {friends.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;})}</div>
           )}
 
           {/* Requests */}
@@ -320,7 +322,7 @@ export default function PeopleTab({
                   <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:6}}>No suggestions yet</div>
                   <div style={{fontSize:13,color:t.textSecondary}}>As more players join your area, they'll appear here.</div>
                 </div>
-                :suggestedPlayers.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps}/>;})
+                :suggestedPlayers.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;})
               }
               <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"16px",marginTop:16,textAlign:"center"}}>
                 <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>Invite friends</div>

@@ -74,7 +74,8 @@ export default function App(){
   var currentUser=useCurrentUser();
   var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats, refreshProfile:currentUser.refreshProfileUI });
   var social=useSocialGraph({ authUser:auth.authUser });
-  var dms=useDMs({ authUser:auth.authUser });
+  // Pass friends list so DM logic can bypass the request gate for friends.
+  var dms=useDMs({ authUser:auth.authUser, friends:social.friends });
   usePresenceHeartbeat(auth.authUser);
   var notifications=useNotifications({
     authUser:auth.authUser,

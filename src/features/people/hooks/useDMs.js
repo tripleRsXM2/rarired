@@ -7,6 +7,7 @@ import { insertNotification, upsertMessageNotification } from "../../notificatio
 
 export function useDMs(opts){
   var authUser=(opts&&opts.authUser)||null;
+  var friends=(opts&&opts.friends)||[];
 
   var [conversations,setConversations]=useState([]);  // accepted + pending-outgoing
   var [requests,setRequests]=useState([]);             // pending incoming
@@ -22,6 +23,14 @@ export function useDMs(opts){
 
   var activeConvRef=useRef(null);
 
+  // Friendship override: keep an always-current ref of friend ids so async
+  // realtime callbacks see the latest list without re-subscribing. Friendship
+  // bypasses the DM request gate entirely — friends always share a normal,
+  // accepted conversation.
+  var friendIdsRef=useRef([]);
+  friendIdsRef.current=friends.map(function(f){return f.id;});
+  function isFriendId(uid){return friendIdsRef.current.indexOf(uid)>=0;}
+
   // ── Load ────────────────────────────────────────────────────────────────────
 
   async function loadConversations(){
@@ -29,6 +38,26 @@ export function useDMs(opts){
     var uid=authUser.id;
     var r=await D.fetchConversations(uid);
     var all=r.data||[];
+
+    // Friendship override — collapse any pending conversation whose partner is
+    // already a friend up to "accepted". Handles legacy rows from before the
+    // friendship-bypass rule existed and races where the DB-side RPC didn't
+    // catch the friendship at insert time.
+    var fIds=friendIdsRef.current;
+    if(fIds.length){
+      var toUpgrade=all.filter(function(c){
+        if(c.status!=='pending')return false;
+        var pid=c.user1_id===uid?c.user2_id:c.user1_id;
+        return fIds.indexOf(pid)>=0;
+      });
+      if(toUpgrade.length){
+        await Promise.all(toUpgrade.map(function(c){
+          return D.updateConversationStatus(c.id,'accepted');
+        }));
+        var upgraded={};toUpgrade.forEach(function(c){upgraded[c.id]=true;});
+        all=all.map(function(c){return upgraded[c.id]?Object.assign({},c,{status:'accepted'}):c;});
+      }
+    }
 
     var accepted=all.filter(function(c){return c.status==='accepted';});
     // Pending direction is determined by requester_id (the originator), NOT by
@@ -108,10 +137,17 @@ export function useDMs(opts){
       return;
     }
     var row=r.data;
-    var isNew=row.requester_id===uid&&row.status==='pending'
-      &&!row.last_message_at; // freshly inserted: no message activity
+
+    // Friendship override — friends never go through the DM request gate.
+    // If the RPC returned a pending row but we're already friends, force
+    // it to "accepted" before any UI/state branches read row.status.
+    if(row.status==='pending'&&isFriendId(partner.id)){
+      var ur=await D.updateConversationStatus(row.id,'accepted');
+      row=(ur&&ur.data)?ur.data:Object.assign({},row,{status:'accepted'});
+    }
 
     // Declined cooldown: do NOT auto-reset; require the cooldown to expire.
+    // (Friends bypass this too — they're handled above.)
     if(row.status==='declined'){
       if(row.request_cooldown_until&&new Date(row.request_cooldown_until)>new Date()){
         alert("You can't message "+partner.name+" right now. Try again later.");
@@ -120,14 +156,17 @@ export function useDMs(opts){
       // Cooldown elapsed — reopen as a fresh pending request from us.
       await D.updateConversationStatus(row.id,'pending');
       row=Object.assign({},row,{status:'pending',requester_id:uid});
-      isNew=true;
     }
 
     var conv=Object.assign({},row,{partner,hasUnread:false});
     setActiveConv(conv);
     activeConvRef.current=conv;
 
-    if(isNew){
+    // "New pending request" only applies to non-friend, sender-side, never-
+    // touched conversations. Friends auto-accepted above will fall to the else.
+    var isNewPending=row.requester_id===uid&&row.status==='pending'&&!row.last_message_at;
+
+    if(isNewPending){
       setThreadMessages([]);
       setConversations(function(cs){
         if(cs.some(function(c){return c.id===conv.id;}))return cs;
@@ -138,9 +177,15 @@ export function useDMs(opts){
       await _loadThread(conv);
       if(row.status==='accepted'){
         D.upsertRead(uid,row.id);
-        setConversations(function(cs){return cs.map(function(c){
-          return c.id===row.id?Object.assign({},c,{hasUnread:false}):c;
-        });});
+        // Move out of requests if it was sitting there, and ensure it lives in
+        // the conversations list (covers first-open of a friend auto-accept).
+        setRequests(function(rs){return rs.filter(function(x){return x.id!==conv.id;});});
+        setConversations(function(cs){
+          if(cs.some(function(c){return c.id===conv.id;})){
+            return cs.map(function(c){return c.id===conv.id?Object.assign({},c,{hasUnread:false,status:'accepted'}):c;});
+          }
+          return [conv].concat(cs);
+        });
       }
     }
   }
@@ -279,6 +324,19 @@ export function useDMs(opts){
       var partnerId=conv.user1_id===uid?conv.user2_id:conv.user1_id;
       var pr=await fetchProfilesByIds([partnerId],'id,name,avatar,skill,suburb,last_active,show_online_status,show_last_seen');
       var partner=(pr.data&&pr.data[0])||{id:partnerId,name:"Player",avatar:"PL"};
+
+      // Friendship override — a friend reaching out is never a "request".
+      // Auto-accept and add straight to conversations, skipping the approval UI.
+      if(conv.status==='pending'&&isFriendId(partnerId)){
+        await D.updateConversationStatus(conv.id,'accepted');
+        var acceptedConv=Object.assign({},conv,{status:'accepted',partner,hasUnread:!!conv.last_message_at});
+        setConversations(function(cs){
+          if(cs.some(function(c){return c.id===conv.id;}))return cs;
+          return [acceptedConv].concat(cs);
+        });
+        return;
+      }
+
       var enriched=Object.assign({},conv,{partner});
       setRequests(function(rs){
         if(rs.some(function(r){return r.id===conv.id;}))return rs;
