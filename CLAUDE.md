@@ -1,5 +1,11 @@
 # CourtSync — Claude Project Context
 
+## Git Workflow
+
+- **Always push to `Mdawg` branch only.** Never push to `main` unless explicitly instructed.
+- Use `git push origin HEAD:Mdawg` (or `git push origin main:Mdawg` if on main) for all pushes.
+- Merging to `main` is the user's decision.
+
 ## Tech Stack
 
 - **Framework**: React 18 + Vite
