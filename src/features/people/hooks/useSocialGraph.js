@@ -72,11 +72,19 @@ export function useSocialGraph(opts){
 
   async function sendFriendRequest(target){
     if(!authUser||isFriend(target.id)||sentReq(target.id)||isBlocked(target.id))return;
+    console.debug('[sendFriendRequest] sender:', authUser.id, '→ recipient:', target.id);
     setSocialLoading(function(l){return Object.assign({},l,{[target.id]:true});});
     var r=await S.insertFriendRequest(authUser.id, target.id);
+    console.debug('[sendFriendRequest] insertFriendRequest result:', r.data, r.error||'no error');
     if(!r.error){
       setSentRequests(function(s){return s.concat([Object.assign({requestId:r.data.id},target)]);});
-      await insertNotification({user_id:target.id,type:'friend_request',from_user_id:authUser.id});
+      var notifPayload={user_id:target.id,type:'friend_request',from_user_id:authUser.id};
+      console.debug('[sendFriendRequest] inserting notification:', notifPayload);
+      var nr=await insertNotification(notifPayload);
+      if(nr.error) console.error('[sendFriendRequest] notification insert FAILED:', nr.error);
+      else console.debug('[sendFriendRequest] notification insert OK');
+    } else {
+      console.error('[sendFriendRequest] friend request insert failed:', r.error);
     }
     setSocialLoading(function(l){return Object.assign({},l,{[target.id]:false});});
   }
