@@ -153,6 +153,7 @@ export default function App(){
             declineMatchTag={notifications.declineMatchTag}
             setTab={setTab} setPeopleTab={social.setPeopleTab}
             setShowNotifications={notifications.setShowNotifications}
+            refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
           />
         )}
 
