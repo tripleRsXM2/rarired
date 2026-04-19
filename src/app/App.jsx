@@ -31,7 +31,7 @@ import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 import CommentModal from "../features/tournaments/components/CommentModal.jsx";
-import DisputeModal from "../features/tournaments/components/DisputeModal.jsx";
+import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
 
 export default function App(){
   var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});

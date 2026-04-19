@@ -149,12 +149,16 @@ export function useMatchHistory(opts){
   // isOpponentView=false: current user is the submitter counter-proposing against
   //                       the opponent's correction → status becomes 'pending_reconfirmation',
   //                       opponent owes a response. (Result already in submitter frame.)
+  //
+  // The actual DB write goes through propose_match_correction() (SECURITY DEFINER),
+  // which validates the state machine, writes match_history, and inserts a
+  // match_revisions row atomically — bypassing RLS correctly for both parties.
   async function _submitProposal(match, reasonCode, reasonDetail, formProposal, isOpponentView){
     if(!authUser) return {error:'not_authenticated'};
     var newRevisionCount=(match.revisionCount||0)+1;
     var pendingActionBy=isOpponentView?match.submitterId:match.opponent_id;
     var nextStatus=isOpponentView?'disputed':'pending_reconfirmation';
-    // Store result in submitter's frame
+    // Store result in submitter's frame for DB storage
     var storedResult=isOpponentView
       ?(formProposal.result==='win'?'loss':'win')
       :formProposal.result;
@@ -166,20 +170,15 @@ export function useMatchHistory(opts){
       venue:formProposal.venue||'',
       court:formProposal.court||'',
     };
-    var r=await M.proposeCorrection(match.id,authUser.id,pendingActionBy,proposal,reasonCode,reasonDetail,newRevisionCount,nextStatus);
-    if(r.error){console.error('[_submitProposal]',r.error);return {error:r.error.message};}
-    // Version history
-    await M.insertRevision({
-      match_id:match.id,
-      revision_number:newRevisionCount,
-      changed_by:authUser.id,
-      action:isOpponentView?'disputed':'counter_proposed',
-      snapshot_before:{result:match.result,sets:match.sets,match_date:match.rawDate,venue:match.venue,court:match.court},
-      snapshot_after:proposal,
-      reason_code:reasonCode,
-      reason_detail:reasonDetail||null,
-    });
-    // Local state update — proposal result in current user's frame
+    // Single RPC call: validates parties, enforces state machine, writes
+    // match_history + match_revisions in one transaction (no separate insertRevision needed).
+    var r=await M.proposeCorrection(match.id,proposal,reasonCode,reasonDetail,nextStatus);
+    if(r.error){
+      console.error('[_submitProposal]',r.error);
+      return {error:r.error.message||'Failed to submit proposal — please try again.'};
+    }
+    // Optimistic local state update — proposal result kept in the current
+    // user's frame (not the stored submitter frame).
     setHistory(function(h){
       return h.map(function(m){
         if(m.id!==match.id) return m;
@@ -195,7 +194,7 @@ export function useMatchHistory(opts){
       });
     });
     var notifyId=isOpponentView?match.submitterId:match.opponent_id;
-    if(sendNotification&&notifyId){
+    if(sendNotification && notifyId){
       await sendNotification({user_id:notifyId,type:isOpponentView?'match_disputed':'match_counter_proposed',from_user_id:authUser.id,match_id:match.id});
     }
     return {error:null};
