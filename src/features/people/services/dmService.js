@@ -76,9 +76,9 @@ export function softDeleteMessage(messageId){
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
 export function upsertRead(userId,convId){
-  return supabase.from('message_reads')
-    .upsert({user_id:userId,conversation_id:convId,last_read_at:new Date().toISOString()},
-      {onConflict:'user_id,conversation_id'});
+  // Security-definer RPC — writes the caller's own read record, bypassing
+  // cross-user RLS restrictions that blocked the direct upsert.
+  return supabase.rpc('mark_conversation_read',{p_conversation_id:convId});
 }
 
 export function fetchReads(userId,convIds){
