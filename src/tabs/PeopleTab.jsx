@@ -90,7 +90,7 @@ export default function PeopleTab({
   t, authUser, friends, sentRequests, receivedRequests,
   blockedUsers, suggestedPlayers,
   peopleTab, setPeopleTab, peopleSearch, setPeopleSearch,
-  searchResults, searchLoading, showSearchDrop, setShowSearchDrop,
+  searchResults, setSearchResults, searchLoading, showSearchDrop, setShowSearchDrop,
   socialLoading, searchTimer,
   sendFriendRequest, acceptRequest, declineRequest, cancelRequest,
   unfriend, blockUser, unblockUser, searchUsers,
