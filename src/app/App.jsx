@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
 import { TABS } from "../lib/constants/ui.js";
-import { insertNotification } from "../features/notifications/services/notificationService.js";
+import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 
 import Providers from "./providers.jsx";
@@ -115,15 +115,54 @@ export default function App(){
     };
   });
 
-  // Opens a conversation by its ID from the notifications panel.
-  // Looks it up in the current dms state, sets it active, and navigates.
-  function openConvById(convId){
-    if(!convId){navigate("/people/messages");return;}
-    var all=[].concat(dms.conversations,dms.requests);
-    var found=all.find(function(c){return c.id===convId;});
-    if(found)dms.openConversation(found);
+  // Opens a conversation from the notifications panel. Prefers lookup by
+  // entity_id (conversation_id), falls back to the sender's user id for
+  // legacy notifications created before entity_id was being stored.
+  function openConvById(convId, fromUserId){
+    var all=[].concat(dms.conversations||[], dms.requests||[]);
+    var found=null;
+    if(convId) found=all.find(function(c){return c.id===convId;});
+    if(!found&&fromUserId){
+      found=all.find(function(c){return c.partner&&c.partner.id===fromUserId;});
+    }
+    if(found) dms.openConversation(found);
     navigate("/people/messages");
   }
+
+  // Auto-dismiss the "new message" notification when the user opens that
+  // conversation. Keeps the bell in sync with actually-unread threads.
+  useEffect(function(){
+    var conv=dms.activeConv;
+    if(!conv||conv.status!=='accepted')return;
+    var match=notifications.notifications.find(function(n){
+      return n.type==='message'&&n.entity_id===conv.id;
+    });
+    if(!match)return;
+    deleteNotification(match.id);
+    notifications.setNotifications(function(ns){
+      return ns.filter(function(n){return n.id!==match.id;});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[dms.activeConv&&dms.activeConv.id]);
+
+  // Auto-dismiss any "friend_request" notifications from senders who are
+  // already friends — happens once the request is accepted (from requests tab,
+  // settings, or notifications panel), making the notification stale.
+  useEffect(function(){
+    if(!social.friends.length||!notifications.notifications.length)return;
+    var friendIds={};
+    social.friends.forEach(function(f){friendIds[f.id]=true;});
+    var stale=notifications.notifications.filter(function(n){
+      return n.type==='friend_request'&&friendIds[n.from_user_id];
+    });
+    if(!stale.length)return;
+    stale.forEach(function(n){deleteNotification(n.id);});
+    var staleIds={};stale.forEach(function(n){staleIds[n.id]=true;});
+    notifications.setNotifications(function(ns){
+      return ns.filter(function(n){return!staleIds[n.id];});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[social.friends.length, notifications.notifications.length]);
 
   return (
     <Providers t={t} dark={dark}>

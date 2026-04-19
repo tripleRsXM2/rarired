@@ -68,7 +68,7 @@ export default function NotificationsPanel({
                         )}
                         <button
                           onClick={function(){
-                            if(openConvById&&n.entity_id)openConvById(n.entity_id);
+                            if(openConvById)openConvById(n.entity_id, n.from_user_id);
                             else navigate("/people/messages");
                             setShowNotifications(false);
                           }}
