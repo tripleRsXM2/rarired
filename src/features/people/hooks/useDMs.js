@@ -31,8 +31,10 @@ export function useDMs(opts){
     var all=r.data||[];
 
     var accepted=all.filter(function(c){return c.status==='accepted';});
-    var pendingOut=all.filter(function(c){return c.status==='pending'&&c.user1_id===uid;});
-    var pendingIn=all.filter(function(c){return c.status==='pending'&&c.user2_id===uid;});
+    // Pending direction is determined by requester_id (the originator), NOT by
+    // user1/user2 column ordering — those are now canonicalised by uuid order.
+    var pendingOut=all.filter(function(c){return c.status==='pending'&&c.requester_id===uid;});
+    var pendingIn=all.filter(function(c){return c.status==='pending'&&c.requester_id!==uid;});
 
     var partnerIds=[...new Set(all.map(function(c){return c.user1_id===uid?c.user2_id:c.user1_id;}))];
     var partnerMap={};
@@ -97,38 +99,48 @@ export function useDMs(opts){
   async function openOrStartConversation(partner){
     if(!authUser)return;
     var uid=authUser.id;
-    var r=await D.fetchConversationBetween(uid,partner.id);
-    var existing=r.data;
 
-    if(existing){
-      if(existing.status==='declined'){
-        if(existing.request_cooldown_until&&new Date(existing.request_cooldown_until)>new Date()){
-          alert("You can't message "+partner.name+" right now. Try again later.");
-          return;
-        }
-        // Re-open as new pending
-        await D.updateConversationStatus(existing.id,'pending');
-        existing=Object.assign({},existing,{status:'pending'});
+    // Atomic get-or-create via RPC. Guarantees one canonical conversation
+    // per pair regardless of races between the two users' clients.
+    var r=await D.getOrCreateConversation(partner.id);
+    if(r.error||!r.data){
+      console.error('[useDMs] getOrCreateConversation failed:',r.error);
+      return;
+    }
+    var row=r.data;
+    var isNew=row.requester_id===uid&&row.status==='pending'
+      &&!row.last_message_at; // freshly inserted: no message activity
+
+    // Declined cooldown: do NOT auto-reset; require the cooldown to expire.
+    if(row.status==='declined'){
+      if(row.request_cooldown_until&&new Date(row.request_cooldown_until)>new Date()){
+        alert("You can't message "+partner.name+" right now. Try again later.");
+        return;
       }
-      var conv=Object.assign({},existing,{partner});
-      setActiveConv(conv);
-      activeConvRef.current=conv;
-      await _loadThread(conv);
-      if(existing.status==='accepted'){
-        D.upsertRead(uid,existing.id);
-        setConversations(function(cs){return cs.map(function(c){
-          return c.id===existing.id?Object.assign({},c,{hasUnread:false}):c;
-        });});
-      }
+      // Cooldown elapsed — reopen as a fresh pending request from us.
+      await D.updateConversationStatus(row.id,'pending');
+      row=Object.assign({},row,{status:'pending',requester_id:uid});
+      isNew=true;
+    }
+
+    var conv=Object.assign({},row,{partner,hasUnread:false});
+    setActiveConv(conv);
+    activeConvRef.current=conv;
+
+    if(isNew){
+      setThreadMessages([]);
+      setConversations(function(cs){
+        if(cs.some(function(c){return c.id===conv.id;}))return cs;
+        return cs.concat([conv]);
+      });
+      insertNotification({user_id:partner.id,type:'message_request',from_user_id:uid,entity_id:conv.id});
     } else {
-      var cr=await D.createConversation(uid,partner.id);
-      if(!cr.error&&cr.data){
-        var newConv=Object.assign({},cr.data,{partner,hasUnread:false});
-        setActiveConv(newConv);
-        activeConvRef.current=newConv;
-        setThreadMessages([]);
-        setConversations(function(cs){return cs.concat([newConv]);});
-        insertNotification({user_id:partner.id,type:'message_request',from_user_id:uid,entity_id:cr.data.id});
+      await _loadThread(conv);
+      if(row.status==='accepted'){
+        D.upsertRead(uid,row.id);
+        setConversations(function(cs){return cs.map(function(c){
+          return c.id===row.id?Object.assign({},c,{hasUnread:false}):c;
+        });});
       }
     }
   }
@@ -255,19 +267,28 @@ export function useDMs(opts){
     if(!authUser)return;
     var uid=authUser.id;
 
+    // Incoming-request realtime — must subscribe to BOTH halves because
+    // user1/user2 are now canonicalised by uuid order, so the receiver may
+    // sit in either column. We then filter client-side by requester_id.
+    async function handleInsert(payload){
+      var conv=payload.new;
+      // Ignore inserts I made myself (already in local state) and only
+      // surface those that arrived for me from the other side.
+      if(conv.requester_id===uid)return;
+      if(conv.user1_id!==uid&&conv.user2_id!==uid)return;
+      var partnerId=conv.user1_id===uid?conv.user2_id:conv.user1_id;
+      var pr=await fetchProfilesByIds([partnerId],'id,name,avatar,skill,suburb,last_active,show_online_status,show_last_seen');
+      var partner=(pr.data&&pr.data[0])||{id:partnerId,name:"Player",avatar:"PL"};
+      var enriched=Object.assign({},conv,{partner});
+      setRequests(function(rs){
+        if(rs.some(function(r){return r.id===conv.id;}))return rs;
+        return [enriched].concat(rs);
+      });
+    }
+
     var convChannel=supabase.channel('convs:'+uid)
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'conversations',filter:'user2_id=eq.'+uid},
-        async function(payload){
-          var conv=payload.new;
-          var pr=await fetchProfilesByIds([conv.user1_id],'id,name,avatar,skill,suburb,last_active,show_online_status,show_last_seen');
-          var partner=(pr.data&&pr.data[0])||{id:conv.user1_id,name:"Player",avatar:"PL"};
-          var enriched=Object.assign({},conv,{partner});
-          setRequests(function(rs){
-            if(rs.some(function(r){return r.id===conv.id;}))return rs;
-            return [enriched].concat(rs);
-          });
-        }
-      )
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'conversations',filter:'user1_id=eq.'+uid},handleInsert)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'conversations',filter:'user2_id=eq.'+uid},handleInsert)
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'conversations'},
         function(payload){
           var conv=payload.new;
