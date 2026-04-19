@@ -48,7 +48,10 @@ export default function DisputeModal({
       ?await counterPropose(match,disputeDraft.reasonCode,disputeDraft.reasonDetail,proposal)
       :await disputeWithProposal(match,disputeDraft.reasonCode,disputeDraft.reasonDetail,proposal);
     setSaving(false);
-    if(res&&res.error){setError('Failed to submit. Try again.');return;}
+    if(res&&res.error){
+      setError(typeof res.error==='string'?res.error:(res.error?.message||'Failed to submit. Try again.'));
+      return;
+    }
     setDisputeModal(null);
   }
 
