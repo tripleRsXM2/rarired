@@ -1,6 +1,8 @@
 // src/features/people/hooks/useSocialGraph.js
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "../../../supabase.js";
 import * as S from "../services/socialService.js";
+import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
 
 export function useSocialGraph(opts){
@@ -133,6 +135,41 @@ export function useSocialGraph(opts){
     await S.deleteBlock(authUser.id, target.id);
     setBlockedUsers(function(b){return b.filter(function(x){return x.id!==target.id;});});
   }
+  // ── Realtime: incoming friend requests ──────────────────────────────────────
+  // Fires when another user sends a request to the logged-in user.
+  // Fixes: received requests never updating live without a page refresh.
+  useEffect(function(){
+    if(!authUser) return;
+    var uid=authUser.id;
+    console.debug('[useSocialGraph] subscribing friend_requests realtime for uid:', uid);
+
+    var channel=supabase.channel('friend_requests:'+uid)
+      .on('postgres_changes',{
+        event:'INSERT',
+        schema:'public',
+        table:'friend_requests',
+        filter:'receiver_id=eq.'+uid,
+      }, async function(payload){
+        var req=payload.new;
+        console.debug('[useSocialGraph] realtime friend_request received:', req);
+        var pr=await fetchProfilesByIds(
+          [req.sender_id],
+          'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen'
+        );
+        var sender=(pr.data&&pr.data[0])||{id:req.sender_id,name:'Player'};
+        var enriched=Object.assign({requestId:req.id},sender);
+        setReceivedRequests(function(rs){
+          if(rs.some(function(r){return r.requestId===req.id;}))return rs;
+          return rs.concat([enriched]);
+        });
+      })
+      .subscribe(function(status){
+        console.debug('[useSocialGraph] friend_requests channel status:', status);
+      });
+
+    return function(){ supabase.removeChannel(channel); };
+  },[authUser&&authUser.id]);
+
   async function searchUsers(query){
     if(!query.trim()||!authUser){setSearchResults([]);setSearchLoading(false);setShowSearchDrop(false);return;}
     var r=await S.searchProfilesByName(authUser.id, query.trim());
