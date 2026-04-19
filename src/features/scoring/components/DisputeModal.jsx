@@ -1,4 +1,4 @@
-// src/modals/DisputeModal.jsx
+// src/features/scoring/components/DisputeModal.jsx
 import { useState } from "react";
 import { inputStyle } from "../../../lib/theme.js";
 
