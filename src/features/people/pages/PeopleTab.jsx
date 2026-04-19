@@ -270,6 +270,10 @@ export default function PeopleTab({
                             <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>{u.suburb} {u.skill&&"· "+u.skill}</div>
                           </div>
                           <div style={{display:"flex",gap:6}}>
+                            <button onClick={function(){handleMessage(u);}}
+                              style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:12,fontWeight:600}}>
+                              Message
+                            </button>
                             <button disabled={loading} onClick={function(){acceptRequest(u);}}
                               style={{padding:"8px 16px",borderRadius:8,border:"none",background:t.green,color:"#fff",fontSize:13,fontWeight:600,opacity:loading?0.6:1}}>
                               {loading?"…":"Accept"}
@@ -299,10 +303,16 @@ export default function PeopleTab({
                             <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>{u.suburb} {u.skill&&"· "+u.skill}</div>
                             <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>Request pending</div>
                           </div>
-                          <button disabled={loading} onClick={function(){cancelRequest(u);}}
-                            style={{padding:"7px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
-                            {loading?"…":"Cancel"}
-                          </button>
+                          <div style={{display:"flex",gap:6,flexShrink:0}}>
+                            <button onClick={function(){handleMessage(u);}}
+                              style={{padding:"7px 12px",borderRadius:8,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:12,fontWeight:600}}>
+                              Message
+                            </button>
+                            <button disabled={loading} onClick={function(){cancelRequest(u);}}
+                              style={{padding:"7px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
+                              {loading?"…":"Cancel"}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
