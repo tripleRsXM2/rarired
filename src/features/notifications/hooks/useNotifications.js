@@ -40,31 +40,29 @@ export function useNotifications(opts){
     var uid=authUser.id;
     console.debug('[useNotifications] subscribing realtime for uid:', uid);
 
-    var channel=supabase.channel('notifications:'+uid)
-      .on('postgres_changes',{
-        event:'INSERT',
-        schema:'public',
-        table:'notifications',
-        filter:'user_id=eq.'+uid,
-      }, async function(payload){
-        var n=payload.new;
-        console.debug('[useNotifications] realtime INSERT received:', n);
-
-        // Enrich with sender profile before adding to state
-        var senderProfile={name:'Someone',avatar:'?'};
-        if(n.from_user_id){
-          var pr=await fetchProfilesByIds([n.from_user_id],'id,name,avatar');
-          var p=(pr.data&&pr.data[0])||{};
-          senderProfile={name:p.name||'Someone',avatar:p.avatar||'?'};
+    async function handleNotifChange(payload){
+      var n=payload.new;
+      if(!n||n.user_id!==uid)return;
+      var senderProfile={name:'Someone',avatar:'?'};
+      if(n.from_user_id){
+        var pr=await fetchProfilesByIds([n.from_user_id],'id,name,avatar');
+        var p=(pr.data&&pr.data[0])||{};
+        senderProfile={name:p.name||'Someone',avatar:p.avatar||'?'};
+      }
+      var enriched=Object.assign({},n,{fromName:senderProfile.name,fromAvatar:senderProfile.avatar});
+      setNotifications(function(ns){
+        // UPDATE: replace existing row in-place (same id)
+        if(ns.some(function(x){return x.id===enriched.id;})){
+          return ns.map(function(x){return x.id===enriched.id?enriched:x;});
         }
+        // INSERT: prepend
+        return [enriched].concat(ns);
+      });
+    }
 
-        var enriched=Object.assign({},n,{fromName:senderProfile.name,fromAvatar:senderProfile.avatar});
-        setNotifications(function(ns){
-          // Guard against duplicates (can happen if initial load races with realtime)
-          if(ns.some(function(x){return x.id===enriched.id;})) return ns;
-          return [enriched].concat(ns);
-        });
-      })
+    var channel=supabase.channel('notifications:'+uid)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'user_id=eq.'+uid},handleNotifChange)
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'notifications',filter:'user_id=eq.'+uid},handleNotifChange)
       .subscribe(function(status){
         console.debug('[useNotifications] channel status:', status);
       });

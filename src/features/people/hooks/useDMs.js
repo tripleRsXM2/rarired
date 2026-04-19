@@ -448,16 +448,15 @@ export function useDMs(opts){
       ||(activeConv.user1_id===uid?activeConv.user2_id:activeConv.user1_id);
     if(!partnerId)return;
 
+    function handlePartnerRead(payload){
+      var row=payload.new;
+      if(!row||row.user_id!==partnerId)return;
+      if(row.last_read_at)setPartnerLastReadAt(row.last_read_at);
+    }
+
     var readsChannel=supabase.channel('reads:'+convId)
-      .on('postgres_changes',{event:'*',schema:'public',table:'message_reads',filter:'conversation_id=eq.'+convId},
-        function(payload){
-          var row=payload.new||payload.old;
-          if(!row||row.user_id!==partnerId)return;
-          if(payload.new&&payload.new.last_read_at){
-            setPartnerLastReadAt(payload.new.last_read_at);
-          }
-        }
-      )
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'message_reads',filter:'conversation_id=eq.'+convId},handlePartnerRead)
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'message_reads',filter:'conversation_id=eq.'+convId},handlePartnerRead)
       .subscribe();
 
     return function(){supabase.removeChannel(readsChannel);};
