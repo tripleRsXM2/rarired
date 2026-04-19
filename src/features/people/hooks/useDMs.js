@@ -224,6 +224,7 @@ export function useDMs(opts){
           type:'message',
           from_user_id:uid,
           entity_id:conv.id,
+          metadata:{preview:preview.slice(0,60)},
         }).then(function(nr){
           if(nr&&nr.error)console.error('[sendMessage] notification failed:',nr.error);
           else console.debug('[sendMessage] notification sent OK');
