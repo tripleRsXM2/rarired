@@ -174,10 +174,10 @@ export default function PeopleTab({
                       {isFriendU
                         ?<span style={{fontSize:11,color:t.accent,fontWeight:600}}>Friends</span>
                         :isReceived
-                          ?<button onMouseDown={function(){acceptRequest(u.id);setShowSearchDrop(false);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontWeight:600,cursor:"pointer"}}>Accept</button>
+                          ?<button onMouseDown={function(){var r=recvReq(u.id);if(r)acceptRequest(r);setShowSearchDrop(false);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontWeight:600,cursor:"pointer"}}>Accept</button>
                           :isPending
-                            ?<button onMouseDown={function(){cancelRequest(u.id);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontWeight:600,cursor:"pointer"}}>Pending</button>
-                            :<button onMouseDown={function(){sendFriendRequest(u.id);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontWeight:600,cursor:"pointer"}}>Add</button>
+                            ?<button onMouseDown={function(){var r=sentReq(u.id);if(r)cancelRequest(r);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontWeight:600,cursor:"pointer"}}>Pending</button>
+                            :<button onMouseDown={function(){sendFriendRequest(u);}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"none",background:t.accent,color:"#fff",fontWeight:600,cursor:"pointer"}}>Add</button>
                       }
                     </div>
                   );
