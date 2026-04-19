@@ -115,6 +115,16 @@ export default function App(){
     };
   });
 
+  // Opens a conversation by its ID from the notifications panel.
+  // Looks it up in the current dms state, sets it active, and navigates.
+  function openConvById(convId){
+    if(!convId){navigate("/people/messages");return;}
+    var all=[].concat(dms.conversations,dms.requests);
+    var found=all.find(function(c){return c.id===convId;});
+    if(found)dms.openConversation(found);
+    navigate("/people/messages");
+  }
+
   return (
     <Providers t={t} dark={dark}>
       <div style={{minHeight:"100vh",background:t.bg,color:t.text,paddingBottom:80}}>
@@ -170,6 +180,7 @@ export default function App(){
             declineMatchTag={notifications.declineMatchTag}
             setShowNotifications={notifications.setShowNotifications}
             refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
+            openConvById={openConvById}
           />
         )}
 

@@ -3,7 +3,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 
 export default function NotificationsPanel({
   t, notifications, markNotificationsRead, acceptMatchTag, declineMatchTag,
-  setShowNotifications, refreshHistory,
+  setShowNotifications, refreshHistory, openConvById,
 }) {
   var navigate=useNavigate();
   function notifLabel(n) {
@@ -58,15 +58,6 @@ export default function NotificationsPanel({
                     <div style={{fontSize:13,color:t.text,lineHeight:1.4}}>{notifLabel(n)}</div>
                     <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{timeStr}</div>
 
-                    {/* friend_request: go to requests tab */}
-                    {n.type==='friend_request'&&(
-                      <button
-                        onClick={function(){navigate("/people/requests");setShowNotifications(false);}}
-                        style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
-                        View request →
-                      </button>
-                    )}
-
                     {/* message / message_request / message_request_accepted: go to messages tab */}
                     {(n.type==='message'||n.type==='message_request'||n.type==='message_request_accepted')&&(
                       <div>
@@ -76,7 +67,11 @@ export default function NotificationsPanel({
                           </div>
                         )}
                         <button
-                          onClick={function(){navigate("/people/messages");setShowNotifications(false);}}
+                          onClick={function(){
+                            if(openConvById&&n.entity_id)openConvById(n.entity_id);
+                            else navigate("/people/messages");
+                            setShowNotifications(false);
+                          }}
                           style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                           View message →
                         </button>
