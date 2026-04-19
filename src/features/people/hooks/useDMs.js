@@ -217,14 +217,17 @@ export function useDMs(opts){
       // Notify the other participant — one notification per conversation
       // (upsert deletes any existing unread message notification first).
       var partnerId=conv.user1_id===uid?conv.user2_id:conv.user1_id;
-      if(conv.status==='accepted'){
+      console.debug('[sendMessage] notif → partnerId:',partnerId,'status:',conv.status);
+      if(conv.status==='accepted'&&partnerId){
         upsertMessageNotification({
           user_id:partnerId,
           type:'message',
           from_user_id:uid,
           entity_id:conv.id,
-          metadata:{preview:preview.slice(0,60)},
-        });
+        }).then(function(nr){
+          if(nr&&nr.error)console.error('[sendMessage] notification failed:',nr.error);
+          else console.debug('[sendMessage] notification sent OK');
+        }).catch(function(e){console.error('[sendMessage] notification threw:',e);});
       }
       setConversations(function(cs){
         var updated=Object.assign({},conv,{
