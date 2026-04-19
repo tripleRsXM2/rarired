@@ -2,6 +2,7 @@ import { useRef, useEffect } from "react";
 import { avColor } from "../lib/helpers.js";
 import { inputStyle } from "../lib/theme.js";
 import Messages from "../features/people/components/Messages.jsx";
+import { PresenceDot, PresenceLabel } from "../features/people/components/PresenceIndicator.jsx";
 
 function fmtMsgTime(iso){
   if(!iso)return"";
@@ -20,11 +21,17 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
   var wr=u.matches_played?Math.round((u.wins||0)/u.matches_played*100):null;
   return (
     <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
-      <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
-        {(u.avatar||(u.name||"?").slice(0,2)).slice(0,2).toUpperCase()}
+      <div style={{position:"relative",flexShrink:0}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff"}}>
+          {(u.avatar||(u.name||"?").slice(0,2)).slice(0,2).toUpperCase()}
+        </div>
+        <PresenceDot profile={u} t={t}/>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:14,fontWeight:700,color:t.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:t.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name}</div>
+          <PresenceLabel profile={u} t={t} style={{flexShrink:0}}/>
+        </div>
         <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>
           {u.suburb&&<span>{u.suburb}</span>}
           {u.skill&&<span>{u.suburb?" · ":""}{u.skill}</span>}
@@ -154,8 +161,11 @@ export default function PeopleTab({
                   var isReceived=receivedRequests.some(function(r){return r.id===u.id;});
                   return (
                     <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid "+t.border,cursor:"default"}}>
-                      <div style={{width:36,height:36,borderRadius:"50%",background:t.accentSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,overflow:"hidden"}}>
-                        {u.avatar?<img src={u.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎾"}
+                      <div style={{position:"relative",flexShrink:0}}>
+                        <div style={{width:36,height:36,borderRadius:"50%",background:t.accentSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,overflow:"hidden"}}>
+                          {u.avatar?<img src={u.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎾"}
+                        </div>
+                        <PresenceDot profile={u} t={t} size={9}/>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.name}</div>

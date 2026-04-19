@@ -37,7 +37,7 @@ export function useDMs(opts){
     var partnerIds=[...new Set(all.map(function(c){return c.user1_id===uid?c.user2_id:c.user1_id;}))];
     var partnerMap={};
     if(partnerIds.length){
-      var pr=await fetchProfilesByIds(partnerIds,'id,name,avatar,skill,suburb,last_active');
+      var pr=await fetchProfilesByIds(partnerIds,'id,name,avatar,skill,suburb,last_active,show_online_status,show_last_seen');
       (pr.data||[]).forEach(function(p){partnerMap[p.id]=p;});
     }
 
@@ -259,7 +259,7 @@ export function useDMs(opts){
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'conversations',filter:'user2_id=eq.'+uid},
         async function(payload){
           var conv=payload.new;
-          var pr=await fetchProfilesByIds([conv.user1_id],'id,name,avatar,skill,suburb,last_active');
+          var pr=await fetchProfilesByIds([conv.user1_id],'id,name,avatar,skill,suburb,last_active,show_online_status,show_last_seen');
           var partner=(pr.data&&pr.data[0])||{id:conv.user1_id,name:"Player",avatar:"PL"};
           var enriched=Object.assign({},conv,{partner});
           setRequests(function(rs){

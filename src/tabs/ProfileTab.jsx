@@ -458,6 +458,47 @@ export default function ProfileTab({
             </div>
           </div>
 
+          {/* Presence visibility */}
+          <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,overflow:"hidden",marginBottom:12}}>
+            <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
+              <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>Presence</div>
+              <div style={{fontSize:11,color:t.textTertiary}}>Control whether others can see when you're active.</div>
+            </div>
+            {[
+              {k:"show_online_status",l:"Show online status",d:"Green dot when you're active now."},
+              {k:"show_last_seen",   l:"Show last seen",     d:'Lets others see "Last seen 5m ago" etc.'},
+            ].map(function(opt,i){
+              var on=profile[opt.k]!==false; // default true
+              return (
+                <div key={opt.k} style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:12,borderTop:i===0?"none":"1px solid "+t.border}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,color:t.text}}>{opt.l}</div>
+                    <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{opt.d}</div>
+                  </div>
+                  <button
+                    onClick={function(){
+                      var next=!on;
+                      var nd=Object.assign({},profile,{[opt.k]:next});
+                      setProfile(nd);
+                      if(authUser)supabase.from('profiles').upsert({id:authUser.id,[opt.k]:next},{onConflict:'id'}).then(function(r){if(r.error)console.error('Presence save error:',r.error);});
+                    }}
+                    aria-label={(on?"Disable ":"Enable ")+opt.l}
+                    style={{
+                      width:42,height:24,borderRadius:14,border:"none",cursor:"pointer",
+                      background:on?t.green:t.border,
+                      position:"relative",flexShrink:0,transition:"background 0.15s",
+                    }}>
+                    <span style={{
+                      position:"absolute",top:2,left:on?20:2,
+                      width:20,height:20,borderRadius:"50%",background:"#fff",
+                      transition:"left 0.15s",boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
+                    }}/>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
           {/* Account */}
           {authUser&&(
             <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,overflow:"hidden",marginBottom:12}}>

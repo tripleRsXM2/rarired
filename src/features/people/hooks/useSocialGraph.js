@@ -33,7 +33,7 @@ export function useSocialGraph(opts){
       ])].filter(function(id){return id&&id!==userId;});
       var pMap={};
       if(otherIds.length){
-        var pr=await S.fetchProfilesByIds(otherIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy');
+        var pr=await S.fetchProfilesByIds(otherIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen');
         (pr.data||[]).forEach(function(p){pMap[p.id]=p;});
       }
       setFriends(accepted.map(function(r){var oid=r.sender_id===userId?r.receiver_id:r.sender_id;return Object.assign({requestId:r.id},pMap[oid]||{id:oid,name:"Player"});}));

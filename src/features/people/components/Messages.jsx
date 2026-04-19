@@ -2,6 +2,8 @@
 import { useRef, useEffect, useState } from "react";
 import { avColor } from "../../../lib/helpers.js";
 import { inputStyle } from "../../../lib/theme.js";
+import { PresenceDot } from "./PresenceIndicator.jsx";
+import { getPresence } from "../services/presenceService.js";
 
 var REACTIONS=["👍","❤️","😂","😢","🔥","🎾"];
 var EDIT_WINDOW_MS=15*60*1000; // 15 min
@@ -13,15 +15,6 @@ function fmtTime(iso){
   if(diff<3600)return Math.floor(diff/60)+"m ago";
   if(d.toDateString()===now.toDateString())return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
   return d.toLocaleDateString([],{day:"numeric",month:"short"});
-}
-
-function fmtPresence(lastActive){
-  if(!lastActive)return null;
-  var diff=Math.floor((Date.now()-new Date(lastActive))/1000);
-  if(diff<300)return{label:"Online",online:true};
-  if(diff<3600)return{label:"Last seen "+Math.floor(diff/60)+"m ago",online:false};
-  if(diff<86400)return{label:"Last seen "+Math.floor(diff/3600)+"h ago",online:false};
-  return{label:"Last seen "+new Date(lastActive).toLocaleDateString([],{day:"numeric",month:"short"}),online:false};
 }
 
 export default function Messages({t,authUser,dms}){
@@ -114,7 +107,6 @@ export default function Messages({t,authUser,dms}){
               var hasUnread=conv.hasUnread;
               var isPending=conv.status==='pending';
               var isMe=conv.last_message_sender_id===myId;
-              var presence=conv.partner.last_active?fmtPresence(conv.partner.last_active):null;
               return (
                 <button key={conv.id} onClick={function(){dms.openConversation(conv);}}
                   style={{width:"100%",background:hasUnread?t.accentSubtle:t.bgCard,border:"1px solid "+(hasUnread?t.accent:t.border),borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"center",cursor:"pointer",textAlign:"left"}}>
@@ -122,7 +114,7 @@ export default function Messages({t,authUser,dms}){
                     <div style={{width:44,height:44,borderRadius:"50%",background:avColor(conv.partner.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff"}}>
                       {(conv.partner.avatar||conv.partner.name||"?").slice(0,2).toUpperCase()}
                     </div>
-                    {presence&&presence.online&&<div style={{position:"absolute",bottom:1,right:1,width:11,height:11,borderRadius:"50%",background:t.green,border:"2px solid "+t.bg}}/>}
+                    <PresenceDot profile={conv.partner} t={t}/>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
@@ -152,7 +144,7 @@ export default function Messages({t,authUser,dms}){
   var myId2=myId;
   var isPending=conv.status==='pending';
   var iAmSender=conv.user1_id===myId2;
-  var presence=conv.partner&&conv.partner.last_active?fmtPresence(conv.partner.last_active):null;
+  var presence=getPresence(conv.partner);
 
   // UNREAD divider — first message from other person after my last read
   var unreadStartIdx=-1;
@@ -195,11 +187,11 @@ export default function Messages({t,authUser,dms}){
           <div style={{width:36,height:36,borderRadius:"50%",background:avColor(conv.partner.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff"}}>
             {(conv.partner.avatar||conv.partner.name||"?").slice(0,2).toUpperCase()}
           </div>
-          {presence&&presence.online&&<div style={{position:"absolute",bottom:0,right:0,width:10,height:10,borderRadius:"50%",background:t.green,border:"2px solid "+t.bg}}/>}
+          <PresenceDot profile={conv.partner} t={t} size={10}/>
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:15,fontWeight:700,color:t.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{conv.partner.name}</div>
-          {presence&&<div style={{fontSize:11,color:presence.online?t.green:t.textTertiary}}>{presence.label}</div>}
+          {presence.label&&<div style={{fontSize:11,color:presence.online?t.green:t.textTertiary}}>{presence.label}</div>}
         </div>
         <button onClick={function(){setShowSettings(true);}}
           style={{background:"transparent",border:"none",color:t.textTertiary,fontSize:18,padding:"4px",flexShrink:0}}>⚙️</button>

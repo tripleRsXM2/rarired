@@ -14,6 +14,7 @@ import { useCurrentUser } from "../features/profile/hooks/useCurrentUser.js";
 import { useMatchHistory } from "../features/scoring/hooks/useMatchHistory.js";
 import { useSocialGraph } from "../features/people/hooks/useSocialGraph.js";
 import { useDMs } from "../features/people/hooks/useDMs.js";
+import { usePresenceHeartbeat } from "../features/people/hooks/usePresenceHeartbeat.js";
 import { useNotifications } from "../features/notifications/hooks/useNotifications.js";
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
 
@@ -56,6 +57,7 @@ export default function App(){
   var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats, refreshProfile:currentUser.refreshProfileUI });
   var social=useSocialGraph({ authUser:auth.authUser });
   var dms=useDMs({ authUser:auth.authUser });
+  usePresenceHeartbeat(auth.authUser);
   var notifications=useNotifications({
     authUser:auth.authUser,
     updateMatchTagStatus:markMatchTagStatus,
