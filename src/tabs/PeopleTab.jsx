@@ -1,6 +1,7 @@
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
 import { avColor } from "../lib/helpers.js";
 import { inputStyle } from "../lib/theme.js";
+import Messages from "../features/people/components/Messages.jsx";
 
 function fmtMsgTime(iso){
   if(!iso)return"";
@@ -113,10 +114,11 @@ export default function PeopleTab({
   var cardProps={t,socialLoading,friendRelationLabel,sentReq,recvReq,sendFriendRequest,cancelRequest,acceptRequest,declineRequest,unfriend,blockUser};
   var iStyle=inputStyle(t);
   var dmUnread=dms?dms.totalUnread():0;
+  var dmBadge=(dms?(dms.requests||[]).length:0)+(dms&&dms.conversations?dms.conversations.filter(function(c){return c.hasUnread;}).length:0);
 
   function handleMessageFriend(u){
     setPeopleTab("messages");
-    if(dms)dms.openThread(u);
+    if(dms)dms.openOrStartConversation(u);
   }
 
   return (
@@ -180,7 +182,7 @@ export default function PeopleTab({
       <div>
         <div style={{display:"flex",borderBottom:"1px solid "+t.border,padding:"0 20px",overflowX:"auto"}}>
           {[
-            {id:"messages",label:"Messages",count:dmUnread||null},
+            {id:"messages",label:"Messages",count:dmBadge||null},
             {id:"friends",label:"Friends",count:friends.length},
             {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
             {id:"suggested",label:"Suggested",count:null},
@@ -188,7 +190,7 @@ export default function PeopleTab({
           ].map(function(tb){
             var on=peopleTab===tb.id;
             return (
-              <button key={tb.id} onClick={function(){setPeopleTab(tb.id);if(tb.id!=="messages"&&dms)dms.closeThread();}}
+              <button key={tb.id} onClick={function(){setPeopleTab(tb.id);if(tb.id!=="messages"&&dms)dms.closeConversation();}}
                 style={{padding:"10px 0",marginRight:20,border:"none",background:"transparent",color:on?t.accent:t.textTertiary,fontSize:13,fontWeight:on?700:400,borderBottom:"2px solid "+(on?t.accent:"transparent"),marginBottom:"-1px",display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
                 {tb.label}
                 {tb.count>0&&<span style={{fontSize:10,fontWeight:800,color:on?t.accent:t.textTertiary,background:on?t.accentSubtle:t.bgTertiary,padding:"1px 6px",borderRadius:10}}>{tb.count}</span>}
@@ -200,105 +202,8 @@ export default function PeopleTab({
         <div style={{padding:"16px 20px 100px"}} className="fade-up">
 
           {/* Messages */}
-          {peopleTab==="messages"&&(
-            dms&&dms.activeThread
-              /* Thread view */
-              ?<div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-                  <button onClick={function(){dms.closeThread();}}
-                    style={{background:"transparent",border:"none",color:t.accent,fontSize:14,fontWeight:600,padding:"4px 0",display:"flex",alignItems:"center",gap:6}}>
-                    ← Back
-                  </button>
-                  <div style={{width:32,height:32,borderRadius:"50%",background:avColor(dms.activeThread.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>
-                    {(dms.activeThread.avatar||dms.activeThread.name||"?").slice(0,2).toUpperCase()}
-                  </div>
-                  <span style={{fontSize:15,fontWeight:700,color:t.text}}>{dms.activeThread.name}</span>
-                </div>
-
-                <div style={{minHeight:200,marginBottom:12}}>
-                  {dms.threadLoading
-                    ?<div style={{textAlign:"center",padding:"40px 0",color:t.textTertiary,fontSize:13}}>Loading…</div>
-                    :dms.threadMessages.length===0
-                      ?<div style={{textAlign:"center",padding:"40px 0"}}>
-                        <div style={{fontSize:28,marginBottom:8}}>💬</div>
-                        <div style={{fontSize:13,color:t.textTertiary}}>No messages yet. Say hello!</div>
-                      </div>
-                      :dms.threadMessages.map(function(m){
-                        var mine=m.sender_id===authUser.id;
-                        return (
-                          <div key={m.id} style={{display:"flex",justifyContent:mine?"flex-end":"flex-start",marginBottom:8}}>
-                            <div style={{maxWidth:"72%"}}>
-                              <div style={{
-                                background:mine?t.accent:t.bgCard,
-                                color:mine?t.accentText:t.text,
-                                border:mine?"none":"1px solid "+t.border,
-                                borderRadius:mine?"16px 16px 4px 16px":"16px 16px 16px 4px",
-                                padding:"9px 13px",fontSize:14,lineHeight:1.4,wordBreak:"break-word",
-                              }}>{m.content}</div>
-                              <div style={{fontSize:10,color:t.textTertiary,marginTop:3,textAlign:mine?"right":"left"}}>{fmtMsgTime(m.created_at)}</div>
-                            </div>
-                          </div>
-                        );
-                      })
-                  }
-                  <div ref={messagesEndRef}/>
-                </div>
-
-                {/* Input */}
-                <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-                  <textarea
-                    rows={1}
-                    value={dms.msgDraft}
-                    placeholder={"Message "+dms.activeThread.name+"…"}
-                    onChange={function(e){dms.setMsgDraft(e.target.value);}}
-                    onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();dms.sendDM(dms.msgDraft).then(function(){dms.setMsgDraft("");});}}}
-                    style={Object.assign({},iStyle,{flex:1,resize:"none",fontSize:14,padding:"10px 14px",borderRadius:12,minHeight:42,lineHeight:1.4})}/>
-                  <button
-                    disabled={!dms.msgDraft.trim()||dms.sending}
-                    onClick={function(){dms.sendDM(dms.msgDraft).then(function(){dms.setMsgDraft("");});}}
-                    style={{padding:"10px 18px",borderRadius:12,border:"none",background:t.accent,color:t.accentText,fontSize:13,fontWeight:700,opacity:(!dms.msgDraft.trim()||dms.sending)?0.5:1,flexShrink:0}}>
-                    {dms.sending?"…":"Send"}
-                  </button>
-                </div>
-              </div>
-
-              /* Conversation list */
-              :<div>
-                {!dms||dms.conversations.length===0
-                  ?<div style={{textAlign:"center",padding:"48px 20px"}}>
-                    <div style={{fontSize:36,marginBottom:12}}>💬</div>
-                    <div style={{fontSize:16,fontWeight:700,color:t.text,marginBottom:6}}>No messages yet</div>
-                    <div style={{fontSize:13,color:t.textSecondary,marginBottom:20}}>Go to Friends and tap Message to start a conversation.</div>
-                    <button onClick={function(){setPeopleTab("friends");}} style={{padding:"10px 20px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>See friends</button>
-                  </div>
-                  :<div>
-                    <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Recent</div>
-                    {dms.conversations.map(function(cv){
-                      var p=cv.partner;
-                      return (
-                        <button key={p.id} onClick={function(){dms.openThread(p);}}
-                          style={{width:"100%",background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"center",cursor:"pointer",textAlign:"left"}}>
-                          <div style={{position:"relative",flexShrink:0}}>
-                            <div style={{width:44,height:44,borderRadius:"50%",background:avColor(p.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff"}}>
-                              {(p.avatar||p.name||"?").slice(0,2).toUpperCase()}
-                            </div>
-                            {cv.unread>0&&<div style={{position:"absolute",top:-3,right:-3,width:16,height:16,borderRadius:"50%",background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:t.accentText}}>{cv.unread>9?"9+":cv.unread}</div>}
-                          </div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
-                              <span style={{fontSize:14,fontWeight:cv.unread>0?700:600,color:t.text}}>{p.name}</span>
-                              <span style={{fontSize:10,color:t.textTertiary,flexShrink:0}}>{fmtMsgTime(cv.lastMessage&&cv.lastMessage.created_at)}</span>
-                            </div>
-                            <div style={{fontSize:12,color:cv.unread>0?t.text:t.textSecondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:cv.unread>0?600:400}}>
-                              {cv.lastMessage?cv.lastMessage.content:""}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                }
-              </div>
+          {peopleTab==="messages"&&dms&&(
+            <Messages t={t} authUser={authUser} dms={dms}/>
           )}
 
           {/* Friends */}
