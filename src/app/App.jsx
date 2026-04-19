@@ -129,18 +129,25 @@ export default function App(){
     navigate("/people/messages");
   }
 
-  // Auto-dismiss the "new message" notification when the user opens that
-  // conversation. Keeps the bell in sync with actually-unread threads.
+  // Auto-dismiss "new message" notifications when the user opens that
+  // conversation. Matches the canonical row (entity_id === conv.id) AND any
+  // legacy rows from the same partner (entity_id null, from before that
+  // column was saved), so old stacked notifications also clear.
   useEffect(function(){
     var conv=dms.activeConv;
     if(!conv||conv.status!=='accepted')return;
-    var match=notifications.notifications.find(function(n){
-      return n.type==='message'&&n.entity_id===conv.id;
+    var partnerId=conv.partner&&conv.partner.id;
+    var matches=notifications.notifications.filter(function(n){
+      if(n.type!=='message')return false;
+      if(n.entity_id===conv.id)return true;
+      if(!n.entity_id&&partnerId&&n.from_user_id===partnerId)return true;
+      return false;
     });
-    if(!match)return;
-    deleteNotification(match.id);
+    if(!matches.length)return;
+    matches.forEach(function(n){deleteNotification(n.id);});
+    var ids={};matches.forEach(function(n){ids[n.id]=true;});
     notifications.setNotifications(function(ns){
-      return ns.filter(function(n){return n.id!==match.id;});
+      return ns.filter(function(n){return!ids[n.id];});
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[dms.activeConv&&dms.activeConv.id]);

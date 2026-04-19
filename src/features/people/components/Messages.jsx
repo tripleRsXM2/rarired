@@ -159,6 +159,19 @@ export default function Messages({t,authUser,dms}){
     }
   }
 
+  // Read receipt — find the most recent message I sent that the partner has
+  // seen (partnerLastReadAt >= message.created_at). Show "Seen" under it.
+  var lastSeenByPartnerIdx=-1;
+  if(dms.partnerLastReadAt){
+    var prAt=new Date(dms.partnerLastReadAt);
+    for(var j=dms.threadMessages.length-1;j>=0;j--){
+      var mj=dms.threadMessages[j];
+      if(mj.sender_id===myId2&&!mj.deleted_at&&new Date(mj.created_at)<=prAt){
+        lastSeenByPartnerIdx=j;break;
+      }
+    }
+  }
+
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"60vh"}}>
 
@@ -290,7 +303,12 @@ export default function Messages({t,authUser,dms}){
                         })}
                       </div>
                     )}
-                    <div style={{fontSize:10,color:t.textTertiary,marginTop:3,textAlign:mine?"right":"left"}}>{fmtTime(msg.created_at)}</div>
+                    <div style={{fontSize:10,color:t.textTertiary,marginTop:3,textAlign:mine?"right":"left"}}>
+                      {fmtTime(msg.created_at)}
+                      {mine&&idx===lastSeenByPartnerIdx&&(
+                        <span style={{marginLeft:6,color:t.accent,fontWeight:600}}>· Seen</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

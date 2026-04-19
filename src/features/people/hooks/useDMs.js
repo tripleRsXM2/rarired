@@ -20,6 +20,9 @@ export function useDMs(opts){
   var [replyTo,setReplyTo]=useState(null);
   var [editingId,setEditingId]=useState(null);
   var [editDraft,setEditDraft]=useState("");
+  // Partner's last_read_at for the active conversation — drives the "Seen"
+  // receipt on sent messages. Updated via realtime on message_reads.
+  var [partnerLastReadAt,setPartnerLastReadAt]=useState(null);
 
   var activeConvRef=useRef(null);
 
@@ -115,6 +118,7 @@ export function useDMs(opts){
     var uid=authUser.id;
     setActiveConv(conv);
     activeConvRef.current=conv;
+    setPartnerLastReadAt(null);
     await _loadThread(conv);
     if(conv.status==='accepted'){
       D.upsertRead(uid,conv.id);
@@ -122,6 +126,14 @@ export function useDMs(opts){
       setConversations(function(cs){return cs.map(function(c){
         return c.id===conv.id?Object.assign({},c,{hasUnread:false,lastReadAt:new Date().toISOString()}):c;
       });});
+      // Fetch partner's last_read_at so we can render "Seen" on sent messages.
+      var partnerId=conv.partner&&conv.partner.id
+        ||(conv.user1_id===uid?conv.user2_id:conv.user1_id);
+      if(partnerId){
+        D.fetchPartnerRead(partnerId,conv.id).then(function(pr){
+          if(pr&&pr.data)setPartnerLastReadAt(pr.data.last_read_at);
+        });
+      }
     }
   }
 
@@ -198,6 +210,7 @@ export function useDMs(opts){
     setMsgDraft("");
     setReplyTo(null);
     setEditingId(null);
+    setPartnerLastReadAt(null);
   }
 
   // ── Send ────────────────────────────────────────────────────────────────────
@@ -425,6 +438,31 @@ export function useDMs(opts){
     return function(){supabase.removeChannel(msgChannel);};
   },[authUser&&authUser.id,activeConv&&activeConv.id]);
 
+  // Read receipts realtime — watch partner's last_read_at for the active
+  // conversation so the "Seen" indicator updates live when they open it.
+  useEffect(function(){
+    if(!authUser||!activeConv||activeConv.status!=='accepted')return;
+    var uid=authUser.id;
+    var convId=activeConv.id;
+    var partnerId=activeConv.partner&&activeConv.partner.id
+      ||(activeConv.user1_id===uid?activeConv.user2_id:activeConv.user1_id);
+    if(!partnerId)return;
+
+    var readsChannel=supabase.channel('reads:'+convId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'message_reads',filter:'conversation_id=eq.'+convId},
+        function(payload){
+          var row=payload.new||payload.old;
+          if(!row||row.user_id!==partnerId)return;
+          if(payload.new&&payload.new.last_read_at){
+            setPartnerLastReadAt(payload.new.last_read_at);
+          }
+        }
+      )
+      .subscribe();
+
+    return function(){supabase.removeChannel(readsChannel);};
+  },[authUser&&authUser.id,activeConv&&activeConv.id]);
+
   // Reactions realtime
   useEffect(function(){
     if(!authUser||!activeConv||!threadMessages.length)return;
@@ -459,6 +497,7 @@ export function useDMs(opts){
     setConversations([]);setRequests([]);setActiveConv(null);
     setThreadMessages([]);setReactions({});setMsgDraft("");
     setReplyTo(null);setEditingId(null);
+    setPartnerLastReadAt(null);
     activeConvRef.current=null;
   }
 
@@ -471,6 +510,7 @@ export function useDMs(opts){
     threadLoading,msgDraft,setMsgDraft,sending,
     replyTo,setReplyTo,clearReplyTo:function(){setReplyTo(null);},
     editingId,editDraft,setEditDraft,
+    partnerLastReadAt,
     loadConversations,openConversation,openOrStartConversation,closeConversation,
     sendMessage,acceptRequest,declineRequest,
     toggleReaction,startEdit,cancelEdit,submitEdit,deleteMessage,

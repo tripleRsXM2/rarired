@@ -86,6 +86,16 @@ export function fetchReads(userId,convIds){
     .select('*').eq('user_id',userId).in('conversation_id',convIds);
 }
 
+// Fetch a single partner's last_read_at for a conversation — used to render
+// the "Seen" receipt on messages I've sent.
+export function fetchPartnerRead(partnerId,convId){
+  return supabase.from('message_reads')
+    .select('last_read_at')
+    .eq('user_id',partnerId)
+    .eq('conversation_id',convId)
+    .maybeSingle();
+}
+
 // ── Reactions ─────────────────────────────────────────────────────────────────
 
 export function fetchReactions(messageIds){
