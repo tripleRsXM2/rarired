@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { avColor } from "../lib/helpers.js";
 import { inputStyle } from "../lib/theme.js";
 import Messages from "../features/people/components/Messages.jsx";
@@ -94,10 +94,10 @@ export default function PeopleTab({
   var messagesEndRef=useRef(null);
 
   useEffect(function(){
-    if(dms&&dms.activeThread&&messagesEndRef.current){
+    if(dms&&dms.activeConv&&messagesEndRef.current){
       messagesEndRef.current.scrollIntoView({behavior:"smooth"});
     }
-  },[dms&&dms.threadMessages&&dms.threadMessages.length, dms&&dms.activeThread]);
+  },[dms&&dms.threadMessages&&dms.threadMessages.length, dms&&dms.activeConv]);
 
   if(!authUser) return (
     <div style={{maxWidth:680,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
