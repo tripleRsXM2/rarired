@@ -14,8 +14,8 @@ var REASON_LABELS={
 function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
-  setScoreModal, setScoreDraft, setDisputeModal, setDisputeDraft,
-  confirmOpponentMatch, acceptCorrection, voidMatchAction, resubmitMatch}) {
+  setDisputeModal, setDisputeDraft,
+  confirmOpponentMatch, acceptCorrection, voidMatchAction}) {
 
   var isWin=m.result==="win";
   var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join("  ");
@@ -27,12 +27,16 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
   var isExpired=status==="expired";
   var isPending=status==="pending_confirmation";
   var isDisputed=status==="disputed";
+  var isPendingReconf=status==="pending_reconfirmation";
   var isVoided=status==="voided";
   var isConfirmed=status==="confirmed";
   var isOpponentView=isPending&&m.isTagged;
-  // Disputed: does the current user need to act?
-  var needsMyAction=isDisputed&&authUser&&m.pendingActionBy===authUser.id;
-  var waitingForOther=isDisputed&&authUser&&m.pendingActionBy&&m.pendingActionBy!==authUser.id;
+  // 'disputed' and 'pending_reconfirmation' share the same action UI — both mean
+  // a proposal is on the table awaiting a response. They differ only in whose
+  // turn it is and how we label the pill.
+  var isInDispute=isDisputed||isPendingReconf;
+  var needsMyAction=isInDispute&&authUser&&m.pendingActionBy===authUser.id;
+  var waitingForOther=isInDispute&&authUser&&m.pendingActionBy&&m.pendingActionBy!==authUser.id;
   var cardOpacity=(isExpired||isVoided)?0.5:1;
 
   function timeRemaining(expiresAt){
@@ -43,16 +47,6 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
     if(h>=48) return Math.floor(h/24)+"d left";
     if(h>=1) return h+"h left";
     return "<1h left";
-  }
-
-  function handleResubmit(){
-    setScoreDraft({
-      sets:m.sets&&m.sets.length?m.sets.map(function(s){return Object.assign({},s);}):[{you:"",them:""}],
-      result:m.result, notes:m.notes||"",
-      date:m.rawDate||new Date().toISOString().slice(0,10),
-      venue:m.venue||"", court:m.court||"",
-    });
-    setScoreModal({resubmit:true,match:m,oppName:m.oppName,opponentId:m.opponent_id});
   }
 
   function openDisputeModal(mode){
@@ -106,9 +100,10 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
         )}
         {isPending&&!isOpponentView&&<span style={{fontSize:9,fontWeight:700,color:t.orange,background:t.orangeSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Pending</span>}
         {isDisputed&&<span style={{fontSize:9,fontWeight:700,color:t.red,background:t.redSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Disputed</span>}
+        {isPendingReconf&&<span style={{fontSize:9,fontWeight:700,color:t.orange,background:t.orangeSubtle,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Re-proposed</span>}
         {isExpired&&<span style={{fontSize:9,fontWeight:700,color:t.textTertiary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Unverified</span>}
         {isVoided&&<span style={{fontSize:9,fontWeight:700,color:t.textTertiary,background:t.bgTertiary,padding:"3px 8px",borderRadius:20,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>Voided</span>}
-        {isOwn&&onDelete&&!isDisputed&&!isVoided&&(
+        {isOwn&&onDelete&&!isInDispute&&!isVoided&&(
           <button onClick={function(){if(window.confirm("Delete this match?"))onDelete(m);}}
             style={{background:"none",border:"none",color:t.textTertiary,fontSize:14,padding:"4px 4px",cursor:"pointer",lineHeight:1,flexShrink:0}}>✕</button>
         )}
@@ -137,24 +132,15 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
       {/* ── PENDING: submitter view ── */}
       {isPending&&!isOpponentView&&(
         <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px"}}>
-          {m.revisionRequestedBy
-            ?<div style={{display:"flex",flexDirection:"column",gap:8}}>
-               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                 <span style={{fontSize:12,color:t.orange}}>✏️</span>
-                 <span style={{fontSize:12,color:t.orange,fontWeight:600}}>Opponent requested a correction</span>
-               </div>
-               {!demo&&<button onClick={handleResubmit} style={{alignSelf:"flex-start",padding:"7px 14px",borderRadius:7,border:"1px solid "+t.accent,background:t.accentSubtle,color:t.accent,fontSize:12,fontWeight:700,cursor:"pointer"}}>Edit &amp; resubmit</button>}
-             </div>
-            :<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                 <span style={{fontSize:12,color:t.orange}}>⏳</span>
-                 <span style={{fontSize:12,color:t.textSecondary}}>Awaiting opponent confirmation</span>
-               </div>
-               {timeRemaining(m.expiresAt)&&(
-                 <span style={{fontSize:10,fontWeight:700,color:t.orange,background:t.orangeSubtle,padding:"2px 8px",borderRadius:20,letterSpacing:"0.04em",flexShrink:0}}>{timeRemaining(m.expiresAt)}</span>
-               )}
-             </div>
-          }
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:12,color:t.orange}}>⏳</span>
+              <span style={{fontSize:12,color:t.textSecondary}}>Awaiting opponent confirmation</span>
+            </div>
+            {timeRemaining(m.expiresAt)&&(
+              <span style={{fontSize:10,fontWeight:700,color:t.orange,background:t.orangeSubtle,padding:"2px 8px",borderRadius:20,letterSpacing:"0.04em",flexShrink:0}}>{timeRemaining(m.expiresAt)}</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -169,11 +155,11 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
         </div>
       )}
 
-      {/* ── DISPUTED: diff block ── */}
-      {isDisputed&&m.currentProposal&&(
+      {/* ── DISPUTED / RECONFIRMATION: diff block ── */}
+      {isInDispute&&m.currentProposal&&(
         <div style={{margin:"0 12px 12px",borderRadius:t.r,border:"1px solid "+t.orange+"55",background:t.orangeSubtle,padding:12}}>
           <div style={{fontSize:10,fontWeight:700,color:t.orange,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>
-            Proposed correction · Round {m.revisionCount||1}
+            {isPendingReconf?"Counter-proposal awaiting opponent":"Proposed correction"} · Round {m.revisionCount||1}
             {(m.revisionCount||0)>=3&&<span style={{marginLeft:6,color:t.red}}> · Final round</span>}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -205,8 +191,8 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
         </div>
       )}
 
-      {/* ── DISPUTED: action buttons for who needs to act ── */}
-      {isDisputed&&needsMyAction&&!demo&&(
+      {/* ── DISPUTED / RECONFIRMATION: action buttons for who needs to act ── */}
+      {isInDispute&&needsMyAction&&!demo&&(
         <div style={{borderTop:"1px solid "+t.border,padding:"12px 16px"}}>
           {(m.revisionCount||0)>=3&&(
             <div style={{fontSize:11,color:t.red,marginBottom:8,fontWeight:500}}>Final round reached — accept or void.</div>
@@ -224,16 +210,18 @@ function FeedCard({m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
         </div>
       )}
 
-      {/* ── DISPUTED: waiting for other party ── */}
-      {isDisputed&&waitingForOther&&(
+      {/* ── DISPUTED / RECONFIRMATION: waiting for other party ── */}
+      {isInDispute&&waitingForOther&&(
         <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:12,color:t.orange}}>⏳</span>
-          <span style={{fontSize:12,color:t.textSecondary}}>Waiting for their response to your correction</span>
+          <span style={{fontSize:12,color:t.textSecondary}}>
+            {isPendingReconf?"Waiting for opponent to reconfirm your counter":"Waiting for their response to your correction"}
+          </span>
         </div>
       )}
 
       {/* ── DISPUTED: no proposal yet (shouldn't normally show) ── */}
-      {isDisputed&&!m.currentProposal&&(
+      {isInDispute&&!m.currentProposal&&(
         <div style={{borderTop:"1px solid "+t.border,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:12,color:t.red}}>⚠</span>
           <span style={{fontSize:12,color:t.textSecondary}}>Under dispute — stats on hold</span>
@@ -323,7 +311,7 @@ export default function HomeTab({
   setShowAuth, setAuthMode, setAuthStep,
   setCasualOppName, setScoreModal, setScoreDraft,
   setDisputeModal, setDisputeDraft,
-  deleteMatch, removeTaggedMatch, resubmitMatch,
+  deleteMatch, removeTaggedMatch,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
 }) {
   var DEMO_FEED=[
@@ -335,8 +323,8 @@ export default function HomeTab({
   var feedCardProps={
     t,authUser,feedLikes,feedLikeCounts,feedComments,
     setFeedLikes,setFeedLikeCounts,setCommentModal,setCommentDraft,
-    setScoreModal,setScoreDraft,setDisputeModal,setDisputeDraft,
-    confirmOpponentMatch,acceptCorrection,voidMatchAction,resubmitMatch,
+    setDisputeModal,setDisputeDraft,
+    confirmOpponentMatch,acceptCorrection,voidMatchAction,
   };
 
   if(!authUser) {

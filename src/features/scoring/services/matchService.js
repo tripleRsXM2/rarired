@@ -7,7 +7,7 @@ export function fetchOwnMatches(userId){
 // Single query for all matches where current user is the opponent
 export function fetchOpponentMatches(userId){
   return supabase.from('match_history').select('*').eq('opponent_id',userId)
-    .in('status',['pending_confirmation','confirmed','disputed','voided']).order('created_at',{ascending:false});
+    .in('status',['pending_confirmation','confirmed','disputed','pending_reconfirmation','voided']).order('created_at',{ascending:false});
 }
 export function fetchFeedLikes(userId, matchIds){
   return supabase.from('feed_likes').select('match_id').eq('user_id',userId).in('match_id',matchIds);
@@ -39,9 +39,11 @@ export function voidMatchRpc(matchId, reason){
   return supabase.rpc('void_match',{p_match_id:matchId,p_reason:reason||'voided'});
 }
 // propose a correction (used for initial dispute and counter-proposals)
-export function proposeCorrection(matchId, proposalBy, pendingActionBy, proposal, reasonCode, reasonDetail, revisionCount){
+// nextStatus: 'disputed' when opponent is proposing (submitter must act),
+//             'pending_reconfirmation' when submitter is counter-proposing (opponent must act).
+export function proposeCorrection(matchId, proposalBy, pendingActionBy, proposal, reasonCode, reasonDetail, revisionCount, nextStatus){
   return supabase.from('match_history').update({
-    status:'disputed',
+    status:nextStatus||'disputed',
     dispute_raised_by:proposalBy,
     dispute_reason_code:reasonCode,
     dispute_reason_detail:reasonDetail||null,
@@ -58,16 +60,28 @@ export function insertRevision(data){
 export function updateMatch(matchId, payload){
   return supabase.from('match_history').update(payload).eq('id',matchId);
 }
+// Server-side enforcement runs on a pg_cron schedule (see supabase/migrations).
+// Client-side calls are a best-effort fallback: trigger the same RPC whenever a
+// user loads their history. RPC is SECURITY DEFINER so it handles both submitter
+// and opponent sides regardless of which party logged in.
+export function expireStaleMatches(){
+  return supabase.rpc('expire_stale_matches');
+}
+// Legacy fallbacks (kept for offline/RLS compatibility) — now cover both sides
+// of the match via .or() so an opponent logging in can expire matches they're
+// party to, not just matches they submitted.
 export function expireStalePendingMatches(userId){
   return supabase.from('match_history')
     .update({status:'expired'})
-    .eq('user_id',userId).eq('status','pending_confirmation')
+    .or('user_id.eq.'+userId+',opponent_id.eq.'+userId)
+    .eq('status','pending_confirmation')
     .lt('expires_at',new Date().toISOString());
 }
 export function expireDisputedMatches(userId){
   var now=new Date().toISOString();
   return supabase.from('match_history')
     .update({status:'voided',voided_at:now,voided_reason:'timeout',current_proposal:null,proposal_by:null,pending_action_by:null})
-    .eq('user_id',userId).eq('status','disputed')
+    .or('user_id.eq.'+userId+',opponent_id.eq.'+userId)
+    .in('status',['disputed','pending_reconfirmation'])
     .lt('dispute_expires_at',now);
 }

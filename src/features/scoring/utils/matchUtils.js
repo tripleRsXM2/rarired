@@ -36,7 +36,6 @@ export function normalizeMatch(m, isTagged){
     tag_status:m.tag_status||null,
     isTagged:isTagged,
     expiresAt:m.expires_at||null,
-    revisionRequestedBy:m.revision_requested_by||null,
     venue:m.venue||"",
     court:m.court||"",
     disputeReasonCode:m.dispute_reason_code||null,
