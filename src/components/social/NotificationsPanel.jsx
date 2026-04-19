@@ -2,7 +2,7 @@ import { avColor } from "../../lib/helpers.js";
 
 export default function NotificationsPanel({
   t, notifications, markNotificationsRead, acceptMatchTag, declineMatchTag,
-  setTab, setPeopleTab, setShowNotifications,
+  setTab, setPeopleTab, setShowNotifications, refreshHistory,
 }) {
   function notifLabel(n) {
     if(n.type==='friend_request') return n.fromName+' sent you a friend request';
@@ -83,10 +83,10 @@ export default function NotificationsPanel({
                       </button>
                     )}
 
-                    {/* match_disputed / counter / correction: direct to feed */}
+                    {/* match_disputed / counter / correction: direct to feed + refresh */}
                     {(n.type==='match_disputed'||n.type==='match_correction_requested'||n.type==='match_counter_proposed'||n.type==='match_voided')&&(
                       <button
-                        onClick={function(){setTab("home");setShowNotifications(false);}}
+                        onClick={function(){if(refreshHistory)refreshHistory();setTab("home");setShowNotifications(false);}}
                         style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                         View in feed →
                       </button>
