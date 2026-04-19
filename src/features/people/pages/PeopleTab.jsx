@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
@@ -89,7 +90,7 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
 export default function PeopleTab({
   t, authUser, friends, sentRequests, receivedRequests,
   blockedUsers, suggestedPlayers,
-  peopleTab, setPeopleTab, peopleSearch, setPeopleSearch,
+  peopleSearch, setPeopleSearch,
   searchResults, setSearchResults, searchLoading, showSearchDrop, setShowSearchDrop,
   socialLoading, searchTimer,
   sendFriendRequest, acceptRequest, declineRequest, cancelRequest,
@@ -98,6 +99,19 @@ export default function PeopleTab({
   setShowAuth, setAuthMode, setAuthStep,
   dms,
 }) {
+  var location=useLocation();
+  var navigate=useNavigate();
+
+  // Derive active sub-tab from URL: /people/messages → "messages"
+  var validPeopleTabs=["messages","friends","requests","suggested","blocked"];
+  var pathParts=location.pathname.split("/").filter(Boolean);
+  var peopleTab=(pathParts[1]&&validPeopleTabs.includes(pathParts[1]))?pathParts[1]:"friends";
+
+  function setPeopleTab(newTab){
+    navigate("/people/"+newTab);
+    if(newTab!=="messages"&&dms)dms.closeConversation();
+  }
+
   var messagesEndRef=useRef(null);
 
   useEffect(function(){
@@ -124,7 +138,7 @@ export default function PeopleTab({
   var dmBadge=(dms?(dms.requests||[]).length:0)+(dms&&dms.conversations?dms.conversations.filter(function(c){return c.hasUnread;}).length:0);
 
   function handleMessageFriend(u){
-    setPeopleTab("messages");
+    navigate("/people/messages");
     if(dms)dms.openOrStartConversation(u);
   }
 

@@ -12,7 +12,6 @@ export function useSocialGraph(opts){
   var [sentRequests,setSentRequests]=useState([]);
   var [receivedRequests,setReceivedRequests]=useState([]);
   var [blockedUsers,setBlockedUsers]=useState([]);
-  var [peopleTab,setPeopleTab]=useState("friends");
   var [peopleSearch,setPeopleSearch]=useState("");
   var [searchResults,setSearchResults]=useState([]);
   var [searchLoading,setSearchLoading]=useState(false);
@@ -182,7 +181,7 @@ export function useSocialGraph(opts){
   return {
     friends, setFriends, sentRequests, setSentRequests,
     receivedRequests, setReceivedRequests, blockedUsers, setBlockedUsers,
-    peopleTab, setPeopleTab, peopleSearch, setPeopleSearch,
+    peopleSearch, setPeopleSearch,
     searchResults, setSearchResults, searchLoading, setSearchLoading,
     showSearchDrop, setShowSearchDrop, suggestedPlayers, setSuggestedPlayers,
     socialLoading, searchTimer,

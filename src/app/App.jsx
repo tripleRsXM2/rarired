@@ -1,5 +1,6 @@
 // src/app/App.jsx
 import { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
@@ -37,12 +38,27 @@ export default function App(){
   var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
   var t=makeTheme(dark);
 
+  var location=useLocation();
+  var navigate=useNavigate();
+
+  // Derive active top-level tab from the URL path.
   var validTabs=["home","tournaments","people","profile","admin"];
-  var [tab,setTab]=useState(function(){var s=localStorage.getItem("tab");return s&&validTabs.includes(s)?s:"home";});
+  var pathParts=location.pathname.split("/").filter(Boolean);
+  var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
+
+  // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
+  function setTab(x){
+    if(x==="people") navigate("/people/friends");
+    else navigate("/"+x);
+  }
+
+  // Redirect bare "/" to /home on first load.
+  useEffect(function(){
+    if(location.pathname==="/"||location.pathname==="")navigate("/home",{replace:true});
+  },[]);
+
   var [profileTab,setProfileTab]=useState("overview");
   var [showSettings,setShowSettings]=useState(false);
-
-  useEffect(function(){localStorage.setItem("tab",tab);},[tab]);
 
   // Coordinator ref — lets useAuthController callbacks reach feature hooks
   // that are declared after it without stale closures.
@@ -151,7 +167,6 @@ export default function App(){
             markNotificationsRead={notifications.markNotificationsRead}
             acceptMatchTag={notifications.acceptMatchTag}
             declineMatchTag={notifications.declineMatchTag}
-            setTab={setTab} setPeopleTab={social.setPeopleTab}
             setShowNotifications={notifications.setShowNotifications}
             refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
           />
@@ -212,7 +227,6 @@ export default function App(){
             t={t} authUser={auth.authUser} friends={social.friends}
             sentRequests={social.sentRequests} receivedRequests={social.receivedRequests}
             blockedUsers={social.blockedUsers} suggestedPlayers={social.suggestedPlayers}
-            peopleTab={social.peopleTab} setPeopleTab={social.setPeopleTab}
             peopleSearch={social.peopleSearch} setPeopleSearch={social.setPeopleSearch}
             searchResults={social.searchResults} setSearchResults={social.setSearchResults} searchLoading={social.searchLoading}
             showSearchDrop={social.showSearchDrop} setShowSearchDrop={social.setShowSearchDrop}
@@ -256,7 +270,6 @@ export default function App(){
             editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
             availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
             receivedRequests={social.receivedRequests}
-            setTab={setTab} setPeopleTab={social.setPeopleTab}
             onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
           />
         )}

@@ -5,6 +5,7 @@
 //
 // Owns all account/preferences content that was previously buried in ProfileTab.
 
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../../../lib/supabase.js";
 import { initials } from "../../../lib/utils/avatar.js";
 import { avColor } from "../../../lib/utils/avatar.js";
@@ -17,9 +18,9 @@ export default function SettingsScreen({
   editingAvail, setEditingAvail,
   availDraft, setAvailDraft,
   receivedRequests,
-  setTab, setPeopleTab,
   onClose,
 }) {
+  var navigate=useNavigate();
   var iStyle = inputStyle(t);
 
   return (
@@ -275,7 +276,7 @@ export default function SettingsScreen({
               <div style={{fontSize:14,color:t.text,fontWeight:500}}>{authUser.email}</div>
             </div>
             <button
-              onClick={function(){onClose();setTab("people");setPeopleTab("requests");}}
+              onClick={function(){onClose();navigate("/people/requests");}}
               style={{width:"100%",padding:"12px 16px",border:"none",borderBottom:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:13,fontWeight:500,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>Friend requests</span>
               <span style={{fontSize:12,color:receivedRequests.length>0?t.accent:t.textTertiary}}>

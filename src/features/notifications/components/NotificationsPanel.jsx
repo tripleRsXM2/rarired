@@ -1,9 +1,11 @@
+import { useNavigate } from "react-router-dom";
 import { avColor } from "../../../lib/utils/avatar.js";
 
 export default function NotificationsPanel({
   t, notifications, markNotificationsRead, acceptMatchTag, declineMatchTag,
-  setTab, setPeopleTab, setShowNotifications, refreshHistory,
+  setShowNotifications, refreshHistory,
 }) {
+  var navigate=useNavigate();
   function notifLabel(n) {
     if(n.type==='friend_request') return n.fromName+' sent you a friend request';
     if(n.type==='request_accepted') return n.fromName+' accepted your friend request';
@@ -77,7 +79,7 @@ export default function NotificationsPanel({
                     {/* match_reminder: direct to feed */}
                     {n.type==='match_reminder'&&(
                       <button
-                        onClick={function(){setTab("home");setShowNotifications(false);}}
+                        onClick={function(){navigate("/home");setShowNotifications(false);}}
                         style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.orange,background:t.orangeSubtle,color:t.orange,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                         View in feed →
                       </button>
@@ -86,7 +88,7 @@ export default function NotificationsPanel({
                     {/* match_disputed / counter / correction: direct to feed + refresh */}
                     {(n.type==='match_disputed'||n.type==='match_correction_requested'||n.type==='match_counter_proposed'||n.type==='match_voided')&&(
                       <button
-                        onClick={function(){if(refreshHistory)refreshHistory();setTab("home");setShowNotifications(false);}}
+                        onClick={function(){if(refreshHistory)refreshHistory();navigate("/home");setShowNotifications(false);}}
                         style={{marginTop:6,padding:"4px 10px",borderRadius:6,border:"1px solid "+t.border,background:"transparent",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                         View in feed →
                       </button>
@@ -101,7 +103,7 @@ export default function NotificationsPanel({
         {notifications.length>0&&(
           <div style={{padding:"10px 16px",borderTop:"1px solid "+t.border}}>
             <button
-              onClick={function(){setTab("people");setPeopleTab("requests");setShowNotifications(false);}}
+              onClick={function(){navigate("/people/requests");setShowNotifications(false);}}
               style={{background:"none",border:"none",color:t.accent,fontSize:12,fontWeight:600}}>
               View friend requests →
             </button>
