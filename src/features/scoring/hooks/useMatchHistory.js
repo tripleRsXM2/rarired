@@ -25,8 +25,14 @@ export function useMatchHistory(opts){
   var [disputeDraft,setDisputeDraft]=useState({reasonCode:"",reasonDetail:"",sets:[{you:"",them:""}],result:"win",date:"",venue:"",court:""});
 
   async function loadHistory(userId){
-    await M.expireStalePendingMatches(userId);
-    await M.expireDisputedMatches(userId);
+    // Prefer the server-side RPC (single authoritative call, SECURITY DEFINER,
+    // also scheduled via pg_cron). Fall back to client-side sweeps if the RPC
+    // isn't deployed yet — they're idempotent so running both is harmless.
+    var sr=await M.expireStaleMatches();
+    if(sr&&sr.error){
+      await M.expireStalePendingMatches(userId);
+      await M.expireDisputedMatches(userId);
+    }
     var hr=await M.fetchOwnMatches(userId);
     var or=await M.fetchOpponentMatches(userId);
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
@@ -137,12 +143,17 @@ export function useMatchHistory(opts){
   }
 
   // Internal: submit a correction proposal (dispute or counter-propose).
-  // isOpponentView=true: current user is the opponent (result must be inverted for storage).
-  // isOpponentView=false: current user is the submitter (result already in submitter frame).
+  // isOpponentView=true:  current user is the opponent acting against the submitter's
+  //                       version → status becomes 'disputed', submitter owes a response.
+  //                       (Result must be inverted for storage in submitter frame.)
+  // isOpponentView=false: current user is the submitter counter-proposing against
+  //                       the opponent's correction → status becomes 'pending_reconfirmation',
+  //                       opponent owes a response. (Result already in submitter frame.)
   async function _submitProposal(match, reasonCode, reasonDetail, formProposal, isOpponentView){
     if(!authUser) return {error:'not_authenticated'};
     var newRevisionCount=(match.revisionCount||0)+1;
     var pendingActionBy=isOpponentView?match.submitterId:match.opponent_id;
+    var nextStatus=isOpponentView?'disputed':'pending_reconfirmation';
     // Store result in submitter's frame
     var storedResult=isOpponentView
       ?(formProposal.result==='win'?'loss':'win')
@@ -155,7 +166,7 @@ export function useMatchHistory(opts){
       venue:formProposal.venue||'',
       court:formProposal.court||'',
     };
-    var r=await M.proposeCorrection(match.id,authUser.id,pendingActionBy,proposal,reasonCode,reasonDetail,newRevisionCount);
+    var r=await M.proposeCorrection(match.id,authUser.id,pendingActionBy,proposal,reasonCode,reasonDetail,newRevisionCount,nextStatus);
     if(r.error){console.error('[_submitProposal]',r.error);return {error:r.error.message};}
     // Version history
     await M.insertRevision({
@@ -173,7 +184,7 @@ export function useMatchHistory(opts){
       return h.map(function(m){
         if(m.id!==match.id) return m;
         return Object.assign({},m,{
-          status:'disputed',
+          status:nextStatus,
           disputeReasonCode:reasonCode,
           disputeReasonDetail:reasonDetail||null,
           currentProposal:{result:formProposal.result,sets:cleanSets,match_date:proposal.match_date,venue:proposal.venue,court:proposal.court},
@@ -256,7 +267,6 @@ export function useMatchHistory(opts){
       sets:clean, result:scoreDraft.result, match_date:matchDate,
       venue:scoreDraft.venue||null, court:scoreDraft.court||null,
       expires_at:newExpiresAt,
-      revision_requested_by:null, revision_reason:null,
       status:'pending_confirmation',
     };
     if(match.opponent_id) payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, clean);
@@ -269,7 +279,7 @@ export function useMatchHistory(opts){
           sets:clean, result:scoreDraft.result,
           date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
           venue:scoreDraft.venue||'', court:scoreDraft.court||'',
-          expiresAt:newExpiresAt, revisionRequestedBy:null, status:'pending_confirmation',
+          expiresAt:newExpiresAt, status:'pending_confirmation',
         });
       });
     });

@@ -67,7 +67,7 @@ export default function DisputeModal({
         <p style={{fontSize:12,color:t.textSecondary,marginBottom:20}}>
           {isCounter
             ?'Propose your corrected version. Round '+(match.revisionCount||0)+' of 3 — after 3 the match is voided.'
-            :'Tell us what's wrong and submit the correct version.'}
+            :"Tell us what's wrong and submit the correct version."}
         </p>
 
         {/* Reason picker */}
