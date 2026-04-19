@@ -23,6 +23,7 @@ import TournamentsTab from "../tabs/TournamentsTab.jsx";
 import PeopleTab from "../tabs/PeopleTab.jsx";
 import ProfileTab from "../tabs/ProfileTab.jsx";
 import AdminTab from "../tabs/AdminTab.jsx";
+import SettingsScreen from "../screens/SettingsScreen.jsx";
 
 import NotificationsPanel from "../components/social/NotificationsPanel.jsx";
 import AuthModal from "../modals/AuthModal.jsx";
@@ -39,6 +40,7 @@ export default function App(){
   var validTabs=["home","tournaments","people","profile","admin"];
   var [tab,setTab]=useState(function(){var s=localStorage.getItem("tab");return s&&validTabs.includes(s)?s:"home";});
   var [profileTab,setProfileTab]=useState("overview");
+  var [showSettings,setShowSettings]=useState(false);
 
   useEffect(function(){localStorage.setItem("tab",tab);},[tab]);
 
@@ -127,8 +129,9 @@ export default function App(){
               )}
               {auth.authUser
                 ?<button
-                    onClick={function(){setTab("profile");setProfileTab("overview");}}
-                    style={{width:32,height:32,borderRadius:t.r,background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
+                    onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+                    title="Settings"
+                    style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
                     {currentUser.profile.avatar}
                   </button>
                 :<button
@@ -224,13 +227,10 @@ export default function App(){
         )}
         {tab==="profile"&&(
           <ProfileTab
-            t={t} authUser={auth.authUser} profile={currentUser.profile} setProfile={currentUser.setProfile}
-            profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
-            history={matchHistory.history} receivedRequests={social.receivedRequests}
+            t={t} authUser={auth.authUser} profile={currentUser.profile}
+            history={matchHistory.history}
             profileTab={profileTab} setProfileTab={setProfileTab}
-            editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
-            availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
-            setTab={setTab} setPeopleTab={social.setPeopleTab}
+            onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
           />
         )}
         {tab==="admin"&&(
@@ -243,6 +243,20 @@ export default function App(){
             recordResult={tournaments.recordResult}
             setSelectedTournId={tournaments.setSelectedTournId} setTab={setTab}
             setTournDetailTab={tournaments.setTournDetailTab}
+          />
+        )}
+
+        {/* Settings screen (IG-style slide-in from avatar) */}
+        {showSettings&&auth.authUser&&(
+          <SettingsScreen
+            t={t} authUser={auth.authUser}
+            profile={currentUser.profile} setProfile={currentUser.setProfile}
+            profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
+            editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
+            availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
+            receivedRequests={social.receivedRequests}
+            setTab={setTab} setPeopleTab={social.setPeopleTab}
+            onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
           />
         )}
 
