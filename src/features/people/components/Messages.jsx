@@ -53,13 +53,13 @@ export default function Messages({t,authUser,dms}){
   },[dms.editingId]);
 
   function handleTouchStart(e,msg){
+    var el=e.currentTarget;
     touchTimer.current=setTimeout(function(){
-      var touch=e.touches[0];
-      setMenuState({message:msg,x:touch.clientX,y:touch.clientY});
+      setMenuState({message:msg,rect:el.getBoundingClientRect()});
     },500);
   }
   function handleTouchEnd(){clearTimeout(touchTimer.current);}
-  function handleContextMenu(e,msg){e.preventDefault();setMenuState({message:msg,x:e.clientX,y:e.clientY});}
+  function handleContextMenu(e,msg){e.preventDefault();setMenuState({message:msg,rect:e.currentTarget.getBoundingClientRect()});}
   function closeMenu(){setMenuState(null);}
 
   // ── Conversation list ──────────────────────────────────────────────────────
@@ -339,10 +339,10 @@ export default function Messages({t,authUser,dms}){
         <div style={{position:"fixed",inset:0,zIndex:200}} onClick={closeMenu}>
           <div style={{
             position:"fixed",
-            top:Math.min(menuState.y,window.innerHeight-260),
-            left:Math.max(8,Math.min(menuState.x-90,window.innerWidth-190)),
+            top:(function(){var r=menuState.rect;var menuH=280;return r.bottom+menuH>window.innerHeight?Math.max(8,r.top-menuH-4):r.bottom+4;})(),
+            left:(function(){var r=menuState.rect;var menuW=190;var mid=r.left+r.width/2-menuW/2;return Math.max(8,Math.min(mid,window.innerWidth-menuW-8));})(),
             background:t.bgCard,border:"1px solid "+t.border,borderRadius:14,
-            boxShadow:"0 8px 40px rgba(0,0,0,0.22)",overflow:"hidden",zIndex:201,minWidth:170,
+            boxShadow:"0 8px 40px rgba(0,0,0,0.22)",overflow:"hidden",zIndex:201,minWidth:190,
           }} onClick={function(e){e.stopPropagation();}}>
             {/* Emoji row */}
             <div style={{display:"flex",gap:2,padding:"10px 12px",borderBottom:"1px solid "+t.border,justifyContent:"space-between"}}>
