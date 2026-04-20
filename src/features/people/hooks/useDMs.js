@@ -319,7 +319,6 @@ export function useDMs(opts){
   }
 
   async function deleteMessage(messageId){
-    if(!window.confirm("Delete this message?"))return;
     await D.softDeleteMessage(messageId);
     setThreadMessages(function(ms){return ms.map(function(m){
       return m.id===messageId?Object.assign({},m,{deleted_at:new Date().toISOString()}):m;

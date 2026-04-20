@@ -17,6 +17,8 @@ function fmtTime(iso){
   return d.toLocaleDateString([],{day:"numeric",month:"short"});
 }
 
+function hiddenKey(uid){return"cs_hidden_msgs_"+uid;}
+
 export default function Messages({t,authUser,dms}){
   var [menuState,setMenuState]=useState(null);
   var [showSettings,setShowSettings]=useState(false);
@@ -25,6 +27,20 @@ export default function Messages({t,authUser,dms}){
   var editInputRef=useRef(null);
   var messagesEndRef=useRef(null);
   var myId=authUser&&authUser.id;
+
+  var [hiddenIds,setHiddenIds]=useState(function(){
+    if(!myId)return{};
+    try{return JSON.parse(localStorage.getItem(hiddenKey(myId))||"{}");}catch(e){return{};}
+  });
+
+  function hideForMe(msgId){
+    setHiddenIds(function(prev){
+      var next=Object.assign({},prev,{[msgId]:true});
+      try{localStorage.setItem(hiddenKey(myId),JSON.stringify(next));}catch(e){}
+      return next;
+    });
+    closeMenu();
+  }
 
   useEffect(function(){
     if(dms.activeConv&&messagesEndRef.current){
@@ -231,7 +247,7 @@ export default function Messages({t,authUser,dms}){
             </div>
           </div>
         ):(
-          dms.threadMessages.map(function(msg,idx){
+          dms.threadMessages.filter(function(msg){return!hiddenIds[msg.id];}).map(function(msg,idx){
             var mine=msg.sender_id===myId2;
             var msgReactions=dms.reactions[msg.id]||[];
             var reactionGroups={};
@@ -340,7 +356,9 @@ export default function Messages({t,authUser,dms}){
               {label:"📋  Copy",show:!menuState.message.deleted_at,action:function(){navigator.clipboard.writeText(menuState.message.content);closeMenu();}},
               {label:"✏️  Edit",show:menuState.message.sender_id===myId2&&!menuState.message.deleted_at&&(Date.now()-new Date(menuState.message.created_at))<EDIT_WINDOW_MS,
                 action:function(){dms.startEdit(menuState.message);closeMenu();}},
-              {label:"🗑  Delete",show:menuState.message.sender_id===myId2&&!menuState.message.deleted_at,danger:true,
+              {label:"Delete for me",show:!menuState.message.deleted_at,danger:false,
+                action:function(){hideForMe(menuState.message.id);}},
+              {label:"Unsend",show:menuState.message.sender_id===myId2&&!menuState.message.deleted_at,danger:true,
                 action:function(){dms.deleteMessage(menuState.message.id);closeMenu();}},
             ].filter(function(i){return i.show;}).map(function(item){
               return (
