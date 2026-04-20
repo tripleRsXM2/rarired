@@ -1,12 +1,8 @@
 // src/features/notifications/utils/notifUtils.js
-// Type classification, copy, sorting, and clearing rules for notifications.
-// Imported by both the hook and the panel — no React, no side-effects.
+// Phase 2 — type classification, priority scoring, smart demotion, grouping,
+// copy, and clearing rules. No React, no side-effects.
 
 // ── Type classification ────────────────────────────────────────────────────────
-// "action"    — requires user response; persists in badge until resolved
-// "important" — meaningful update; can be read/dismissed
-// "activity"  — passive update; cleared most easily
-
 var ACTION_TYPES = new Set([
   "match_tag",
   "match_disputed",
@@ -28,6 +24,12 @@ export function getNotifType(n) {
   if (ACTION_TYPES.has(n.type)) return "action";
   if (IMPORTANT_TYPES.has(n.type)) return "important";
   return "activity";
+}
+
+// getEffectiveType respects smart demotion (_demoted flag set by applySmartDemotion).
+export function getEffectiveType(n) {
+  if (n._demoted) return "important";
+  return getNotifType(n);
 }
 
 // ── Human-readable copy ────────────────────────────────────────────────────────
@@ -53,28 +55,194 @@ export function getNotifLabel(n) {
   }
 }
 
-// ── Sorting ────────────────────────────────────────────────────────────────────
-// action → important → activity, newest-first within each group.
-var TYPE_ORDER = { action: 0, important: 1, activity: 2 };
+// Compact label for thread context lines (no trailing punctuation for readability).
+export function getThreadContextLabel(n) {
+  var name = n.fromName || "Someone";
+  switch (n.type) {
+    case "match_tag":                  return name + " logged the match";
+    case "match_confirmed":            return name + " confirmed the result";
+    case "match_disputed":             return name + " disputed the result";
+    case "match_correction_requested": return name + " proposed a correction";
+    case "match_counter_proposed":     return name + " counter-proposed";
+    case "match_voided":               return "Match was voided";
+    default:                           return getNotifLabel(n);
+  }
+}
 
+// ── Priority scoring ───────────────────────────────────────────────────────────
+// Replaces pure bucket + date sort. Keeps natural action → important → activity
+// grouping while elevating urgency and recency within buckets.
+
+var TYPE_BASE_SCORE = { action: 3000, important: 2000, activity: 1000 };
+
+var TYPE_URGENCY_BONUS = {
+  match_disputed:             450,
+  match_counter_proposed:     400,
+  match_correction_requested: 380,
+  match_tag:                  320,
+  match_reminder:             280,
+  friend_request:             220,
+  message_request:            180,
+  message_request_accepted:   60,
+  match_confirmed:            50,
+  match_voided:               40,
+};
+
+export function computePriorityScore(n) {
+  var effectiveType = getEffectiveType(n);
+  var base    = TYPE_BASE_SCORE[effectiveType] || 1000;
+  var urgency = TYPE_URGENCY_BONUS[n.type] || 0;
+  var unread  = n.read ? 0 : 80;
+  // Recency decay over 7 days (0–200 points)
+  var ageMs   = Date.now() - new Date(n.created_at || Date.now()).getTime();
+  var ageDays = ageMs / (1000 * 60 * 60 * 24);
+  var recency = Math.max(0, Math.round(200 * (1 - Math.min(ageDays / 7, 1))));
+  return base + urgency + unread + recency;
+}
+
+// ── Sorting ────────────────────────────────────────────────────────────────────
 export function sortNotifications(notifications) {
   return notifications.slice().sort(function (a, b) {
-    var ta = TYPE_ORDER[getNotifType(a)];
-    var tb = TYPE_ORDER[getNotifType(b)];
-    if (ta !== tb) return ta - tb;
-    return new Date(b.created_at) - new Date(a.created_at);
+    return computePriorityScore(b) - computePriorityScore(a);
+  });
+}
+
+// ── Smart demotion ─────────────────────────────────────────────────────────────
+// When a match has been confirmed or voided, lingering dispute notifications
+// for the same entity_id are demoted from "action" to "important". They remain
+// visible (for context) but no longer assert urgency.
+
+var DEMOTABLE_DISPUTE_TYPES = new Set([
+  "match_disputed",
+  "match_correction_requested",
+  "match_counter_proposed",
+]);
+
+export function applySmartDemotion(notifications) {
+  var resolvedIds = new Set();
+  notifications.forEach(function (n) {
+    if ((n.type === "match_confirmed" || n.type === "match_voided") && n.entity_id) {
+      resolvedIds.add(n.entity_id);
+    }
+  });
+  if (!resolvedIds.size) return notifications;
+  return notifications.map(function (n) {
+    if (n.entity_id && resolvedIds.has(n.entity_id) && DEMOTABLE_DISPUTE_TYPES.has(n.type)) {
+      return Object.assign({}, n, { _demoted: true });
+    }
+    return n;
+  });
+}
+
+// ── Smart grouping ─────────────────────────────────────────────────────────────
+// Returns an array of "display items" for the panel renderer:
+//
+//   { kind: "single",     n,                       score }
+//   { kind: "thread",     primary, context: [n…],  score }  ← dispute threads
+//   { kind: "like_group", items: [n…],              score }  ← likes on same match
+//
+// Rules:
+//   - action-required notifications are NEVER hidden — they always appear as
+//     the primary of their thread or as a standalone single.
+//   - Dispute-family types for the same entity_id form a thread; the highest-
+//     priority item is the primary.
+//   - Multiple likes on the same match collapse into one like_group item.
+
+var DISPUTE_FAMILY = new Set([
+  "match_tag",
+  "match_disputed",
+  "match_correction_requested",
+  "match_counter_proposed",
+  "match_voided",
+  "match_confirmed",
+]);
+
+export function groupNotifications(rawNotifications) {
+  var ns = applySmartDemotion(rawNotifications);
+  var sorted = sortNotifications(ns);
+
+  // Bucket into: threads, like groups, singles
+  var threadBuckets = {};   // entity_id → [n]
+  var likeBuckets   = {};   // entity_id → [n]
+  var singles       = [];
+
+  sorted.forEach(function (n) {
+    if (DISPUTE_FAMILY.has(n.type) && n.entity_id) {
+      if (!threadBuckets[n.entity_id]) threadBuckets[n.entity_id] = [];
+      threadBuckets[n.entity_id].push(n);
+    } else if (n.type === "like" && n.entity_id) {
+      if (!likeBuckets[n.entity_id]) likeBuckets[n.entity_id] = [];
+      likeBuckets[n.entity_id].push(n);
+    } else {
+      singles.push({ kind: "single", n: n, score: computePriorityScore(n) });
+    }
+  });
+
+  // Flatten thread buckets → display items
+  var threadItems = Object.values(threadBuckets).map(function (group) {
+    // Primary = highest-priority notification in the thread
+    var by_score = group.slice().sort(function (a, b) {
+      return computePriorityScore(b) - computePriorityScore(a);
+    });
+    var primary = by_score[0];
+    var context = by_score.slice(1); // older / lower-priority events for context
+    return {
+      kind: "thread",
+      primary: primary,
+      context: context,
+      score: computePriorityScore(primary),
+    };
+  });
+
+  // Flatten like buckets → display items
+  var likeItems = Object.values(likeBuckets).map(function (group) {
+    var byDate = group.slice().sort(function (a, b) {
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    if (byDate.length === 1) {
+      return { kind: "single", n: byDate[0], score: computePriorityScore(byDate[0]) };
+    }
+    return { kind: "like_group", items: byDate, score: computePriorityScore(byDate[0]) };
+  });
+
+  // Merge and sort all display items by score
+  return singles.concat(threadItems).concat(likeItems).sort(function (a, b) {
+    return b.score - a.score;
   });
 }
 
 // ── Clearing rules ─────────────────────────────────────────────────────────────
-// Action items cannot be silently dismissed — they have no × button.
 export function canDismiss(n) {
-  return getNotifType(n) !== "action";
+  return getEffectiveType(n) !== "action";
 }
 
-// ── Type accent colour (returns a theme token value) ──────────────────────────
+// Can an entire display item be dismissed?
+export function canDismissItem(item) {
+  if (item.kind === "single")     return canDismiss(item.n);
+  if (item.kind === "thread")     return canDismiss(item.primary);
+  if (item.kind === "like_group") return true;
+  return false;
+}
+
+// All notification IDs that make up a display item.
+export function getItemIds(item) {
+  if (item.kind === "single")     return [item.n.id];
+  if (item.kind === "thread")     return [item.primary].concat(item.context).map(function (n) { return n.id; });
+  if (item.kind === "like_group") return item.items.map(function (n) { return n.id; });
+  return [];
+}
+
+// Section (action / important / activity) for a display item.
+export function getItemSection(item) {
+  if (item.kind === "single")     return getEffectiveType(item.n);
+  if (item.kind === "thread")     return getEffectiveType(item.primary);
+  if (item.kind === "like_group") return "activity";
+  return "activity";
+}
+
+// ── Type accent colour ─────────────────────────────────────────────────────────
 export function notifAccentColor(n, t) {
-  var type = getNotifType(n);
+  var type = getEffectiveType(n);
   if (type === "action")    return t.accent;
   if (type === "important") return t.green;
   return t.border;
@@ -84,9 +252,9 @@ export function notifAccentColor(n, t) {
 export function notifTimeLabel(isoString) {
   var now  = Date.now();
   var then = new Date(isoString).getTime();
-  var diff = Math.floor((now - then) / 1000); // seconds
-  if (diff < 60)   return "just now";
-  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+  var diff = Math.floor((now - then) / 1000);
+  if (diff < 60)    return "just now";
+  if (diff < 3600)  return Math.floor(diff / 60) + "m ago";
   if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
   if (diff < 604800) return Math.floor(diff / 86400) + "d ago";
   return new Date(isoString).toLocaleDateString("en-AU", { day: "numeric", month: "short" });

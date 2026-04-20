@@ -247,8 +247,18 @@ export default function App(){
               markAllRead={notifications.markAllRead}
               markOneRead={notifications.markOneRead}
               dismissNotification={notifications.dismissNotification}
+              dismissNotifications={notifications.dismissNotifications}
               acceptMatchTag={notifications.acceptMatchTag}
               declineMatchTag={notifications.declineMatchTag}
+              onAcceptFriendRequest={function(n){
+                // Build the req shape acceptRequest expects, then dismiss notif
+                social.acceptRequest({id:n.from_user_id,requestId:n.entity_id,name:n.fromName,avatar:n.fromAvatar});
+                notifications.dismissNotification(n.id);
+              }}
+              onDeclineFriendRequest={function(n){
+                social.declineRequest({id:n.from_user_id,requestId:n.entity_id});
+                notifications.dismissNotification(n.id);
+              }}
               setShowNotifications={notifications.setShowNotifications}
               refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
               openConvById={openConvById}

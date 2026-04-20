@@ -132,6 +132,15 @@ export function useNotifications(opts) {
     setNotifications(function (ns) { return ns.filter(function (n) { return n.id !== id; }); });
   }
 
+  // ── dismissNotifications (bulk) ──────────────────────────────────────────────
+  // Used to dismiss all notifications in a group/thread at once.
+  async function dismissNotifications(ids) {
+    if (!ids || !ids.length) return;
+    await Promise.all(ids.map(function (id) { return N.deleteNotification(id); }));
+    var idSet = new Set(ids);
+    setNotifications(function (ns) { return ns.filter(function (n) { return !idSet.has(n.id); }); });
+  }
+
   // ── acceptMatchTag / declineMatchTag ─────────────────────────────────────────
   async function acceptMatchTag(n) {
     if (!updateMatchTagStatus) return;
@@ -161,7 +170,7 @@ export function useNotifications(opts) {
     loadNotifications, resetNotifications,
     unreadCount,
     markSeen, markOneRead, markAllRead,
-    dismissNotification,
+    dismissNotification, dismissNotifications,
     acceptMatchTag, declineMatchTag,
     // Legacy alias — kept so any remaining callers don't break
     markNotificationsRead: markAllRead,
