@@ -38,6 +38,27 @@ export function useMatchHistory(opts){
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
     var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true);});
     var normalized=ownNorm.concat(oppNorm).sort(function(a,b){return b.date<a.date?-1:1;});
+
+    // ── Enrich tagged matches with submitter names ──────────────────────────
+    // For isTagged=true rows, m.opp_name is the current user's own name
+    // (it's what the submitter typed for their opponent). The real "opponent"
+    // from the tagged user's view is the submitter (m.submitterId / m.user_id).
+    var taggedIds=[...new Set(normalized
+      .filter(function(m){return m.isTagged&&m.submitterId;})
+      .map(function(m){return m.submitterId;})
+    )];
+    if(taggedIds.length){
+      var spr=await fetchProfilesByIds(taggedIds,'id,name,avatar');
+      var submitterMap={};
+      (spr.data||[]).forEach(function(p){submitterMap[p.id]=p;});
+      normalized=normalized.map(function(m){
+        if(!m.isTagged||!m.submitterId)return m;
+        var sp=submitterMap[m.submitterId];
+        if(!sp)return m;
+        return Object.assign({},m,{oppName:sp.name||m.oppName,friendName:sp.name||m.oppName});
+      });
+    }
+
     var matchIds=normalized.map(function(m){return m.id;});
     setHistory(normalized);
     // Client-side reminder: notify opponent when <24h left on pending match
