@@ -2,9 +2,42 @@
 
 ## Git Workflow
 
-- **Always push to `Mdawg` branch only.** Never push to `main` unless explicitly instructed.
-- Use `git push origin HEAD:Mdawg` (or `git push origin main:Mdawg` if on main) for all pushes.
-- Merging to `main` is the user's decision.
+### Branch ownership
+- **`Mikey` / `Mikey/<feature>`** — the user's branches. All Claude work goes here.
+- **`Mdawg` / `Mdawg/<feature>`** — the other developer's branches. **Claude must never touch these under any circumstances.**
+- **`main`** — shared production branch. Only merge into main when explicitly instructed.
+
+### Rules
+- **Never push directly to `main`** unless the user explicitly says to.
+- **Never touch `Mdawg` or any `Mdawg/*` branch** — not checkout, not merge, not push. Ever.
+- Always pull latest `main` before starting new work.
+- Use a separate branch per feature/fix: `Mikey/<feature-name>`.
+- When merging `main` into a feature branch and conflicts arise, always keep `main`'s version unless the user says otherwise.
+
+### Standard flow
+```bash
+# Start new work
+git checkout main
+git pull origin main
+git checkout -b Mikey/feature-name
+
+# Commit
+git add .
+git commit -m "Description"
+
+# Sync main before pushing
+git checkout main && git pull origin main
+git checkout Mikey/feature-name
+git merge main
+
+# Push
+git push origin Mikey/feature-name
+
+# Merge to main (only when instructed)
+git checkout main
+git merge Mikey/feature-name
+git push origin main
+```
 
 ## Tech Stack
 

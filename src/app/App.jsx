@@ -9,6 +9,8 @@ import { insertNotification, deleteNotification } from "../features/notification
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 
 import Providers from "./providers.jsx";
+import Sidebar from "./Sidebar.jsx";
+import RightPanel from "../features/home/components/RightPanel.jsx";
 
 import { useAuthController } from "../features/auth/hooks/useAuthController.js";
 import { useCurrentUser } from "../features/profile/hooks/useCurrentUser.js";
@@ -171,103 +173,128 @@ export default function App(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[social.friends.length, notifications.notifications.length]);
 
+  function openLogMatch(){
+    matchHistory.setCasualOppName("");
+    matchHistory.setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});
+    matchHistory.setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10),venue:"",court:""});
+  }
+
   return (
     <Providers t={t} dark={dark}>
-      <div style={{minHeight:"100vh",background:t.bg,color:t.text,paddingBottom:80}}>
+      {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
+      <div className="cs-shell" style={{color:t.text}}>
 
-        {/* Nav */}
-        <nav style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>
-          <div style={{maxWidth:680,margin:"0 auto",padding:"0 20px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:26,height:26,borderRadius:4,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:t.accentText,letterSpacing:"-0.5px",flexShrink:0}}>CS</div>
-              <span style={{fontSize:15,fontWeight:700,letterSpacing:"-0.5px",color:t.text}}>CourtSync</span>
-            </div>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <button
-                onClick={function(){setDark(function(d){var next=!d;localStorage.setItem("theme",next?"dark":"light");return next;});}}
-                style={{background:"transparent",border:"1px solid "+t.border,borderRadius:t.r,padding:"4px 10px",fontSize:10,fontWeight:600,color:t.textSecondary,letterSpacing:"0.05em",textTransform:"uppercase"}}>
-                {dark?"Light":"Dark"}
-              </button>
-              {auth.authUser&&(
-                <button
-                  onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markNotificationsRead();}}
-                  style={{position:"relative",width:32,height:32,borderRadius:t.r,background:notifications.unreadCount()>0?t.accentSubtle:"transparent",border:"1px solid "+(notifications.unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all 0.2s"}}>
-                  🔔
-                  {notifications.unreadCount()>0&&(
-                    <div style={{position:"absolute",top:-4,right:-4,width:15,height:15,borderRadius:"50%",background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontWeight:800,color:t.accentText}}>
-                      {notifications.unreadCount()>9?"9+":notifications.unreadCount()}
-                    </div>
-                  )}
-                </button>
-              )}
-              {auth.authUser
-                ?<button
-                    onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
-                    title="Settings"
-                    style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
-                    {currentUser.profile.avatar}
-                  </button>
-                :<button
-                    onClick={auth.openLogin}
-                    style={{background:t.accent,border:"none",borderRadius:t.r,padding:"7px 16px",fontSize:12,fontWeight:700,color:t.accentText,letterSpacing:"0.02em"}}>
-                    Log in
-                  </button>
-              }
-            </div>
-          </div>
-        </nav>
-
-        {/* Notifications panel */}
-        {notifications.showNotifications&&auth.authUser&&(
-          <NotificationsPanel
-            t={t} notifications={notifications.notifications}
-            markNotificationsRead={notifications.markNotificationsRead}
-            acceptMatchTag={notifications.acceptMatchTag}
-            declineMatchTag={notifications.declineMatchTag}
+        {/* LEFT SIDEBAR — desktop only, controlled by .cs-sidebar-col CSS */}
+        <div className="cs-sidebar-col">
+          <Sidebar
+            t={t} tab={tab} setTab={setTab}
+            dark={dark} setDark={setDark}
+            profile={currentUser.profile} authUser={auth.authUser}
+            unreadCount={notifications.unreadCount()}
+            showNotifications={notifications.showNotifications}
             setShowNotifications={notifications.setShowNotifications}
-            refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
-            openConvById={openConvById}
+            markNotificationsRead={notifications.markNotificationsRead}
+            onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+            openLogin={auth.openLogin}
           />
-        )}
-
-        {/* Tab bar */}
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
-          <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"8px 0 calc(8px + env(safe-area-inset-bottom))"}}>
-            {TABS.map(function(tb){
-              var on=tab===tb.id;
-              return (
-                <button key={tb.id}
-                  onClick={function(){setTab(tb.id);if(tb.id!=="tournaments")tournaments.setSelectedTournId(null);}}
-                  style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"4px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary}}>
-                  <div style={{width:16,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
-                  <span style={{fontSize:10,fontWeight:on?700:500,letterSpacing:"0.05em",textTransform:"uppercase"}}>{tb.label}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        {/* Tab content */}
-        {tab==="home"&&(
-          <HomeTab
-            t={t} authUser={auth.authUser} profile={currentUser.profile} history={matchHistory.history}
-            feedLikes={matchHistory.feedLikes} setFeedLikes={matchHistory.setFeedLikes}
-            feedLikeCounts={matchHistory.feedLikeCounts} setFeedLikeCounts={matchHistory.setFeedLikeCounts}
-            feedComments={matchHistory.feedComments} commentModal={matchHistory.commentModal}
-            setCommentModal={matchHistory.setCommentModal}
-            commentDraft={matchHistory.commentDraft} setCommentDraft={matchHistory.setCommentDraft}
-            setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
-            setCasualOppName={matchHistory.setCasualOppName}
-            setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
-            setDisputeModal={matchHistory.setDisputeModal} setDisputeDraft={matchHistory.setDisputeDraft}
-            deleteMatch={matchHistory.deleteMatch} removeTaggedMatch={matchHistory.removeTaggedMatch}
-            resubmitMatch={matchHistory.resubmitMatch}
-            confirmOpponentMatch={matchHistory.confirmOpponentMatch}
-            acceptCorrection={matchHistory.acceptCorrection}
-            voidMatchAction={matchHistory.voidMatchAction}
-          />
-        )}
-        {tab==="tournaments"&&(
+        {/* CENTER COLUMN */}
+        <div className="cs-center-col cs-outer-pad">
+
+          {/* MOBILE top nav — hidden on desktop via .cs-mob-nav CSS */}
+          <nav className="cs-mob-nav" style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>
+            <div style={{maxWidth:680,margin:"0 auto",padding:"0 20px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:26,height:26,borderRadius:4,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:t.accentText,letterSpacing:"-0.5px",flexShrink:0}}>CS</div>
+                <span style={{fontSize:15,fontWeight:700,letterSpacing:"-0.5px",color:t.text}}>CourtSync</span>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <button
+                  onClick={function(){setDark(function(d){var next=!d;localStorage.setItem("theme",next?"dark":"light");return next;});}}
+                  style={{background:"transparent",border:"1px solid "+t.border,borderRadius:t.r,padding:"4px 10px",fontSize:10,fontWeight:600,color:t.textSecondary,letterSpacing:"0.05em",textTransform:"uppercase"}}>
+                  {dark?"Light":"Dark"}
+                </button>
+                {auth.authUser&&(
+                  <button
+                    onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markNotificationsRead();}}
+                    style={{position:"relative",width:32,height:32,borderRadius:t.r,background:notifications.unreadCount()>0?t.accentSubtle:"transparent",border:"1px solid "+(notifications.unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all 0.2s"}}>
+                    🔔
+                    {notifications.unreadCount()>0&&(
+                      <div style={{position:"absolute",top:-4,right:-4,width:15,height:15,borderRadius:"50%",background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontWeight:800,color:t.accentText}}>
+                        {notifications.unreadCount()>9?"9+":notifications.unreadCount()}
+                      </div>
+                    )}
+                  </button>
+                )}
+                {auth.authUser
+                  ?<button
+                      onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+                      title="Settings"
+                      style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
+                      {currentUser.profile.avatar}
+                    </button>
+                  :<button
+                      onClick={auth.openLogin}
+                      style={{background:t.accent,border:"none",borderRadius:t.r,padding:"7px 16px",fontSize:12,fontWeight:700,color:t.accentText,letterSpacing:"0.02em"}}>
+                      Log in
+                    </button>
+                }
+              </div>
+            </div>
+          </nav>
+
+          {/* Notifications panel */}
+          {notifications.showNotifications&&auth.authUser&&(
+            <NotificationsPanel
+              t={t} notifications={notifications.notifications}
+              markNotificationsRead={notifications.markNotificationsRead}
+              acceptMatchTag={notifications.acceptMatchTag}
+              declineMatchTag={notifications.declineMatchTag}
+              setShowNotifications={notifications.setShowNotifications}
+              refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
+              openConvById={openConvById}
+            />
+          )}
+
+          {/* MOBILE bottom tab bar — hidden on desktop via .cs-mob-tabs CSS */}
+          <div className="cs-mob-tabs" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
+            <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"8px 0 calc(8px + env(safe-area-inset-bottom))"}}>
+              {TABS.map(function(tb){
+                var on=tab===tb.id;
+                return (
+                  <button key={tb.id}
+                    onClick={function(){setTab(tb.id);if(tb.id!=="tournaments")tournaments.setSelectedTournId(null);}}
+                    style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"4px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary}}>
+                    <div style={{width:16,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
+                    <span style={{fontSize:10,fontWeight:on?700:500,letterSpacing:"0.05em",textTransform:"uppercase"}}>{tb.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tab content */}
+          {tab==="home"&&(
+            <HomeTab
+              t={t} authUser={auth.authUser} profile={currentUser.profile} history={matchHistory.history}
+              feedLikes={matchHistory.feedLikes} setFeedLikes={matchHistory.setFeedLikes}
+              feedLikeCounts={matchHistory.feedLikeCounts} setFeedLikeCounts={matchHistory.setFeedLikeCounts}
+              feedComments={matchHistory.feedComments} commentModal={matchHistory.commentModal}
+              setCommentModal={matchHistory.setCommentModal}
+              commentDraft={matchHistory.commentDraft} setCommentDraft={matchHistory.setCommentDraft}
+              setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
+              setCasualOppName={matchHistory.setCasualOppName}
+              setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
+              setDisputeModal={matchHistory.setDisputeModal} setDisputeDraft={matchHistory.setDisputeDraft}
+              deleteMatch={matchHistory.deleteMatch} removeTaggedMatch={matchHistory.removeTaggedMatch}
+              resubmitMatch={matchHistory.resubmitMatch}
+              confirmOpponentMatch={matchHistory.confirmOpponentMatch}
+              acceptCorrection={matchHistory.acceptCorrection}
+              voidMatchAction={matchHistory.voidMatchAction}
+            />
+          )}
+          {tab==="tournaments"&&(
           <TournamentsTab
             t={t} myId={myId} tournaments={tournaments.tournaments}
             selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
@@ -319,21 +346,36 @@ export default function App(){
           />
         )}
 
-        {/* Settings screen (IG-style slide-in from avatar) */}
-        {showSettings&&auth.authUser&&(
-          <SettingsScreen
-            t={t} authUser={auth.authUser}
-            profile={currentUser.profile} setProfile={currentUser.setProfile}
-            profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
-            editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
-            availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
-            receivedRequests={social.receivedRequests}
-            onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
-          />
+        </div>{/* end .cs-center-col */}
+
+        {/* RIGHT PANEL — large desktop only, home tab only, controlled by .cs-right-col CSS */}
+        {tab==="home"&&(
+          <div className="cs-right-col">
+            <RightPanel
+              t={t} authUser={auth.authUser}
+              history={matchHistory.history}
+              onLogMatch={openLogMatch}
+            />
+          </div>
         )}
 
-        {/* Modals */}
-        <ScheduleModal
+      </div>{/* end .cs-shell */}
+
+      {/* Settings screen (IG-style slide-in from avatar) */}
+      {showSettings&&auth.authUser&&(
+        <SettingsScreen
+          t={t} authUser={auth.authUser}
+          profile={currentUser.profile} setProfile={currentUser.setProfile}
+          profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
+          editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
+          availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
+          receivedRequests={social.receivedRequests}
+          onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
+        />
+      )}
+
+      {/* Modals */}
+      <ScheduleModal
           t={t} scheduleModal={tournaments.scheduleModal} setScheduleModal={tournaments.setScheduleModal}
           scheduleDraft={tournaments.scheduleDraft} setScheduleDraft={tournaments.setScheduleDraft}
           scheduleMatch={tournaments.scheduleMatch}
@@ -382,7 +424,6 @@ export default function App(){
           onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
           onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
         />
-      </div>
     </Providers>
   );
 }
