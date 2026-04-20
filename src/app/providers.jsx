@@ -1,7 +1,7 @@
 // src/app/providers.jsx
 import { useEffect } from "react";
 
-export default function Providers({ t, dark, children }){
+export default function Providers({ t, theme, children }){
   useEffect(function(){
     var el=document.createElement("style");
     el.id="cs-css";
@@ -84,6 +84,6 @@ export default function Providers({ t, dark, children }){
     document.head.appendChild(el);
     document.body.style.background=t.bg;
     return function(){var o=document.getElementById("cs-css");if(o)o.remove();};
-  },[dark]);
+  },[theme]);
   return children;
 }

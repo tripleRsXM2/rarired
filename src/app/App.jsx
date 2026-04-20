@@ -182,7 +182,7 @@ export default function App(){
   }
 
   return (
-    <Providers t={t} dark={dark}>
+    <Providers t={t} theme={theme}>
       {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
       <div className="cs-shell" style={{color:t.text}}>
 
