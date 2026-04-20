@@ -71,7 +71,6 @@ var NAV_ITEMS = [
 
 export default function Sidebar({
   t, tab, setTab,
-  dark, setDark,
   profile, authUser,
   unreadCount,
   showNotifications, setShowNotifications, markNotificationsRead,
@@ -174,27 +173,6 @@ export default function Sidebar({
             </span>
           </button>
         )}
-
-        {/* Dark / light toggle */}
-        <button
-          className="cs-nav-item"
-          onClick={function() {
-            setDark(function(d) {
-              var next = !d;
-              localStorage.setItem("theme", next ? "dark" : "light");
-              return next;
-            });
-          }}
-          style={{ color: t.textSecondary }}
-        >
-          <span style={{ flexShrink: 0, display: "flex" }}>
-            {dark
-              ? <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="3.5" stroke="currentColor" strokeWidth="1.5"/><path d="M9 1v2M9 15v2M1 9h2M15 9h2M3.343 3.343l1.414 1.414M13.243 13.243l1.414 1.414M3.343 14.657l1.414-1.414M13.243 4.757l1.414-1.414" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-              : <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M15 10.5A7 7 0 0 1 7.5 3a7.001 7.001 0 1 0 7.5 7.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-            }
-          </span>
-          <span className="cs-nav-label">{dark ? "Light mode" : "Dark mode"}</span>
-        </button>
 
         {/* User avatar / login */}
         {authUser ? (

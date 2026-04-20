@@ -12,8 +12,16 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
 
+var THEME_OPTIONS = [
+  {id:"wimbledon",    label:"Wimbledon",       swatch:"#3D5A1E", bg:"#F4F4F0"},
+  {id:"ao",          label:"Australian Open",  swatch:"#3B82F6", bg:"#111827"},
+  {id:"french-open", label:"French Open",      swatch:"#C4431A", bg:"#FDF6EE"},
+  {id:"us-open",     label:"US Open",          swatch:"#F0B429", bg:"#0F1219"},
+];
+
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
+  theme, setTheme,
   profileDraft, setProfileDraft,
   editingAvail, setEditingAvail,
   availDraft, setAvailDraft,
@@ -266,6 +274,39 @@ export default function SettingsScreen({
               </div>
             );
           })}
+        </div>
+
+        {/* ── Appearance ─────────────────────────────────────────────────────── */}
+        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
+          <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
+            <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>Appearance</div>
+            <div style={{fontSize:11,color:t.textTertiary}}>Choose your court theme.</div>
+          </div>
+          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:8}}>
+            {THEME_OPTIONS.map(function(opt){
+              var on=theme===opt.id;
+              return (
+                <button key={opt.id}
+                  onClick={function(){setTheme(opt.id);}}
+                  style={{
+                    display:"flex",alignItems:"center",gap:12,padding:"10px 12px",
+                    borderRadius:9,border:"1px solid "+(on?t.accent:t.border),
+                    background:on?t.accentSubtle:"transparent",
+                    cursor:"pointer",textAlign:"left",
+                  }}>
+                  <div style={{
+                    width:28,height:28,borderRadius:7,flexShrink:0,overflow:"hidden",
+                    border:"1px solid "+t.border,display:"flex",
+                  }}>
+                    <div style={{flex:1,background:opt.bg}}/>
+                    <div style={{width:10,background:opt.swatch}}/>
+                  </div>
+                  <span style={{fontSize:13,fontWeight:on?600:400,color:on?t.accent:t.text}}>{opt.label}</span>
+                  {on&&<span style={{marginLeft:"auto",fontSize:13,color:t.accent}}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Account ────────────────────────────────────────────────────────── */}

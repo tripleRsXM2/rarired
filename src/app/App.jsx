@@ -37,8 +37,10 @@ import CommentModal from "../features/tournaments/components/CommentModal.jsx";
 import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
 
 export default function App(){
-  var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
-  var t=makeTheme(dark);
+  var VALID_THEMES=['wimbledon','ao','french-open','us-open'];
+  var [theme,setTheme]=useState(function(){var s=localStorage.getItem("theme");return s&&VALID_THEMES.includes(s)?s:'wimbledon';});
+  var t=makeTheme(theme);
+  function applyTheme(name){localStorage.setItem("theme",name);setTheme(name);}
 
   var location=useLocation();
   var navigate=useNavigate();
@@ -188,7 +190,6 @@ export default function App(){
         <div className="cs-sidebar-col">
           <Sidebar
             t={t} tab={tab} setTab={setTab}
-            dark={dark} setDark={setDark}
             profile={currentUser.profile} authUser={auth.authUser}
             unreadCount={notifications.unreadCount()}
             showNotifications={notifications.showNotifications}
@@ -210,11 +211,6 @@ export default function App(){
                 <span style={{fontSize:15,fontWeight:700,letterSpacing:"-0.5px",color:t.text}}>CourtSync</span>
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <button
-                  onClick={function(){setDark(function(d){var next=!d;localStorage.setItem("theme",next?"dark":"light");return next;});}}
-                  style={{background:"transparent",border:"1px solid "+t.border,borderRadius:t.r,padding:"4px 10px",fontSize:10,fontWeight:600,color:t.textSecondary,letterSpacing:"0.05em",textTransform:"uppercase"}}>
-                  {dark?"Light":"Dark"}
-                </button>
                 {auth.authUser&&(
                   <button
                     onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markNotificationsRead();}}
@@ -365,6 +361,7 @@ export default function App(){
       {showSettings&&auth.authUser&&(
         <SettingsScreen
           t={t} authUser={auth.authUser}
+          theme={theme} setTheme={applyTheme}
           profile={currentUser.profile} setProfile={currentUser.setProfile}
           profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
           editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
