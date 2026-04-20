@@ -16,7 +16,7 @@ var THEME_OPTIONS = [
   {id:"wimbledon",    label:"Wimbledon",       swatch:"#3D5A1E", bg:"#F4F4F0"},
   {id:"ao",          label:"Australian Open",  swatch:"#3B82F6", bg:"#111827"},
   {id:"french-open", label:"French Open",      swatch:"#C4431A", bg:"#FDF6EE"},
-  {id:"us-open",     label:"US Open",          swatch:"#F0B429", bg:"#0F1219"},
+  {id:"us-open",     label:"US Open",          swatch:"#FFC72C", bg:"#002566"},
 ];
 
 export default function SettingsScreen({
