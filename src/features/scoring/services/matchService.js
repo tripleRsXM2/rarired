@@ -1,5 +1,5 @@
 // src/features/scoring/services/matchService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export function fetchOwnMatches(userId){
   return supabase.from('match_history').select('*').eq('user_id',userId).order('created_at',{ascending:false});
@@ -38,24 +38,22 @@ export function acceptCorrectionRpc(matchId){
 export function voidMatchRpc(matchId, reason){
   return supabase.rpc('void_match',{p_match_id:matchId,p_reason:reason||'voided'});
 }
-// propose a correction (used for initial dispute and counter-proposals)
-// nextStatus: 'disputed' when opponent is proposing (submitter must act),
-//             'pending_reconfirmation' when submitter is counter-proposing (opponent must act).
-export function proposeCorrection(matchId, proposalBy, pendingActionBy, proposal, reasonCode, reasonDetail, revisionCount, nextStatus){
-  return supabase.from('match_history').update({
-    status:nextStatus||'disputed',
-    dispute_raised_by:proposalBy,
-    dispute_reason_code:reasonCode,
-    dispute_reason_detail:reasonDetail||null,
-    current_proposal:proposal,
-    proposal_by:proposalBy,
-    pending_action_by:pendingActionBy,
-    revision_count:revisionCount,
-    dispute_expires_at:new Date(Date.now()+48*60*60*1000).toISOString(),
-  }).eq('id',matchId);
-}
-export function insertRevision(data){
-  return supabase.from('match_revisions').insert(data);
+// Propose a correction (initial dispute or counter-proposal).
+// Uses a SECURITY DEFINER RPC so the write succeeds regardless of which
+// party calls it — a direct .update() would fail under RLS for the opponent
+// because they don't own the match_history row.
+// The RPC also writes match_revisions atomically, so we no longer do that
+// separately on the client.
+// nextStatus: 'disputed'               — opponent is acting, submitter must respond
+//             'pending_reconfirmation' — submitter is counter-proposing, opponent must respond
+export function proposeCorrection(matchId, proposal, reasonCode, reasonDetail, nextStatus){
+  return supabase.rpc('propose_match_correction', {
+    p_match_id:    matchId,
+    p_reason_code: reasonCode,
+    p_reason_detail: reasonDetail || null,
+    p_proposal:    proposal,
+    p_next_status: nextStatus,
+  });
 }
 export function updateMatch(matchId, payload){
   return supabase.from('match_history').update(payload).eq('id',matchId);

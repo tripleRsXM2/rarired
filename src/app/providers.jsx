@@ -10,6 +10,8 @@ export default function Providers({ t, dark, children }){
       "@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}",
       "@keyframes pop{0%{transform:scale(.97);opacity:0}100%{transform:scale(1);opacity:1}}",
       "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}",
+      "@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}",
+      ".slide-in-right{animation:slideInRight .28s cubic-bezier(.32,.72,0,1) both}",
       "@keyframes reveal{from{clip-path:inset(100% 0 0 0)}to{clip-path:inset(0 0 0 0)}}",
       ".fade-up{animation:fadeUp .3s cubic-bezier(.32,.72,0,1) both}",
       ".pop{animation:pop .22s cubic-bezier(.34,2.27,.64,1) both}",

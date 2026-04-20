@@ -1,7 +1,7 @@
 // src/features/tournaments/hooks/useTournamentManager.js
 import { useState, useEffect } from "react";
 import * as T from "../services/tournamentService.js";
-import { BOT_PLAYERS } from "../../../lib/constants.js";
+import { BOT_PLAYERS } from "../constants.js";
 import { buildLeagueDraw, buildKnockoutDraw, applyResultToTournament, applySchedule } from "../utils/bracketUtils.js";
 
 export function useTournamentManager(opts){

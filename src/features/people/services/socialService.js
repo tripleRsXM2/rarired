@@ -1,5 +1,5 @@
 // src/features/people/services/socialService.js
-import { supabase } from "../../../supabase.js";
+import { supabase } from "../../../lib/supabase.js";
 
 export function fetchFriendRequests(userId){
   return supabase.from('friend_requests').select('*').or('sender_id.eq.'+userId+',receiver_id.eq.'+userId);
@@ -9,13 +9,13 @@ export function fetchBlocks(userId){
 }
 export { fetchProfilesByIds } from "../../../lib/db.js";
 export function fetchSuggestedPlayers(userId, suburb, excludeIds){
-  return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played')
+  return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
     .neq('id',userId).eq('suburb',suburb||"Sydney")
     .not('id','in','('+excludeIds.join(',')+')')
     .limit(6);
 }
 export function searchProfilesByName(userId, query){
-  return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,wins,privacy')
+  return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,wins,privacy,last_active,show_online_status,show_last_seen')
     .ilike('name','%'+query+'%').neq('id',userId).limit(10);
 }
 export function insertFriendRequest(senderId, receiverId){

@@ -1,10 +1,11 @@
 // src/app/App.jsx
 import { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { makeTheme } from "../lib/theme.js";
-import { avColor } from "../lib/helpers.js";
-import { TABS } from "../lib/constants.js";
-import { insertNotification } from "../features/notifications/services/notificationService.js";
+import { avColor } from "../lib/utils/avatar.js";
+import { TABS } from "../lib/constants/ui.js";
+import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 
 import Providers from "./providers.jsx";
@@ -14,32 +15,50 @@ import { useCurrentUser } from "../features/profile/hooks/useCurrentUser.js";
 import { useMatchHistory } from "../features/scoring/hooks/useMatchHistory.js";
 import { useSocialGraph } from "../features/people/hooks/useSocialGraph.js";
 import { useDMs } from "../features/people/hooks/useDMs.js";
+import { usePresenceHeartbeat } from "../features/people/hooks/usePresenceHeartbeat.js";
 import { useNotifications } from "../features/notifications/hooks/useNotifications.js";
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
 
-import HomeTab from "../tabs/HomeTab.jsx";
-import TournamentsTab from "../tabs/TournamentsTab.jsx";
-import PeopleTab from "../tabs/PeopleTab.jsx";
-import ProfileTab from "../tabs/ProfileTab.jsx";
-import AdminTab from "../tabs/AdminTab.jsx";
+import HomeTab from "../features/home/pages/HomeTab.jsx";
+import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
+import PeopleTab from "../features/people/pages/PeopleTab.jsx";
+import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
+import AdminTab from "../features/admin/pages/AdminTab.jsx";
+import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
-import NotificationsPanel from "../components/social/NotificationsPanel.jsx";
-import AuthModal from "../modals/AuthModal.jsx";
-import OnboardingModal from "../modals/OnboardingModal.jsx";
-import ScheduleModal from "../modals/ScheduleModal.jsx";
-import ScoreModal from "../modals/ScoreModal.jsx";
-import CommentModal from "../modals/CommentModal.jsx";
-import DisputeModal from "../modals/DisputeModal.jsx";
+import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
+import AuthModal from "../features/auth/components/AuthModal.jsx";
+import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
+import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
+import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
+import CommentModal from "../features/tournaments/components/CommentModal.jsx";
+import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
 
 export default function App(){
   var [dark,setDark]=useState(function(){var s=localStorage.getItem("theme");return s?s==="dark":true;});
   var t=makeTheme(dark);
 
-  var validTabs=["home","tournaments","people","profile","admin"];
-  var [tab,setTab]=useState(function(){var s=localStorage.getItem("tab");return s&&validTabs.includes(s)?s:"home";});
-  var [profileTab,setProfileTab]=useState("overview");
+  var location=useLocation();
+  var navigate=useNavigate();
 
-  useEffect(function(){localStorage.setItem("tab",tab);},[tab]);
+  // Derive active top-level tab from the URL path.
+  var validTabs=["home","tournaments","people","profile","admin"];
+  var pathParts=location.pathname.split("/").filter(Boolean);
+  var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
+
+  // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
+  function setTab(x){
+    if(x==="people") navigate("/people/friends");
+    else navigate("/"+x);
+  }
+
+  // Redirect bare "/" to /home on first load.
+  useEffect(function(){
+    if(location.pathname==="/"||location.pathname==="")navigate("/home",{replace:true});
+  },[]);
+
+  var [profileTab,setProfileTab]=useState("overview");
+  var [showSettings,setShowSettings]=useState(false);
 
   // Coordinator ref — lets useAuthController callbacks reach feature hooks
   // that are declared after it without stale closures.
@@ -55,7 +74,9 @@ export default function App(){
   var currentUser=useCurrentUser();
   var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats, refreshProfile:currentUser.refreshProfileUI });
   var social=useSocialGraph({ authUser:auth.authUser });
-  var dms=useDMs({ authUser:auth.authUser });
+  // Pass friends list so DM logic can bypass the request gate for friends.
+  var dms=useDMs({ authUser:auth.authUser, friends:social.friends });
+  usePresenceHeartbeat(auth.authUser);
   var notifications=useNotifications({
     authUser:auth.authUser,
     updateMatchTagStatus:markMatchTagStatus,
@@ -94,6 +115,62 @@ export default function App(){
     };
   });
 
+  // Opens a conversation from the notifications panel. Prefers lookup by
+  // entity_id (conversation_id), falls back to the sender's user id for
+  // legacy notifications created before entity_id was being stored.
+  function openConvById(convId, fromUserId){
+    var all=[].concat(dms.conversations||[], dms.requests||[]);
+    var found=null;
+    if(convId) found=all.find(function(c){return c.id===convId;});
+    if(!found&&fromUserId){
+      found=all.find(function(c){return c.partner&&c.partner.id===fromUserId;});
+    }
+    if(found) dms.openConversation(found);
+    navigate("/people/messages");
+  }
+
+  // Auto-dismiss "new message" notifications when the user opens that
+  // conversation. Matches the canonical row (entity_id === conv.id) AND any
+  // legacy rows from the same partner (entity_id null, from before that
+  // column was saved), so old stacked notifications also clear.
+  useEffect(function(){
+    var conv=dms.activeConv;
+    if(!conv||conv.status!=='accepted')return;
+    var partnerId=conv.partner&&conv.partner.id;
+    var matches=notifications.notifications.filter(function(n){
+      if(n.type!=='message')return false;
+      if(n.entity_id===conv.id)return true;
+      if(!n.entity_id&&partnerId&&n.from_user_id===partnerId)return true;
+      return false;
+    });
+    if(!matches.length)return;
+    matches.forEach(function(n){deleteNotification(n.id);});
+    var ids={};matches.forEach(function(n){ids[n.id]=true;});
+    notifications.setNotifications(function(ns){
+      return ns.filter(function(n){return!ids[n.id];});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[dms.activeConv&&dms.activeConv.id]);
+
+  // Auto-dismiss any "friend_request" notifications from senders who are
+  // already friends — happens once the request is accepted (from requests tab,
+  // settings, or notifications panel), making the notification stale.
+  useEffect(function(){
+    if(!social.friends.length||!notifications.notifications.length)return;
+    var friendIds={};
+    social.friends.forEach(function(f){friendIds[f.id]=true;});
+    var stale=notifications.notifications.filter(function(n){
+      return n.type==='friend_request'&&friendIds[n.from_user_id];
+    });
+    if(!stale.length)return;
+    stale.forEach(function(n){deleteNotification(n.id);});
+    var staleIds={};stale.forEach(function(n){staleIds[n.id]=true;});
+    notifications.setNotifications(function(ns){
+      return ns.filter(function(n){return!staleIds[n.id];});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[social.friends.length, notifications.notifications.length]);
+
   return (
     <Providers t={t} dark={dark}>
       <div style={{minHeight:"100vh",background:t.bg,color:t.text,paddingBottom:80}}>
@@ -125,8 +202,9 @@ export default function App(){
               )}
               {auth.authUser
                 ?<button
-                    onClick={function(){setTab("profile");setProfileTab("overview");}}
-                    style={{width:32,height:32,borderRadius:t.r,background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
+                    onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+                    title="Settings"
+                    style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
                     {currentUser.profile.avatar}
                   </button>
                 :<button
@@ -146,9 +224,9 @@ export default function App(){
             markNotificationsRead={notifications.markNotificationsRead}
             acceptMatchTag={notifications.acceptMatchTag}
             declineMatchTag={notifications.declineMatchTag}
-            setTab={setTab} setPeopleTab={social.setPeopleTab}
             setShowNotifications={notifications.setShowNotifications}
             refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
+            openConvById={openConvById}
           />
         )}
 
@@ -207,9 +285,8 @@ export default function App(){
             t={t} authUser={auth.authUser} friends={social.friends}
             sentRequests={social.sentRequests} receivedRequests={social.receivedRequests}
             blockedUsers={social.blockedUsers} suggestedPlayers={social.suggestedPlayers}
-            peopleTab={social.peopleTab} setPeopleTab={social.setPeopleTab}
             peopleSearch={social.peopleSearch} setPeopleSearch={social.setPeopleSearch}
-            searchResults={social.searchResults} searchLoading={social.searchLoading}
+            searchResults={social.searchResults} setSearchResults={social.setSearchResults} searchLoading={social.searchLoading}
             showSearchDrop={social.showSearchDrop} setShowSearchDrop={social.setShowSearchDrop}
             socialLoading={social.socialLoading} searchTimer={social.searchTimer}
             sendFriendRequest={social.sendFriendRequest} acceptRequest={social.acceptRequest}
@@ -223,13 +300,10 @@ export default function App(){
         )}
         {tab==="profile"&&(
           <ProfileTab
-            t={t} authUser={auth.authUser} profile={currentUser.profile} setProfile={currentUser.setProfile}
-            profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
-            history={matchHistory.history} receivedRequests={social.receivedRequests}
+            t={t} authUser={auth.authUser} profile={currentUser.profile}
+            history={matchHistory.history}
             profileTab={profileTab} setProfileTab={setProfileTab}
-            editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
-            availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
-            setTab={setTab} setPeopleTab={social.setPeopleTab}
+            onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
           />
         )}
         {tab==="admin"&&(
@@ -242,6 +316,19 @@ export default function App(){
             recordResult={tournaments.recordResult}
             setSelectedTournId={tournaments.setSelectedTournId} setTab={setTab}
             setTournDetailTab={tournaments.setTournDetailTab}
+          />
+        )}
+
+        {/* Settings screen (IG-style slide-in from avatar) */}
+        {showSettings&&auth.authUser&&(
+          <SettingsScreen
+            t={t} authUser={auth.authUser}
+            profile={currentUser.profile} setProfile={currentUser.setProfile}
+            profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
+            editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
+            availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
+            receivedRequests={social.receivedRequests}
+            onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
           />
         )}
 

@@ -1,6 +1,8 @@
 // src/features/people/hooks/useSocialGraph.js
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "../../../lib/supabase.js";
 import * as S from "../services/socialService.js";
+import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
 
 export function useSocialGraph(opts){
@@ -10,7 +12,6 @@ export function useSocialGraph(opts){
   var [sentRequests,setSentRequests]=useState([]);
   var [receivedRequests,setReceivedRequests]=useState([]);
   var [blockedUsers,setBlockedUsers]=useState([]);
-  var [peopleTab,setPeopleTab]=useState("friends");
   var [peopleSearch,setPeopleSearch]=useState("");
   var [searchResults,setSearchResults]=useState([]);
   var [searchLoading,setSearchLoading]=useState(false);
@@ -33,7 +34,7 @@ export function useSocialGraph(opts){
       ])].filter(function(id){return id&&id!==userId;});
       var pMap={};
       if(otherIds.length){
-        var pr=await S.fetchProfilesByIds(otherIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy');
+        var pr=await S.fetchProfilesByIds(otherIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen');
         (pr.data||[]).forEach(function(p){pMap[p.id]=p;});
       }
       setFriends(accepted.map(function(r){var oid=r.sender_id===userId?r.receiver_id:r.sender_id;return Object.assign({requestId:r.id},pMap[oid]||{id:oid,name:"Player"});}));
@@ -72,11 +73,19 @@ export function useSocialGraph(opts){
 
   async function sendFriendRequest(target){
     if(!authUser||isFriend(target.id)||sentReq(target.id)||isBlocked(target.id))return;
+    console.debug('[sendFriendRequest] sender:', authUser.id, '→ recipient:', target.id);
     setSocialLoading(function(l){return Object.assign({},l,{[target.id]:true});});
     var r=await S.insertFriendRequest(authUser.id, target.id);
+    console.debug('[sendFriendRequest] insertFriendRequest result:', r.data, r.error||'no error');
     if(!r.error){
       setSentRequests(function(s){return s.concat([Object.assign({requestId:r.data.id},target)]);});
-      await insertNotification({user_id:target.id,type:'friend_request',from_user_id:authUser.id});
+      var notifPayload={user_id:target.id,type:'friend_request',from_user_id:authUser.id,entity_id:r.data.id};
+      console.debug('[sendFriendRequest] inserting notification:', notifPayload);
+      var nr=await insertNotification(notifPayload);
+      if(nr.error) console.error('[sendFriendRequest] notification insert FAILED:', nr.error);
+      else console.debug('[sendFriendRequest] notification insert OK');
+    } else {
+      console.error('[sendFriendRequest] friend request insert failed:', r.error);
     }
     setSocialLoading(function(l){return Object.assign({},l,{[target.id]:false});});
   }
@@ -125,6 +134,41 @@ export function useSocialGraph(opts){
     await S.deleteBlock(authUser.id, target.id);
     setBlockedUsers(function(b){return b.filter(function(x){return x.id!==target.id;});});
   }
+  // ── Realtime: incoming friend requests ──────────────────────────────────────
+  // Fires when another user sends a request to the logged-in user.
+  // Fixes: received requests never updating live without a page refresh.
+  useEffect(function(){
+    if(!authUser) return;
+    var uid=authUser.id;
+    console.debug('[useSocialGraph] subscribing friend_requests realtime for uid:', uid);
+
+    var channel=supabase.channel('friend_requests:'+uid)
+      .on('postgres_changes',{
+        event:'INSERT',
+        schema:'public',
+        table:'friend_requests',
+        filter:'receiver_id=eq.'+uid,
+      }, async function(payload){
+        var req=payload.new;
+        console.debug('[useSocialGraph] realtime friend_request received:', req);
+        var pr=await fetchProfilesByIds(
+          [req.sender_id],
+          'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen'
+        );
+        var sender=(pr.data&&pr.data[0])||{id:req.sender_id,name:'Player'};
+        var enriched=Object.assign({requestId:req.id},sender);
+        setReceivedRequests(function(rs){
+          if(rs.some(function(r){return r.requestId===req.id;}))return rs;
+          return rs.concat([enriched]);
+        });
+      })
+      .subscribe(function(status){
+        console.debug('[useSocialGraph] friend_requests channel status:', status);
+      });
+
+    return function(){ supabase.removeChannel(channel); };
+  },[authUser&&authUser.id]);
+
   async function searchUsers(query){
     if(!query.trim()||!authUser){setSearchResults([]);setSearchLoading(false);setShowSearchDrop(false);return;}
     var r=await S.searchProfilesByName(authUser.id, query.trim());
@@ -137,7 +181,7 @@ export function useSocialGraph(opts){
   return {
     friends, setFriends, sentRequests, setSentRequests,
     receivedRequests, setReceivedRequests, blockedUsers, setBlockedUsers,
-    peopleTab, setPeopleTab, peopleSearch, setPeopleSearch,
+    peopleSearch, setPeopleSearch,
     searchResults, setSearchResults, searchLoading, setSearchLoading,
     showSearchDrop, setShowSearchDrop, suggestedPlayers, setSuggestedPlayers,
     socialLoading, searchTimer,
