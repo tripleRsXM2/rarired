@@ -194,7 +194,7 @@ export default function App(){
             unreadCount={notifications.unreadCount()}
             showNotifications={notifications.showNotifications}
             setShowNotifications={notifications.setShowNotifications}
-            markNotificationsRead={notifications.markNotificationsRead}
+            markSeen={notifications.markSeen}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openLogin={auth.openLogin}
           />
@@ -213,7 +213,7 @@ export default function App(){
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {auth.authUser&&(
                   <button
-                    onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markNotificationsRead();}}
+                    onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markSeen();}}
                     style={{position:"relative",width:32,height:32,borderRadius:t.r,background:notifications.unreadCount()>0?t.accentSubtle:"transparent",border:"1px solid "+(notifications.unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all 0.2s"}}>
                     🔔
                     {notifications.unreadCount()>0&&(
@@ -244,7 +244,9 @@ export default function App(){
           {notifications.showNotifications&&auth.authUser&&(
             <NotificationsPanel
               t={t} notifications={notifications.notifications}
-              markNotificationsRead={notifications.markNotificationsRead}
+              markAllRead={notifications.markAllRead}
+              markOneRead={notifications.markOneRead}
+              dismissNotification={notifications.dismissNotification}
               acceptMatchTag={notifications.acceptMatchTag}
               declineMatchTag={notifications.declineMatchTag}
               setShowNotifications={notifications.setShowNotifications}

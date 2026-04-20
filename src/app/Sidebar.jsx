@@ -73,7 +73,7 @@ export default function Sidebar({
   t, tab, setTab,
   profile, authUser,
   unreadCount,
-  showNotifications, setShowNotifications, markNotificationsRead,
+  showNotifications, setShowNotifications, markSeen,
   onOpenSettings, openLogin,
 }) {
 
@@ -147,7 +147,7 @@ export default function Sidebar({
             className="cs-nav-item"
             onClick={function() {
               setShowNotifications(function(v) { return !v; });
-              if (!showNotifications) markNotificationsRead();
+              if (!showNotifications && markSeen) markSeen();
             }}
             style={{ color: unreadCount > 0 ? t.accent : t.textSecondary, position: "relative" }}
           >
