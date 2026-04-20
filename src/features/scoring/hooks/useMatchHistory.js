@@ -205,7 +205,10 @@ export function useMatchHistory(opts){
   }
 
   async function counterPropose(match, reasonCode, reasonDetail, formProposal){
-    return _submitProposal(match, reasonCode, reasonDetail, formProposal, false);
+    // isOpponentView must reflect whose frame we're in:
+    // - submitter counter-proposes: match.isTagged=false → no inversion needed
+    // - opponent counter-proposes (round 3+): match.isTagged=true → result must be inverted to submitter frame
+    return _submitProposal(match, reasonCode, reasonDetail, formProposal, match.isTagged);
   }
 
   // Accept the other party's proposed correction — DB updates both players atomically.

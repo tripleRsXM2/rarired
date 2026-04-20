@@ -145,6 +145,7 @@ CREATE OR REPLACE FUNCTION expire_stale_matches()
 RETURNS void
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public
 AS $$
   UPDATE match_history
      SET status = 'expired'
