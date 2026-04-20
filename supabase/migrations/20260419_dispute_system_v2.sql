@@ -45,12 +45,18 @@ CREATE OR REPLACE FUNCTION accept_correction_and_update_stats(p_match_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
-  v_match match_history%ROWTYPE;
+  v_match   match_history%ROWTYPE;
   v_proposal jsonb;
 BEGIN
-  SELECT * INTO v_match FROM match_history WHERE id = p_match_id FOR UPDATE;
+  -- id is text; cast param to text for the WHERE
+  SELECT * INTO v_match
+    FROM match_history
+   WHERE id = p_match_id::text
+     FOR UPDATE;
+
   IF v_match.id IS NULL THEN
     RAISE EXCEPTION 'match not found';
   END IF;
@@ -69,18 +75,18 @@ BEGIN
   v_proposal := v_match.current_proposal;
 
   UPDATE match_history SET
-    status = 'confirmed',
-    result = v_proposal->>'result',
-    sets = v_proposal->'sets',
-    match_date = (v_proposal->>'match_date')::date,
-    venue = v_proposal->>'venue',
-    court = v_proposal->>'court',
-    current_proposal = NULL,
-    proposal_by = NULL,
-    pending_action_by = NULL,
+    status             = 'confirmed',
+    result             = v_proposal->>'result',
+    sets               = v_proposal->'sets',
+    match_date         = (v_proposal->>'match_date')::date,
+    venue              = v_proposal->>'venue',
+    court              = v_proposal->>'court',
+    current_proposal   = NULL,
+    proposal_by        = NULL,
+    pending_action_by  = NULL,
     dispute_expires_at = NULL,
-    confirmed_at = now()
-  WHERE id = p_match_id;
+    confirmed_at       = now()
+  WHERE id = p_match_id::text;
 
   -- Delegate to the existing ELO/stat update path
   PERFORM bump_stats_for_match(p_match_id);
@@ -92,11 +98,17 @@ CREATE OR REPLACE FUNCTION void_match(p_match_id uuid, p_reason text)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_match match_history%ROWTYPE;
 BEGIN
-  SELECT * INTO v_match FROM match_history WHERE id = p_match_id FOR UPDATE;
+  -- id is text; cast param to text for the WHERE
+  SELECT * INTO v_match
+    FROM match_history
+   WHERE id = p_match_id::text
+     FOR UPDATE;
+
   IF v_match.id IS NULL THEN
     RAISE EXCEPTION 'match not found';
   END IF;
@@ -108,13 +120,13 @@ BEGIN
   END IF;
 
   UPDATE match_history SET
-    status = 'voided',
-    voided_at = now(),
-    voided_reason = COALESCE(p_reason, 'voided'),
-    current_proposal = NULL,
-    proposal_by = NULL,
+    status            = 'voided',
+    voided_at         = now(),
+    voided_reason     = COALESCE(p_reason, 'voided'),
+    current_proposal  = NULL,
+    proposal_by       = NULL,
     pending_action_by = NULL
-  WHERE id = p_match_id;
+  WHERE id = p_match_id::text;
 END;
 $$;
 
