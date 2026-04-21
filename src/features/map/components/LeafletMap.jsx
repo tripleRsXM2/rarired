@@ -11,7 +11,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { ZONES, ZONE_BY_ID, SYDNEY_BOUNDS } from "../data/zones.js";
+import { ZONES, ZONE_BY_ID } from "../data/zones.js";
 import { COURTS } from "../data/courts.js";
 
 // Pick a basemap tile set that reads OK against the current theme.
@@ -67,11 +67,10 @@ export default function LeafletMap({
     tileLayersRef.current.base = base;
     tileLayersRef.current.labels = labels;
 
-    map.fitBounds(SYDNEY_BOUNDS, { padding: [24, 24] });
-
     // Zone polygons — each zone may have 1..N outer shapes (MultiPolygon).
     // Leaflet accepts a list of rings; we pass the whole array so holes and
     // disjoint pieces both render under a single layer.
+    var allZoneLayers = [];
     ZONES.forEach(function(z){
       var shapes = (z.polygons && z.polygons.length) ? z.polygons : [];
       var poly = L.polygon(shapes, {
@@ -79,6 +78,7 @@ export default function LeafletMap({
         fillColor: z.color, fillOpacity: 0.42,
         smoothFactor: 0.5,
       }).addTo(map);
+      allZoneLayers.push(poly);
       poly.on("mouseover", function(){ onHover && onHover(z.id); });
       poly.on("mouseout",  function(){ onHover && onHover(null); });
       poly.on("click",     function(){ onSelect && onSelect(z.id); });
@@ -101,6 +101,13 @@ export default function LeafletMap({
       }).addTo(map);
       zoneLabelsRef.current[z.id] = label;
     });
+
+    // Fit the view to the union of all zone polygons so the zones fill
+    // the visible map instead of floating inside extra whitespace.
+    if(allZoneLayers.length){
+      var group = L.featureGroup(allZoneLayers);
+      map.fitBounds(group.getBounds(), { padding: [24, 24] });
+    }
 
     // Court markers
     COURTS.forEach(function(c){
