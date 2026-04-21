@@ -65,7 +65,7 @@ export default function Providers({ t, theme, children }){
       // ── Shell height tokens (for full-bleed pages like Map) ──────────────
       // --cs-nav-h = sticky mobile top nav height; --cs-tab-h = mobile bottom
       // tab bar height including iOS safe area. Both collapse to 0 on desktop.
-      ":root{--cs-nav-h:52px;--cs-tab-h:calc(80px + env(safe-area-inset-bottom,0px))}",
+      ":root{--cs-nav-h:52px;--cs-tab-h:calc(48px + env(safe-area-inset-bottom,0px))}",
       "@media(min-width:1024px){:root{--cs-nav-h:0px;--cs-tab-h:0px}}",
       // A map-mode flag on the center col kills the outer-pad padding so the
       // map can reach the tab bar; the map itself owns its own sizing.

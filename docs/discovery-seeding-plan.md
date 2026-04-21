@@ -18,9 +18,13 @@ Three sources feed the Discover tab (`/people/suggested`), stacked in this order
 
 All three queries filter out the viewer's existing friends, pending requests, and blocked users.
 
-### Location display rule
+### Location rule (v1.3 — home-zone-only)
 
-On profile views and player cards, the subtitle under a user's name is their **home zone** name (e.g. "Eastern Suburbs") when set, falling back to their freetext `profiles.suburb` when it isn't. Suburb stays in the edit form so "Players near you" discovery keeps working at sub-zone granularity, but home zone is the visible identity signal.
+**Home zone is now the sole declared location signal.** The freetext `profiles.suburb` field is no longer a user input — it's been replaced in the Edit Profile form with a dropdown of the six zones that writes `profiles.home_zone`. The `suburb` column is preserved in the DB so existing data isn't lost, but nothing writes to it going forward and nothing reads from it for new users.
+
+Display rule (unchanged): the subtitle under a user's name is their **home zone** name when set, falling back to suburb for legacy profiles, else blank.
+
+**Implication for discovery:** `useSocialGraph.fetchSuggestedPlayers` still queries by suburb exact-match, which won't find matches for new users. This needs to be switched to home-zone matching in a follow-up — "Players near you" becomes "Players in your zone" (same UX intent, different column). Until then, the played-opponents and same-skill discovery sections still work; the suburb section silently returns empty for new users.
 
 ### Map tab (Module 4) — zone-based spatial discovery
 
@@ -167,3 +171,4 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 - v1 — Module 4 (Map tab): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.
 - v1.1 — avatar upload + location display rule: `profiles.avatar_url` + `avatars` storage bucket; name subtitle prefers home-zone over suburb everywhere.
 - v1.2 — CourtInfoCard: tapping a court marker opens an info modal that links out to Google Maps and (where known) the operator's own booking page. No embedded imagery. Street-name labels removed from map base tiles.
+- v1.3 — Suburb removed as a user-facing input; Edit Profile now uses a home-zone dropdown. `profiles.suburb` retained in DB for legacy data only. `fetchSuggestedPlayers` needs follow-up to switch from suburb to home_zone matching.

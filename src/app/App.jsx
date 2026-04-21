@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
 import { TABS } from "../lib/constants/ui.js";
+import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 
@@ -372,17 +373,19 @@ export default function App(){
             />
           )}
 
-          {/* MOBILE bottom tab bar — hidden on desktop via .cs-mob-tabs CSS */}
+          {/* MOBILE bottom tab bar — icons only (hidden on desktop via CSS). */}
           <div className="cs-mob-tabs" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
-            <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"8px 0 calc(8px + env(safe-area-inset-bottom))"}}>
+            <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"6px 0 calc(6px + env(safe-area-inset-bottom))"}}>
               {TABS.map(function(tb){
                 var on=tab===tb.id;
+                var Icon=NAV_ICONS[tb.id];
                 return (
                   <button key={tb.id}
                     onClick={function(){setTab(tb.id);if(tb.id!=="tournaments")tournaments.setSelectedTournId(null);}}
-                    style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"4px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary}}>
-                    <div style={{width:16,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
-                    <span style={{fontSize:10,fontWeight:on?700:500,letterSpacing:"0.05em",textTransform:"uppercase"}}>{tb.label}</span>
+                    aria-label={tb.label}
+                    style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary,cursor:"pointer"}}>
+                    <div style={{width:18,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
+                    {Icon ? Icon(22) : null}
                   </button>
                 );
               })}

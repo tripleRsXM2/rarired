@@ -13,7 +13,6 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
 import { ZONES } from "../../map/data/zones.js";
-import { setHomeZone } from "../../map/services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUpload.js";
 
@@ -211,7 +210,6 @@ export default function SettingsScreen({
 
             {[
               {l:"Full name",  k:"name",   type:"text", ph:"Your name"},
-              {l:"Suburb",     k:"suburb", type:"text", ph:"e.g. Bondi"},
               {l:"Bio",        k:"bio",    type:"text", ph:"Short bio..."},
             ].map(function(f){
               return (
@@ -223,6 +221,28 @@ export default function SettingsScreen({
                 </div>
               );
             })}
+
+            {/* Home zone — replaces the old freetext Suburb input. */}
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase"}}>Home zone</label>
+              <select
+                value={profileDraft.home_zone||""}
+                onChange={function(e){
+                  var v=e.target.value||null;
+                  setProfileDraft(function(d){return Object.assign({},d,{home_zone:v});});
+                }}
+                style={Object.assign({},iStyle,{appearance:"none",WebkitAppearance:"none",paddingRight:28,
+                  backgroundImage:"linear-gradient(45deg,transparent 50%,"+t.textSecondary+" 50%),linear-gradient(135deg,"+t.textSecondary+" 50%,transparent 50%)",
+                  backgroundPosition:"calc(100% - 14px) 50%, calc(100% - 9px) 50%",
+                  backgroundSize:"5px 5px, 5px 5px",
+                  backgroundRepeat:"no-repeat",
+                })}>
+                <option value="">Select your home zone…</option>
+                {ZONES.map(function(z){
+                  return <option key={z.id} value={z.id}>{z.name}</option>;
+                })}
+              </select>
+            </div>
             {[{l:"Skill level",k:"skill",opts:SKILL_LEVELS},{l:"Play style",k:"style",opts:PLAY_STYLES}].map(function(f){
               return (
                 <div key={f.k} style={{marginBottom:12}}>
@@ -251,12 +271,12 @@ export default function SettingsScreen({
                   var res=await supabase.from("profiles").upsert({
                     id:authUser.id,
                     name:nd.name||"",
-                    suburb:nd.suburb||"",
                     bio:nd.bio||"",
                     skill:nd.skill||"Intermediate",
                     style:nd.style||"All-Court",
                     avatar:nd.avatar||"",
                     avatar_url:nd.avatar_url||null,
+                    home_zone:nd.home_zone||null,
                     availability:nd.availability||{},
                   },{onConflict:"id"});
                   if(res.error)console.error("Profile save error:",res.error);
@@ -407,49 +427,6 @@ export default function SettingsScreen({
           })}
         </div>
 
-        {/* ── Home zone ──────────────────────────────────────────────────────── */}
-        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
-          <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
-            <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>Home zone</div>
-            <div style={{fontSize:11,color:t.textTertiary}}>Your home court area — shows a pin on the Map and lists you as available in that zone.</div>
-          </div>
-          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:6}}>
-            {ZONES.map(function(z){
-              var on=(profile.home_zone||null)===z.id;
-              return (
-                <button key={z.id}
-                  onClick={async function(){
-                    var nextVal = on ? null : z.id;
-                    var prev = profile.home_zone||null;
-                    setProfile(function(p){return Object.assign({},p,{home_zone:nextVal});});
-                    if(authUser){
-                      var r = await setHomeZone(authUser.id, nextVal);
-                      if(r.error){
-                        setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
-                        console.error("Home zone save error:", r.error);
-                      }
-                    }
-                  }}
-                  style={{
-                    display:"flex",alignItems:"center",gap:12,
-                    padding:"10px 12px",
-                    borderRadius:9,border:"1px solid "+(on?t.accent:t.border),
-                    background:on?t.accentSubtle:"transparent",
-                    cursor:"pointer",textAlign:"left",
-                  }}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:z.color,flexShrink:0,
-                    boxShadow:"0 0 0 2px "+t.bgCard,color:"#fff",display:"flex",alignItems:"center",
-                    justifyContent:"center",fontSize:11,fontWeight:700}}>{z.num}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,color:on?t.accent:t.text,fontWeight:on?700:500}}>{z.name}</div>
-                    <div style={{fontSize:11,color:t.textTertiary,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{z.blurb}</div>
-                  </div>
-                  {on&&<span style={{fontSize:13,color:t.accent,flexShrink:0}}>✓</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* ── Appearance ─────────────────────────────────────────────────────── */}
         <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
