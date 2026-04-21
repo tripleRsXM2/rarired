@@ -14,16 +14,50 @@ export default function ScoreModal({
   var iStyle=inputStyle(t);
   var [saving,setSaving]=useState(false);
   var [saveError,setSaveError]=useState("");
+  // Track whether the user has been warned once about a result/sets mismatch.
+  // We warn on first save attempt, let them correct or proceed on the second.
+  // Retirement / incomplete matches are valid cases where sets don't predict
+  // the stored winner — we don't want to hard-block.
+  var [mismatchAck,setMismatchAck]=useState(false);
 
   if(!scoreModal) return null;
 
   var isResubmit=!!scoreModal.resubmit;
   var isVerified=isResubmit?true:!!casualOppId;
 
+  // Compute who the sets say won, in the submitter's frame:
+  // "you" > "them" = submitter win. Returns "win" | "loss" | null (tied/empty).
+  function winnerBySets(sets){
+    if(!sets||!sets.length) return null;
+    var ys=0, ts=0;
+    sets.forEach(function(s){
+      var y=Number(s.you), th=Number(s.them);
+      if(!Number.isNaN(y)&&!Number.isNaN(th)&&y!==th){
+        if(y>th) ys++; else ts++;
+      }
+    });
+    if(ys===ts) return null;
+    return ys>ts ? "win" : "loss";
+  }
+
   async function handleSave(){
     setSaveError("");
     var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
     if(!clean.length){setSaveError("Add at least one set score.");return;}
+
+    // Result-vs-sets sanity check. If the set scores clearly say the opposite
+    // of what the user picked, warn once — they can correct it or tap Save
+    // again to proceed (valid for retirements / incomplete matches).
+    var whoWon=winnerBySets(clean);
+    if(whoWon && whoWon!==scoreDraft.result && !mismatchAck){
+      setMismatchAck(true);
+      setSaveError(
+        "Heads up — your set scores say you " + (whoWon==="win"?"won":"lost") +
+        " but you picked " + (scoreDraft.result==="win"?"Win":"Loss") +
+        ". Tap Save again to keep it, or fix the scores above."
+      );
+      return;
+    }
 
     setSaving(true);
 

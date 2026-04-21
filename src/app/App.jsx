@@ -357,6 +357,20 @@ export default function App(){
     });
   }
 
+  // Module-fix: parallel helper for the match_tag → Dispute path from the
+  // Review drawer. Opens the DisputeModal in 'dispute' mode (first-round),
+  // prefilling from the logged match.
+  function openDisputeFromTag(match){
+    matchHistory.setDisputeModal({match,mode:'dispute'});
+    matchHistory.setDisputeDraft({
+      reasonCode:'', reasonDetail:'',
+      sets: match.sets && match.sets.length ? match.sets : [{you:'',them:''}],
+      result: match.result,
+      date: match.rawDate || new Date().toISOString().slice(0,10),
+      venue: match.venue || '', court: match.court || '',
+    });
+  }
+
   return (
     <Providers t={t} theme={theme}>
       {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
@@ -492,6 +506,8 @@ export default function App(){
               onGoToDiscover={function(){navigate("/people/suggested");}}
               openChallenge={openChallenge}
               toast={toast}
+              pendingFreshCount={matchHistory.pendingFreshCount}
+              refreshFeed={matchHistory.refreshFeed}
             />
           )}
           {tab==="map"&&(
@@ -640,9 +656,12 @@ export default function App(){
               if(reviewDrawer.notifId)notifications.dismissNotification(reviewDrawer.notifId);
             }}
             acceptCorrection={matchHistory.acceptCorrection}
+            confirmOpponentMatch={matchHistory.confirmOpponentMatch}
             onCounter={function(match){
               setReviewDrawer(null);
-              openCounterPropose(match);
+              // match_tag → first-round dispute; everything else → counter-propose.
+              if(reviewDrawer && reviewDrawer.notifType === "match_tag") openDisputeFromTag(match);
+              else openCounterPropose(match);
             }}
             voidMatchAction={matchHistory.voidMatchAction}
           />

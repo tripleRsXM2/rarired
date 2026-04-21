@@ -1,5 +1,6 @@
 // src/features/scoring/hooks/useMatchHistory.js
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../../../lib/supabase.js";
 import * as M from "../services/matchService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
@@ -31,6 +32,11 @@ export function useMatchHistory(opts){
   var onMatchLoggedFromChallenge=(opts&&opts.onMatchLoggedFromChallenge)||null;
 
   var [history,setHistory]=useState([]);
+  // Module 6.5: Strava-style "new match — tap to refresh" banner counter.
+  // Incremented by the realtime subscription below whenever a match the
+  // viewer is a party to lands in the DB and isn't already in local state.
+  // The banner (rendered in HomeTab) calls refreshFeed() to reload + reset.
+  var [pendingFreshCount,setPendingFreshCount]=useState(0);
   var [feedLikes,setFeedLikes]=useState({});
   var [feedLikeCounts,setFeedLikeCounts]=useState({});
   var [feedComments,setFeedComments]=useState({});
@@ -126,8 +132,43 @@ export function useMatchHistory(opts){
     }
   }
 
+  // Module 6.5 — realtime "new match" heads-up for the feed.
+  // Subscribes to INSERTs on match_history where either user_id or opponent_id
+  // is the viewer. Two channels because PostgREST-style filters don't support
+  // OR. When a row arrives that isn't in local state yet, bump the pending
+  // counter. The UI shows a non-intrusive banner — tap to reload.
+  // We deliberately do NOT eagerly splice the new match in; that would cause
+  // list-jumps while the user is reading (the Strava pattern).
+  useEffect(function(){
+    if(!authUser) return;
+    var uid=authUser.id;
+    function onInsert(payload){
+      var row=payload.new;
+      if(!row) return;
+      setHistory(function(cur){
+        if(cur.some(function(m){return String(m.id)===String(row.id);})) return cur;
+        setPendingFreshCount(function(n){return n+1;});
+        return cur;
+      });
+    }
+    var chanA=supabase.channel('match_history_submitter:'+uid)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'match_history',filter:'user_id=eq.'+uid}, onInsert)
+      .subscribe();
+    var chanB=supabase.channel('match_history_opponent:'+uid)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'match_history',filter:'opponent_id=eq.'+uid}, onInsert)
+      .subscribe();
+    return function(){ supabase.removeChannel(chanA); supabase.removeChannel(chanB); };
+  },[authUser&&authUser.id]);
+
+  async function refreshFeed(){
+    if(!authUser) return;
+    setPendingFreshCount(0);
+    await loadHistory(authUser.id);
+  }
+
   function resetHistory(){
     setHistory([]); setFeedLikes({}); setFeedLikeCounts({}); setFeedComments({});
+    setPendingFreshCount(0);
   }
 
   // Fetch a fresh single row from DB, normalize it, patch it into local history,
@@ -457,6 +498,7 @@ export function useMatchHistory(opts){
     scoreModal, setScoreModal, scoreDraft, setScoreDraft,
     disputeModal, setDisputeModal, disputeDraft, setDisputeDraft,
     loadHistory, resetHistory, refreshSingleMatch,
+    pendingFreshCount, refreshFeed,
     submitMatch, deleteMatch, resubmitMatch, removeTaggedMatch, applyAcceptedTagMatch,
     confirmOpponentMatch, disputeWithProposal, counterPropose, acceptCorrection, voidMatchAction,
   };

@@ -24,6 +24,12 @@ var NOTIF_META = {
     title:    "Counter-proposal received",
     subtitle: function (name) { return name + " responded to your correction with a counter-proposal."; },
   },
+  // Unified review flow — match_tag lands here too. No proposal yet; the user
+  // is confirming the original logged match (or disputing / voiding it).
+  match_tag: {
+    title:    "Confirm this match",
+    subtitle: function (name) { return name + " logged a match with you. Does this look right?"; },
+  },
 };
 
 var REASON_LABELS = {
@@ -131,7 +137,8 @@ export default function ActionReviewDrawer({
   fromName,
   onClose,
   onDismissNotif,
-  acceptCorrection,
+  acceptCorrection,      // used by disputed / correction / counter types
+  confirmOpponentMatch,  // used by match_tag (initial confirm of a pending match)
   onCounter,
   voidMatchAction,
 }) {
@@ -142,7 +149,9 @@ export default function ActionReviewDrawer({
   if (!match) return null;
 
   var meta     = NOTIF_META[notifType] || NOTIF_META["match_disputed"];
-  var proposal = match.currentProposal;
+  var isMatchTag = notifType === "match_tag";
+  // match_tag has no proposal — it's the initial confirmation, not a correction.
+  var proposal = isMatchTag ? null : match.currentProposal;
   var diff     = proposal ? computeDiff(match, proposal) : {};
   var anyDiff  = proposal && Object.values(diff).some(Boolean);
 
@@ -157,7 +166,15 @@ export default function ActionReviewDrawer({
     setError("");
     setSaving(true);
     setAction("accept");
-    var res = await acceptCorrection(match);
+    // match_tag takes a different RPC path — it's the initial pending→confirmed
+    // transition, not an accept-correction. Everything else accepts a proposal.
+    var fn = isMatchTag ? confirmOpponentMatch : acceptCorrection;
+    if (!fn) {
+      setError("Confirm action unavailable.");
+      setSaving(false); setAction(null);
+      return;
+    }
+    var res = await fn(match);
     setSaving(false);
     if (res && res.error) {
       setError(typeof res.error === "string" ? res.error : (res.error?.message || "Failed. Try again."));
@@ -306,8 +323,47 @@ export default function ActionReviewDrawer({
             </div>
           </div>
 
-          {/* ── No proposal yet ───────────────────────────────────────────── */}
-          {!proposal && (
+          {/* ── For match_tag: show the logged match details (original only). */}
+          {isMatchTag && (
+            <div style={{
+              padding: "14px 16px",
+              borderRadius: 10,
+              background: t.bgTertiary,
+              border: "1px solid " + t.border,
+              fontSize: 13, color: t.text, lineHeight: 1.5,
+              marginBottom: 18,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: t.textTertiary, marginBottom: 8 }}>
+                Logged by {fromName}
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Result · </span>
+                <span style={{ fontWeight: 600 }}>{origResult}</span>
+                <span style={{ color: t.textTertiary, fontSize: 12 }}> (from {fromName}'s view)</span>
+              </div>
+              {origSets && origSets !== "—" && (
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Score · </span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{origSets}</span>
+                </div>
+              )}
+              {origDate && (
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Date · </span>
+                  {origDate}
+                </div>
+              )}
+              {origVenue && origVenue !== "—" && (
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Venue · </span>
+                  {origVenue}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── No proposal yet (only for correction/dispute notifs, not match_tag) */}
+          {!proposal && !isMatchTag && (
             <div style={{
               padding: "16px 14px",
               borderRadius: 10,
@@ -455,7 +511,9 @@ export default function ActionReviewDrawer({
               onMouseEnter={function (e) { if (!saving) e.currentTarget.style.opacity = "0.88"; }}
               onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
             >
-              {saving && action === "accept" ? "Accepting…" : "Accept correction"}
+              {saving && action === "accept"
+                ? (isMatchTag ? "Confirming…" : "Accepting…")
+                : (isMatchTag ? "Confirm match" : "Accept correction")}
             </button>
 
             {/* Secondary row: Counter + Void */}
@@ -476,7 +534,7 @@ export default function ActionReviewDrawer({
                 onMouseEnter={function (e) { if (!saving) e.currentTarget.style.opacity = "0.7"; }}
                 onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
               >
-                {wouldAutoVoid ? "Void match" : "Propose correction"}
+                {wouldAutoVoid ? "Void match" : (isMatchTag ? "Dispute score" : "Propose correction")}
               </button>
 
               <button

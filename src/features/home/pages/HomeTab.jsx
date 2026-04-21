@@ -203,13 +203,27 @@ function FeedCard({
           )}
         </div>
 
-        {/* Player rows
-            For own matches (isOwn=true):  pName = viewer, isWin is direct.
-            For tagged matches (isOwn=false): pName = submitter, but isWin is
-            stored from the VIEWER's perspective (result inverted in normalizeMatch),
-            so the submitter's win = !isWin. */}
+        {/* Player rows.
+            Winner-row derivation: we trust the SCOREBOARD, not the stored
+            `result` field. If the sets unambiguously pick a winner (more sets
+            won on one side), we use that — this self-heals the classic
+            "user accidentally tapped Loss but entered winning set scores" bug,
+            where stored `result` disagrees with the actual score.
+            If the sets are tied in count (retirement, incomplete match) we
+            fall back to the stored `result` via `isWin` in the original
+            tagged-frame logic. */}
         {(function() {
-          var posterWins = isOwn ? isWin : !isWin;
+          var sets = m.sets || [];
+          var ys = 0, ts = 0;
+          sets.forEach(function (s) {
+            var y = Number(s.you), th = Number(s.them);
+            if (!Number.isNaN(y) && !Number.isNaN(th) && y !== th) {
+              if (y > th) ys++; else ts++;
+            }
+          });
+          // s.you is always the submitter's score in the DB, and pName is
+          // always the submitter (own or tagged). So ys > ts means pName won.
+          var posterWins = ys !== ts ? (ys > ts) : (isOwn ? isWin : !isWin);
           return [
             {
               name: pName,
@@ -548,6 +562,8 @@ export default function HomeTab({
   onGoToDiscover,
   openChallenge,
   toast,
+  pendingFreshCount,
+  refreshFeed,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
@@ -697,6 +713,36 @@ export default function HomeTab({
           );
         })}
       </div>
+
+      {/* New-match banner (Module 6.5): shown when realtime detects a
+          match_history INSERT involving the viewer that isn't in local state
+          yet. Tap refreshes the feed — we don't eagerly splice the row in
+          because it'd jump the list mid-scroll. */}
+      {pendingFreshCount > 0 && refreshFeed && (
+        <div style={{ padding: "0 20px 12px", maxWidth: 720, margin: "0 auto", width: "100%" }}>
+          <button
+            onClick={refreshFeed}
+            className="pop"
+            style={{
+              width: "100%", padding: "10px 14px",
+              background: t.accent, color: "#fff",
+              border: "none", borderRadius: 10,
+              fontSize: 12, fontWeight: 700, letterSpacing: "-0.1px",
+              cursor: "pointer", transition: "opacity 0.15s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+            onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+          >
+            <span style={{ fontSize: 14 }}>↑</span>
+            <span>
+              {pendingFreshCount === 1
+                ? "1 new match — tap to refresh"
+                : pendingFreshCount + " new matches — tap to refresh"}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Feed */}
       <div style={{ padding: "0 20px 40px", maxWidth: 720 }}>
