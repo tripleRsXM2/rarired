@@ -116,23 +116,6 @@ function NotifRow({
   setShowNotifications, refreshHistory, openConvById,
   openProfile,
 }) {
-  // TEMP DIAGNOSTIC (remove after debugging the missing Review button on
-  // match_tag notifications). Logs the exact shape of every match_tag row
-  // the NotifRow is rendering — lets us see if `tag_status` is sneaking in.
-  if (n.type === "match_tag") {
-    // eslint-disable-next-line no-console
-    console.log("[NotifRow match_tag]", {
-      id: n.id,
-      type: n.type,
-      tag_status: n.tag_status,
-      tag_status_truthy: !!n.tag_status,
-      read: n.read,
-      has_from_user: !!n.from_user_id,
-      match_id: n.match_id,
-      full: n,
-    });
-  }
-
   // Activity-category notifs should vanish on tap-through (like, comment,
   // match_deleted, message). User signalled they "resolved" the notification
   // by interacting with its target.
@@ -477,20 +460,6 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
   var effectiveType = getEffectiveType(primary);
   var isUnread    = !primary.read;
   var dismissable = canDismissItem(item);
-
-  // TEMP DIAGNOSTIC — same as NotifRow, but for thread primaries.
-  if (primary.type === "match_tag") {
-    // eslint-disable-next-line no-console
-    console.log("[ThreadRow match_tag primary]", {
-      primary_id: primary.id,
-      primary_type: primary.type,
-      primary_tag_status: primary.tag_status,
-      primary_tag_status_truthy: !!primary.tag_status,
-      context_count: context.length,
-      context_types: context.map(function(c){return c.type;}),
-      full_primary: primary,
-    });
-  }
 
   // Swipe state (same logic as NotifRow)
   var [swipeX, setSwipeX]       = useState(0);

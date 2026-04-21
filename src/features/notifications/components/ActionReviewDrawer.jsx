@@ -222,7 +222,7 @@ export default function ActionReviewDrawer({
     : null;
 
   return (
-    // Backdrop
+    // Backdrop — centered dialog (was bottom-sheet slide-up).
     <div
       onClick={onClose}
       style={{
@@ -230,31 +230,25 @@ export default function ActionReviewDrawer({
         background: "rgba(0,0,0,0.4)",
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
-        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "0 16px",
       }}
     >
       {/* Sheet */}
       <div
         onClick={function (e) { e.stopPropagation(); }}
-        className="slide-up"
+        className="pop"
         style={{
           background: t.modalBg,
-          borderTop: "1px solid " + t.border,
-          borderRadius: "18px 18px 0 0",
+          border: "1px solid " + t.border,
+          borderRadius: 16,
           width: "100%",
           maxWidth: 540,
           maxHeight: "92vh",
           overflowY: "auto",
-          padding: "0 0 env(safe-area-inset-bottom)",
         }}
       >
-        {/* Drag handle */}
-        <div style={{
-          width: 36, height: 4, borderRadius: 2,
-          background: t.border, margin: "14px auto 0",
-        }} />
-
-        <div style={{ padding: "18px 22px 32px" }}>
+        <div style={{ padding: "24px 22px 28px" }}>
 
           {/* ── Header ───────────────────────────────────────────────────── */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>

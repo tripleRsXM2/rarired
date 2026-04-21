@@ -323,6 +323,26 @@ export default function App(){
     notifications.setShowNotifications(false);
   }
 
+  // Secondary entry point: open the Review drawer directly from a match row
+  // (e.g. RightPanel "Needs your action" pending-action chip). Derives the
+  // appropriate notifType from the match status + isTagged so the drawer
+  // picks the right Accept action (confirm vs acceptCorrection).
+  function openReviewForMatch(match){
+    if(!match) return;
+    var notifType =
+      match.status === "pending_confirmation" ? "match_tag"
+      : match.status === "pending_reconfirmation" ? "match_counter_proposed"
+      : match.status === "disputed" ? "match_disputed"
+      : null;
+    if(!notifType) return;
+    // fromName is the OTHER party — if we're the tagged user, it's the submitter
+    // (best effort from normalizeMatch's enrichment: friendName || oppName).
+    var fromName = match.isTagged
+      ? (match.friendName || match.oppName || "Someone")
+      : (match.oppName || "Someone");
+    setReviewDrawer({ match: match, notifId: null, notifType: notifType, fromName: fromName });
+  }
+
   // Module 3: fires a `comment` notification to every match participant
   // except the commenter. A match has up to two real people (submitter +
   // opponent) — either of them commenting should reach the other; a third
@@ -600,6 +620,7 @@ export default function App(){
               onLogMatch={openLogMatch}
               openProfile={openProfile}
               viewerSuburb={currentUser.profile && currentUser.profile.suburb}
+              onReviewMatch={openReviewForMatch}
             />
           </div>
         )}
