@@ -117,6 +117,7 @@ export default function PeopleTab({
   challenges,
   openChallenge,
   openConvertToMatch,
+  toast,
 }) {
   var location=useLocation();
   var navigate=useNavigate();
@@ -386,6 +387,7 @@ export default function PeopleTab({
               declineChallenge={challenges.declineChallenge}
               cancelChallenge={challenges.cancelChallenge}
               onLogConvertedMatch={openConvertToMatch}
+              toast={toast}
             />
           )}
 

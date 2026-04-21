@@ -91,7 +91,9 @@ export default function ChallengesPanel({
   t, authUser, challenges, profileMap, loading, openProfile,
   acceptChallenge, declineChallenge, cancelChallenge,
   onLogConvertedMatch,   // (challenge) => void  — opens ScoreModal prefilled
+  toast,                 // optional — non-blocking error reporter
 }) {
+  function reportErr(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
   if (!authUser) return null;
 
   var incoming = challenges.filter(function (c) { return c.status === "pending" && c.challenged_id === authUser.id; });
@@ -131,12 +133,12 @@ export default function ChallengesPanel({
                 key={c.id} c={c} t={t} partner={p} openProfile={openProfile}
                 rightActions={<>
                   <button disabled={busy(c.id)}
-                    onClick={async function () { var r = await acceptChallenge(c); if (r && r.error) window.alert(r.error); }}
+                    onClick={async function () { var r = await acceptChallenge(c); if (r && r.error) reportErr(r.error); }}
                     style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
                     Accept
                   </button>
                   <button disabled={busy(c.id)}
-                    onClick={async function () { var r = await declineChallenge(c); if (r && r.error) window.alert(r.error); }}
+                    onClick={async function () { var r = await declineChallenge(c); if (r && r.error) reportErr(r.error); }}
                     style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
                     Decline
                   </button>
@@ -164,7 +166,7 @@ export default function ChallengesPanel({
                     Log result
                   </button>
                   <button disabled={busy(c.id)}
-                    onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) window.alert(r.error); } }}
+                    onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) reportErr(r.error); } }}
                     style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
                     Cancel
                   </button>
@@ -190,7 +192,7 @@ export default function ChallengesPanel({
                     Awaiting response
                   </span>
                   <button disabled={busy(c.id)}
-                    onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) window.alert(r.error); } }}
+                    onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) reportErr(r.error); } }}
                     style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
                     Cancel
                   </button>

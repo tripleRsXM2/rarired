@@ -598,13 +598,15 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LikeGroupRow({ item, t, onDismiss }) {
-  var { items } = item;
+  var { items, kind } = item;
   var first  = items[0];
   var others = items.length - 1;
   var names  = items.slice(0, 3).map(function (n) { return n.fromName || "?"; });
+  // Module 6: same row handles both 'like_group' and 'comment_group'.
+  var verb = kind === "comment_group" ? "commented on your match" : "liked your match";
   var label  = others > 0
-    ? first.fromName + " and " + others + " other" + (others > 1 ? "s" : "") + " liked your match."
-    : first.fromName + " liked your match.";
+    ? first.fromName + " and " + others + " other" + (others > 1 ? "s" : "") + " " + verb + "."
+    : first.fromName + " " + verb + ".";
 
   return (
     <div style={{ position: "relative", overflow: "hidden" }}>
@@ -709,11 +711,12 @@ export default function NotificationsPanel({
 
   // ── Render a display item ────────────────────────────────────────────────
   function renderItem(item) {
-    var key = item.kind === "single" ? item.n.id
-            : item.kind === "thread" ? "thread-" + item.primary.id
-            : "likes-" + item.items[0].id;
+    var key = item.kind === "single"        ? item.n.id
+            : item.kind === "thread"        ? "thread-" + item.primary.id
+            : item.kind === "comment_group" ? "comments-" + item.items[0].id
+            :                                 "likes-"    + item.items[0].id;
 
-    if (item.kind === "like_group") {
+    if (item.kind === "like_group" || item.kind === "comment_group") {
       return (
         <LikeGroupRow
           key={key} item={item} t={t}

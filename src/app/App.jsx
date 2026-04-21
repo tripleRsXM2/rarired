@@ -40,12 +40,18 @@ import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 import CommentModal from "../features/tournaments/components/CommentModal.jsx";
 import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
 import ChallengeModal from "../features/challenges/components/ChallengeModal.jsx";
+import { useToasts, ToastStack } from "../components/ui/Toast.jsx";
 
 export default function App(){
   var VALID_THEMES=['wimbledon','ao','french-open','us-open'];
   var [theme,setTheme]=useState(function(){var s=localStorage.getItem("theme");return s&&VALID_THEMES.includes(s)?s:'wimbledon';});
   var t=makeTheme(theme);
   function applyTheme(name){localStorage.setItem("theme",name);setTheme(name);}
+
+  // Module 6: app-wide toast emitter. Replaces window.alert() everywhere.
+  // toast(msg, 'error'|'success'|'info').
+  var toastSystem=useToasts();
+  var toast=toastSystem.emit;
 
   var location=useLocation();
   var navigate=useNavigate();
@@ -467,6 +473,7 @@ export default function App(){
               socialLoading={social.socialLoading}
               onGoToDiscover={function(){navigate("/people/suggested");}}
               openChallenge={openChallenge}
+              toast={toast}
             />
           )}
           {tab==="tournaments"&&(
@@ -503,6 +510,7 @@ export default function App(){
             challenges={challenges}
             openChallenge={openChallenge}
             openConvertToMatch={openConvertToMatch}
+            toast={toast}
           />
         )}
         {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
@@ -626,7 +634,7 @@ export default function App(){
           loading={challenges.loading}
           onSend={async function(){
             var res=await challenges.sendChallenge();
-            if(res&&res.error)window.alert(res.error);
+            if(res&&res.error)toast(res.error,"error");
           }}
           onClose={challenges.closeComposer}
         />
@@ -650,6 +658,7 @@ export default function App(){
           onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
           onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
         />
+        <ToastStack t={t} toasts={toastSystem.toasts} dismiss={toastSystem.dismiss} />
     </Providers>
   );
 }

@@ -46,7 +46,7 @@ Every meaningful module ships with event tracking so we can learn from real beha
 | Only **confirmed** matches affect stats | All logged matches count | Integrity > data volume. A product that says "verified identity" must enforce that via the stat math. |
 | **Casual** matches allowed (freetext opponent) but can't earn stats | Require all matches to be ranked | Lowers friction for onboarding and off-platform opponents; preserves the identity bar for ranked stats. |
 | **Local-first suburb** matching | National / interest-based discovery | Density beats reach at this stage. |
-| **Inline alert / native confirm** for mutations | Toast / snackbar system | Minimal UX, correct signal. A proper toast system is a Module 6 polish item. |
+| **Non-blocking toast** for mutation errors / success | Native `alert()` (legacy) | Module 6 shipped this — no more modal alert that interrupts the flow. Tap-to-dismiss; auto-clears. |
 
 ## Open Questions
 
@@ -71,3 +71,4 @@ Every meaningful module ships with event tracking so we can learn from real beha
 - v0 — initialised from shipped state at end of Module 3.
 - v1 — Module 3.5 (analytics foundation). Added the "how we instrument" note under the Mom Test lens.
 - v2 — Module 4 (challenge / rematch). Sharpened the "NOT building" section: challenge is the lightweight coordination surface, not a booking product or chat thread.
+- v3 — Module 6 (polish): toast system replaces blocking alerts in the tradeoffs table. Adjusted to reflect shipped state.
