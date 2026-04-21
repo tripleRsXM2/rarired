@@ -100,10 +100,7 @@ export default function Sidebar({
             style={{ color: unreadCount > 0 ? t.accent : t.textSecondary, position: "relative" }}
           >
             <span style={{ flexShrink: 0, display: "flex", position: "relative" }}>
-              <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2a6 6 0 0 1 6 6v3l1.5 2H1.5L3 11V8a6 6 0 0 1 6-6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M7 15a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
+              {NAV_ICONS.notifications(17)}
               {unreadCount > 0 && (
                 <span style={{
                   position: "absolute", top: -4, right: -4,

@@ -27,6 +27,14 @@ Do not only build UX. Also add **instrumentation so we can learn from real user 
 - **Avoid**: broad booking systems, generic messaging platforms. Those are not the product.
 - **Optimise for the core loop**: play → log → confirm → profile/feed update → challenge/rematch.
 
+### Icon rule (locked — never regress)
+
+**No emoji as icons.** Every UI affordance — nav buttons, tab pills, inline action icons inside buttons / badges / status strips, notification bells, social footer actions, status indicators — uses an **SVG line-art icon** with `stroke="currentColor"`, `strokeWidth="1.5"`, and an 18×18 viewBox. Colour flows through the parent button's text colour (no hardcoded strokes).
+
+- Shared icon set lives in **`src/lib/constants/navIcons.jsx`** (`NAV_ICONS.home`, `.map`, `.tournaments`, `.people`, `.profile`, `.admin`, `.notifications`, `.rematch`, …). Feed-local icons live in `src/features/home/pages/HomeTab.jsx` under `ICONS` (`like`, `likeFilled`, `comment`, `rematch`, `share`, `tennisBall`).
+- If you need a new icon, add it to one of those sets. **Don't** inline a one-off SVG in a component and **don't** reach for an emoji as a shortcut.
+- Exception: **decorative hero illustrations** inside empty-state blocks (e.g. a large 🎾 in "no matches yet" or 💬 in "no comments yet") at 28px+ are permitted as illustrations, not icons. When in doubt, use an SVG.
+
 ### Pre-module report format (required before starting any module)
 1. How this improves local network density
 2. How this improves the retention loop

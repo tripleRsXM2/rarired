@@ -6,6 +6,7 @@ import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";
 import { track } from "../../../lib/analytics.js";
 import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 
 function fmtMsgTime(iso){
   if(!iso)return"";
@@ -81,8 +82,9 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
         )}
         {rel==="friends"&&openChallenge&&(
           <button onClick={function(){openChallenge(u,"profile");}}
-            style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+t.accent,background:t.accentSubtle,color:t.accent,fontSize:11,fontWeight:700,letterSpacing:"0.02em"}}>
-            🔁 Challenge
+            style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+t.accent,background:t.accentSubtle,color:t.accent,fontSize:11,fontWeight:700,letterSpacing:"0.02em",display:"inline-flex",alignItems:"center",gap:5}}>
+            <span style={{display:"flex",alignItems:"center"}}>{NAV_ICONS.rematch(13)}</span>
+            Challenge
           </button>
         )}
         {rel==="friends"&&(

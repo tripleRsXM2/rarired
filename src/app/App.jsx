@@ -6,6 +6,7 @@ import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
 import { TABS } from "../lib/constants/ui.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
+import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 import { track } from "../lib/analytics.js";
@@ -426,10 +427,17 @@ export default function App(){
                 {auth.authUser&&(
                   <button
                     onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markSeen();}}
-                    style={{position:"relative",width:32,height:32,borderRadius:t.r,background:notifications.unreadCount()>0?t.accentSubtle:"transparent",border:"1px solid "+(notifications.unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all 0.2s"}}>
-                    🔔
+                    title="Notifications"
+                    style={{
+                      position:"relative",width:32,height:32,
+                      background:"transparent",border:"none",padding:0,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      color:notifications.unreadCount()>0?t.accent:t.textSecondary,
+                      transition:"color 0.15s",cursor:"pointer",
+                    }}>
+                    {NAV_ICONS.notifications(18)}
                     {notifications.unreadCount()>0&&(
-                      <div style={{position:"absolute",top:-4,right:-4,width:15,height:15,borderRadius:"50%",background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontWeight:800,color:t.accentText}}>
+                      <div style={{position:"absolute",top:-2,right:-2,minWidth:14,height:14,padding:"0 3px",borderRadius:8,background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:t.accentText,letterSpacing:"-0.02em"}}>
                         {notifications.unreadCount()>9?"9+":notifications.unreadCount()}
                       </div>
                     )}

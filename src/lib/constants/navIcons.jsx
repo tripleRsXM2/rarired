@@ -66,4 +66,29 @@ export var NAV_ICONS = {
       </svg>
     );
   },
+  // Not a tab — header chrome. Used by both the desktop sidebar's
+  // notifications button and the mobile top-bar notification button.
+  // Callers own their own badge overlay positioning.
+  notifications: function(size){
+    var s = size || 17;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M9 2a6 6 0 0 1 6 6v3l1.5 2H1.5L3 11V8a6 6 0 0 1 6-6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M7 15a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    );
+  },
+  // Loop / rematch arrow — used in feed card + any future "repeat this
+  // match" affordance. Kept here so it's available outside the feed too.
+  rematch: function(size){
+    var s = size || 17;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M3 9a6 6 0 0 1 10.5-3.95L15 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 3.5V7h-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 9a6 6 0 0 1-10.5 3.95L3 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M3 14.5V11h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
 };
