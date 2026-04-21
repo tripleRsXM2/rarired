@@ -10,7 +10,7 @@
 // later modules when we have an RPC for public match data.
 
 import { useEffect } from "react";
-import { avColor } from "../../../lib/utils/avatar.js";
+import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
 import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
 import {
   computeHeadToHead,
@@ -70,21 +70,36 @@ export default function PlayerProfileView({
       {/* Hero */}
       <div style={{ padding: "28px 20px 0", background: t.bg }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 18 }}>
-          <div style={{
-            width: 72, height: 72, borderRadius: "50%", flexShrink: 0,
-            background: avColor(profile.name),
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 24, fontWeight: 800, color: "#fff",
-            boxShadow: "0 0 0 3px " + t.bg + ", 0 0 0 5px " + avColor(profile.name) + "44",
-          }}>
-            {profile.avatar || (profile.name || "?").slice(0, 2).toUpperCase()}
-          </div>
+          {(function(){
+            var url = avatarUrl(profile);
+            if(url){
+              return (
+                <img src={url} alt={profile.name||"player"}
+                  style={{
+                    width:72, height:72, borderRadius:"50%", objectFit:"cover", flexShrink:0,
+                    boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
+                    background:"#eee",
+                  }}/>
+              );
+            }
+            return (
+              <div style={{
+                width: 72, height: 72, borderRadius: "50%", flexShrink: 0,
+                background: avColor(profile.name),
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 24, fontWeight: 800, color: "#fff",
+                boxShadow: "0 0 0 3px " + t.bg + ", 0 0 0 5px " + avColor(profile.name) + "44",
+              }}>
+                {profile.avatar || (profile.name || "?").slice(0, 2).toUpperCase()}
+              </div>
+            );
+          })()}
           <div style={{ flex: 1, paddingTop: 4, minWidth: 0 }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: "-0.5px", lineHeight: 1.1 }}>
               {profile.name || "Unnamed player"}
             </div>
-            {profile.suburb && (
-              <div style={{ fontSize: 13, color: t.textSecondary, marginTop: 3 }}>{profile.suburb}</div>
+            {displayLocation(profile) && (
+              <div style={{ fontSize: 13, color: t.textSecondary, marginTop: 3 }}>{displayLocation(profile)}</div>
             )}
             <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
               {profile.skill && (

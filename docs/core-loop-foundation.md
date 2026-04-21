@@ -297,6 +297,63 @@ Code:
 - No notification for "user started following you as a friend" distinct from `friend_request` → `request_accepted` flow — the follow graph IS friend_requests by design (Module 2), so the events we already have cover this.
 - No batching on high-frequency likes. If a user rapidly spams like/unlike, every `like` fires a notification. Cheap (notifications table insert), but could spam the match owner's tray. A dedupe RPC similar to `upsert_message_notification` is a Module 6 polish item.
 
+## Module 4 — Map tab (spatial discovery)
+
+**Objective:** give CourtSync a top-level surface that shows "how much tennis is happening near me" at a glance, and let users declare a home zone that feeds discovery. No booking, no scheduling — this is a *discovery* surface, not a *coordination* surface.
+
+**Audit findings:**
+- App had no spatial surface. Suburb was a freetext profile field; nothing visualised it.
+- `profiles.suburb` is brittle (case-sensitive string match). A compression layer was needed between freetext suburbs and a map UI.
+- Design bundle shipped six hand-curated zones + 27 real public courts. Original used Leaflet + Turf.js + a 3MB GeoJSON; we kept Leaflet but dropped Turf and the GeoJSON in favour of hand-tuned zone polygons inlined as JS.
+
+**Design decisions — zones not suburbs:**
+- Six zones are a compression layer, not a replacement for `profiles.suburb`. A player can have `suburb="Bondi Beach"` and `home_zone="east"` — they coexist. Discovery keeps using suburb for "near you"; the map adds a zone-level signal.
+- Zones are hand-tuned to read cleanly on a Leaflet map — not accurate to suburb boundaries.
+- Bundle impact acceptable: leaflet (~150 KB) + leaflet CSS (~15 KB); zero Turf, zero GeoJSON.
+
+**Files changed / added:**
+
+New:
+- `src/features/map/data/zones.js` — 6 zones with inline polygons, colors, centers, member-suburb lists, and reverse lookup (`ZONE_BY_ID`, `SUBURB_TO_ZONE`).
+- `src/features/map/data/courts.js` — 27 curated public courts + `courtsInZone` / `totalCourtsInZone` helpers.
+- `src/features/map/services/mapService.js` — `fetchPlayersInZone`, `fetchZonePlayerCounts`, `setHomeZone`.
+- `src/features/map/components/LeafletMap.jsx` — Leaflet init, theme-aware Carto tiles (positron on light themes, dark-matter on AO/US Open), zone polygons with hover/selected/idle styling, court markers with tooltips, and a home pin that renders over the declared zone's centroid.
+- `src/features/map/components/ZoneSidePanel.jsx` — right-hand slide-in: zone header + blurb, stats (courts nearby count, players here count), courts list, players list (tappable → profile), set/clear home button, browse-players-here button.
+- `src/features/map/pages/MapTab.jsx` — the full-bleed page, top-left title pill, hover tooltip, side-panel mount.
+- `supabase/migrations/20260422_home_zone.sql` — adds `profiles.home_zone text` with a CHECK constraint limiting it to the six zone IDs, plus a partial index.
+
+Modified:
+- `src/lib/constants/ui.js` — inserted `{id:"map", label:"Map"}` between Feed and Compete.
+- `src/app/Sidebar.jsx` — added the Map nav item with a folded-map icon.
+- `src/app/App.jsx` — added `map` to `validTabs`, imported MapTab + `setHomeZone` service, added `applyHomeZone` / `clearHomeZone` / `browseZonePlayers` handlers, rendered `<MapTab>` in the tab switcher.
+- `src/features/settings/pages/SettingsScreen.jsx` — added a "Home zone" card with the six zones as selectable pills; tapping writes `profiles.home_zone` optimistically with rollback on error.
+- `package.json` — `leaflet@^1.9.4`.
+
+**Schema changes:**
+- `alter table public.profiles add column home_zone text` + CHECK constraint + partial index. Nullable, opt-in. RLS already permits users to update their own profile row; no new policy needed.
+
+**Acceptance:**
+- ✅ Sydney map renders at load, zooms to fit the six zones cleanly.
+- ✅ Zones hover-highlight and click-select; side panel slides in with correct courts + players.
+- ✅ Tapping "Set as home area" writes `profiles.home_zone`, redraws the home pin on the map, and adds the current user to that zone's player list.
+- ✅ Toggling from Settings works identically and stays in sync with Map side panel state.
+- ✅ Theme tokens consistent across all four themes; dark-matter tiles on AO/US Open, positron on Wimbledon/French Open.
+- ✅ Build passes (889 KB, +172 KB from Module 3 — leaflet + CSS).
+
+**Docs updated:**
+- `docs/discovery-seeding-plan.md` — main addition: "Map tab (Module 4) — zone-based spatial discovery" + v1 log entry.
+- `docs/product-principles.md` — clarified Map surfaces courts but does not book them; updated NOT-BUILDING list.
+- `docs/core-loop.md` — new secondary loop 2a "spatial browse".
+- This build log — Module 4 section.
+
+**Open risks / deferred:**
+- `20260422_home_zone.sql` must be applied to Supabase before the feature works. Until then, `setHomeZone` calls fail and the UI rolls back optimistic state — harmless but silent. `supabase db push` from local.
+- "Browse players here" currently routes to the generic Discover tab; zone-filtered Discover is a follow-up.
+- No zone-based notification (e.g. "new player in your zone") — Module 5+ if zones become a retention signal.
+- Tile loading on mobile: first Map visit shows blank-then-tiles. Acceptable; could pre-warm on app boot but not worth it yet.
+- Suburb → zone inference is available (`SUBURB_TO_ZONE`) but not wired — when a user types a suburb, we could auto-suggest a home zone. Deferred.
+- `fetchZonePlayerCounts` not yet called on Map mount; side panel fetches per-zone. A single batch call would power zone labels showing live counts ("3 players"). Deferred.
+
 
 
 

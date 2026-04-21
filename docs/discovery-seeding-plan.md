@@ -18,6 +18,30 @@ Three sources feed the Discover tab (`/people/suggested`), stacked in this order
 
 All three queries filter out the viewer's existing friends, pending requests, and blocked users.
 
+### Location rule (v1.3 — home-zone-only)
+
+**Home zone is now the sole declared location signal.** The freetext `profiles.suburb` field is no longer a user input — it's been replaced in the Edit Profile form with a dropdown of the six zones that writes `profiles.home_zone`. The `suburb` column is preserved in the DB so existing data isn't lost, but nothing writes to it going forward and nothing reads from it for new users.
+
+Display rule (unchanged): the subtitle under a user's name is their **home zone** name when set, falling back to suburb for legacy profiles, else blank.
+
+**Implication for discovery:** `useSocialGraph.fetchSuggestedPlayers` still queries by suburb exact-match, which won't find matches for new users. This needs to be switched to home-zone matching in a follow-up — "Players near you" becomes "Players in your zone" (same UX intent, different column). Until then, the played-opponents and same-skill discovery sections still work; the suburb section silently returns empty for new users.
+
+### Map tab (Module 4) — zone-based spatial discovery
+
+A fourth top-level surface. Full-bleed Leaflet map of Sydney divided into **six hand-curated matchmaking zones** (CBD, East, Inner West, Lower North Shore, Northern Beaches, South/Bayside). Each zone:
+
+- Renders as a colored polygon on a Carto basemap
+- Lists its curated public / bookable tennis venues (~27 real courts)
+- Surfaces "Players here" — anyone who has declared this zone via `profiles.home_zone`
+
+Tapping a court marker opens a **CourtInfoCard** modal with the court name, suburb, zone, court count, and two outbound links: a "Book a court" button for venues where we have a verified booking URL, and a "View on Google Maps" link for everything else. No imagery is embedded — operator photos aren't licensed to us, so we link out rather than host.
+
+Tapping a zone opens a right-hand side panel with the zone name + blurb, courts nearby (count + list), and players in the zone. Two actions:
+- **Set as home area** — writes `profiles.home_zone`. The map then draws a home pin on that zone and the user is listed in that zone's "Players here" section. Toggleable from the same button (switches to "Clear") and from Settings → Home zone.
+- **Browse players here** — routes to the existing People / Discover surface for now (zone-filtered Discover is deferred).
+
+Why zones instead of real suburb boundaries: zones are a compression layer between the brittle `profiles.suburb` field (every user types differently) and a map surface that needs a small, memorable set of regions. Six zones are the right count — readable, each has recognisable landmarks, aligned with how Sydneysiders already talk about the city.
+
 ### Search
 
 `searchProfilesByName(userId, query)` — server-side `ilike('name', '%q%').neq('id', userId).limit(10)`. Debounced 400ms on input. Dropdown surfaces name, suburb, skill; clickable rows jump to profile; inline Add button for non-friends.
@@ -144,4 +168,8 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Seed metrics are hypotheses, will be tracked live once Module 3.5 (analytics foundation) lands.
-- v1 — Module 6 (polish): suburb match upgraded to case-insensitive + trimmed via `ilike`. Stops missing the obvious "Bondi" vs "bondi" / trailing-space cases.
+- v1 — Module 6 (polish, Mikey): suburb match upgraded to case-insensitive + trimmed via `ilike`. Partly superseded by the home-zone migration below — kept in place for legacy `profiles.suburb` rows.
+- v2 — Map tab (Mdawg workstream): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.
+- v2.1 — avatar upload + location display rule: `profiles.avatar_url` + `avatars` storage bucket; name subtitle prefers home-zone over suburb everywhere.
+- v2.2 — CourtInfoCard: tapping a court marker opens an info modal that links out to Google Maps and (where known) the operator's own booking page. No embedded imagery. Street-name labels removed from map base tiles.
+- v2.3 — Suburb removed as a user-facing input; Edit Profile now uses a home-zone dropdown. `profiles.suburb` retained in DB for legacy data only. **Open follow-up**: `fetchSuggestedPlayers` still queries `suburb` via `ilike` — needs migrating to `home_zone` matching for the Discover surface to benefit from the zone model. Tracked as a known gap here.

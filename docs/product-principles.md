@@ -18,7 +18,9 @@ The product compass. What CourtSync is, who it serves, what we optimise for, and
 3. **Lightweight coordination** — just enough to line up another match (rematch, challenge). Not a booking platform.
 
 ### What we are explicitly NOT building
-- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. The challenge surface (Module 4) is intentionally just a notification + freetext venue / time / message — not a booking product.
+- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. Two surfaces reinforce this line:
+  - The **challenge surface** (Mikey Module 4) is intentionally just a notification + freetext venue / time / message — not a booking product.
+  - The **Map tab** (Mdawg Map workstream) lists public courts but does not book them — it's a *discovery* surface, not a *reservation* surface. Tapping a court opens an info card that **links out** to Google Maps and (where verified) the operator's own booking page; CourtSync never processes the booking itself.
 - **Venue operations.** Not a tool for clubs to manage their members or courts.
 - **Tournament operations.** The tournament surface we have is intentionally minimal; we're not competing with Matchtag / PlayByPoint on ladder ops.
 - **A generic chat app.** DMs exist to support rematch coordination and light banter between friends — they are not a messaging product on their own. Challenges deliberately don't have a comment thread; if users want to negotiate, they DM.
@@ -72,3 +74,4 @@ Every meaningful module ships with event tracking so we can learn from real beha
 - v1 — Module 3.5 (analytics foundation). Added the "how we instrument" note under the Mom Test lens.
 - v2 — Module 4 (challenge / rematch). Sharpened the "NOT building" section: challenge is the lightweight coordination surface, not a booking product or chat thread.
 - v3 — Module 6 (polish): toast system replaces blocking alerts in the tradeoffs table. Adjusted to reflect shipped state.
+- v4 — Map tab (Mdawg workstream): added as a second reinforcement of the no-booking line — map surfaces public courts but links out to Google Maps / operator sites; CourtSync never processes bookings. CourtInfoCard exemplifies this pattern.

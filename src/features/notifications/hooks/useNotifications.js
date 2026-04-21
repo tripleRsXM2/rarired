@@ -21,12 +21,16 @@ export function useNotifications(opts) {
     var nr = await N.fetchRecentNotifications(userId);
     if (nr.data && nr.data.length) {
       var fromIds = [...new Set(nr.data.map(function (n) { return n.from_user_id; }).filter(Boolean))];
-      var fpr = fromIds.length ? await fetchProfilesByIds(fromIds, "id,name,avatar") : { data: [] };
+      var fpr = fromIds.length ? await fetchProfilesByIds(fromIds, "id,name,avatar,avatar_url") : { data: [] };
       var fpMap = {};
       (fpr.data || []).forEach(function (p) { fpMap[p.id] = p; });
       setNotifications(nr.data.map(function (n) {
         var fp = fpMap[n.from_user_id] || {};
-        return Object.assign({}, n, { fromName: fp.name || "Someone", fromAvatar: fp.avatar || "?" });
+        return Object.assign({}, n, {
+          fromName: fp.name || "Someone",
+          fromAvatar: fp.avatar || "?",
+          fromAvatarUrl: fp.avatar_url || null,
+        });
       }));
     } else {
       setNotifications([]);
@@ -43,11 +47,15 @@ export function useNotifications(opts) {
       if (!n || n.user_id !== uid) return;
       var senderProfile = { name: "Someone", avatar: "?" };
       if (n.from_user_id) {
-        var pr = await fetchProfilesByIds([n.from_user_id], "id,name,avatar");
+        var pr = await fetchProfilesByIds([n.from_user_id], "id,name,avatar,avatar_url");
         var p = (pr.data && pr.data[0]) || {};
-        senderProfile = { name: p.name || "Someone", avatar: p.avatar || "?" };
+        senderProfile = { name: p.name || "Someone", avatar: p.avatar || "?", avatar_url: p.avatar_url || null };
       }
-      var enriched = Object.assign({}, n, { fromName: senderProfile.name, fromAvatar: senderProfile.avatar });
+      var enriched = Object.assign({}, n, {
+        fromName: senderProfile.name,
+        fromAvatar: senderProfile.avatar,
+        fromAvatarUrl: senderProfile.avatar_url,
+      });
       setNotifications(function (ns) {
         if (ns.some(function (x) { return x.id === enriched.id; })) {
           return ns.map(function (x) { return x.id === enriched.id ? enriched : x; });

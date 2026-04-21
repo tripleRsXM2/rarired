@@ -62,6 +62,20 @@ export default function Providers({ t, theme, children }){
       ".cs-outer-pad{padding-bottom:80px}",
       "@media(min-width:1024px){.cs-outer-pad{padding-bottom:0}}",
 
+      // ── Shell height tokens (for full-bleed pages like Map) ──────────────
+      // --cs-nav-h = sticky mobile top nav height; --cs-tab-h = mobile bottom
+      // tab bar height including iOS safe area. Both collapse to 0 on desktop.
+      ":root{--cs-nav-h:52px;--cs-tab-h:calc(48px + env(safe-area-inset-bottom,0px))}",
+      "@media(min-width:1024px){:root{--cs-nav-h:0px;--cs-tab-h:0px}}",
+      // A map-mode flag on the center col kills the outer-pad padding so the
+      // map can reach the tab bar; the map itself owns its own sizing.
+      ".cs-center-col-map{padding-bottom:0!important}",
+      // Full-bleed map frame. Uses dvh so iOS url-bar retraction doesn't
+      // leave a dead strip at the bottom. isolation:isolate caps Leaflet's
+      // internal z-indexes so Settings + modals render cleanly on top.
+      ".cs-map-frame{position:relative;overflow:hidden;min-height:360px;isolation:isolate;" +
+        "height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))}",
+
       // ── Feed card ─────────────────────────────────────────────────────────
       ".cs-card{transition:border-color 0.15s ease,box-shadow 0.15s ease}",
       "@media(hover:hover){.cs-card:hover{border-color:"+t.borderStrong+"!important}}",
