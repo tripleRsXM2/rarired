@@ -15,6 +15,7 @@ import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
 import {
   computeHeadToHead,
   formatConfirmedBadge,
+  provisionalLabel,
 } from "../utils/profileStats.js";
 import { track } from "../../../lib/analytics.js";
 
@@ -59,6 +60,7 @@ export default function PlayerProfileView({
   var streakType  = profile.streak_type;
   var streakLabel = streakCount === 0 ? "—" : streakCount + (streakType === "win" ? " W" : " L");
   var confirmedBadge = formatConfirmedBadge(profile);
+  var provLabel = provisionalLabel(profile);
 
   // H2H computed from the viewer's own history (RLS-safe).
   var h2h = computeHeadToHead(viewerHistory || [], authUser && authUser.id, profile.id);
@@ -105,18 +107,31 @@ export default function PlayerProfileView({
           </p>
         )}
 
-        {/* Trust indicator — the whole point of the "verified identity" vision */}
-        {confirmedBadge && (
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "5px 10px", borderRadius: 20,
-            background: t.greenSubtle, color: t.green,
-            border: "1px solid " + t.green + "33",
-            fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
-            marginBottom: 16,
-          }}>
-            <span>✓</span>
-            <span>{confirmedBadge}</span>
+        {/* Trust + rating-state pills row (Modules 1 + 5) */}
+        {(confirmedBadge || provLabel) && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+            {confirmedBadge && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "5px 10px", borderRadius: 20,
+                background: t.greenSubtle, color: t.green,
+                border: "1px solid " + t.green + "33",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
+              }}>
+                <span>✓</span><span>{confirmedBadge}</span>
+              </span>
+            )}
+            {provLabel && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "5px 10px", borderRadius: 20,
+                background: t.orangeSubtle, color: t.orange,
+                border: "1px solid " + t.orange + "33",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
+              }}>
+                <span>⚖</span><span>{provLabel}</span>
+              </span>
+            )}
           </div>
         )}
 

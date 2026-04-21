@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
+import { track } from "../../../lib/analytics.js";
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
 function Section({ t, title, children }) {
@@ -20,23 +21,36 @@ function Section({ t, title, children }) {
 }
 
 // ── Leaderboard ────────────────────────────────────────────────────────────────
-function Leaderboard({ t, openProfile }) {
+// Module 5: scope toggle — "All" vs "My suburb". Suburb scope is the
+// stronger local-network signal but only meaningful when the viewer has set
+// their own suburb.
+function Leaderboard({ t, openProfile, viewerSuburb }) {
   var [players, setPlayers] = useState([]);
   var [loading, setLoading] = useState(true);
+  var [scope, setScope]     = useState(viewerSuburb ? "suburb" : "all");
 
   useEffect(function() {
-    supabase
+    setLoading(true);
+    var q = supabase
       .from("profiles")
-      .select("id,name,avatar,ranking_points,wins,losses")
+      .select("id,name,avatar,ranking_points,wins,losses,suburb,matches_played")
       .not("name", "is", null)
       .gt("matches_played", 0)
       .order("ranking_points", { ascending: false })
-      .limit(5)
-      .then(function(res) {
-        if (res.data) setPlayers(res.data);
-        setLoading(false);
-      });
-  }, []);
+      .limit(5);
+    if (scope === "suburb" && viewerSuburb) q = q.eq("suburb", viewerSuburb);
+    q.then(function(res) {
+      if (res.data) setPlayers(res.data);
+      setLoading(false);
+    });
+    track("leaderboard_viewed", { scope: scope, has_suburb: !!viewerSuburb });
+  }, [scope, viewerSuburb]);
+
+  function changeScope(next) {
+    if (next === scope) return;
+    track("leaderboard_filter_changed", { from_scope: scope, to_scope: next });
+    setScope(next);
+  }
 
   if (loading) {
     return (
@@ -58,14 +72,47 @@ function Leaderboard({ t, openProfile }) {
     );
   }
 
+  function ScopeToggle() {
+    if (!viewerSuburb) return null;
+    return (
+      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+        {[{ id: "suburb", label: viewerSuburb }, { id: "all", label: "All" }].map(function (s) {
+          var on = scope === s.id;
+          return (
+            <button key={s.id} onClick={function () { changeScope(s.id); }}
+              style={{
+                fontSize: 10, fontWeight: on ? 700 : 500,
+                padding: "3px 10px", borderRadius: 12,
+                background: on ? t.accentSubtle : "transparent",
+                color: on ? t.accent : t.textTertiary,
+                border: on ? "1px solid " + t.accent + "44" : "1px solid " + t.border,
+                cursor: "pointer", letterSpacing: "0.02em",
+              }}>{s.label}</button>
+          );
+        })}
+      </div>
+    );
+  }
+
   if (!players.length) {
-    return <div style={{ fontSize: 12, color: t.textTertiary }}>No ranked players yet.</div>;
+    return (
+      <div>
+        <ScopeToggle />
+        <div style={{ fontSize: 12, color: t.textTertiary }}>
+          {scope === "suburb"
+            ? "No ranked players in " + viewerSuburb + " yet — invite someone."
+            : "No ranked players yet."}
+        </div>
+      </div>
+    );
   }
 
   var medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div>
+      <ScopeToggle />
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {players.map(function(p, i) {
         var clickable = !!openProfile;
         return (
@@ -113,6 +160,7 @@ function Leaderboard({ t, openProfile }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -184,7 +232,7 @@ function PendingActions({ t, authUser, history }) {
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────
-export default function RightPanel({ t, authUser, history, onLogMatch, openProfile }) {
+export default function RightPanel({ t, authUser, history, onLogMatch, openProfile, viewerSuburb }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: t.bgCard }}>
 
@@ -216,7 +264,7 @@ export default function RightPanel({ t, authUser, history, onLogMatch, openProfi
 
       {/* Leaderboard */}
       <Section t={t} title="Leaderboard">
-        <Leaderboard t={t} openProfile={openProfile} />
+        <Leaderboard t={t} openProfile={openProfile} viewerSuburb={viewerSuburb} />
       </Section>
 
     </div>
