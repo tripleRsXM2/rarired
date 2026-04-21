@@ -19,7 +19,7 @@ function fmtTime(iso){
 
 function hiddenKey(uid){return"cs_hidden_msgs_"+uid;}
 
-export default function Messages({t,authUser,dms}){
+export default function Messages({t,authUser,dms,openProfile}){
   var [menuState,setMenuState]=useState(null);
   var [showSettings,setShowSettings]=useState(false);
   var touchTimer=useRef(null);
@@ -214,13 +214,17 @@ export default function Messages({t,authUser,dms}){
       <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:12,marginBottom:4,borderBottom:"1px solid "+t.border}}>
         <button onClick={function(){dms.closeConversation();setMenuState(null);setShowSettings(false);}}
           style={{background:"transparent",border:"none",color:t.accent,fontSize:22,lineHeight:1,padding:"0 6px 0 0",flexShrink:0}}>←</button>
-        <div style={{position:"relative",flexShrink:0}}>
+        <div
+          onClick={openProfile&&conv.partner.id?function(){openProfile(conv.partner.id);}:undefined}
+          style={{position:"relative",flexShrink:0,cursor:openProfile&&conv.partner.id?"pointer":"default"}}>
           <div style={{width:36,height:36,borderRadius:"50%",background:avColor(conv.partner.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff"}}>
             {(conv.partner.avatar||conv.partner.name||"?").slice(0,2).toUpperCase()}
           </div>
           <PresenceDot profile={conv.partner} t={t} size={10}/>
         </div>
-        <div style={{flex:1,minWidth:0}}>
+        <div
+          onClick={openProfile&&conv.partner.id?function(){openProfile(conv.partner.id);}:undefined}
+          style={{flex:1,minWidth:0,cursor:openProfile&&conv.partner.id?"pointer":"default"}}>
           <div style={{fontSize:15,fontWeight:700,color:t.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{conv.partner.name}</div>
           {presence.label&&<div style={{fontSize:11,color:presence.online?t.green:t.textTertiary}}>{presence.label}</div>}
         </div>

@@ -5,6 +5,11 @@
 
 import { avColor } from "../../../lib/utils/avatar.js";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
+import {
+  computeRecentForm,
+  computeMostPlayed,
+  formatConfirmedBadge,
+} from "../utils/profileStats.js";
 
 var BADGES=[
   {id:"first", label:"First Match",   desc:"Play your first match",             icon:"🎾", check:function(w,p){return p>=1;}},
@@ -22,6 +27,7 @@ export default function ProfileTab({
   history,
   profileTab, setProfileTab,
   onOpenSettings,
+  openProfile,
 }) {
   var wins    = profile.wins         != null ? profile.wins         : history.filter(function(m){return m.result==="win";}).length;
   var losses  = profile.losses       != null ? profile.losses       : history.length - wins;
@@ -41,6 +47,12 @@ export default function ProfileTab({
     return Object.assign({},b,{unlocked:b.check(wins,played,streakCount,streakType)});
   });
   var unlockedCount = badges.filter(function(b){return b.unlocked;}).length;
+
+  // Module 1 additions — derived identity signals.
+  var recentForm = computeRecentForm(history, 5);
+  var myId = authUser && authUser.id;
+  var mostPlayed = computeMostPlayed(history, myId, 5);
+  var confirmedBadge = formatConfirmedBadge(profile);
 
   return (
     <div style={{maxWidth:680,margin:"0 auto"}}>
@@ -73,6 +85,44 @@ export default function ProfileTab({
           )}
         </div>
         {profile.bio&&<p style={{fontSize:13,color:t.textSecondary,lineHeight:1.6,marginBottom:16,marginTop:-8}}>{profile.bio}</p>}
+
+        {/* Trust indicator — "verified identity" vision: shows the confirmed
+            match count prominently so viewers understand what's been vouched
+            for by a real opponent. */}
+        {confirmedBadge&&(
+          <div style={{
+            display:"inline-flex",alignItems:"center",gap:6,
+            padding:"5px 10px",borderRadius:20,
+            background:t.greenSubtle,color:t.green,
+            border:"1px solid "+t.green+"33",
+            fontSize:11,fontWeight:700,letterSpacing:"0.02em",
+            marginBottom:14,
+          }}>
+            <span>✓</span><span>{confirmedBadge}</span>
+          </div>
+        )}
+
+        {/* Recent form chips (last 5 confirmed, most recent first) */}
+        {recentForm.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+            <span style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em"}}>Recent form</span>
+            <div style={{display:"flex",gap:4}}>
+              {recentForm.map(function(r,i){
+                var isW=r==="W";
+                return (
+                  <span key={i} style={{
+                    width:20,height:20,borderRadius:6,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:10,fontWeight:800,
+                    color:isW?t.green:t.red,
+                    background:isW?t.greenSubtle:t.redSubtle,
+                    border:"1px solid "+(isW?t.green:t.red)+"33",
+                  }}>{r}</span>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Rank + achievements summary */}
         <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -175,6 +225,47 @@ export default function ProfileTab({
               );
             })
           }
+
+          {/* Most-played opponents — identity check: "I've played these
+              people consistently". Each chip is clickable when the opponent
+              is a real user (opponent_id present), taking the viewer into
+              that player's public profile. */}
+          {mostPlayed.length>0&&(
+            <div style={{marginTop:24}}>
+              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Most played</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {mostPlayed.map(function(o,i){
+                  var clickable = !!o.opponentId && !!openProfile;
+                  return (
+                    <div key={i}
+                      onClick={clickable ? function(){openProfile(o.opponentId);} : undefined}
+                      style={{
+                        display:"flex",alignItems:"center",gap:8,
+                        background:t.bgCard,border:"1px solid "+t.border,
+                        borderRadius:10,padding:"8px 12px 8px 8px",
+                        cursor:clickable?"pointer":"default",
+                      }}>
+                      <div style={{
+                        width:28,height:28,borderRadius:"50%",flexShrink:0,
+                        background:avColor(o.opponentName),
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:10,fontWeight:700,color:"#fff",
+                      }}>{(o.opponentName||"?").slice(0,2).toUpperCase()}</div>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:600,color:t.text,lineHeight:1.1}}>{o.opponentName}</div>
+                        <div style={{fontSize:10,color:t.textTertiary,marginTop:2,letterSpacing:"0.02em"}}>
+                          <span style={{color:t.green,fontWeight:700}}>{o.wins}</span>
+                          <span style={{margin:"0 3px"}}>–</span>
+                          <span style={{color:t.red,fontWeight:700}}>{o.losses}</span>
+                          <span style={{marginLeft:6}}>· {o.plays} played</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Achievements preview */}
           {unlockedCount>0&&(
