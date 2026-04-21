@@ -17,6 +17,17 @@ var REASON_LABELS = {
 // All 18×18, stroke="currentColor", stroke-width 1.5 — so they follow the
 // parent button's color state (default = textSecondary, active = accent).
 var ICONS = {
+  tennisBall: function (size) {
+    var s = size || 18;
+    // Circle + the two characteristic tennis-ball seam curves.
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.5"/>
+        <path d="M3 6.5c2.5 1 4 3 4 5.5s-1.5 4.5-4 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" transform="translate(0 -3.5)"/>
+        <path d="M15 6.5c-2.5 1-4 3-4 5.5s1.5 4.5 4 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" transform="translate(0 -3.5)"/>
+      </svg>
+    );
+  },
   like: function (size) {
     var s = size || 18;
     // Thumb-up outline.
@@ -257,15 +268,21 @@ function FeedCard({
               padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
             }}>{statusPill.label}</span>
           )}
-          {isOwn && onDelete && !isInDispute && !isVoided && (
+          {/* Submitter can delete when: not actively disputed. Includes voided
+              matches now — a voided card is terminal dead weight on the feed
+              and the user should be able to clear it. */}
+          {isOwn && onDelete && !isInDispute && (
             <button onClick={async function() {
-                if (!window.confirm("Delete this match?")) return;
+                if (!window.confirm(isVoided ? "Remove this voided match from your feed?" : "Delete this match?")) return;
                 var res = await onDelete(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
-          {m.isTagged && onRemove && isConfirmed && (
+          {/* Tagged user (opponent) can hide confirmed OR voided / expired
+              matches from their own feed. Dispute/pending still blocked — the
+              match-truth flow handles those. */}
+          {m.isTagged && onRemove && (isConfirmed || isVoided || isExpired) && (
             <button onClick={async function() {
                 if (!window.confirm("Remove from your feed?")) return;
                 var res = await onRemove(m);
@@ -276,9 +293,11 @@ function FeedCard({
         </div>
       </div>
 
-      {/* ── Activity title row (smaller, refined) ── */}
+      {/* ── Activity title row (line-art icon + refined heading) ── */}
       <div style={{ padding: "10px 16px 4px", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>🎾</span>
+        <span style={{ color: t.textSecondary, display: "flex", alignItems: "center", flexShrink: 0 }}>
+          {ICONS.tennisBall(16)}
+        </span>
         <h3 style={{
           margin: 0,
           fontSize: 15, fontWeight: 700, color: t.text,
