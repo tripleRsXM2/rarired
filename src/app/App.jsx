@@ -330,8 +330,10 @@ export default function App(){
                   ?<button
                       onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
                       title="Settings"
-                      style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),border:"none",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>
-                      {currentUser.profile.avatar}
+                      style={{width:32,height:32,borderRadius:"50%",border:"none",padding:0,background:"transparent",overflow:"hidden"}}>
+                      {currentUser.profile.avatar_url
+                        ? <img src={currentUser.profile.avatar_url} alt="" style={{width:32,height:32,objectFit:"cover",display:"block",borderRadius:"50%"}}/>
+                        : <div style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>{currentUser.profile.avatar}</div>}
                     </button>
                   :<button
                       onClick={auth.openLogin}

@@ -5,6 +5,7 @@
 //
 // Owns all account/preferences content that was previously buried in ProfileTab.
 
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../../lib/supabase.js";
 import { initials } from "../../../lib/utils/avatar.js";
@@ -13,6 +14,8 @@ import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
 import { ZONES } from "../../map/data/zones.js";
 import { setHomeZone } from "../../map/services/mapService.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUpload.js";
 
 var THEME_OPTIONS = [
   {id:"wimbledon",    label:"Wimbledon",       swatch:"#006F4A", bg:"#F0F2EA"},
@@ -32,6 +35,48 @@ export default function SettingsScreen({
 }) {
   var navigate=useNavigate();
   var iStyle = inputStyle(t);
+
+  // ── Avatar upload state ────────────────────────────────────────────────────
+  var fileInputRef = useRef(null);
+  var [uploadState,setUploadState] = useState({ busy:false, error:null });
+
+  async function pickAvatarFile(e){
+    var f = e.target.files && e.target.files[0];
+    e.target.value = ""; // reset so picking the same file re-fires onChange
+    if(!f || !authUser) return;
+    setUploadState({ busy:true, error:null });
+    var r = await uploadAvatar(authUser.id, f);
+    if(r.error){ setUploadState({ busy:false, error:r.error.message||"Upload failed" }); return; }
+    // Write back to profile + mirror locally so the chrome updates instantly.
+    var prevUrl = profile.avatar_url || null;
+    var nd = Object.assign({}, profile, { avatar_url: r.url });
+    setProfile(nd);
+    setProfileDraft(function(d){return Object.assign({},d,{avatar_url:r.url});});
+    var save = await supabase.from("profiles").update({ avatar_url: r.url }).eq("id", authUser.id);
+    if(save.error){
+      setProfile(profile); // rollback
+      setUploadState({ busy:false, error:save.error.message });
+      return;
+    }
+    // Best-effort: delete the old image to keep the bucket tidy.
+    if(prevUrl) deleteAvatarByUrl(prevUrl);
+    setUploadState({ busy:false, error:null });
+  }
+
+  async function removeAvatar(){
+    if(!authUser) return;
+    var prevUrl = profile.avatar_url || null;
+    var nd = Object.assign({}, profile, { avatar_url: null });
+    setProfile(nd);
+    setProfileDraft(function(d){return Object.assign({},d,{avatar_url:null});});
+    var save = await supabase.from("profiles").update({ avatar_url: null }).eq("id", authUser.id);
+    if(save.error){
+      setProfile(profile);
+      setUploadState({ busy:false, error:save.error.message });
+      return;
+    }
+    if(prevUrl) deleteAvatarByUrl(prevUrl);
+  }
 
   return (
     <div
@@ -64,14 +109,11 @@ export default function SettingsScreen({
           Settings
         </span>
         {/* Avatar — decorative, reminds user whose settings they're in */}
-        <div style={{
-          width:32, height:32, borderRadius:"50%",
-          background:avColor(profile.name), flexShrink:0,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:11, fontWeight:700, color:"#fff",
-        }}>
-          {profile.avatar}
-        </div>
+        <PlayerAvatar
+          name={profile.name} avatar={profile.avatar}
+          avatarUrl={profile.avatar_url}
+          size={32}
+        />
       </div>
 
       {/* Content */}
@@ -81,6 +123,56 @@ export default function SettingsScreen({
         {!editingAvail&&(
           <div style={{background:t.bgCard, border:"1px solid "+t.border, borderRadius:12, padding:20, marginBottom:12}}>
             <div style={{fontSize:13, fontWeight:700, color:t.text, marginBottom:16}}>Edit Profile</div>
+
+            {/* Avatar upload */}
+            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
+              <div style={{position:"relative"}}>
+                <PlayerAvatar
+                  name={profileDraft.name||profile.name}
+                  avatar={profileDraft.avatar||profile.avatar}
+                  avatarUrl={profileDraft.avatar_url||profile.avatar_url}
+                  size={72}
+                />
+                {uploadState.busy&&(
+                  <div style={{
+                    position:"absolute",inset:0,borderRadius:"50%",
+                    background:"rgba(0,0,0,0.55)",color:"#fff",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:10,fontWeight:700,letterSpacing:"0.05em",
+                  }}>…</div>
+                )}
+              </div>
+              <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+                <input ref={fileInputRef} type="file" accept="image/*"
+                  onChange={pickAvatarFile}
+                  style={{display:"none"}}/>
+                <button type="button" disabled={uploadState.busy||!authUser}
+                  onClick={function(){ fileInputRef.current && fileInputRef.current.click(); }}
+                  style={{
+                    padding:"8px 14px",borderRadius:7,border:"1px solid "+t.border,
+                    background:"transparent",color:t.text,fontSize:12,fontWeight:600,
+                    cursor: uploadState.busy?"not-allowed":"pointer",textAlign:"left",
+                    opacity: uploadState.busy?0.6:1,
+                  }}>
+                  {profile.avatar_url?"Change photo":"Upload photo"}
+                </button>
+                {profile.avatar_url&&(
+                  <button type="button" disabled={uploadState.busy}
+                    onClick={removeAvatar}
+                    style={{
+                      padding:"8px 14px",borderRadius:7,border:"1px solid "+t.border,
+                      background:"transparent",color:t.red,fontSize:12,fontWeight:500,
+                      cursor:"pointer",textAlign:"left",
+                    }}>
+                    Remove photo
+                  </button>
+                )}
+                {uploadState.error&&(
+                  <div style={{fontSize:11,color:t.red,marginTop:2}}>{uploadState.error}</div>
+                )}
+              </div>
+            </div>
+
             {[
               {l:"Full name",  k:"name",   type:"text", ph:"Your name"},
               {l:"Suburb",     k:"suburb", type:"text", ph:"e.g. Bondi"},
@@ -128,6 +220,7 @@ export default function SettingsScreen({
                     skill:nd.skill||"Intermediate",
                     style:nd.style||"All-Court",
                     avatar:nd.avatar||"",
+                    avatar_url:nd.avatar_url||null,
                     availability:nd.availability||{},
                   },{onConflict:"id"});
                   if(res.error)console.error("Profile save error:",res.error);

@@ -192,12 +192,14 @@ export default function Sidebar({
             onClick={onOpenSettings}
             style={{ color: t.textSecondary }}
           >
-            <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: avColor(profile.name),
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
-            }}>{profile.avatar}</div>
+            {profile.avatar_url
+              ? <img src={profile.avatar_url} alt="" style={{ width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0,background:"#eee" }}/>
+              : <div style={{
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: avColor(profile.name),
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
+                }}>{profile.avatar}</div>}
             <span className="cs-nav-label" style={{ color: t.text, fontWeight: 500 }}>
               {profile.name || "You"}
             </span>

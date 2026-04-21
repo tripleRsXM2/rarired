@@ -18,6 +18,10 @@ Three sources feed the Discover tab (`/people/suggested`), stacked in this order
 
 All three queries filter out the viewer's existing friends, pending requests, and blocked users.
 
+### Location display rule
+
+On profile views and player cards, the subtitle under a user's name is their **home zone** name (e.g. "Eastern Suburbs") when set, falling back to their freetext `profiles.suburb` when it isn't. Suburb stays in the edit form so "Players near you" discovery keeps working at sub-zone granularity, but home zone is the visible identity signal.
+
 ### Map tab (Module 4) — zone-based spatial discovery
 
 A fourth top-level surface. Full-bleed Leaflet map of Sydney divided into **six hand-curated matchmaking zones** (CBD, East, Inner West, Lower North Shore, Northern Beaches, South/Bayside). Each zone:
@@ -159,3 +163,4 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Seed metrics are hypotheses, will be tracked live once Module 3.5 (analytics foundation) lands.
 - v1 — Module 4 (Map tab): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.
+- v1.1 — avatar upload + location display rule: `profiles.avatar_url` + `avatars` storage bucket; name subtitle prefers home-zone over suburb everywhere.

@@ -3,7 +3,7 @@
 // Public-facing profile view: stats, match history, achievements, availability.
 // Settings have been moved to SettingsScreen (accessible via top-bar avatar).
 
-import { avColor } from "../../../lib/utils/avatar.js";
+import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
 import {
   computeRecentForm,
@@ -60,16 +60,31 @@ export default function ProfileTab({
       {/* ── Hero header ──────────────────────────────────────────────────────── */}
       <div style={{padding:"28px 20px 0",background:t.bg}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:16,marginBottom:20}}>
-          <div style={{
-            width:72,height:72,borderRadius:"50%",flexShrink:0,
-            background:avColor(profile.name),
-            display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:24,fontWeight:800,color:"#fff",
-            boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
-          }}>{profile.avatar}</div>
+          {(function(){
+            var url = avatarUrl(profile);
+            if(url){
+              return (
+                <img src={url} alt={profile.name}
+                  style={{
+                    width:72,height:72,borderRadius:"50%",objectFit:"cover",flexShrink:0,
+                    boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
+                    background:"#eee",
+                  }}/>
+              );
+            }
+            return (
+              <div style={{
+                width:72,height:72,borderRadius:"50%",flexShrink:0,
+                background:avColor(profile.name),
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:24,fontWeight:800,color:"#fff",
+                boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
+              }}>{profile.avatar}</div>
+            );
+          })()}
           <div style={{flex:1,paddingTop:4}}>
             <div style={{fontSize:22,fontWeight:800,color:t.text,letterSpacing:"-0.5px",lineHeight:1.1}}>{profile.name}</div>
-            {profile.suburb&&<div style={{fontSize:13,color:t.textSecondary,marginTop:3}}>{profile.suburb}</div>}
+            {displayLocation(profile)&&<div style={{fontSize:13,color:t.textSecondary,marginTop:3}}>{displayLocation(profile)}</div>}
             <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
               <span style={{fontSize:11,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 9px",borderRadius:20,letterSpacing:"0.02em"}}>{profile.skill}</span>
               <span style={{fontSize:11,fontWeight:600,color:t.green,background:t.greenSubtle,padding:"3px 9px",borderRadius:20}}>{profile.style}</span>
