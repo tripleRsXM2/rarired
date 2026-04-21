@@ -107,9 +107,16 @@ export function sortNotifications(notifications) {
   });
 }
 
+// ── Match key helper ──────────────────────────────────────────────────────────
+// Notifications use match_id for match-related types, entity_id for social
+// (friend_request, conversation). Use this everywhere to avoid confusion.
+export function matchKey(n) {
+  return n.match_id || n.entity_id || null;
+}
+
 // ── Smart demotion ─────────────────────────────────────────────────────────────
 // When a match has been confirmed or voided, lingering dispute notifications
-// for the same entity_id are demoted from "action" to "important". They remain
+// for the same match are demoted from "action" to "important". They remain
 // visible (for context) but no longer assert urgency.
 
 var DEMOTABLE_DISPUTE_TYPES = new Set([
@@ -121,13 +128,13 @@ var DEMOTABLE_DISPUTE_TYPES = new Set([
 export function applySmartDemotion(notifications) {
   var resolvedIds = new Set();
   notifications.forEach(function (n) {
-    if ((n.type === "match_confirmed" || n.type === "match_voided") && n.entity_id) {
-      resolvedIds.add(n.entity_id);
+    if ((n.type === "match_confirmed" || n.type === "match_voided") && matchKey(n)) {
+      resolvedIds.add(matchKey(n));
     }
   });
   if (!resolvedIds.size) return notifications;
   return notifications.map(function (n) {
-    if (n.entity_id && resolvedIds.has(n.entity_id) && DEMOTABLE_DISPUTE_TYPES.has(n.type)) {
+    if (matchKey(n) && resolvedIds.has(matchKey(n)) && DEMOTABLE_DISPUTE_TYPES.has(n.type)) {
       return Object.assign({}, n, { _demoted: true });
     }
     return n;
@@ -167,12 +174,13 @@ export function groupNotifications(rawNotifications) {
   var singles       = [];
 
   sorted.forEach(function (n) {
-    if (DISPUTE_FAMILY.has(n.type) && n.entity_id) {
-      if (!threadBuckets[n.entity_id]) threadBuckets[n.entity_id] = [];
-      threadBuckets[n.entity_id].push(n);
-    } else if (n.type === "like" && n.entity_id) {
-      if (!likeBuckets[n.entity_id]) likeBuckets[n.entity_id] = [];
-      likeBuckets[n.entity_id].push(n);
+    var key = matchKey(n);
+    if (DISPUTE_FAMILY.has(n.type) && key) {
+      if (!threadBuckets[key]) threadBuckets[key] = [];
+      threadBuckets[key].push(n);
+    } else if (n.type === "like" && key) {
+      if (!likeBuckets[key]) likeBuckets[key] = [];
+      likeBuckets[key].push(n);
     } else {
       singles.push({ kind: "single", n: n, score: computePriorityScore(n) });
     }

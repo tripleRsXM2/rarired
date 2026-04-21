@@ -100,6 +100,7 @@ function SectionLabel({ label, t }) {
 function NotifRow({
   n, t, dismissable,
   onRead, onDismiss,
+  onReviewMatch,
   acceptMatchTag, declineMatchTag,
   onAcceptFriendRequest, onDeclineFriendRequest,
   setShowNotifications, refreshHistory, openConvById,
@@ -313,9 +314,26 @@ function NotifRow({
           {/* match reminder */}
           {n.type === "match_reminder" && ctaButton(t, t.orange, true, "View in feed →", goFeed)}
 
-          {/* dispute / correction — direct action CTA */}
+          {/* dispute / correction — opens in-context review drawer, no navigation */}
           {(n.type === "match_disputed" || n.type === "match_correction_requested" || n.type === "match_counter_proposed") && (
-            ctaButton(t, t.accent, false, "Review in feed →", goFeed)
+            <button
+              onClick={function (e) {
+                e.stopPropagation();
+                if (!n.read) onRead(n.id);
+                if (onReviewMatch) onReviewMatch(n);
+              }}
+              style={{
+                display: "inline-block", marginTop: 8,
+                padding: "5px 14px", borderRadius: 6,
+                border: "none",
+                background: t.accent, color: "#fff",
+                fontSize: 11, fontWeight: 700,
+                cursor: "pointer", transition: "opacity 0.13s",
+                letterSpacing: "0.01em",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >Review →</button>
           )}
 
           {/* voided / demoted — soft CTA */}
@@ -347,7 +365,7 @@ function NotifRow({
 // Thread row — dispute thread with primary action + compact context
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ThreadRow({ item, t, onRead, onDismiss, panelProps }) {
+function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
   var { primary, context } = item;
   var accent      = notifAccentColor(primary, t);
   var effectiveType = getEffectiveType(primary);
@@ -439,22 +457,25 @@ function ThreadRow({ item, t, onRead, onDismiss, panelProps }) {
             <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 4, marginBottom: 10 }}>
               {notifTimeLabel(primary.created_at)}
             </div>
-            {/* CTAs for primary action */}
+            {/* CTAs for primary action — opens review drawer directly */}
             {(primary.type === "match_disputed" || primary.type === "match_correction_requested" || primary.type === "match_counter_proposed") && (
               <div style={{ marginBottom: 10 }}>
-                {panelProps.goFeed && (
-                  <button
-                    onClick={function (e) { e.stopPropagation(); panelProps.goFeed(primary); }}
-                    style={{
-                      padding: "5px 13px", borderRadius: 6,
-                      border: "1px solid " + accent + "55", background: "transparent",
-                      color: accent, fontSize: 11, fontWeight: 600,
-                      cursor: "pointer", transition: "opacity 0.13s",
-                    }}
-                    onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.75"; }}
-                    onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-                  >Review in feed →</button>
-                )}
+                <button
+                  onClick={function (e) {
+                    e.stopPropagation();
+                    if (!primary.read) onRead(primary.id);
+                    if (onReviewMatch) onReviewMatch(primary);
+                  }}
+                  style={{
+                    padding: "5px 14px", borderRadius: 6,
+                    border: "none",
+                    background: accent, color: "#fff",
+                    fontSize: 11, fontWeight: 700,
+                    cursor: "pointer", transition: "opacity 0.13s",
+                  }}
+                  onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
+                  onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+                >Review →</button>
               </div>
             )}
           </div>
@@ -576,6 +597,7 @@ export default function NotificationsPanel({
   declineMatchTag,
   onAcceptFriendRequest,
   onDeclineFriendRequest,
+  onReviewMatch,
   setShowNotifications,
   refreshHistory,
   openConvById,
@@ -637,6 +659,7 @@ export default function NotificationsPanel({
           key={key} item={item} t={t}
           onRead={handleRead}
           onDismiss={function () { handleDismissItem(item); }}
+          onReviewMatch={onReviewMatch}
           panelProps={{ goFeed: goFeed }}
         />
       );
@@ -650,6 +673,7 @@ export default function NotificationsPanel({
         dismissable={canDismissItem(item)}
         onRead={handleRead}
         onDismiss={function () { handleDismissItem(item); }}
+        onReviewMatch={onReviewMatch}
         acceptMatchTag={acceptMatchTag}
         declineMatchTag={declineMatchTag}
         onAcceptFriendRequest={onAcceptFriendRequest}

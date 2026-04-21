@@ -29,6 +29,7 @@ import AdminTab from "../features/admin/pages/AdminTab.jsx";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
 import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
+import ActionReviewDrawer from "../features/notifications/components/ActionReviewDrawer.jsx";
 import AuthModal from "../features/auth/components/AuthModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
@@ -181,6 +182,35 @@ export default function App(){
     matchHistory.setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10),venue:"",court:""});
   }
 
+  // ── In-context notification review drawer ────────────────────────────────
+  var [reviewDrawer,setReviewDrawer]=useState(null); // { match, notifId, notifType, fromName }
+
+  function openReviewDrawer(n){
+    // Find the match in local history using match_id from the notification.
+    var matchId=n.match_id;
+    if(!matchId)return;
+    var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
+    if(!match){
+      // Not in local history yet — reload then navigate to feed as fallback.
+      if(auth.authUser)matchHistory.loadHistory(auth.authUser.id);
+      return;
+    }
+    setReviewDrawer({match,notifId:n.id,notifType:n.type,fromName:n.fromName||"Someone"});
+    notifications.setShowNotifications(false);
+  }
+
+  function openCounterPropose(match){
+    // Opens the existing DisputeModal in counter mode — reuse existing UX.
+    matchHistory.setDisputeModal({match,mode:'counter'});
+    matchHistory.setDisputeDraft({
+      reasonCode:'',reasonDetail:'',
+      sets:(match.currentProposal&&match.currentProposal.sets)||match.sets||[{you:'',them:''}],
+      result:match.result,
+      date:match.rawDate||new Date().toISOString().slice(0,10),
+      venue:match.venue||'',court:match.court||'',
+    });
+  }
+
   return (
     <Providers t={t} theme={theme}>
       {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
@@ -259,6 +289,7 @@ export default function App(){
                 social.declineRequest({id:n.from_user_id,requestId:n.entity_id});
                 notifications.dismissNotification(n.id);
               }}
+              onReviewMatch={openReviewDrawer}
               setShowNotifications={notifications.setShowNotifications}
               refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
               openConvById={openConvById}
@@ -407,6 +438,25 @@ export default function App(){
           counterPropose={matchHistory.counterPropose}
           voidMatchAction={matchHistory.voidMatchAction}
         />
+        {/* In-context review drawer — opened from notification tray */}
+        {reviewDrawer&&auth.authUser&&(
+          <ActionReviewDrawer
+            t={t}
+            match={reviewDrawer.match}
+            notifType={reviewDrawer.notifType}
+            fromName={reviewDrawer.fromName}
+            onClose={function(){setReviewDrawer(null);}}
+            onDismissNotif={function(){
+              if(reviewDrawer.notifId)notifications.dismissNotification(reviewDrawer.notifId);
+            }}
+            acceptCorrection={matchHistory.acceptCorrection}
+            onCounter={function(match){
+              setReviewDrawer(null);
+              openCounterPropose(match);
+            }}
+            voidMatchAction={matchHistory.voidMatchAction}
+          />
+        )}
         <CommentModal
           t={t} authUser={auth.authUser} profile={currentUser.profile}
           commentModal={matchHistory.commentModal} setCommentModal={matchHistory.setCommentModal}
