@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
+import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 
 var REASON_LABELS = {
   wrong_score:   "Score is wrong",
@@ -112,6 +113,8 @@ function FeedCard({
   setDisputeModal, setDisputeDraft,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
   openProfile, openChallenge, toast,
+  // Module — FeedInteractionsModal trigger.
+  onOpenInteractions,
 }) {
   // Identity resolvers — who is the "poster" and who is the "opponent" from
   // the viewer's POV, so the right user IDs get wired into the profile links.
@@ -609,15 +612,36 @@ function FeedCard({
           padding: "10px 14px",
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
         }}>
-          {/* Left: engagement summary / kudos prompt */}
+          {/* Left: engagement summary / kudos prompt — each count is its own
+              clickable link opening the FeedInteractionsModal on the right tab. */}
           <div style={{ fontSize: 12, color: t.textSecondary, fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {(function () {
-              var bits = [];
-              if (likeCount > 0) bits.push(likeCount + (likeCount === 1 ? " like" : " likes"));
-              if (comments.length > 0) bits.push(comments.length + (comments.length === 1 ? " comment" : " comments"));
-              if (!bits.length) return <span style={{ color: t.textTertiary }}>Be the first to give kudos!</span>;
-              return bits.join(" · ");
-            })()}
+            {likeCount === 0 && comments.length === 0 ? (
+              <span style={{ color: t.textTertiary }}>Be the first to give kudos!</span>
+            ) : (
+              <>
+                {likeCount > 0 && (
+                  <span
+                    onClick={onOpenInteractions ? function () { onOpenInteractions(m.id, "kudos"); } : undefined}
+                    style={{ cursor: onOpenInteractions ? "pointer" : "default", color: t.textSecondary }}
+                    onMouseEnter={function (e) { if (onOpenInteractions) e.currentTarget.style.color = t.text; }}
+                    onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; }}
+                  >
+                    {likeCount + (likeCount === 1 ? " like" : " likes")}
+                  </span>
+                )}
+                {likeCount > 0 && comments.length > 0 && " · "}
+                {comments.length > 0 && (
+                  <span
+                    onClick={onOpenInteractions ? function () { onOpenInteractions(m.id, "comments"); } : undefined}
+                    style={{ cursor: onOpenInteractions ? "pointer" : "default", color: t.textSecondary }}
+                    onMouseEnter={function (e) { if (onOpenInteractions) e.currentTarget.style.color = t.text; }}
+                    onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; }}
+                  >
+                    {comments.length + (comments.length === 1 ? " comment" : " comments")}
+                  </span>
+                )}
+              </>
+            )}
           </div>
 
           {/* Right: minimal icon actions (Like · Comment · Rematch · Share) */}
@@ -666,7 +690,11 @@ function FeedCard({
             <IconButton
               t={t}
               title={"Comment" + (comments.length > 0 ? " (" + comments.length + ")" : "")}
-              onClick={function () { setCommentModal(m.id); setCommentDraft(""); }}>
+              onClick={function () {
+                setCommentDraft("");
+                if (onOpenInteractions) onOpenInteractions(m.id, "comments");
+                else setCommentModal(m.id); // legacy fallback
+              }}>
               {ICONS.comment()}
             </IconButton>
             {openChallenge && opponentClickable && (
@@ -735,7 +763,7 @@ function FeedCard({
 export default function HomeTab({
   t, authUser, profile, history,
   feedLikes, setFeedLikes, feedLikeCounts, setFeedLikeCounts,
-  feedComments, commentModal, setCommentModal, commentDraft, setCommentDraft,
+  feedComments, setFeedComments, commentModal, setCommentModal, commentDraft, setCommentDraft,
   setShowAuth, setAuthMode, setAuthStep,
   setCasualOppName, setScoreModal, setScoreDraft,
   setDisputeModal, setDisputeDraft,
@@ -743,16 +771,42 @@ export default function HomeTab({
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
   openProfile,
   friends, playedOpponents, suggestedPlayers,
-  sendFriendRequest, friendRelationLabel, socialLoading,
+  sendFriendRequest, cancelRequest, acceptRequest, sentReq, recvReq,
+  friendRelationLabel, socialLoading,
   onGoToDiscover,
   openChallenge,
   toast,
   pendingFreshCount,
   refreshFeed,
+  notifyMatchOwnerOfComment,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
   var [feedFilter, setFeedFilter] = useState("everyone");
+
+  // Strava-style Kudos + Comments modal state. Shape: {matchId, tab}.
+  var [interactionsModal, setInteractionsModal] = useState(null);
+  function openInteractions(matchId, tab) { setInteractionsModal({ matchId: matchId, tab: tab || "kudos" }); }
+  function closeInteractions() { setInteractionsModal(null); }
+
+  // For the modal's inline "Give kudos" CTA: we need the current liked/toggle
+  // state of the match in the modal. The like handler lives inside FeedCard;
+  // re-create a minimal one here so the modal can drive it.
+  async function toggleLikeForModalMatch() {
+    var mid = interactionsModal && interactionsModal.matchId;
+    if (!mid || !authUser) return;
+    var prev = !!feedLikes[mid];
+    var now = !prev;
+    setFeedLikes(function(l){var n=Object.assign({},l);n[mid]=now;return n;});
+    setFeedLikeCounts(function(c){var n=Object.assign({},c);n[mid]=Math.max(0,(n[mid]||0)+(now?1:-1));return n;});
+    var res;
+    if (now) { res = await supabase.from("feed_likes").insert({match_id:mid,user_id:authUser.id}); }
+    else     { res = await supabase.from("feed_likes").delete().eq("match_id",mid).eq("user_id",authUser.id); }
+    if (res && res.error) {
+      setFeedLikes(function(l){var n=Object.assign({},l);n[mid]=prev;return n;});
+      setFeedLikeCounts(function(c){var n=Object.assign({},c);n[mid]=Math.max(0,(n[mid]||0)+(now?-1:1));return n;});
+    }
+  }
   var DEMO_FEED = [
     { id: "demo-1", oppName: "Alex Chen",     tournName: "Summer Open",       date: "Today",     sets: [{ you: 6, them: 3 }, { you: 6, them: 4 }], result: "win",  playerName: "Jordan Smith", playerAvatar: "JS", isOwn: false, status: "confirmed" },
     { id: "demo-2", oppName: "Sam Williams",  tournName: "Casual Match",      date: "Yesterday", sets: [{ you: 4, them: 6 }, { you: 3, them: 6 }], result: "loss", playerName: "Riley Brown",  playerAvatar: "RB", isOwn: false, status: "confirmed" },
@@ -766,6 +820,7 @@ export default function HomeTab({
     confirmOpponentMatch, acceptCorrection, voidMatchAction,
     openProfile, openChallenge,
     toast,
+    onOpenInteractions: openInteractions,
   };
 
   function openLogMatch() {
@@ -1042,6 +1097,31 @@ export default function HomeTab({
           );
         })()}
       </div>
+
+      {/* Strava-style Kudos / Comments modal — triggered from the feed-card
+          social footer counts and the 💬 icon. */}
+      <FeedInteractionsModal
+        t={t}
+        modal={interactionsModal}
+        onClose={closeInteractions}
+        authUser={authUser}
+        profile={profile}
+        feedComments={feedComments}
+        setFeedComments={setFeedComments}
+        commentDraft={commentDraft}
+        setCommentDraft={setCommentDraft}
+        onCommentPosted={notifyMatchOwnerOfComment}
+        openProfile={openProfile}
+        friendRelationLabel={friendRelationLabel}
+        sendFriendRequest={sendFriendRequest}
+        cancelRequest={cancelRequest}
+        acceptRequest={acceptRequest}
+        sentReq={sentReq}
+        recvReq={recvReq}
+        socialLoading={socialLoading}
+        liked={interactionsModal ? !!feedLikes[interactionsModal.matchId] : false}
+        onToggleLike={toggleLikeForModalMatch}
+      />
     </div>
   );
 }
