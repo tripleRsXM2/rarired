@@ -19,7 +19,7 @@ A fourth soft state — **demoted** — exists: when a dispute is later confirme
 
 | Type | Category | Trigger | Recipient | Deep-link |
 |---|---|---|---|---|
-| `match_tag` | action | Submitter logs a ranked match | Linked opponent | Inline Confirm/Decline buttons on the notif row |
+| `match_tag` | action | Submitter logs a ranked match | Linked opponent | `Review →` — opens `ActionReviewDrawer` (same flow as disputes); primary action is **Confirm**, secondary **Dispute score** (opens `DisputeModal` in dispute mode), tertiary **Not my match** (void). |
 | `match_disputed` | action | Opponent disputes a pending match with a correction | Submitter | Opens `ActionReviewDrawer` (in-context, no page navigation) |
 | `match_correction_requested` | action | *(reserved — currently fired as `match_disputed`; kept for labelling)* | Submitter | Opens `ActionReviewDrawer` |
 | `match_counter_proposed` | action | Submitter counter-proposes a different correction | Opponent | Opens `ActionReviewDrawer` |
@@ -136,3 +136,4 @@ Sender avatar on every tray row is itself a tap target → sender's profile.
 - v0 — initialised from shipped state at end of Module 3. Includes Module 3's deep-link + fire-gap work (like/comment fire to both participants, `match_expired` live, sender avatar clickable).
 - v1 — Module 4 (challenges). 4 new types: `challenge_received` (action), `challenge_accepted` / `challenge_declined` / `challenge_expired` (important). New `goChallenges` deep-link target → `/people/challenges`. Per-type urgency scores added in `notifUtils.TYPE_URGENCY_BONUS`.
 - v2 — Module 6 (polish): comment grouping into `comment_group` display items + 1-hour dedupe on repeated `like` notifications from the same user/match. Both reduce tray noise without losing analytics signal (`feed_like` event still fires every toggle).
+- v3 — Unified review flow: `match_tag` now uses the same `ActionReviewDrawer` surface as disputes/corrections (Review button replaces the inline Confirm/Decline). Drawer branches on `notifType` — `match_tag` calls `confirmOpponentMatch` and shows the logged match details; dispute family calls `acceptCorrection` and shows the diff comparison. Activity-category notifications (`like`, `comment`, `match_deleted`, `message`, `request_accepted`, `challenge_declined`, `challenge_expired`) now dismiss on tap-through (not just mark read) — tapping the CTA means "I acknowledged this, make it go away."

@@ -323,6 +323,26 @@ export default function App(){
     notifications.setShowNotifications(false);
   }
 
+  // Secondary entry point: open the Review drawer directly from a match row
+  // (e.g. RightPanel "Needs your action" pending-action chip). Derives the
+  // appropriate notifType from the match status + isTagged so the drawer
+  // picks the right Accept action (confirm vs acceptCorrection).
+  function openReviewForMatch(match){
+    if(!match) return;
+    var notifType =
+      match.status === "pending_confirmation" ? "match_tag"
+      : match.status === "pending_reconfirmation" ? "match_counter_proposed"
+      : match.status === "disputed" ? "match_disputed"
+      : null;
+    if(!notifType) return;
+    // fromName is the OTHER party — if we're the tagged user, it's the submitter
+    // (best effort from normalizeMatch's enrichment: friendName || oppName).
+    var fromName = match.isTagged
+      ? (match.friendName || match.oppName || "Someone")
+      : (match.oppName || "Someone");
+    setReviewDrawer({ match: match, notifId: null, notifType: notifType, fromName: fromName });
+  }
+
   // Module 3: fires a `comment` notification to every match participant
   // except the commenter. A match has up to two real people (submitter +
   // opponent) — either of them commenting should reach the other; a third
@@ -354,6 +374,20 @@ export default function App(){
       result:match.result,
       date:match.rawDate||new Date().toISOString().slice(0,10),
       venue:match.venue||'',court:match.court||'',
+    });
+  }
+
+  // Module-fix: parallel helper for the match_tag → Dispute path from the
+  // Review drawer. Opens the DisputeModal in 'dispute' mode (first-round),
+  // prefilling from the logged match.
+  function openDisputeFromTag(match){
+    matchHistory.setDisputeModal({match,mode:'dispute'});
+    matchHistory.setDisputeDraft({
+      reasonCode:'', reasonDetail:'',
+      sets: match.sets && match.sets.length ? match.sets : [{you:'',them:''}],
+      result: match.result,
+      date: match.rawDate || new Date().toISOString().slice(0,10),
+      venue: match.venue || '', court: match.court || '',
     });
   }
 
@@ -492,6 +526,8 @@ export default function App(){
               onGoToDiscover={function(){navigate("/people/suggested");}}
               openChallenge={openChallenge}
               toast={toast}
+              pendingFreshCount={matchHistory.pendingFreshCount}
+              refreshFeed={matchHistory.refreshFeed}
             />
           )}
           {tab==="map"&&(
@@ -584,6 +620,7 @@ export default function App(){
               onLogMatch={openLogMatch}
               openProfile={openProfile}
               viewerSuburb={currentUser.profile && currentUser.profile.suburb}
+              onReviewMatch={openReviewForMatch}
             />
           </div>
         )}
@@ -640,9 +677,12 @@ export default function App(){
               if(reviewDrawer.notifId)notifications.dismissNotification(reviewDrawer.notifId);
             }}
             acceptCorrection={matchHistory.acceptCorrection}
+            confirmOpponentMatch={matchHistory.confirmOpponentMatch}
             onCounter={function(match){
               setReviewDrawer(null);
-              openCounterPropose(match);
+              // match_tag → first-round dispute; everything else → counter-propose.
+              if(reviewDrawer && reviewDrawer.notifType === "match_tag") openDisputeFromTag(match);
+              else openCounterPropose(match);
             }}
             voidMatchAction={matchHistory.voidMatchAction}
           />

@@ -116,6 +116,18 @@ function NotifRow({
   setShowNotifications, refreshHistory, openConvById,
   openProfile,
 }) {
+  // Activity-category notifs should vanish on tap-through (like, comment,
+  // match_deleted, message). User signalled they "resolved" the notification
+  // by interacting with its target.
+  function dismissIfActivity() {
+    if (!dismissable) return;
+    var t_ = n.type;
+    if (t_ === "like" || t_ === "comment" || t_ === "match_deleted" ||
+        t_ === "message" || t_ === "request_accepted" ||
+        t_ === "challenge_declined" || t_ === "challenge_expired") {
+      onDismiss();
+    }
+  }
   var navigate     = useNavigate();
   var effectiveType = getEffectiveType(n);
   var accent       = notifAccentColor(n, t);
@@ -159,6 +171,7 @@ function NotifRow({
     navigate("/home");
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
+    dismissIfActivity();
   }
   function goMessages(e) {
     if (e) e.stopPropagation();
@@ -167,6 +180,7 @@ function NotifRow({
     else navigate("/people/messages");
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
+    dismissIfActivity();
   }
   function goProfile(e) {
     if (e) e.stopPropagation();
@@ -176,6 +190,7 @@ function NotifRow({
     else navigate("/profile/" + n.from_user_id);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
+    dismissIfActivity();
   }
   function goChallenges(e) {
     if (e) e.stopPropagation();
@@ -270,32 +285,29 @@ function NotifRow({
 
           {/* ── Inline CTAs ── */}
 
-          {/* match_tag */}
+          {/* match_tag — unified Review action (replaces inline Confirm/Decline).
+              Opens ActionReviewDrawer which shows the match details and lets
+              the recipient Confirm / Dispute / Mark "not my match" in one
+              place — same flow as every other review-worthy notification. */}
           {n.type === "match_tag" && !n.tag_status && (
-            <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
-              <button
-                onMouseDown={function (e) { e.stopPropagation(); acceptMatchTag(n); }}
-                style={{
-                  padding: "5px 14px", borderRadius: 6, border: "none",
-                  background: t.green, color: "#fff",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  transition: "opacity 0.15s",
-                }}
-                onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
-                onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-              >Confirm</button>
-              <button
-                onMouseDown={function (e) { e.stopPropagation(); declineMatchTag(n); }}
-                style={{
-                  padding: "5px 12px", borderRadius: 6,
-                  border: "1px solid " + t.border, background: "transparent",
-                  color: t.textSecondary, fontSize: 12, fontWeight: 500,
-                  cursor: "pointer", transition: "opacity 0.15s",
-                }}
-                onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.7"; }}
-                onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-              >Decline</button>
-            </div>
+            <button
+              onClick={function (e) {
+                e.stopPropagation();
+                if (!n.read) onRead(n.id);
+                if (onReviewMatch) onReviewMatch(n);
+              }}
+              style={{
+                display: "inline-block", marginTop: 8,
+                padding: "5px 14px", borderRadius: 6,
+                border: "none",
+                background: t.accent, color: "#fff",
+                fontSize: 11, fontWeight: 700,
+                cursor: "pointer", transition: "opacity 0.13s",
+                letterSpacing: "0.01em",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >Review →</button>
           )}
           {n.type === "match_tag" && n.tag_status === "accepted" && (
             <div style={{ fontSize: 11, color: t.green, marginTop: 5, fontWeight: 600 }}>✓ Confirmed</div>
@@ -534,8 +546,11 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
             <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 4, marginBottom: 10 }}>
               {notifTimeLabel(primary.created_at)}
             </div>
-            {/* CTAs for primary action — opens review drawer directly */}
-            {(primary.type === "match_disputed" || primary.type === "match_correction_requested" || primary.type === "match_counter_proposed") && (
+            {/* CTAs for primary action — opens review drawer directly.
+                Thread primaries may be match_tag too (e.g. match_tag + later
+                match_confirmed grouped by match_id), and match_tag still needs
+                a Review button to open the confirm/dispute/void flow. */}
+            {(primary.type === "match_tag" || primary.type === "match_disputed" || primary.type === "match_correction_requested" || primary.type === "match_counter_proposed") && !primary.tag_status && (
               <div style={{ marginBottom: 10 }}>
                 <button
                   onClick={function (e) {

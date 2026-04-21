@@ -141,6 +141,23 @@ git push origin main
 - `src/app/App.jsx` — Root component; owns all hooks and wires them to pages via props
 - `src/app/providers.jsx` — Global CSS/keyframes injected via `<style>`
 
+## Supabase CLI access (DB migrations, direct queries)
+
+The Supabase personal access token is stored at `~/.supabase/access-token` (outside the repo, `chmod 600`, never commit).
+
+To apply a migration or run a one-off query:
+
+```bash
+SUPABASE_ACCESS_TOKEN="$(cat ~/.supabase/access-token)" /tmp/supabase db query --linked -f path/to/file.sql
+```
+
+Project is already linked via `supabase/.temp/linked-project.json` (ref `yndpjabmrkqclcxeecei`, org TripleRs). No need to re-link per session.
+
+**Rules**:
+- Never paste or echo the token in any committed file, commit message, or conversation transcript.
+- Prefer `db query --linked -f <file>` over `db push --linked` — the latter will re-run any untracked older migrations.
+- If the token is ever compromised, rotate it in Supabase Dashboard → Account → Access Tokens and overwrite `~/.supabase/access-token`.
+
 ## Coordinator Pattern
 
 `App.jsx` uses a `coordRef` to break circular hook dependencies:

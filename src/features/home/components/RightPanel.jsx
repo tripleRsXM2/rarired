@@ -166,7 +166,7 @@ function Leaderboard({ t, openProfile, viewerSuburb }) {
 }
 
 // ── Pending actions ────────────────────────────────────────────────────────────
-function PendingActions({ t, authUser, history }) {
+function PendingActions({ t, authUser, history, onReviewMatch }) {
   var pending = (history || []).filter(function(m) {
     if (m.status === "pending_confirmation" && m.isTagged) return true;
     if ((m.status === "disputed" || m.status === "pending_reconfirmation") && authUser && m.pendingActionBy === authUser.id) return true;
@@ -195,13 +195,20 @@ function PendingActions({ t, authUser, history }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {pending.map(function(m) {
         var s = statusLabel[m.status] || { label: "View", color: t.accent };
+        var clickable = !!onReviewMatch;
         return (
-          <div key={m.id} style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 12px", borderRadius: 8,
-            border: "1px solid " + t.border,
-            background: t.bgCard,
-          }}>
+          <div key={m.id}
+            onClick={clickable ? function() { onReviewMatch(m); } : undefined}
+            onMouseEnter={clickable ? function(e) { e.currentTarget.style.borderColor = t.accent + "66"; } : undefined}
+            onMouseLeave={clickable ? function(e) { e.currentTarget.style.borderColor = t.border; } : undefined}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 12px", borderRadius: 8,
+              border: "1px solid " + t.border,
+              background: t.bgCard,
+              cursor: clickable ? "pointer" : "default",
+              transition: "border-color 0.15s",
+            }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
               background: avColor(m.oppName),
@@ -232,7 +239,7 @@ function PendingActions({ t, authUser, history }) {
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────
-export default function RightPanel({ t, authUser, history, onLogMatch, openProfile, viewerSuburb }) {
+export default function RightPanel({ t, authUser, history, onLogMatch, openProfile, viewerSuburb, onReviewMatch }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: t.bgCard }}>
 
@@ -258,7 +265,7 @@ export default function RightPanel({ t, authUser, history, onLogMatch, openProfi
       {/* Pending matches needing action */}
       {authUser && (
         <Section t={t} title="Needs your action">
-          <PendingActions t={t} authUser={authUser} history={history} />
+          <PendingActions t={t} authUser={authUser} history={history} onReviewMatch={onReviewMatch} />
         </Section>
       )}
 
