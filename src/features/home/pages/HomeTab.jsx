@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 
 var REASON_LABELS = {
@@ -223,12 +224,28 @@ function FeedCard({
                   : isVoided                    ? { label: "Voided",     color: t.textTertiary, bg: t.bgTertiary }
                   : null;
 
+  // Outer card treatment — unconfirmed matches "pop" against confirmed ones:
+  //   - orange border for any pending/re-propose state
+  //   - red border for active disputes
+  //   - needs-my-action cards also get a slight accent background tint and
+  //     a thicker border so the user's attention is drawn immediately
+  var needsAction = isOpponentView || needsMyAction;
+  var statusColor = isDisputed ? t.red
+                   : (isPending || isPendingReconf) ? t.orange
+                   : null;
+  var cardBorder = statusColor
+                   ? (needsAction ? "2px solid " + statusColor : "1px solid " + statusColor + "88")
+                   : "1px solid " + t.border;
+  var cardBg = needsAction && statusColor
+               ? (isDisputed ? t.redSubtle : t.orangeSubtle)
+               : t.bgCard;
+
   return (
     <div
       className="cs-card"
       style={{
-        background: t.bgCard,
-        border: "1px solid " + t.border,
+        background: cardBg,
+        border: cardBorder,
         borderRadius: 0,
         overflow: "hidden",
         marginBottom: 14,
@@ -415,7 +432,6 @@ function FeedCard({
               display: "flex", alignItems: "center",
               padding: "7px 16px",
               borderTop: "1px solid " + t.border,
-              background: t.bgCard,
             }}>
               {/* Player name — clickable when that row is a real user */}
               <div
@@ -466,8 +482,13 @@ function FeedCard({
       {isPending && !isOpponentView && (
         <div style={{ borderTop: "1px solid " + t.border, padding: "10px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, color: t.orange }}>⏳</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.orange }}>
+              <span style={{ display: "flex", alignItems: "center" }}>
+                <svg width="12" height="12" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.5"/>
+                  <path d="M9 5v4l3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </span>
               <span style={{ fontSize: 12, color: t.textSecondary }}>Awaiting opponent confirmation</span>
             </div>
             {timeRemaining(m.expiresAt) && (
@@ -478,21 +499,42 @@ function FeedCard({
       )}
 
       {/* ── PENDING: opponent action buttons ─────────────────────────────── */}
+      {/* Sharp-cornered Confirm/Dispute in line with the feed card chrome.
+          Confirm = solid accent-green primary. Dispute = transparent line-art
+          outline with red stroke. SVG icons per the no-emoji-as-icons rule. */}
       {isOpponentView && !demo && (
-        <div style={{ borderTop: "1px solid " + t.border, padding: "12px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 12, color: t.textSecondary, width: "100%", marginBottom: 6, fontWeight: 500 }}>{pName} logged this match — does it look right?</div>
-          <button onClick={async function() {
-              var res = await confirmOpponentMatch(m);
-              if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
-            }}
-            style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
-            onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
-            ✓ Confirm
-          </button>
-          <button onClick={function() { openDisputeModal("dispute"); }}
-            style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.red + "44", background: t.redSubtle, color: t.red, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
-            Dispute
-          </button>
+        <div style={{ borderTop: "1px solid " + t.border, padding: "10px 14px 12px" }}>
+          <div style={{ fontSize: 11, color: t.textSecondary, marginBottom: 8, fontWeight: 500, letterSpacing: "0.01em" }}>
+            {pName} logged this match — does it look right?
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={async function() {
+                var res = await confirmOpponentMatch(m);
+                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
+              }}
+              style={{
+                flex: 1, padding: "9px 10px", borderRadius: 0, border: "none",
+                background: t.green, color: "#fff",
+                fontSize: 12, fontWeight: 700, letterSpacing: "0.03em",
+                cursor: "pointer", transition: "opacity 0.15s",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+              onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+              <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.check(13)}</span>
+              Confirm
+            </button>
+            <button onClick={function() { openDisputeModal("dispute"); }}
+              style={{
+                flex: 1, padding: "9px 10px", borderRadius: 0,
+                border: "1px solid " + t.red, background: "transparent", color: t.red,
+                fontSize: 12, fontWeight: 600, letterSpacing: "0.03em",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}>
+              <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.x(13)}</span>
+              Dispute
+            </button>
+          </div>
         </div>
       )}
 
@@ -531,24 +573,43 @@ function FeedCard({
       )}
 
       {/* ── DISPUTED: action buttons ──────────────────────────────────────── */}
+      {/* Same sharp line-art treatment as the confirm/dispute block above —
+          Accept (primary green), Counter-propose (orange outline),
+          Void (red outline). SVG icons, no emoji. */}
       {isInDispute && needsMyAction && !demo && (
-        <div style={{ borderTop: "1px solid " + t.border, padding: "12px 16px" }}>
+        <div style={{ borderTop: "1px solid " + t.border, padding: "10px 14px 12px" }}>
           {(m.revisionCount || 0) >= 3 && (
-            <div style={{ fontSize: 11, color: t.red, marginBottom: 8, fontWeight: 500 }}>Final round reached — accept or void.</div>
+            <div style={{ fontSize: 11, color: t.red, marginBottom: 8, fontWeight: 500, letterSpacing: "0.01em" }}>
+              Final round reached — accept or void.
+            </div>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={async function() {
                 var res = await acceptCorrection(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
-              style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
+              style={{
+                flex: 1, padding: "9px 10px", borderRadius: 0, border: "none",
+                background: t.green, color: "#fff",
+                fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", minWidth: 80,
+                cursor: "pointer", transition: "opacity 0.15s",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
               onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+              <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.check(13)}</span>
               Accept
             </button>
             {(m.revisionCount || 0) < 3 && (
               <button onClick={function() { openDisputeModal("counter"); }}
-                style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.orange, background: t.orangeSubtle, color: t.orange, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
-                Counter-propose
+                style={{
+                  flex: 1, padding: "9px 10px", borderRadius: 0,
+                  border: "1px solid " + t.orange, background: "transparent", color: t.orange,
+                  fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", minWidth: 80,
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                }}>
+                <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.edit(12)}</span>
+                Counter
               </button>
             )}
             <button onClick={async function() {
@@ -556,7 +617,14 @@ function FeedCard({
                 var res = await voidMatchAction(m, "mutual_void");
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
-              style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.red + "44", background: t.redSubtle, color: t.red, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
+              style={{
+                flex: 1, padding: "9px 10px", borderRadius: 0,
+                border: "1px solid " + t.red, background: "transparent", color: t.red,
+                fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", minWidth: 80,
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}>
+              <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.x(13)}</span>
               Void
             </button>
           </div>

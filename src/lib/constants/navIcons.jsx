@@ -89,6 +89,25 @@ export var NAV_ICONS = {
       </svg>
     );
   },
+  // Checkmark — used for "Confirm" affordances (match confirmation, accept
+  // friend request, etc). Replaces the emoji ✓ per the no-emoji-as-icons rule.
+  check: function(size){
+    var s = size || 15;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M3.5 9.5l3.5 3.5 7.5-8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+  // X / close glyph — used for "Decline" / "Dispute" / dismiss affordances.
+  x: function(size){
+    var s = size || 15;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      </svg>
+    );
+  },
   // Loop / rematch arrow — used in feed card + any future "repeat this
   // match" affordance. Kept here so it's available outside the feed too.
   rematch: function(size){
