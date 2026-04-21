@@ -6,6 +6,84 @@
 
 Every feature decision, UI trade-off, and prioritisation call must be consistent with this. If a proposed change leans toward heavy scheduling/coordination tooling at the expense of social identity and verification, push back or flag it.
 
+## Product Lenses (locked — apply to all future work)
+
+Every module, feature, and UX choice must pass through these three lenses before shipping.
+
+### 1. The Cold Start Problem
+Build for **network density in a small local tennis community first**. Prioritise suburb/club identity, local discovery, people-you-played, rematches, rivalries, and meaningful Friends-feed behaviour. Do NOT optimise for broad generic scale yet. If a feature makes sense only at 100k users but not at 100, it's the wrong feature now.
+
+### 2. Hooked (Eyal)
+For every feature, design the loop: **trigger → action → reward → investment**. Prioritise notifications as triggers, one-tap actions, visible profile/stat changes as variable rewards, and actions that make the app more valuable next time (investment). If a feature has no obvious re-entry hook, explain why.
+
+### 3. The Mom Test (Fitzpatrick)
+Do not only build UX. Also add **instrumentation so we can learn from real user behaviour**. Track core events, measure drop-offs, and support small experiments. Shipping without telemetry is shipping blind.
+
+## Standing requirements (locked)
+
+- Every module must explain how it improves **density, retention, or learning**.
+- Every module must include **analytics/event tracking** if relevant.
+- Every module must keep the user journey **lightweight**.
+- **Avoid**: broad booking systems, generic messaging platforms. Those are not the product.
+- **Optimise for the core loop**: play → log → confirm → profile/feed update → challenge/rematch.
+
+### Pre-module report format (required before starting any module)
+1. How this improves local network density
+2. How this improves the retention loop
+3. What measurable user behaviour should change (hypothesis)
+4. What analytics/events are being added (concrete event names)
+
+## Product docs — always kept in sync with code (locked)
+
+Code changes the product. Docs explain the product. Both must stay in sync. A module is **not complete** until the relevant docs are updated.
+
+### Required docs (lives in `/docs/`)
+
+| File | Owns |
+|---|---|
+| `product-principles.md` | What CourtSync is / isn't. Tradeoffs. Scope boundaries. |
+| `trust-and-ranking-rules.md` | Match validity, confirmation, dispute, void, expiry, ranking formula. |
+| `core-loop.md` | Primary + secondary loops, activation, aha moment, retention triggers, key metrics. |
+| `notification-taxonomy.md` | Every notification type: trigger, recipient, priority, deep-link, copy. |
+| `discovery-seeding-plan.md` | Atomic network, discovery behaviour, empty states, invite flow, seed metrics. |
+
+### Doc structure (required for each file)
+1. Title
+2. Purpose
+3. Current Product Rule / Current State
+4. Design / Decision Principles
+5. Open Questions
+6. Out of Scope
+7. Last Updated By Module
+
+### Change classification — which doc to update
+
+| If the change touches… | Update |
+|---|---|
+| Trust, ranking, confirmation, disputes, match validity | `trust-and-ranking-rules.md` |
+| The main user journey, onboarding, activation, next-step behaviour | `core-loop.md` |
+| App scope, product direction, tradeoffs | `product-principles.md` |
+| Alerts, inbox behaviour, deep links, notification copy | `notification-taxonomy.md` |
+| Player search, follows, local discovery, empty states, growth assumptions | `discovery-seeding-plan.md` |
+
+### Working process for every module
+1. **Audit** what already exists.
+2. **Classify** which areas the module touches (from the table above).
+3. **Before coding**: state which docs will update and what product rule is being introduced or changed.
+4. **Implement** the code.
+5. **Verify**.
+6. **Update** all relevant docs in the *same commit* (or at minimum the same merge).
+7. **Summarise** code changes + product rule changes + docs touched + open questions.
+
+### Doc writing rules
+- Plain English, not aspirational fluff.
+- Opinionated and specific; avoid "we should consider…" hedging.
+- Concise and skimmable; prefer product rules over implementation detail.
+- Include "Open Questions" when a thing is undecided — don't pretend it's settled.
+- Include "Out of Scope" to prevent drift.
+- Mark inferred-from-code assumptions clearly.
+- Write for a future model to use as a source of truth.
+
 ## Git Workflow
 
 ### Branch ownership
