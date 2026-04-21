@@ -78,6 +78,17 @@ export var NAV_ICONS = {
       </svg>
     );
   },
+  // Pencil / edit glyph — used on the profile hero edit button + anywhere
+  // "edit this thing" is needed.
+  edit: function(size){
+    var s = size || 15;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M2 14l1-4L12 1l4 4-9 9-4 1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M10 3l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    );
+  },
   // Loop / rematch arrow — used in feed card + any future "repeat this
   // match" affordance. Kept here so it's available outside the feed too.
   rematch: function(size){

@@ -14,6 +14,147 @@ import {
   computeConfirmationRate,
 } from "../utils/profileStats.js";
 import { track } from "../../../lib/analytics.js";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+
+// ── ProfileMatchRow ──────────────────────────────────────────────────────────
+// Compact version of the feed scoreboard for use inside the profile (Recent
+// Matches + Matches tab). Same typography + winner-from-sets derivation as
+// FeedCard, minus the social footer / action blocks. Header row shows
+// opponent, date, tournament pill, and a tiny result chip on the right.
+function ProfileMatchRow({ m, t, profile }) {
+  var sets = m.sets || [];
+  // Viewer's scores are s.you for own matches; for tagged matches the row is
+  // still rendered from the viewer's POV — normalizeMatch already flips
+  // `result` but leaves sets in the submitter's frame, so we compute which
+  // side the viewer is on.
+  var viewerIsSubmitter = !m.isTagged;
+  // Set-count winner derivation (trust the board, not the stored result).
+  var ys = 0, ts = 0;
+  sets.forEach(function (s) {
+    var y = Number(s.you), th = Number(s.them);
+    if (!Number.isNaN(y) && !Number.isNaN(th) && y !== th) {
+      if (y > th) ys++; else ts++;
+    }
+  });
+  var isWinStored = m.result === "win";
+  var viewerWins = ys !== ts
+    ? (viewerIsSubmitter ? ys > ts : ts > ys)
+    : isWinStored;
+  var viewerName = (profile && profile.name) || "You";
+  var rows = [
+    {
+      name: viewerName,
+      isWinner: viewerWins,
+      scores: viewerIsSubmitter ? sets.map(function(s){return s.you;}) : sets.map(function(s){return s.them;}),
+      oppScores: viewerIsSubmitter ? sets.map(function(s){return s.them;}) : sets.map(function(s){return s.you;}),
+    },
+    {
+      name: m.oppName || "Unknown",
+      isWinner: !viewerWins,
+      scores: viewerIsSubmitter ? sets.map(function(s){return s.them;}) : sets.map(function(s){return s.you;}),
+      oppScores: viewerIsSubmitter ? sets.map(function(s){return s.you;}) : sets.map(function(s){return s.them;}),
+    },
+  ];
+
+  return (
+    <div style={{
+      background: t.bgCard,
+      border: "1px solid " + t.border,
+      borderRadius: 0,
+      marginBottom: 8,
+      overflow: "hidden",
+    }}>
+      {/* Header: opponent + date + tourn + result chip */}
+      <div style={{ display: "flex", alignItems: "center", padding: "10px 14px", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "-0.1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            vs {m.oppName || "Unknown"}
+          </div>
+          <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {[m.date, m.tournName && m.tournName !== "Casual Match" ? m.tournName : (m.tournName === "Casual Match" ? "Casual" : null), m.venue].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        {m.status === "confirmed" && (
+          <span style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+            color: viewerWins ? t.green : t.red,
+            background: viewerWins ? t.greenSubtle : t.redSubtle,
+            padding: "2px 7px", borderRadius: 20, flexShrink: 0,
+          }}>{viewerWins ? "Won" : "Lost"}</span>
+        )}
+        {m.status !== "confirmed" && (
+          <span style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+            color: t.textTertiary, background: t.bgTertiary,
+            padding: "2px 7px", borderRadius: 20, flexShrink: 0,
+          }}>
+            {m.status === "pending_confirmation" ? "Pending" :
+             m.status === "disputed" ? "Disputed" :
+             m.status === "pending_reconfirmation" ? "Re-proposed" :
+             m.status === "voided" ? "Voided" :
+             m.status === "expired" ? "Unverified" : m.status}
+          </span>
+        )}
+      </div>
+
+      {/* Scoreboard — same compact style as feed card */}
+      {sets.length > 0 && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 14px", borderTop: "1px solid " + t.border }}>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {sets.map(function (_, i) {
+                return (
+                  <div key={i} style={{ width: 24, textAlign: "center", fontSize: 8, fontWeight: 600, color: t.textTertiary, letterSpacing: "0.04em", padding: "4px 0" }}>
+                    S{i + 1}
+                  </div>
+                );
+              })}
+              <div style={{ width: 16 }} />
+            </div>
+          </div>
+          {rows.map(function (row, ri) {
+            return (
+              <div key={ri} style={{
+                display: "flex", alignItems: "center",
+                padding: "6px 14px",
+                borderTop: "1px solid " + t.border,
+              }}>
+                <div style={{
+                  flex: 1, minWidth: 0,
+                  fontSize: 13,
+                  fontWeight: row.isWinner ? 600 : 400,
+                  color: row.isWinner ? t.text : t.textSecondary,
+                  letterSpacing: "-0.1px",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8,
+                }}>{row.name}</div>
+                {row.scores.map(function (score, i) {
+                  var opp = row.oppScores[i];
+                  var wonSet = (score !== "" && score !== undefined && opp !== "" && opp !== undefined)
+                    ? Number(score) > Number(opp) : false;
+                  return (
+                    <div key={i} style={{
+                      width: 24, textAlign: "center",
+                      fontSize: 14, fontWeight: wonSet ? 600 : 400,
+                      color: wonSet ? t.text : t.textTertiary,
+                      fontVariantNumeric: "tabular-nums", letterSpacing: "-0.2px", lineHeight: 1,
+                    }}>
+                      {score !== undefined && score !== "" ? score : "–"}
+                    </div>
+                  );
+                })}
+                <div style={{ width: 16, textAlign: "center" }}>
+                  {row.isWinner && (
+                    <span style={{ fontSize: 9, color: t.green, fontWeight: 600 }}>◀</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
 
 var BADGES=[
   {id:"first", label:"First Match",   desc:"Play your first match",             icon:"🎾", check:function(w,p){return p>=1;}},
@@ -103,11 +244,19 @@ export default function ProfileTab({
               <span style={{fontSize:11,fontWeight:600,color:t.green,background:t.greenSubtle,padding:"3px 9px",borderRadius:20}}>{profile.style}</span>
             </div>
           </div>
-          {/* "Edit profile" shortcut — opens Settings */}
+          {/* "Edit profile" shortcut — opens Settings. Transparent chrome, SVG icon. */}
           {authUser&&(
             <button
               onClick={onOpenSettings}
-              style={{padding:"7px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:12,fontWeight:600,flexShrink:0,marginTop:4}}>
+              title="Edit profile"
+              style={{
+                padding:"6px 10px",
+                border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,
+                fontSize:12,fontWeight:600,flexShrink:0,marginTop:4,
+                display:"inline-flex",alignItems:"center",gap:6,
+                cursor:"pointer",
+              }}>
+              <span style={{display:"flex",alignItems:"center"}}>{NAV_ICONS.edit(13)}</span>
               Edit
             </button>
           )}
@@ -153,18 +302,18 @@ export default function ProfileTab({
             )}
           </div>
         )}
-        {/* Recent form chips (last 5 confirmed, most recent first) */}
+        {/* Recent form chips — sharp squares to match feed chrome */}
         {recentForm.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-            <span style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em"}}>Recent form</span>
-            <div style={{display:"flex",gap:4}}>
+            <span style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em"}}>Recent form</span>
+            <div style={{display:"flex",gap:3}}>
               {recentForm.map(function(r,i){
                 var isW=r==="W";
                 return (
                   <span key={i} style={{
-                    width:20,height:20,borderRadius:6,
+                    width:18,height:18,borderRadius:0,
                     display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:10,fontWeight:800,
+                    fontSize:10,fontWeight:700,
                     color:isW?t.green:t.red,
                     background:isW?t.greenSubtle:t.redSubtle,
                     border:"1px solid "+(isW?t.green:t.red)+"33",
@@ -175,32 +324,32 @@ export default function ProfileTab({
           </div>
         )}
 
-        {/* Rank + achievements summary */}
-        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        {/* Rank + achievements summary — sharp corners, tighter typography */}
+        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"12px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Ranking Points</div>
-            <div style={{fontSize:26,fontWeight:800,color:t.text,letterSpacing:"-0.5px",fontVariantNumeric:"tabular-nums"}}>{rankPts.toLocaleString()}</div>
+            <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Ranking Points</div>
+            <div style={{fontSize:22,fontWeight:800,color:t.text,letterSpacing:"-0.4px",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{rankPts.toLocaleString()}</div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Achievements</div>
-            <div style={{fontSize:26,fontWeight:800,color:t.gold,letterSpacing:"-0.5px"}}>
-              {unlockedCount}<span style={{fontSize:13,color:t.textTertiary,fontWeight:500}}>/{badges.length}</span>
+            <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Achievements</div>
+            <div style={{fontSize:22,fontWeight:800,color:t.gold,letterSpacing:"-0.4px",lineHeight:1.1}}>
+              {unlockedCount}<span style={{fontSize:12,color:t.textTertiary,fontWeight:500}}>/{badges.length}</span>
             </div>
           </div>
         </div>
 
-        {/* Quick stats bar */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
+        {/* Quick stats strip — 4-col, sharp corners, Strava label/value rhythm */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:0,marginBottom:18,background:t.bgCard,border:"1px solid "+t.border}}>
           {[
-            {l:"Matches",v:history.length,                                          c:t.text},
-            {l:"Wins",   v:wins,                                                    c:t.green},
-            {l:"Win %",  v:history.length?winRate+"%":"—",                          c:t.accent},
+            {l:"Matches",v:history.length,                              c:t.text},
+            {l:"Wins",   v:wins,                                        c:t.green},
+            {l:"Win %",  v:history.length?winRate+"%":"—",              c:t.accent},
             {l:"Streak", v:streakLabel, c:streakType==="win"?t.green:streakType==="loss"?t.red:t.textTertiary},
-          ].map(function(s){
+          ].map(function(s,i){
             return (
-              <div key={s.l} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
-                <div style={{fontSize:20,fontWeight:800,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.3px"}}>{s.v}</div>
-                <div style={{fontSize:9,color:t.textTertiary,marginTop:3,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}}>{s.l}</div>
+              <div key={s.l} style={{padding:"10px 8px",textAlign:"center",borderLeft:i===0?"none":"1px solid "+t.border}}>
+                <div style={{fontSize:9,color:t.textTertiary,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
+                <div style={{fontSize:14,fontWeight:700,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.2px",lineHeight:1.1}}>{s.v}</div>
               </div>
             );
           })}
@@ -231,18 +380,22 @@ export default function ProfileTab({
       {profileTab==="overview"&&(
         <div style={{padding:"20px 20px 100px"}} className="fade-up">
           <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Performance</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:24}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,marginBottom:24,background:t.bgCard,border:"1px solid "+t.border}}>
             {[
               {l:"Total Played", v:history.length,                                   sub:"all time",                                                        c:t.text},
               {l:"Total Wins",   v:wins,                                              sub:"all time",                                                        c:t.green},
               {l:"Total Losses", v:losses,                                            sub:"all time",                                                        c:t.red},
               {l:"Win Rate",     v:history.length?winRate+"%":"—", sub:history.length?"from "+history.length+" matches":"no matches yet", c:t.accent},
-            ].map(function(s){
+            ].map(function(s,i){
               return (
-                <div key={s.l} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+s.c,borderRadius:10,padding:"14px 16px"}}>
-                  <div style={{fontSize:28,fontWeight:800,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px"}}>{s.v}</div>
-                  <div style={{fontSize:12,fontWeight:600,color:t.text,marginTop:2}}>{s.l}</div>
-                  <div style={{fontSize:11,color:t.textTertiary,marginTop:1}}>{s.sub}</div>
+                <div key={s.l} style={{
+                  padding:"14px 16px",
+                  borderLeft:i%2===1?"1px solid "+t.border:"none",
+                  borderTop:i>=2?"1px solid "+t.border:"none",
+                }}>
+                  <div style={{fontSize:9,color:t.textTertiary,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:4}}>{s.l}</div>
+                  <div style={{fontSize:22,fontWeight:800,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.4px",lineHeight:1.1}}>{s.v}</div>
+                  <div style={{fontSize:10,color:t.textTertiary,marginTop:3,letterSpacing:"0.01em"}}>{s.sub}</div>
                 </div>
               );
             })}
@@ -254,26 +407,13 @@ export default function ProfileTab({
             {history.length>3&&<button onClick={function(){setProfileTab("matches");}} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600}}>See all</button>}
           </div>
           {history.length===0
-            ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"28px 20px",textAlign:"center"}}>
+            ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"28px 20px",textAlign:"center"}}>
               <div style={{fontSize:28,marginBottom:8}}>🎾</div>
               <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:4}}>No matches yet</div>
               <div style={{fontSize:13,color:t.textTertiary}}>Enter a tournament or log a match to get started.</div>
             </div>
             :history.slice(0,3).map(function(m){
-              var isWin=m.result==="win";
-              var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join(", ");
-              return (
-                <div key={m.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+(isWin?t.green:t.red),borderRadius:10,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
-                  <div style={{width:36,height:36,borderRadius:"50%",flexShrink:0,background:isWin?t.greenSubtle:t.redSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:isWin?t.green:t.red}}>
-                    {isWin?"W":"L"}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>vs {m.oppName||"Unknown"}</div>
-                    <div style={{fontSize:12,color:t.textSecondary}}>{scoreStr||"No score"}{m.tournName?" · "+m.tournName:""}</div>
-                  </div>
-                  <div style={{fontSize:11,color:t.textTertiary,flexShrink:0,textAlign:"right"}}>{m.date||""}</div>
-                </div>
-              );
+              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} />;
             })
           }
 
@@ -293,7 +433,7 @@ export default function ProfileTab({
                       style={{
                         display:"flex",alignItems:"center",gap:8,
                         background:t.bgCard,border:"1px solid "+t.border,
-                        borderRadius:10,padding:"8px 12px 8px 8px",
+                        borderRadius:0,padding:"8px 12px 8px 8px",
                         cursor:clickable?"pointer":"default",
                       }}>
                       <div style={{
@@ -328,9 +468,9 @@ export default function ProfileTab({
               <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
                 {badges.filter(function(b){return b.unlocked;}).map(function(b){
                   return (
-                    <div key={b.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"12px",textAlign:"center",minWidth:80,flexShrink:0}}>
-                      <div style={{fontSize:24,marginBottom:4}}>{b.icon}</div>
-                      <div style={{fontSize:10,fontWeight:700,color:t.text,lineHeight:1.2}}>{b.label}</div>
+                    <div key={b.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"12px",textAlign:"center",minWidth:80,flexShrink:0}}>
+                      <div style={{fontSize:22,marginBottom:4}}>{b.icon}</div>
+                      <div style={{fontSize:9,fontWeight:700,color:t.text,lineHeight:1.2,textTransform:"uppercase",letterSpacing:"0.04em"}}>{b.label}</div>
                     </div>
                   );
                 })}
@@ -344,17 +484,17 @@ export default function ProfileTab({
               <span>Availability</span>
               {authUser&&<button onClick={onOpenSettings} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600}}>Edit</button>}
             </div>
-            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"14px 16px"}}>
+            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"14px 16px"}}>
               {DAYS_SHORT.filter(function(d){return((profile.availability||{})[d]||[]).length>0;}).length===0
                 ?<p style={{fontSize:13,color:t.textTertiary,margin:0}}>No availability set yet.</p>
                 :<div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {DAYS_SHORT.filter(function(d){return((profile.availability||{})[d]||[]).length>0;}).map(function(day){
                     return (
                       <div key={day} style={{display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{fontSize:11,fontWeight:700,color:t.textSecondary,width:30,flexShrink:0}}>{day}</span>
+                        <span style={{fontSize:10,fontWeight:700,color:t.textSecondary,width:30,flexShrink:0,textTransform:"uppercase",letterSpacing:"0.06em"}}>{day}</span>
                         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                           {((profile.availability||{})[day]||[]).map(function(b){
-                            return <span key={b} style={{fontSize:10,fontWeight:600,color:t.accent,background:t.accentSubtle,padding:"2px 8px",borderRadius:20}}>{b}</span>;
+                            return <span key={b} style={{fontSize:10,fontWeight:600,color:t.accent,background:t.accentSubtle,border:"1px solid "+t.accent+"33",padding:"2px 8px",borderRadius:0}}>{b}</span>;
                           })}
                         </div>
                       </div>
@@ -374,39 +514,13 @@ export default function ProfileTab({
             Match History · {history.length} {history.length===1?"match":"matches"}
           </div>
           {history.length===0
-            ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"40px 20px",textAlign:"center"}}>
+            ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"40px 20px",textAlign:"center"}}>
               <div style={{fontSize:36,marginBottom:12}}>🎾</div>
               <div style={{fontSize:15,fontWeight:700,color:t.text,marginBottom:6}}>No matches yet</div>
               <div style={{fontSize:13,color:t.textTertiary,lineHeight:1.5}}>Complete a tournament match and log your score to see your history here.</div>
             </div>
             :history.map(function(m){
-              var isWin=m.result==="win";
-              var scoreStr=(m.sets||[]).map(function(s){return s.you+"-"+s.them;}).join(", ");
-              return (
-                <div key={m.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+(isWin?t.green:t.red),borderRadius:10,padding:"16px",marginBottom:8}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:32,height:32,borderRadius:"50%",background:isWin?t.greenSubtle:t.redSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:isWin?t.green:t.red,flexShrink:0}}>
-                        {isWin?"W":"L"}
-                      </div>
-                      <div>
-                        <div style={{fontSize:14,fontWeight:700,color:t.text}}>vs {m.oppName||"Unknown"}</div>
-                        <div style={{fontSize:11,color:isWin?t.green:t.red,fontWeight:600,marginTop:1}}>{isWin?"Victory":"Defeat"}</div>
-                      </div>
-                    </div>
-                    <div style={{fontSize:11,color:t.textTertiary,textAlign:"right"}}>
-                      <div>{m.date||""}</div>
-                      {m.tournName&&<div style={{fontSize:10,marginTop:2,color:t.accent,fontWeight:600}}>{m.tournName}</div>}
-                    </div>
-                  </div>
-                  {scoreStr&&(
-                    <div style={{background:t.bgTertiary,border:"1px solid "+t.border,borderRadius:7,padding:"8px 12px",display:"inline-block"}}>
-                      <span style={{fontSize:11,fontWeight:600,color:t.textSecondary,letterSpacing:"0.04em"}}>SCORE </span>
-                      <span style={{fontSize:14,fontWeight:800,color:t.text,fontVariantNumeric:"tabular-nums"}}>{scoreStr}</span>
-                    </div>
-                  )}
-                </div>
-              );
+              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} />;
             })
           }
         </div>
@@ -416,22 +530,39 @@ export default function ProfileTab({
       {profileTab==="achievements"&&(
         <div style={{padding:"20px 20px 100px"}} className="fade-up">
           <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Badges</div>
-          <div style={{fontSize:13,color:t.textSecondary,marginBottom:16}}>{unlockedCount} of {badges.length} unlocked</div>
-          <div style={{background:t.bgTertiary,borderRadius:4,height:4,marginBottom:24,overflow:"hidden"}}>
-            <div style={{height:"100%",width:(unlockedCount/badges.length*100)+"%",background:t.gold,borderRadius:4,transition:"width 0.5s ease"}}/>
+          <div style={{fontSize:13,color:t.textSecondary,marginBottom:14}}>{unlockedCount} of {badges.length} unlocked</div>
+          <div style={{background:t.bgTertiary,borderRadius:0,height:3,marginBottom:20,overflow:"hidden"}}>
+            <div style={{height:"100%",width:(unlockedCount/badges.length*100)+"%",background:t.gold,transition:"width 0.5s ease"}}/>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {badges.map(function(b){
+          <div style={{background:t.bgCard,border:"1px solid "+t.border}}>
+            {badges.map(function(b,i){
               return (
-                <div key={b.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+(b.unlocked?t.gold:t.border),borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,opacity:b.unlocked?1:0.5}}>
-                  <div style={{width:44,height:44,borderRadius:12,flexShrink:0,background:b.unlocked?t.goldSubtle:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,filter:b.unlocked?"none":"grayscale(1)"}}>
+                <div key={b.id} style={{
+                  borderTop:i===0?"none":"1px solid "+t.border,
+                  padding:"12px 14px",display:"flex",alignItems:"center",gap:12,
+                  opacity:b.unlocked?1:0.45,
+                }}>
+                  <div style={{
+                    width:36,height:36,borderRadius:0,flexShrink:0,
+                    background:b.unlocked?t.goldSubtle:t.bgTertiary,
+                    border:"1px solid "+(b.unlocked?t.gold+"33":t.border),
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:18,filter:b.unlocked?"none":"grayscale(1)",
+                  }}>
                     {b.icon}
                   </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:14,fontWeight:700,color:t.text}}>{b.label}</div>
-                    <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>{b.desc}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:700,color:t.text,letterSpacing:"-0.1px"}}>{b.label}</div>
+                    <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{b.desc}</div>
                   </div>
-                  {b.unlocked&&<div style={{fontSize:11,fontWeight:700,color:t.gold,flexShrink:0}}>Unlocked</div>}
+                  {b.unlocked&&(
+                    <span style={{
+                      fontSize:9,fontWeight:700,color:t.gold,flexShrink:0,
+                      textTransform:"uppercase",letterSpacing:"0.06em",
+                      background:t.goldSubtle,border:"1px solid "+t.gold+"33",
+                      padding:"2px 7px",borderRadius:20,
+                    }}>Unlocked</span>
+                  )}
                 </div>
               );
             })}
