@@ -117,8 +117,9 @@ Object.entries(ZONE_MEMBERS).forEach(function(entry){
       if(u) merged = u;
     } catch(e){ /* skip self-intersections */ }
   }
-  // Simplify to keep output small but shape still clean.
-  var simp = turf.simplify(merged, { tolerance: 0.0003, highQuality: true, mutate: false });
+  // Light simplify — keeps real curves but drops sub-metre noise so the
+  // polygons don't balloon the bundle. Tolerance is in degrees (~10m here).
+  var simp = turf.simplify(merged, { tolerance: 0.00008, highQuality: true, mutate: false });
   out[zoneId] = simp.geometry;
 });
 

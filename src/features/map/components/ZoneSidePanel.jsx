@@ -23,6 +23,9 @@ export default function ZoneSidePanel({
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
 
+  // Re-fetch when the zone changes OR when the user's home zone changes,
+  // so setting/clearing "home" in this panel refreshes the list without
+  // needing to close + reopen the panel.
   useEffect(function(){
     if(!zone) return;
     setLoading(true);
@@ -31,7 +34,26 @@ export default function ZoneSidePanel({
       else setPlayers(r.data||[]);
       setLoading(false);
     });
-  },[zone&&zone.id]);
+  },[zone&&zone.id, homeZone]);
+
+  // If the current user just set this zone as home, optimistically include
+  // them at the top of the list so the UI reflects it instantly even before
+  // the re-fetch resolves.
+  var displayPlayers = players;
+  if(zone && authUser && homeZone === zone.id && profile){
+    var alreadyThere = players.some(function(p){ return p.id === authUser.id; });
+    if(!alreadyThere){
+      displayPlayers = [{
+        id: authUser.id,
+        name: profile.name,
+        avatar: profile.avatar,
+        skill: profile.skill,
+        ranking_points: profile.ranking_points,
+        suburb: profile.suburb,
+        home_zone: zone.id,
+      }].concat(players);
+    }
+  }
 
   if(!zone) return null;
 
@@ -81,7 +103,7 @@ export default function ZoneSidePanel({
           <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Courts nearby</div>
         </div>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading?"…":players.length}</div>
+          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading?"…":displayPlayers.length}</div>
           <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Players here</div>
         </div>
       </div>
@@ -114,14 +136,14 @@ export default function ZoneSidePanel({
         <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Players in this zone</div>
         {loading
           ? <div style={{ fontSize:12, color:t.textTertiary }}>Loading…</div>
-          : players.length===0
+          : displayPlayers.length===0
             ? <div style={{ fontSize:12, color:t.textTertiary, lineHeight:1.45 }}>
                 No one has set this as their home yet.
                 {canSetHome && !isHome && " Be the first."}
               </div>
             : (
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                {players.map(function(p){
+                {displayPlayers.map(function(p){
                   return (
                     <button key={p.id}
                       onClick={function(){ onOpenProfile && onOpenProfile(p.id); }}

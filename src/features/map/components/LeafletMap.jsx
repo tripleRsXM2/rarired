@@ -177,8 +177,10 @@ export default function LeafletMap({
         'box-shadow:0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)">' +
         '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
       '</div>';
+    // iconAnchor y pushed to 70 so the pin renders ~54px ABOVE the centroid,
+    // clearing the zone number + name label stack below it.
     var pin = L.marker(z.center, {
-      icon: L.divIcon({ className: "cs-home-pin", html: html, iconSize: [32,32], iconAnchor: [16,16] }),
+      icon: L.divIcon({ className: "cs-home-pin", html: html, iconSize: [32,32], iconAnchor: [16,70] }),
       interactive: false,
       zIndexOffset: 1500,
     }).addTo(map);
