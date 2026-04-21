@@ -13,7 +13,7 @@ import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
 
 var THEME_OPTIONS = [
-  {id:"wimbledon",    label:"Wimbledon",       swatch:"#2F3E38", bg:"#F2EEE8"},
+  {id:"wimbledon",    label:"Wimbledon",       swatch:"#006F4A", bg:"#F0F2EA"},
   {id:"ao",          label:"Australian Open",  swatch:"#3B82F6", bg:"#111827"},
   {id:"french-open", label:"French Open",      swatch:"#E0783B", bg:"#EEE0CA"},
   {id:"us-open",     label:"US Open",          swatch:"#FFC72C", bg:"#002566"},
