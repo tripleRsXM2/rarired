@@ -83,12 +83,6 @@ export default function App(){
   }
   function clearHomeZone(){ applyHomeZone(null); }
 
-  // Side-panel "Browse players here" — park on People/Friends for now.
-  // A proper zone-filtered Discover view is a later iteration.
-  function browseZonePlayers(){
-    navigate("/people/suggested");
-  }
-
   // Redirect bare "/" to /home on first load.
   useEffect(function(){
     if(location.pathname==="/"||location.pathname==="")navigate("/home",{replace:true});
@@ -429,7 +423,6 @@ export default function App(){
               onSetHomeZone={applyHomeZone}
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
-              onBrowseZonePlayers={browseZonePlayers}
             />
           )}
           {tab==="tournaments"&&(

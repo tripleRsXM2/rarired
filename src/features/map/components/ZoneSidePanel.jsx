@@ -18,7 +18,7 @@ import { fetchPlayersInZone } from "../services/mapService.js";
 export default function ZoneSidePanel({
   t, zone, onClose,
   authUser, profile, homeZone, onSetHome, onClearHome,
-  onBrowseZonePlayers, onOpenProfile,
+  onOpenProfile,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
@@ -98,12 +98,11 @@ export default function ZoneSidePanel({
               {courts.map(function(c){
                 return (
                   <div key={c.name} style={{
-                    display:"flex", justifyContent:"space-between", alignItems:"center",
                     padding:"9px 11px", borderRadius:8,
                     background: t.bgTertiary,
+                    fontSize:12, color:t.text, fontWeight:500,
                   }}>
-                    <span style={{ fontSize:12, color:t.text, fontWeight:500 }}>{c.name}</span>
-                    <span style={{ fontSize:10, color:t.textSecondary, fontWeight:600 }}>{c.courts} crt</span>
+                    {c.name}
                   </div>
                 );
               })}
@@ -122,7 +121,7 @@ export default function ZoneSidePanel({
               </div>
             : (
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                {players.slice(0,8).map(function(p){
+                {players.map(function(p){
                   return (
                     <button key={p.id}
                       onClick={function(){ onOpenProfile && onOpenProfile(p.id); }}
@@ -149,22 +148,13 @@ export default function ZoneSidePanel({
                     </button>
                   );
                 })}
-                {players.length > 8 && (
-                  <button onClick={function(){ onBrowseZonePlayers && onBrowseZonePlayers(zone.id); }}
-                    style={{
-                      fontSize:12, color:t.accent, background:"transparent", border:"none",
-                      textAlign:"left", padding:"4px 8px", cursor:"pointer", fontWeight:600,
-                    }}>
-                    View all {players.length}+ players →
-                  </button>
-                )}
               </div>
             )
         }
       </div>
 
-      {/* Footer actions */}
-      <div style={{ padding:"14px 20px", borderTop:"1px solid "+t.border, display:"flex", flexDirection:"column", gap:8 }}>
+      {/* Footer — home-zone toggle is the only action */}
+      <div style={{ padding:"14px 20px", borderTop:"1px solid "+t.border }}>
         <button
           onClick={function(){
             if(!canSetHome) return;
@@ -181,16 +171,6 @@ export default function ZoneSidePanel({
             fontSize:13, fontWeight:700, opacity: canSetHome ? 1 : 0.5,
           }}>
           {isHome ? "✓ Your home area · Clear" : "Set as home area"}
-        </button>
-        <button
-          onClick={function(){ onBrowseZonePlayers && onBrowseZonePlayers(zone.id); }}
-          style={{
-            width:"100%", padding:"11px",
-            background:"transparent", color:t.text,
-            border:"1px solid "+t.border, borderRadius:8,
-            cursor:"pointer", fontSize:12, fontWeight:600,
-          }}>
-          Browse players here
         </button>
       </div>
     </div>

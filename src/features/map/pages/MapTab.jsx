@@ -15,7 +15,7 @@ import { ZONE_BY_ID } from "../data/zones.js";
 
 export default function MapTab({
   t, theme, authUser, profile,
-  onSetHomeZone, onClearHomeZone, onOpenProfile, onBrowseZonePlayers,
+  onSetHomeZone, onClearHomeZone, onOpenProfile,
 }){
   var [hovered,setHovered]=useState(null);
   var [selected,setSelected]=useState(null);
@@ -88,7 +88,6 @@ export default function MapTab({
         homeZone={homeZone}
         onSetHome={onSetHomeZone}
         onClearHome={onClearHomeZone}
-        onBrowseZonePlayers={onBrowseZonePlayers}
         onOpenProfile={onOpenProfile}
       />
     </div>

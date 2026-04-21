@@ -69,9 +69,12 @@ export default function LeafletMap({
 
     map.fitBounds(SYDNEY_BOUNDS, { padding: [24, 24] });
 
-    // Zone polygons
+    // Zone polygons — each zone may have 1..N outer shapes (MultiPolygon).
+    // Leaflet accepts a list of rings; we pass the whole array so holes and
+    // disjoint pieces both render under a single layer.
     ZONES.forEach(function(z){
-      var poly = L.polygon(z.polygon, {
+      var shapes = (z.polygons && z.polygons.length) ? z.polygons : [];
+      var poly = L.polygon(shapes, {
         color: z.color, weight: 2, opacity: 0.9,
         fillColor: z.color, fillOpacity: 0.42,
         smoothFactor: 0.5,

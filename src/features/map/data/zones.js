@@ -1,14 +1,18 @@
 // src/features/map/data/zones.js
 //
 // The six CourtSync matchmaking zones. Each one aggregates many real NSW
-// suburbs into one contiguous area. Polygons are hand-tuned approximations
-// of the shape — close enough to read as Sydney without needing a 3MB
-// suburb GeoJSON or Turf at runtime.
+// suburbs into one contiguous area. Polygons are REAL — generated offline
+// from `scripts/sydney-suburbs.geojson` by `scripts/build-zone-polygons.mjs`,
+// unioned per zone, simplified, and committed at `./zonePolygons.js` so the
+// runtime bundle never needs Turf or the raw GeoJSON.
 //
-// Each polygon is an array of [lat, lng] points (Leaflet order).
-// `members` is the uppercase suburb list — used when mapping a user's
-// declared suburb to a zone later.
+// Each zone's `polygons` is an array of [lat, lng] ring arrays (Leaflet order);
+// each zone has 1 or more polygons (MultiPolygon → array of polygons).
+// `members` is the uppercase suburb list — used to map a user's declared
+// suburb to a zone later.
 // `center` is the centroid the map uses for the zone label + home pin.
+
+import { ZONE_POLYGONS } from "./zonePolygons.js";
 
 export var ZONES = [
   {
@@ -16,12 +20,7 @@ export var ZONES = [
     color: "#E8736A",
     blurb: "City, Surry Hills, Darlinghurst, Pyrmont, Ultimo",
     center: [-33.883, 151.207],
-    polygon: [
-      [-33.853, 151.198], [-33.855, 151.219],
-      [-33.870, 151.230], [-33.895, 151.227],
-      [-33.910, 151.215], [-33.910, 151.192],
-      [-33.895, 151.180], [-33.870, 151.180],
-    ],
+    polygons: ZONE_POLYGONS["cbd"],
     members: [
       "SYDNEY","HAYMARKET","THE ROCKS","MILLERS POINT","BARANGAROO","DAWES POINT",
       "PYRMONT","ULTIMO","CHIPPENDALE","DARLINGTON","REDFERN","EVELEIGH",
@@ -36,12 +35,7 @@ export var ZONES = [
     color: "#E89B4A",
     blurb: "Bondi, Coogee, Randwick, Bronte, Clovelly, Rose Bay",
     center: [-33.905, 151.260],
-    polygon: [
-      [-33.855, 151.230], [-33.852, 151.283],
-      [-33.890, 151.295], [-33.945, 151.275],
-      [-33.985, 151.250], [-33.955, 151.225],
-      [-33.910, 151.227],
-    ],
+    polygons: ZONE_POLYGONS["east"],
     members: [
       "PADDINGTON","WOOLLAHRA","CENTENNIAL PARK","MOORE PARK","QUEENS PARK","WAVERLEY",
       "DOUBLE BAY","BELLEVUE HILL","DARLING POINT","EDGECLIFF","POINT PIPER",
@@ -58,11 +52,7 @@ export var ZONES = [
     color: "#6FB28F",
     blurb: "Newtown, Marrickville, Leichhardt, Stanmore, Dulwich Hill",
     center: [-33.895, 151.160],
-    polygon: [
-      [-33.855, 151.135], [-33.855, 151.195],
-      [-33.895, 151.180], [-33.930, 151.170],
-      [-33.935, 151.135], [-33.900, 151.118],
-    ],
+    polygons: ZONE_POLYGONS["inner-west"],
     members: [
       "NEWTOWN","ENMORE","CAMPERDOWN","MACDONALDTOWN","ST PETERS","SYDENHAM","TEMPE",
       "STANMORE","PETERSHAM","LEWISHAM","DULWICH HILL","HURLSTONE PARK",
@@ -79,11 +69,7 @@ export var ZONES = [
     color: "#B691C9",
     blurb: "North Sydney, Neutral Bay, Mosman, Cremorne, Chatswood",
     center: [-33.818, 151.205],
-    polygon: [
-      [-33.775, 151.165], [-33.780, 151.255],
-      [-33.825, 151.270], [-33.850, 151.250],
-      [-33.852, 151.195], [-33.825, 151.160],
-    ],
+    polygons: ZONE_POLYGONS["lower-north"],
     members: [
       "NORTH SYDNEY","MCMAHONS POINT","MILSONS POINT","LAVENDER BAY","KIRRIBILLI",
       "WAVERTON","NEUTRAL BAY","KURRABA POINT",
@@ -103,12 +89,7 @@ export var ZONES = [
     color: "#7FC4D9",
     blurb: "Manly, Dee Why, Brookvale, Curl Curl, Narrabeen, Palm Beach",
     center: [-33.700, 151.300],
-    polygon: [
-      [-33.600, 151.260], [-33.600, 151.345],
-      [-33.680, 151.335], [-33.760, 151.320],
-      [-33.800, 151.290], [-33.800, 151.260],
-      [-33.720, 151.240],
-    ],
+    polygons: ZONE_POLYGONS["northern-beaches"],
     members: [
       "MANLY","MANLY VALE","FAIRLIGHT","BALGOWLAH","BALGOWLAH HEIGHTS","NORTH BALGOWLAH",
       "SEAFORTH","CLONTARF","QUEENSCLIFF","NORTH MANLY","NORTH HARBOUR",
@@ -127,12 +108,7 @@ export var ZONES = [
     color: "#4BA8A8",
     blurb: "Mascot, Botany, Brighton-Le-Sands, Kogarah, Rockdale",
     center: [-33.955, 151.170],
-    polygon: [
-      [-33.920, 151.135], [-33.925, 151.215],
-      [-33.955, 151.230], [-33.985, 151.220],
-      [-34.005, 151.170], [-33.995, 151.115],
-      [-33.955, 151.108],
-    ],
+    polygons: ZONE_POLYGONS["south"],
     members: [
       "MASCOT","BOTANY","BANKSMEADOW","PORT BOTANY",
       "ROCKDALE","BEXLEY","BEXLEY NORTH","KINGSGROVE",
