@@ -64,7 +64,7 @@ Share-link button on the Discover tab. Uses `navigator.share` when available, fa
 
 ### Local relevance — what "near" means today
 
-**Exact string match on `profiles.suburb`.** Case-sensitive. "Bondi" and "Bondi Beach" do NOT match each other; "bondi" and "Bondi" do NOT match. This is brittle but adequate at seed scale — real users will converge on consistent spellings within a suburb.
+**Case-insensitive, trimmed `ilike` on `profiles.suburb` (Module 6).** Equivalent to exact string match but ignoring case + whitespace, so "Bondi", "bondi", and " Bondi " all match each other. Still does NOT match "Bondi Beach" against "Bondi" — that needs a normalised lookup or alias table, deferred. At seed scale this is enough; real users in a single suburb will converge on the same spelling once the cluster forms.
 
 ### How Discovery behaves at low density
 
@@ -168,7 +168,8 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Seed metrics are hypotheses, will be tracked live once Module 3.5 (analytics foundation) lands.
-- v1 — Module 4 (Map tab): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.
-- v1.1 — avatar upload + location display rule: `profiles.avatar_url` + `avatars` storage bucket; name subtitle prefers home-zone over suburb everywhere.
-- v1.2 — CourtInfoCard: tapping a court marker opens an info modal that links out to Google Maps and (where known) the operator's own booking page. No embedded imagery. Street-name labels removed from map base tiles.
-- v1.3 — Suburb removed as a user-facing input; Edit Profile now uses a home-zone dropdown. `profiles.suburb` retained in DB for legacy data only. `fetchSuggestedPlayers` needs follow-up to switch from suburb to home_zone matching.
+- v1 — Module 6 (polish, Mikey): suburb match upgraded to case-insensitive + trimmed via `ilike`. Partly superseded by the home-zone migration below — kept in place for legacy `profiles.suburb` rows.
+- v2 — Map tab (Mdawg workstream): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.
+- v2.1 — avatar upload + location display rule: `profiles.avatar_url` + `avatars` storage bucket; name subtitle prefers home-zone over suburb everywhere.
+- v2.2 — CourtInfoCard: tapping a court marker opens an info modal that links out to Google Maps and (where known) the operator's own booking page. No embedded imagery. Street-name labels removed from map base tiles.
+- v2.3 — Suburb removed as a user-facing input; Edit Profile now uses a home-zone dropdown. `profiles.suburb` retained in DB for legacy data only. **Open follow-up**: `fetchSuggestedPlayers` still queries `suburb` via `ilike` — needs migrating to `home_zone` matching for the Discover surface to benefit from the zone model. Tracked as a known gap here.

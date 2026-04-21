@@ -1,6 +1,7 @@
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function CommentModal({
   t, authUser, profile,
@@ -68,6 +69,7 @@ export default function CommentModal({
                   return Object.assign({},fc,{[commentModal]:cur});
                 });
                 if(onCommentPosted) onCommentPosted(commentModal);
+                track("feed_comment",{match_id:commentModal,body_len:text.length});
               }
             }}
             style={{padding:"9px 16px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,flexShrink:0}}>

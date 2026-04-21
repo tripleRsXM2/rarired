@@ -4,6 +4,8 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";
+import { track } from "../../../lib/analytics.js";
+import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
 
 function fmtMsgTime(iso){
   if(!iso)return"";
@@ -17,7 +19,7 @@ function fmtMsgTime(iso){
 // ── PlayerCard ────────────────────────────────────────────────────────────────
 function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
   sendFriendRequest, cancelRequest, acceptRequest, declineRequest, unfriend, blockUser,
-  onMessage, openProfile}) {
+  onMessage, openProfile, openChallenge}) {
   var rel=friendRelationLabel(u.id), loading=!!socialLoading[u.id];
   var wr=u.matches_played?Math.round((u.wins||0)/u.matches_played*100):null;
   function goToProfile(){ if(openProfile) openProfile(u.id); }
@@ -77,6 +79,12 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
             </button>
           </div>
         )}
+        {rel==="friends"&&openChallenge&&(
+          <button onClick={function(){openChallenge(u,"profile");}}
+            style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+t.accent,background:t.accentSubtle,color:t.accent,fontSize:11,fontWeight:700,letterSpacing:"0.02em"}}>
+            🔁 Challenge
+          </button>
+        )}
         {rel==="friends"&&(
           <button disabled={loading} onClick={function(){if(window.confirm("Unfriend "+u.name+"?"))unfriend(u);}}
             style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
@@ -106,12 +114,17 @@ export default function PeopleTab({
   setShowAuth, setAuthMode, setAuthStep,
   dms,
   openProfile,
+  challenges,
+  openChallenge,
+  openConvertToMatch,
+  toast,
 }) {
   var location=useLocation();
   var navigate=useNavigate();
 
   // Derive active sub-tab from URL: /people/messages → "messages"
-  var validPeopleTabs=["messages","friends","requests","suggested","blocked"];
+  // Module 4: 'challenges' is the new coordination inbox.
+  var validPeopleTabs=["messages","friends","requests","challenges","suggested","blocked"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var peopleTab=(pathParts[1]&&validPeopleTabs.includes(pathParts[1]))?pathParts[1]:"friends";
 
@@ -128,6 +141,18 @@ export default function PeopleTab({
     }
   },[dms&&dms.threadMessages&&dms.threadMessages.length, dms&&dms.activeConv]);
 
+  // Module 3.5: Discover tab view. Section counts are snapshotted at view time
+  // so we can measure whether empty-states correlate with drop-off.
+  useEffect(function(){
+    if(peopleTab!=="suggested"||!authUser) return;
+    track("discover_tab_viewed",{
+      played_opponents_count: (playedOpponents||[]).length,
+      suburb_suggestions_count: (suggestedPlayers||[]).length,
+      skill_suggestions_count: (sameSkillPlayers||[]).length,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[peopleTab,authUser&&authUser.id]);
+
   if(!authUser) return (
     <div style={{maxWidth:680,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
       <div style={{fontSize:32,marginBottom:12}}>🎾</div>
@@ -140,7 +165,7 @@ export default function PeopleTab({
     </div>
   );
 
-  var cardProps={t,socialLoading,friendRelationLabel,sentReq,recvReq,sendFriendRequest,cancelRequest,acceptRequest,declineRequest,unfriend,blockUser,openProfile};
+  var cardProps={t,socialLoading,friendRelationLabel,sentReq,recvReq,sendFriendRequest,cancelRequest,acceptRequest,declineRequest,unfriend,blockUser,openProfile,openChallenge};
   var iStyle=inputStyle(t);
   var dmUnread=dms?dms.totalUnread():0;
   var dmBadge=(dms?(dms.requests||[]).length:0)+(dms&&dms.conversations?dms.conversations.filter(function(c){return c.hasUnread;}).length:0);
@@ -223,13 +248,18 @@ export default function PeopleTab({
       {/* Sub-tabs */}
       <div>
         <div style={{display:"flex",borderBottom:"1px solid "+t.border,padding:"0 20px",overflowX:"auto"}}>
-          {[
-            {id:"messages",label:"Messages",count:dmBadge||null},
-            {id:"friends",label:"Friends",count:friends.length},
-            {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
-            {id:"suggested",label:"Discover",count:null},
-            {id:"blocked",label:"Blocked",count:blockedUsers.length||null},
-          ].map(function(tb){
+          {(function(){
+            var chCounts = (challenges && challenges.counts) ? challenges.counts() : {incoming:0,outgoing:0,accepted:0};
+            var chBadge = chCounts.incoming + chCounts.accepted; // bold sections
+            return [
+              {id:"messages",label:"Messages",count:dmBadge||null},
+              {id:"friends",label:"Friends",count:friends.length},
+              {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
+              {id:"challenges",label:"Challenges",count:chBadge||null},
+              {id:"suggested",label:"Discover",count:null},
+              {id:"blocked",label:"Blocked",count:blockedUsers.length||null},
+            ];
+          })().map(function(tb){
             var on=peopleTab===tb.id;
             return (
               <button key={tb.id} onClick={function(){setPeopleTab(tb.id);if(tb.id!=="messages"&&dms)dms.closeConversation();}}
@@ -343,6 +373,22 @@ export default function PeopleTab({
                   </div>
                 )}
               </div>
+          )}
+
+          {/* Challenges — coordination inbox (Module 4). */}
+          {peopleTab==="challenges"&&challenges&&(
+            <ChallengesPanel
+              t={t} authUser={authUser}
+              challenges={challenges.challenges}
+              profileMap={challenges.profileMap}
+              loading={challenges.loading}
+              openProfile={openProfile}
+              acceptChallenge={challenges.acceptChallenge}
+              declineChallenge={challenges.declineChallenge}
+              cancelChallenge={challenges.cancelChallenge}
+              onLogConvertedMatch={openConvertToMatch}
+              toast={toast}
+            />
           )}
 
           {/* Discover — 3 sections: people you've played, near you, similar

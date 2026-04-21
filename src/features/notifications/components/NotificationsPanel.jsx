@@ -5,6 +5,7 @@
 import { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { avColor } from "../../../lib/utils/avatar.js";
+import { track } from "../../../lib/analytics.js";
 import {
   getEffectiveType,
   getNotifLabel,
@@ -153,6 +154,7 @@ function NotifRow({
   }
   function goFeed(e) {
     if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "feed" });
     if (refreshHistory) refreshHistory();
     navigate("/home");
     setShowNotifications(false);
@@ -160,6 +162,7 @@ function NotifRow({
   }
   function goMessages(e) {
     if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "messages" });
     if (openConvById) openConvById(n.entity_id, n.from_user_id);
     else navigate("/people/messages");
     setShowNotifications(false);
@@ -168,8 +171,16 @@ function NotifRow({
   function goProfile(e) {
     if (e) e.stopPropagation();
     if (!n.from_user_id) return;
+    track("notification_opened", { type: n.type, deep_link_target: "profile" });
     if (openProfile) openProfile(n.from_user_id);
     else navigate("/profile/" + n.from_user_id);
+    setShowNotifications(false);
+    if (!n.read) onRead(n.id);
+  }
+  function goChallenges(e) {
+    if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "challenges" });
+    navigate("/people/challenges");
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
@@ -385,6 +396,34 @@ function NotifRow({
           {n.type === "request_accepted" && n.from_user_id && (
             ctaButton(t, t.accent, true, "View profile →", goProfile)
           )}
+
+          {/* Module 4: challenge notifications all land in the Challenges
+              sub-tab where the right action lives. challenge_received is
+              "action" so it gets primary styling. */}
+          {n.type === "challenge_received" && (
+            <button
+              onClick={function (e) {
+                e.stopPropagation();
+                if (!n.read) onRead(n.id);
+                goChallenges(e);
+              }}
+              style={{
+                display: "inline-block", marginTop: 8,
+                padding: "5px 14px", borderRadius: 6,
+                border: "none", background: t.accent, color: "#fff",
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+                transition: "opacity 0.13s", letterSpacing: "0.01em",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >Open challenge →</button>
+          )}
+          {n.type === "challenge_accepted" && (
+            ctaButton(t, t.green, true, "Log result →", goChallenges)
+          )}
+          {(n.type === "challenge_declined" || n.type === "challenge_expired") && (
+            ctaButton(t, t.textSecondary, false, "View challenges →", goChallenges)
+          )}
         </div>
 
         {/* Right col: unread dot + dismiss */}
@@ -568,13 +607,15 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LikeGroupRow({ item, t, onDismiss }) {
-  var { items } = item;
+  var { items, kind } = item;
   var first  = items[0];
   var others = items.length - 1;
   var names  = items.slice(0, 3).map(function (n) { return n.fromName || "?"; });
+  // Module 6: same row handles both 'like_group' and 'comment_group'.
+  var verb = kind === "comment_group" ? "commented on your match" : "liked your match";
   var label  = others > 0
-    ? first.fromName + " and " + others + " other" + (others > 1 ? "s" : "") + " liked your match."
-    : first.fromName + " liked your match.";
+    ? first.fromName + " and " + others + " other" + (others > 1 ? "s" : "") + " " + verb + "."
+    : first.fromName + " " + verb + ".";
 
   return (
     <div style={{ position: "relative", overflow: "hidden" }}>
@@ -679,11 +720,12 @@ export default function NotificationsPanel({
 
   // ── Render a display item ────────────────────────────────────────────────
   function renderItem(item) {
-    var key = item.kind === "single" ? item.n.id
-            : item.kind === "thread" ? "thread-" + item.primary.id
-            : "likes-" + item.items[0].id;
+    var key = item.kind === "single"        ? item.n.id
+            : item.kind === "thread"        ? "thread-" + item.primary.id
+            : item.kind === "comment_group" ? "comments-" + item.items[0].id
+            :                                 "likes-"    + item.items[0].id;
 
-    if (item.kind === "like_group") {
+    if (item.kind === "like_group" || item.kind === "comment_group") {
       return (
         <LikeGroupRow
           key={key} item={item} t={t}

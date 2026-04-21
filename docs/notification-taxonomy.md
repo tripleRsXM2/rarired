@@ -35,6 +35,10 @@ A fourth soft state — **demoted** — exists: when a dispute is later confirme
 | `like` | activity | Someone hearts a match; fires to every participant except the liker | Match participants (minus liker) | `View match →` |
 | `comment` | activity | Someone comments on a match; fires to every participant except commenter | Match participants (minus commenter) | `View match →` |
 | `message` | activity | Someone sends a DM in an existing conversation | Other participant | `View message →` |
+| `challenge_received` | action | Someone sends you a challenge / rematch | Challenged user | `Open challenge →` (lands on `/people/challenges`) |
+| `challenge_accepted` | important | Target accepted your challenge | Challenger | `Log result →` (lands on `/people/challenges` ready-to-play row) |
+| `challenge_declined` | important | Target declined your challenge | Challenger | `View challenges →` |
+| `challenge_expired` | important | pg_cron auto-expires a 7-day-stale pending challenge | Challenger | `View challenges →` |
 
 ### Priority scoring
 
@@ -73,7 +77,7 @@ Badge count = `count(n: !n.read && !seenIds.has(n.id))`. The `seenIds` bit is wh
 Rules:
 - **Action-required notifications are never hidden** inside a thread. They always appear as the primary of their thread or as a standalone single.
 - `match_tag` / `match_disputed` / `match_correction_requested` / `match_counter_proposed` / `match_voided` / `match_confirmed` all belong to the **dispute family** and group by `match_id`.
-- `like` groups by `match_id`. `comment` does not group currently (see open questions).
+- `like` groups by `match_id`. `comment` also groups by `match_id` (Module 6) into a `comment_group` display item with the same stacked-avatar UI.
 
 ### Deep-link destinations
 
@@ -110,8 +114,8 @@ Sender avatar on every tray row is itself a tap target → sender's profile.
 
 ## Open Questions
 
-- **Comment grouping.** Multiple comments on the same match currently show as separate `activity` rows. Should they collapse the way `like` does? Probably yes. Deferred to Module 6 polish.
-- **Rapid like/unlike dedupe.** A user spamming like → unlike → like fires a fresh `like` notification each time. A dedupe RPC (like the existing `upsert_message_notification`) would help. Deferred.
+- ~~**Comment grouping.**~~ Done in Module 6: comments on the same match now collapse into `comment_group` display items.
+- ~~**Rapid like/unlike dedupe.**~~ Done in Module 6: a `like` notification from the same user/match will not re-fire within 1 hour (client-side check before insert). The `feed_like` analytics event still fires every time so we don't lose the raw signal.
 - **`match_correction_requested` vs `match_disputed`.** Currently we only ever fire `match_disputed` on the initial dispute. The `match_correction_requested` type is defined and labelled but unused. Either retire it or split the two (e.g. dispute = "I didn't play" flavour, correction_requested = "the score was wrong"). Decide before Module 5.
 - **Notification settings.** No per-type mute / DND UI today. Unclear whether users will ask for it before we have scale.
 - **Email / push channel.** Everything lives in the in-app tray. When do we add email digests? Native push? Probably Module 7+.
@@ -130,3 +134,5 @@ Sender avatar on every tray row is itself a tap target → sender's profile.
 
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Includes Module 3's deep-link + fire-gap work (like/comment fire to both participants, `match_expired` live, sender avatar clickable).
+- v1 — Module 4 (challenges). 4 new types: `challenge_received` (action), `challenge_accepted` / `challenge_declined` / `challenge_expired` (important). New `goChallenges` deep-link target → `/people/challenges`. Per-type urgency scores added in `notifUtils.TYPE_URGENCY_BONUS`.
+- v2 — Module 6 (polish): comment grouping into `comment_group` display items + 1-hour dedupe on repeated `like` notifications from the same user/match. Both reduce tray noise without losing analytics signal (`feed_like` event still fires every toggle).

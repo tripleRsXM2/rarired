@@ -11,6 +11,8 @@ var ACTION_TYPES = new Set([
   "match_reminder",
   "friend_request",
   "message_request",
+  // Module 4: incoming challenge needs a yes/no response.
+  "challenge_received",
 ]);
 
 var IMPORTANT_TYPES = new Set([
@@ -19,6 +21,10 @@ var IMPORTANT_TYPES = new Set([
   "match_confirmed",
   "match_voided",
   "match_expired",
+  // Module 4: outcomes of a challenge you sent.
+  "challenge_accepted",
+  "challenge_declined",
+  "challenge_expired",
 ]);
 
 export function getNotifType(n) {
@@ -53,6 +59,10 @@ export function getNotifLabel(n) {
     case "match_reminder":             return "A pending match is expiring soon — check your feed.";
     case "like":                       return name + " liked your match.";
     case "comment":                    return name + " commented on your match.";
+    case "challenge_received":         return name + " challenged you to a match.";
+    case "challenge_accepted":         return name + " accepted your challenge — log the result when you've played.";
+    case "challenge_declined":         return name + " declined your challenge.";
+    case "challenge_expired":          return "Your challenge to " + name + " expired without a response.";
     default:                           return "New notification.";
   }
 }
@@ -89,6 +99,11 @@ var TYPE_URGENCY_BONUS = {
   match_confirmed:            50,
   match_voided:               40,
   match_expired:              30,
+  // Module 4
+  challenge_received:        300,  // ranked just below match_tag — needs response
+  challenge_accepted:         70,  // positive, prompts log-result
+  challenge_declined:         20,
+  challenge_expired:          15,
 };
 
 export function computePriorityScore(n) {
@@ -171,10 +186,11 @@ export function groupNotifications(rawNotifications) {
   var ns = applySmartDemotion(rawNotifications);
   var sorted = sortNotifications(ns);
 
-  // Bucket into: threads, like groups, singles
-  var threadBuckets = {};   // entity_id → [n]
-  var likeBuckets   = {};   // entity_id → [n]
-  var singles       = [];
+  // Bucket into: threads, like groups, comment groups, singles
+  var threadBuckets  = {};   // matchKey → [n]
+  var likeBuckets    = {};   // matchKey → [n]
+  var commentBuckets = {};   // matchKey → [n] (Module 6)
+  var singles        = [];
 
   sorted.forEach(function (n) {
     var key = matchKey(n);
@@ -184,6 +200,9 @@ export function groupNotifications(rawNotifications) {
     } else if (n.type === "like" && key) {
       if (!likeBuckets[key]) likeBuckets[key] = [];
       likeBuckets[key].push(n);
+    } else if (n.type === "comment" && key) {
+      if (!commentBuckets[key]) commentBuckets[key] = [];
+      commentBuckets[key].push(n);
     } else {
       singles.push({ kind: "single", n: n, score: computePriorityScore(n) });
     }
@@ -216,10 +235,21 @@ export function groupNotifications(rawNotifications) {
     return { kind: "like_group", items: byDate, score: computePriorityScore(byDate[0]) };
   });
 
-  // Merge and sort all display items by score
-  return singles.concat(threadItems).concat(likeItems).sort(function (a, b) {
-    return b.score - a.score;
+  // Module 6: comment groups — same shape as like_group but rendered with a
+  // "comment" verb. Single comments stay as their own row.
+  var commentItems = Object.values(commentBuckets).map(function (group) {
+    var byDate = group.slice().sort(function (a, b) {
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    if (byDate.length === 1) {
+      return { kind: "single", n: byDate[0], score: computePriorityScore(byDate[0]) };
+    }
+    return { kind: "comment_group", items: byDate, score: computePriorityScore(byDate[0]) };
   });
+
+  // Merge and sort all display items by score
+  return singles.concat(threadItems).concat(likeItems).concat(commentItems)
+    .sort(function (a, b) { return b.score - a.score; });
 }
 
 // ── Clearing rules ─────────────────────────────────────────────────────────────
@@ -229,25 +259,28 @@ export function canDismiss(n) {
 
 // Can an entire display item be dismissed?
 export function canDismissItem(item) {
-  if (item.kind === "single")     return canDismiss(item.n);
-  if (item.kind === "thread")     return canDismiss(item.primary);
-  if (item.kind === "like_group") return true;
+  if (item.kind === "single")        return canDismiss(item.n);
+  if (item.kind === "thread")        return canDismiss(item.primary);
+  if (item.kind === "like_group")    return true;
+  if (item.kind === "comment_group") return true;
   return false;
 }
 
 // All notification IDs that make up a display item.
 export function getItemIds(item) {
-  if (item.kind === "single")     return [item.n.id];
-  if (item.kind === "thread")     return [item.primary].concat(item.context).map(function (n) { return n.id; });
-  if (item.kind === "like_group") return item.items.map(function (n) { return n.id; });
+  if (item.kind === "single")        return [item.n.id];
+  if (item.kind === "thread")        return [item.primary].concat(item.context).map(function (n) { return n.id; });
+  if (item.kind === "like_group")    return item.items.map(function (n) { return n.id; });
+  if (item.kind === "comment_group") return item.items.map(function (n) { return n.id; });
   return [];
 }
 
 // Section (action / important / activity) for a display item.
 export function getItemSection(item) {
-  if (item.kind === "single")     return getEffectiveType(item.n);
-  if (item.kind === "thread")     return getEffectiveType(item.primary);
-  if (item.kind === "like_group") return "activity";
+  if (item.kind === "single")        return getEffectiveType(item.n);
+  if (item.kind === "thread")        return getEffectiveType(item.primary);
+  if (item.kind === "like_group")    return "activity";
+  if (item.kind === "comment_group") return "activity";
   return "activity";
 }
 

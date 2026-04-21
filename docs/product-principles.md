@@ -18,10 +18,12 @@ The product compass. What CourtSync is, who it serves, what we optimise for, and
 3. **Lightweight coordination** — just enough to line up another match (rematch, challenge). Not a booking platform.
 
 ### What we are explicitly NOT building
-- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. The Map tab (v1 shipped in Module 4) lists public courts but does not book them — it's a *discovery* surface, not a *reservation* surface. Tapping a court opens an info card that **links out** to Google Maps and (where verified) the operator's own booking page; CourtSync never processes the booking itself. This line stays bright.
+- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. Two surfaces reinforce this line:
+  - The **challenge surface** (Mikey Module 4) is intentionally just a notification + freetext venue / time / message — not a booking product.
+  - The **Map tab** (Mdawg Map workstream) lists public courts but does not book them — it's a *discovery* surface, not a *reservation* surface. Tapping a court opens an info card that **links out** to Google Maps and (where verified) the operator's own booking page; CourtSync never processes the booking itself.
 - **Venue operations.** Not a tool for clubs to manage their members or courts.
 - **Tournament operations.** The tournament surface we have is intentionally minimal; we're not competing with Matchtag / PlayByPoint on ladder ops.
-- **A generic chat app.** DMs exist to support rematch coordination and light banter between friends — they are not a messaging product on their own.
+- **A generic chat app.** DMs exist to support rematch coordination and light banter between friends — they are not a messaging product on their own. Challenges deliberately don't have a comment thread; if users want to negotiate, they DM.
 
 ## Design / Decision Principles
 
@@ -36,6 +38,8 @@ For every feature: trigger → action → reward → investment. Prioritise noti
 ### 3. The Mom Test — instrument, don't guess
 Every meaningful module ships with event tracking so we can learn from real behaviour. No feature is "done" without at least one measurable outcome. Self-reported UX is lying UX — we need the data.
 
+**How we instrument (from Module 3.5):** a single `public.events` table, a client-side `track(name, props)` helper (fire-and-forget, never blocks UX), and the event registry in `analytics-events.md`. Every new module adds its events to that registry in the same commit as the code. Reads are service_role only — nobody browses other users' behaviour in-app.
+
 ## Key trade-offs already made (and why)
 
 | Decision | Rejected alternative | Reason |
@@ -44,7 +48,7 @@ Every meaningful module ships with event tracking so we can learn from real beha
 | Only **confirmed** matches affect stats | All logged matches count | Integrity > data volume. A product that says "verified identity" must enforce that via the stat math. |
 | **Casual** matches allowed (freetext opponent) but can't earn stats | Require all matches to be ranked | Lowers friction for onboarding and off-platform opponents; preserves the identity bar for ranked stats. |
 | **Local-first suburb** matching | National / interest-based discovery | Density beats reach at this stage. |
-| **Inline alert / native confirm** for mutations | Toast / snackbar system | Minimal UX, correct signal. A proper toast system is a Module 6 polish item. |
+| **Non-blocking toast** for mutation errors / success | Native `alert()` (legacy) | Module 6 shipped this — no more modal alert that interrupts the flow. Tap-to-dismiss; auto-clears. |
 
 ## Open Questions
 
@@ -66,6 +70,8 @@ Every meaningful module ships with event tracking so we can learn from real beha
 - Translation / i18n. English-AU only for now.
 
 ## Last Updated By Module
-- v0 — initialised from shipped state at end of Module 3. Future module deltas append here.
-- v1 — Module 4 (Map tab): clarified that the map surfaces public courts without booking them — Map is a *discovery* surface, not a *reservation* surface. Line held.
-- v1.1 — CourtInfoCard explicitly links out to external booking (Google Maps + operator site); CourtSync never processes the booking. Line held again.
+- v0 — initialised from shipped state at end of Module 3.
+- v1 — Module 3.5 (analytics foundation). Added the "how we instrument" note under the Mom Test lens.
+- v2 — Module 4 (challenge / rematch). Sharpened the "NOT building" section: challenge is the lightweight coordination surface, not a booking product or chat thread.
+- v3 — Module 6 (polish): toast system replaces blocking alerts in the tradeoffs table. Adjusted to reflect shipped state.
+- v4 — Map tab (Mdawg workstream): added as a second reinforcement of the no-booking line — map surfaces public courts but links out to Google Maps / operator sites; CourtSync never processes bookings. CourtInfoCard exemplifies this pattern.

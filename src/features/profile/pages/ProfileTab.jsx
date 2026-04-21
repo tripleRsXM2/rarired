@@ -3,13 +3,17 @@
 // Public-facing profile view: stats, match history, achievements, availability.
 // Settings have been moved to SettingsScreen (accessible via top-bar avatar).
 
+import { useEffect } from "react";
 import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
 import {
   computeRecentForm,
   computeMostPlayed,
   formatConfirmedBadge,
+  provisionalLabel,
+  computeConfirmationRate,
 } from "../utils/profileStats.js";
+import { track } from "../../../lib/analytics.js";
 
 var BADGES=[
   {id:"first", label:"First Match",   desc:"Play your first match",             icon:"🎾", check:function(w,p){return p>=1;}},
@@ -53,6 +57,15 @@ export default function ProfileTab({
   var myId = authUser && authUser.id;
   var mostPlayed = computeMostPlayed(history, myId, 5);
   var confirmedBadge = formatConfirmedBadge(profile);
+  // Module 5 additions — provisional rating + confirmation-rate trust signal.
+  var provLabel = provisionalLabel(profile);
+  var confRate = computeConfirmationRate(history);
+
+  // Module 3.5: self-view analytics. Fires once per profile-id load.
+  useEffect(function () {
+    if (!profile || !profile.id) return;
+    track("profile_viewed", { target_user_id: profile.id, is_self: true });
+  }, [profile && profile.id]);
 
   return (
     <div style={{maxWidth:680,margin:"0 auto"}}>
@@ -101,22 +114,45 @@ export default function ProfileTab({
         </div>
         {profile.bio&&<p style={{fontSize:13,color:t.textSecondary,lineHeight:1.6,marginBottom:16,marginTop:-8}}>{profile.bio}</p>}
 
-        {/* Trust indicator — "verified identity" vision: shows the confirmed
-            match count prominently so viewers understand what's been vouched
-            for by a real opponent. */}
-        {confirmedBadge&&(
-          <div style={{
-            display:"inline-flex",alignItems:"center",gap:6,
-            padding:"5px 10px",borderRadius:20,
-            background:t.greenSubtle,color:t.green,
-            border:"1px solid "+t.green+"33",
-            fontSize:11,fontWeight:700,letterSpacing:"0.02em",
-            marginBottom:14,
-          }}>
-            <span>✓</span><span>{confirmedBadge}</span>
+        {/* Trust + rating-state pills row (Modules 1 + 5 stack here) */}
+        {(confirmedBadge||provLabel||confRate)&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+            {confirmedBadge&&(
+              <span style={{
+                display:"inline-flex",alignItems:"center",gap:6,
+                padding:"5px 10px",borderRadius:20,
+                background:t.greenSubtle,color:t.green,
+                border:"1px solid "+t.green+"33",
+                fontSize:11,fontWeight:700,letterSpacing:"0.02em",
+              }}>
+                <span>✓</span><span>{confirmedBadge}</span>
+              </span>
+            )}
+            {provLabel&&(
+              <span style={{
+                display:"inline-flex",alignItems:"center",gap:6,
+                padding:"5px 10px",borderRadius:20,
+                background:t.orangeSubtle,color:t.orange,
+                border:"1px solid "+t.orange+"33",
+                fontSize:11,fontWeight:700,letterSpacing:"0.02em",
+              }}>
+                <span>⚖</span><span>{provLabel}</span>
+              </span>
+            )}
+            {confRate&&(
+              <span style={{
+                display:"inline-flex",alignItems:"center",gap:6,
+                padding:"5px 10px",borderRadius:20,
+                background:t.bgTertiary,color:t.textSecondary,
+                border:"1px solid "+t.border,
+                fontSize:11,fontWeight:700,letterSpacing:"0.02em",
+              }}
+              title={confRate.total + " ranked matches resolved (confirmed + voided + expired)"}>
+                <span>{confRate.pct}%</span><span style={{fontWeight:500}}>confirmed</span>
+              </span>
+            )}
           </div>
         )}
-
         {/* Recent form chips (last 5 confirmed, most recent first) */}
         {recentForm.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>

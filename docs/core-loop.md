@@ -26,6 +26,7 @@ Every arrow in this chain is currently shipped. Modules 0–3 hardened the chain
 2a. **Spatial browse loop** (Module 4) — open Map tab → scan the six zones → tap a zone → see courts + players who've set this zone as home → tap a profile → add friend. Same discovery outcome as loop 2, different entry point — and the visible *density per zone* works as a motivator to declare a home zone yourself.
 3. **Dispute loop** (edge case but critical for trust) — submitter logs → opponent disputes with correction → submitter accepts or counters → resolution → stats fire. Without this loop reliable, the whole ranking trust story collapses.
 4. **Reminder loop** — pending match, <24h to expiry → reminder notification → opponent confirms → loop completes. Rescues matches from silently expiring.
+5. **Challenge loop** (Module 4) — viewer opens friend's profile or a confirmed match card → taps Challenge / Rematch → sends a `challenge_received` notification with optional time/venue/message → other party accepts/declines from notification or `/people/challenges` → on Accept the challenge sits in "Ready to play" → after IRL match, either party taps "Log result" to convert directly into the standard `match_logged → match_confirmed` flow with `tournName='Ranked'`. Closes the gap between "I want to play this person again" and the actual match cycle. The only coordination surface in the product — intentionally not chat, not a calendar.
 
 ### Activation path (new user)
 
@@ -74,6 +75,11 @@ These are the reasons a user opens the app on a day they didn't originally plan 
 | Comment on match | Inline preview, new row in feed_comments | `comment` to every match participant except commenter | No |
 | Add friend | Inline "Pending" state | `friend_request` to target | No |
 | Accept friend request | Both sides see each other as friends | `request_accepted` to sender | No |
+| Send challenge | Inline "Awaiting response" pill on `/people/challenges` Sent | `challenge_received` to target | No |
+| Accept challenge | Row moves to "Ready to play" for both sides | `challenge_accepted` to challenger | No |
+| Decline challenge | Row terminal, removed from challenger's pending list | `challenge_declined` to challenger | No |
+| Convert challenge → match | Standard ScoreModal opens prefilled (opponent linked, venue/court from challenge); challenge row flips to `completed` and links `match_id` | `match_tag` to opponent (existing path) | After opponent confirms — yes |
+| Auto-expire challenge (7d, pg_cron) | Row terminal, removed from challenger's pending list | `challenge_expired` to challenger | No |
 
 ## Design / Decision Principles
 
@@ -91,34 +97,36 @@ These are the reasons a user opens the app on a day they didn't originally plan 
 
 ## Key product metrics tied to the loop
 
-These are the metrics we should measure once the analytics foundation (Module 3.5) lands. Hypotheses first — numbers to validate them later.
+Every metric here is now **measurable via the `events` table** (Module 3.5). See `analytics-events.md` for the full event catalogue and sample queries.
 
 ### Activation
-- **Time from signup to first match logged** (target: <7 days median).
-- **% of signups that log a match within 14 days** (target: >50%).
-- **% of first matches that are ranked (linked opponent)** vs casual (target: >30% ranked).
-- **% of ranked matches confirmed within 72h** (target: >70%).
+- **Time from signup to first match logged** (target: <7 days median) — `auth_signup_completed` → `match_logged`.
+- **% of signups that log a match within 14 days** (target: >50%) — same events.
+- **% of first matches that are ranked (linked opponent)** vs casual (target: >30% ranked) — `match_logged` filtered by `props.is_ranked`.
+- **% of ranked matches confirmed within 72h** (target: >70%) — `match_logged(is_ranked=true)` → `match_confirmed` delta.
 
 ### Retention
-- **% of users who return on Day 1 / Day 7 / Day 30** after signup.
-- **Session frequency** — sessions per active user per week.
-- **Return-after-notification rate** — % of notifications that result in an app open within 24h of delivery.
+- **% of users who return on Day 1 / Day 7 / Day 30** after signup — cohort on `auth_signup_completed.user_id`, presence of `app_open` in the window.
+- **Session frequency** — distinct `session_id` per `user_id` per week.
+- **Return-after-notification rate** — % of notifications that result in an `app_open` within 24h of delivery — join `notifications.created_at` against `app_open` event timestamps.
+- **Notification tap-through rate by type** — `notification_opened` grouped by `props.type`, divided by notifications created in the same window.
 
 ### Loop health
-- **Median time from match-log → confirmed** (target: <24h for ranked).
-- **Dispute rate** — % of ranked matches that enter `disputed` or `pending_reconfirmation`. (Too high = trust issue; too low might mean confirmations are rubber-stamped.)
-- **Expiry rate** — % of pending matches that hit 72h without confirmation (target: <20%).
-- **Repeat-opponent rate** — % of confirmed matches where both players have played each other before (proxy for rivalry / density).
+- **Median time from match-log → confirmed** (target: <24h for ranked) — `match_logged` → `match_confirmed` delta.
+- **Dispute rate** — % of ranked matches that fire `match_disputed`. (Too high = trust issue; too low = rubber-stamp confirmations.)
+- **Expiry rate** — % of `match_logged(is_ranked=true)` that never see a `match_confirmed` within 72h (target: <20%).
+- **Repeat-opponent rate** — derived from `match_history` directly (confirmed matches where both players have played each other before). No event needed — this is a query on the match table.
 
 ### Density
-- **Ratio of ranked matches to total matches** (up-and-to-the-right over time).
-- **% of feed cards that belong to a friend** (vs yourself-only feed).
-- **Friends per active user** (distribution, not mean).
+- **Ratio of ranked matches to total matches** — `match_logged` grouped by `props.is_ranked`.
+- **% of feed cards that belong to a friend** — derived from `match_history` joined against `friend_requests`. No event needed.
+- **Friends per active user** (distribution, not mean) — derived from `friend_requests`.
+- **Discovery → follow conversion** — users who fire `discover_tab_viewed` then fire `friend_request_sent` in the same session.
 
 ### Social reward
-- **Average likes per confirmed match** among friends.
-- **Average comments per confirmed match.**
-- **Tap-through rate on `like` / `comment` / `match_confirmed` notifications.**
+- **Average likes per confirmed match** among friends — derived from `feed_likes` (or `feed_like` events).
+- **Average comments per confirmed match** — `feed_comment` events grouped by `props.match_id`.
+- **Tap-through rate on `like` / `comment` / `match_confirmed` notifications** — `notification_opened` filtered by `props.type`.
 
 ## Open Questions
 
@@ -139,5 +147,9 @@ These are the metrics we should measure once the analytics foundation (Module 3.
 - Any scheduled content (drip notifications on a timer rather than event-driven).
 
 ## Last Updated By Module
-- v0 — initialised from shipped state at end of Module 3. Metrics section awaits Module 3.5 (analytics foundation) to become real numbers instead of hypotheses.
-- v1 — Module 4 (Map tab): added the spatial-browse secondary loop (loop 2a).
+- v0 — initialised from shipped state at end of Module 3.
+- v1 — Module 3.5 (analytics foundation). Every metric in this doc is now mapped to a concrete event or a direct table query. See `analytics-events.md`.
+- v2 — Module 4 (challenge / rematch). New secondary loop + 6 new post-action rows. Challenge is now the only coordination surface; it explicitly converts intent into a logged match via the existing flow.
+- v3 — Module 5 (real ELO + leaderboard). The "aha moment" (rating change after confirmed win) is now backed by real ELO math with provisional period. Suburb-scoped leaderboard adds a local-network reinforcement signal.
+- v4 — Module 6 (feed polish). Community-pulse one-liner above the feed surfaces "this week" activity (own + friends) as a glance-able social-proof signal — keeps users engaged on no-match days. Toasts replace alerts in the post-action UX. Tray noise reduced via like dedupe + comment grouping.
+- v5 — Map tab (parallel workstream from the Mdawg branch): adds a spatial-browse secondary loop. Users can visually explore zones/courts as a discovery-plus-coordination aid. Integrates with the existing courts / zones data under `src/features/map/`.

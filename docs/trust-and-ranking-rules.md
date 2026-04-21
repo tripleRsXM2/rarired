@@ -59,11 +59,40 @@ expired   → terminal        (unverified, no stats)
 | `voided` | No | No | No |
 | `expired` | No | No | No |
 
-### Current ranking formula (placeholder)
+### Current ranking formula — ELO (Module 5)
 
-`ranking_points = 1000 + wins*15 − losses*10`
+Real ELO. Standard formula, single source of truth (`apply_match_outcome(p_match_id text)` SECURITY DEFINER RPC). Both `bump_stats_for_match(uuid)` and `confirm_match_and_update_stats(text)` delegate to it.
 
-This is a **linear placeholder**, not real ELO. It lives in `useCurrentUser.bumpMatchStats` and runs whenever a confirmed match increments the counters. Real ELO (rating K-factor, opponent strength, provisional periods) is **Module 5**.
+```
+expected_A   = 1 / (1 + 10^((rating_B - rating_A) / 400))
+score_A      = 1 if A won else 0
+new_rating_A = max(0, rating_A + K_A * (score_A - expected_A))   (rounded int)
+```
+
+Where:
+- `K_A = 32` if A's `matches_played < 20` (provisional)
+- `K_A = 16` once A has 20+ confirmed matches (settled)
+
+Each player has their own K-factor. A settled veteran vs a brand-new player both move at their own appropriate pace — the new player's rating shifts more, the veteran's less.
+
+**Initial rating** is 1000 (set at signup via `defaultProfile`).
+
+**Casual matches** (no `opponent_id`) are no-ops in `apply_match_outcome` — no rating change ever. Only ranked matches (linked opponent + confirmed) move the number.
+
+**Concurrency**: the RPC takes `FOR UPDATE` on both profile rows in id-order before reading the current ratings. Two concurrent confirmations involving the same player can't race; deadlocks between two matches involving the same pair are avoided.
+
+### Provisional rating period
+
+A profile is *provisional* while `matches_played < 20`. Surfaced in the UI as an orange "⚖ Provisional · N matches to settle" pill on both own and public profiles. After 20 confirmed matches the pill disappears and the K-factor drops from 32 → 16. Constants in `src/features/profile/utils/profileStats.js` (`PROVISIONAL_THRESHOLD`).
+
+### Confirmation rate (trust signal)
+
+Shown on own profile only (since a viewer's `match_history` is the only side they can read under RLS). Computed by `computeConfirmationRate(history)` in `profileStats.js`:
+- numerator: confirmed ranked matches submitted by user
+- denominator: confirmed + voided + expired ranked matches submitted by user
+- displayed only when denominator ≥ 3 (avoids noisy single-digit %s)
+
+A 100% confirmation rate is a strong "this player logs real matches that opponents agree with" signal. A low rate signals disputes / no-shows / fake submissions.
 
 ### Dispute windows
 
@@ -111,8 +140,8 @@ A player's **"N confirmed matches"** badge (green tick, shown on own and public 
 
 ## Open Questions
 
-- **Real ELO.** Module 5 replaces the linear formula. Target shape: 32-point K-factor for first 20 matches (provisional), 16 after; opponent strength factored; no rating movement below 5 games played total. Not final.
-- **Provisional rating period.** Should new accounts have a "this rating is still settling" badge for their first N confirmed matches?
+- **K-factor tuning.** 32→16 at 20 matches is a sensible starting point but probably needs a third tier (8) for tournament-grade settled players (200+ matches?). Wait for data.
+- **Provisional length.** 20 matches is currently hardcoded. Plausible range 15–30. Tune based on how long it takes ratings to converge for real users.
 - **Off-peer voiding.** Should an admin be able to manually void a match flagged by a third party (e.g., both players colluding on a fake result)? Not yet.
 - **Match-not-played window.** If a match is logged but never played IRL, the current `not_my_match` void covers it. Do we need an explicit "I played this but the score is very wrong" path beyond the existing dispute/correction flow? Probably not.
 - **Stats backfill on account link.** If a freetext opponent signs up later, do we retroactively link prior casual matches to their account? **No**, for now — keeps the casual/ranked distinction clean. Open if it becomes a user complaint.
@@ -131,4 +160,6 @@ A player's **"N confirmed matches"** badge (green tick, shown on own and public 
 - Match expiry time tuning per-user / per-suburb.
 
 ## Last Updated By Module
-- v0 — initialised from shipped state at end of Module 3. Pending updates for Module 5 (real ELO) and Module 4 (challenge/rematch integration with match logging).
+- v0 — initialised from shipped state at end of Module 3.
+- v1 — Module 4 (challenges) noted as the conversion path from intent → ranked match log; no trust math change.
+- v2 — Module 5 (real ELO). Linear placeholder replaced by ELO with provisional period. Single-source-of-truth `apply_match_outcome` RPC. Provisional + confirmation-rate trust pills surfaced on profile UI.

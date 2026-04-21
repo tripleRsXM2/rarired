@@ -46,6 +46,7 @@ Code changes the product. Docs explain the product. Both must stay in sync. A mo
 | `core-loop.md` | Primary + secondary loops, activation, aha moment, retention triggers, key metrics. |
 | `notification-taxonomy.md` | Every notification type: trigger, recipient, priority, deep-link, copy. |
 | `discovery-seeding-plan.md` | Atomic network, discovery behaviour, empty states, invite flow, seed metrics. |
+| `analytics-events.md` | Every tracked event: trigger, props, loop-stage mapping, example queries. |
 
 ### Doc structure (required for each file)
 1. Title
@@ -65,6 +66,7 @@ Code changes the product. Docs explain the product. Both must stay in sync. A mo
 | App scope, product direction, tradeoffs | `product-principles.md` |
 | Alerts, inbox behaviour, deep links, notification copy | `notification-taxonomy.md` |
 | Player search, follows, local discovery, empty states, growth assumptions | `discovery-seeding-plan.md` |
+| Adds or changes a tracked analytics event (or its props) | `analytics-events.md` |
 
 ### Working process for every module
 1. **Audit** what already exists.

@@ -9,18 +9,31 @@
 // no match history for the subject (RLS-restricted). Those surfaces are for
 // later modules when we have an RPC for public match data.
 
+import { useEffect } from "react";
 import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
 import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
 import {
   computeHeadToHead,
   formatConfirmedBadge,
+  provisionalLabel,
 } from "../utils/profileStats.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function PlayerProfileView({
-  t, authUser, userId, viewerHistory, onBack,
+  t, authUser, userId, viewerHistory, onBack, openChallenge,
 }) {
   var state = usePlayerProfile(userId);
   var profile = state.profile;
+
+  // Module 3.5: fire once per public-profile view, once the real profile has
+  // loaded. Skeleton / error / not-found states don't count.
+  useEffect(function () {
+    if (!profile || !profile.id) return;
+    track("profile_viewed", {
+      target_user_id: profile.id,
+      is_self: false,
+    });
+  }, [profile && profile.id]);
 
   // Loading / error / not-found shells — all styled the same as the real
   // profile hero so the layout doesn't jump when the fetch resolves.
@@ -47,6 +60,7 @@ export default function PlayerProfileView({
   var streakType  = profile.streak_type;
   var streakLabel = streakCount === 0 ? "—" : streakCount + (streakType === "win" ? " W" : " L");
   var confirmedBadge = formatConfirmedBadge(profile);
+  var provLabel = provisionalLabel(profile);
 
   // H2H computed from the viewer's own history (RLS-safe).
   var h2h = computeHeadToHead(viewerHistory || [], authUser && authUser.id, profile.id);
@@ -108,18 +122,52 @@ export default function PlayerProfileView({
           </p>
         )}
 
-        {/* Trust indicator — the whole point of the "verified identity" vision */}
-        {confirmedBadge && (
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "5px 10px", borderRadius: 20,
-            background: t.greenSubtle, color: t.green,
-            border: "1px solid " + t.green + "33",
-            fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
-            marginBottom: 16,
-          }}>
-            <span>✓</span>
-            <span>{confirmedBadge}</span>
+        {/* Trust + rating-state pills row (Modules 1 + 5) */}
+        {(confirmedBadge || provLabel) && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+            {confirmedBadge && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "5px 10px", borderRadius: 20,
+                background: t.greenSubtle, color: t.green,
+                border: "1px solid " + t.green + "33",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
+              }}>
+                <span>✓</span><span>{confirmedBadge}</span>
+              </span>
+            )}
+            {provLabel && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "5px 10px", borderRadius: 20,
+                background: t.orangeSubtle, color: t.orange,
+                border: "1px solid " + t.orange + "33",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
+              }}>
+                <span>⚖</span><span>{provLabel}</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Module 4: primary action on a public profile is "Challenge".
+            Hidden when the viewer isn't signed in or is somehow viewing
+            themselves (route should redirect, but guard anyway). */}
+        {openChallenge && authUser && profile.id !== authUser.id && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={function () { openChallenge(profile, "profile"); }}
+              style={{
+                flex: 1, padding: "12px", borderRadius: 10, border: "none",
+                background: t.accent, color: "#fff",
+                fontSize: 14, fontWeight: 700, letterSpacing: "-0.1px",
+                cursor: "pointer", transition: "opacity 0.15s",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >
+              Challenge {profile.name ? profile.name.split(" ")[0] : ""}
+            </button>
           </div>
         )}
 

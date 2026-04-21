@@ -8,6 +8,7 @@ import { TABS } from "../lib/constants/ui.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
+import { track } from "../lib/analytics.js";
 
 import Providers from "./providers.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -21,6 +22,7 @@ import { useDMs } from "../features/people/hooks/useDMs.js";
 import { usePresenceHeartbeat } from "../features/people/hooks/usePresenceHeartbeat.js";
 import { useNotifications } from "../features/notifications/hooks/useNotifications.js";
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
+import { useChallenges } from "../features/challenges/hooks/useChallenges.js";
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
@@ -40,12 +42,19 @@ import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx"
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 import CommentModal from "../features/tournaments/components/CommentModal.jsx";
 import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
+import ChallengeModal from "../features/challenges/components/ChallengeModal.jsx";
+import { useToasts, ToastStack } from "../components/ui/Toast.jsx";
 
 export default function App(){
   var VALID_THEMES=['wimbledon','ao','french-open','us-open'];
   var [theme,setTheme]=useState(function(){var s=localStorage.getItem("theme");return s&&VALID_THEMES.includes(s)?s:'wimbledon';});
   var t=makeTheme(theme);
   function applyTheme(name){localStorage.setItem("theme",name);setTheme(name);}
+
+  // Module 6: app-wide toast emitter. Replaces window.alert() everywhere.
+  // toast(msg, 'error'|'success'|'info').
+  var toastSystem=useToasts();
+  var toast=toastSystem.emit;
 
   var location=useLocation();
   var navigate=useNavigate();
@@ -104,7 +113,18 @@ export default function App(){
   });
 
   var currentUser=useCurrentUser();
-  var matchHistory=useMatchHistory({ authUser:auth.authUser, sendNotification:insertNotification, bumpStats:currentUser.bumpMatchStats, refreshProfile:currentUser.refreshProfileUI });
+  var matchHistory=useMatchHistory({
+    authUser:auth.authUser,
+    sendNotification:insertNotification,
+    bumpStats:currentUser.bumpMatchStats,
+    refreshProfile:currentUser.refreshProfileUI,
+    // Module 4: when a logged match was sourced from an accepted challenge,
+    // mark that challenge row 'completed' and link the match_id.
+    onMatchLoggedFromChallenge: function(challengeId, matchId){
+      if(coordRef.current.markChallengeAsConverted)
+        coordRef.current.markChallengeAsConverted(challengeId, matchId);
+    },
+  });
   var social=useSocialGraph({ authUser:auth.authUser });
   // Pass friends list so DM logic can bypass the request gate for friends.
   var dms=useDMs({ authUser:auth.authUser, friends:social.friends });
@@ -124,6 +144,7 @@ export default function App(){
     myId:auth.authUser?auth.authUser.id:"local-user",
     requireAuth:auth.requireAuth,
   });
+  var challenges=useChallenges({ authUser:auth.authUser });
 
   var myId=auth.authUser?auth.authUser.id:"local-user";
 
@@ -133,16 +154,28 @@ export default function App(){
       bootstrap: async function(supabaseUser, isFresh){
         var res=await currentUser.loadProfile(supabaseUser);
         auth.setAuthInitialized(true);
+        // Module 3.5: fresh sign-in splits into signup-completed vs login-completed
+        // based on whether loadProfile just created the row.
+        if(isFresh){
+          track(res.isNew?"auth_signup_completed":"auth_login_completed",{});
+        }
         await Promise.all([
           matchHistory.loadHistory(supabaseUser.id),
           social.loadSocial(supabaseUser.id, res.profile),
           notifications.loadNotifications(supabaseUser.id),
           dms.loadConversations(),
+          challenges.loadChallenges(supabaseUser.id),
         ]);
         if(res.isNew&&isFresh)currentUser.triggerOnboarding();
       },
       reset: function(){
         // Match prior behavior: clear only auth; data rehydrates on next sign-in.
+      },
+      // Module 4: bridges the useMatchHistory→useChallenges call from inside a
+      // coordRef so we don't have to re-order the hook declarations.
+      markChallengeAsConverted: function(challengeId, matchId){
+        if(challenges&&challenges.markChallengeAsConverted)
+          challenges.markChallengeAsConverted(challengeId, matchId);
       },
     };
   });
@@ -223,6 +256,45 @@ export default function App(){
     matchHistory.setCasualOppName("");
     matchHistory.setScoreModal({casual:true,oppName:"",tournName:"Casual Match"});
     matchHistory.setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10),venue:"",court:""});
+  }
+
+  // Module 4: composer entry points.
+  // openChallenge(targetUser, source, sourceMatch?) — used by profile & feed-card
+  // "Challenge"/"Rematch" CTAs. For rematch we prefill venue/court from the source.
+  function openChallenge(targetUser, source, sourceMatch){
+    if(!auth.authUser){auth.openLogin();return;}
+    if(!targetUser||!targetUser.id||targetUser.id===auth.authUser.id) return;
+    challenges.openComposer(targetUser, source||"profile", sourceMatch&&sourceMatch.id);
+    if(source==="rematch"&&sourceMatch){
+      challenges.setDraft({
+        message:"",
+        venue: sourceMatch.venue||"",
+        court: sourceMatch.court||"",
+        proposed_at:"",
+      });
+    }
+  }
+
+  // openConvertToMatch(challenge, partnerProfile) — opens ScoreModal prefilled
+  // for an accepted challenge. On successful submit, useMatchHistory will mark
+  // the challenge as completed via the sourceChallengeId on the modal context.
+  function openConvertToMatch(challenge, partnerProfile){
+    if(!challenge||!partnerProfile) return;
+    matchHistory.setCasualOppName(partnerProfile.name||"");
+    matchHistory.setCasualOppId(partnerProfile.id||null);
+    matchHistory.setScoreModal({
+      casual:true,
+      oppName:partnerProfile.name||"",
+      opponentId:partnerProfile.id||null,
+      tournName:"Ranked",
+      sourceChallengeId: challenge.id,
+    });
+    matchHistory.setScoreDraft({
+      sets:[{you:"",them:""}], result:"win", notes:"",
+      date:new Date().toISOString().slice(0,10),
+      venue: challenge.venue||"",
+      court: challenge.court||"",
+    });
   }
 
   // ── In-context notification review drawer ────────────────────────────────
@@ -418,6 +490,8 @@ export default function App(){
               friendRelationLabel={social.friendRelationLabel}
               socialLoading={social.socialLoading}
               onGoToDiscover={function(){navigate("/people/suggested");}}
+              openChallenge={openChallenge}
+              toast={toast}
             />
           )}
           {tab==="map"&&(
@@ -461,6 +535,10 @@ export default function App(){
             setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
             dms={dms}
             openProfile={openProfile}
+            challenges={challenges}
+            openChallenge={openChallenge}
+            openConvertToMatch={openConvertToMatch}
+            toast={toast}
           />
         )}
         {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
@@ -470,6 +548,7 @@ export default function App(){
             userId={profilePathId}
             viewerHistory={matchHistory.history}
             onBack={function(){navigate(-1);}}
+            openChallenge={openChallenge}
           />
         )}
         {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(
@@ -504,6 +583,7 @@ export default function App(){
               history={matchHistory.history}
               onLogMatch={openLogMatch}
               openProfile={openProfile}
+              viewerSuburb={currentUser.profile && currentUser.profile.suburb}
             />
           </div>
         )}
@@ -574,6 +654,18 @@ export default function App(){
           feedComments={matchHistory.feedComments} setFeedComments={matchHistory.setFeedComments}
           onCommentPosted={notifyMatchOwnerOfComment}
         />
+        <ChallengeModal
+          t={t}
+          composer={challenges.composer}
+          draft={challenges.draft}
+          setDraft={challenges.setDraft}
+          loading={challenges.loading}
+          onSend={async function(){
+            var res=await challenges.sendChallenge();
+            if(res&&res.error)toast(res.error,"error");
+          }}
+          onClose={challenges.closeComposer}
+        />
         <AuthModal
           t={t} showAuth={auth.showAuth} setShowAuth={auth.setShowAuth}
           authMode={auth.authMode} setAuthMode={auth.setAuthMode}
@@ -594,6 +686,7 @@ export default function App(){
           onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
           onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
         />
+        <ToastStack t={t} toasts={toastSystem.toasts} dismiss={toastSystem.dismiss} />
     </Providers>
   );
 }

@@ -9,8 +9,12 @@ export function fetchBlocks(userId){
 }
 export { fetchProfilesByIds } from "../../../lib/db.js";
 export function fetchSuggestedPlayers(userId, suburb, excludeIds){
+  // Module 6: case-insensitive, trimmed suburb match. Old exact-string match
+  // missed "Bondi" vs "bondi " variants. ilike with the suburb literal still
+  // works as exact-text in the absence of % wildcards but ignores case.
+  var s=(suburb||"Sydney").trim();
   return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
-    .neq('id',userId).eq('suburb',suburb||"Sydney")
+    .neq('id',userId).ilike('suburb',s)
     .not('id','in','('+excludeIds.join(',')+')')
     .limit(6);
 }

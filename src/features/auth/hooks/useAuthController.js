@@ -1,6 +1,7 @@
 // src/features/auth/hooks/useAuthController.js
 import { useState, useEffect, useRef } from "react";
 import { getSession, subscribeAuthChange, normalizeAuthUser } from "../services/authService.js";
+import { track } from "../../../lib/analytics.js";
 
 export function useAuthController(callbacks){
   var [authUser,setAuthUser]=useState(null);
@@ -24,6 +25,12 @@ export function useAuthController(callbacks){
   cbRef.current=callbacks||{};
 
   useEffect(function(){
+    // Module 3.5: fire once per tab-session on mount. app_open counts sessions
+    // even before auth resolves — user_id is filled in by the analytics helper
+    // at flush time, so an already-signed-in user gets their id attached, and
+    // an anonymous visitor writes a null-user row.
+    track("app_open", {});
+
     getSession().then(function(r){
       if(r.data.session){
         setAuthUser(normalizeAuthUser(r.data.session.user));
