@@ -547,6 +547,7 @@ export default function App(){
               history={matchHistory.history}
               onLogMatch={openLogMatch}
               openProfile={openProfile}
+              viewerSuburb={currentUser.profile && currentUser.profile.suburb}
             />
           </div>
         )}

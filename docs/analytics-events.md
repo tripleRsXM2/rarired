@@ -39,6 +39,8 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `friend_request_sent` | `sendFriendRequest` succeeds | `target_user_id` |
 | `friend_request_accepted` | `acceptRequest` succeeds | `requester_user_id` |
 | `discover_tab_viewed` | Entering the `/people/suggested` sub-tab | `played_opponents_count`, `suburb_suggestions_count`, `skill_suggestions_count` |
+| `leaderboard_viewed` | Leaderboard query resolves (mount or scope-change) | `scope` ("all" \| "suburb"), `has_suburb` |
+| `leaderboard_filter_changed` | User toggles between scope buttons | `from_scope`, `to_scope` |
 
 ### Module 4 events (now fired)
 
@@ -156,3 +158,4 @@ from logged l left join confirmed c using (mid);
 ## Last Updated By Module
 - v0 — introduced by Module 3.5 (analytics foundation) with 16 registered events covering the full core loop + 4 reserved for Module 4.
 - v1 — Module 4 promoted all 4 reserved events (`challenge_sent`, `challenge_accepted`, `challenge_declined`, `rematch_converted_to_match`) to fired with concrete props. Total registered events: 20 fired, 0 reserved.
+- v2 — Module 5 added 2 new events: `leaderboard_viewed`, `leaderboard_filter_changed`. Total: 22 fired.

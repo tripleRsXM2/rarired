@@ -118,3 +118,41 @@ export function formatConfirmedBadge(profile) {
   if (!n) return null;
   return n === 1 ? "1 confirmed match" : n + " confirmed matches";
 }
+
+// Module 5: provisional period gates the "settled" rating signal. Mirrors the
+// SQL: matches_played < 20 → K=32 (provisional); >= 20 → K=16 (settled).
+// We expose a boolean + a small label-fragment for UI use.
+export var PROVISIONAL_THRESHOLD = 20;
+
+export function isProvisional(profile) {
+  if (!profile) return true;
+  return (profile.matches_played || 0) < PROVISIONAL_THRESHOLD;
+}
+
+export function provisionalLabel(profile) {
+  if (!profile) return null;
+  var played = profile.matches_played || 0;
+  if (played >= PROVISIONAL_THRESHOLD) return null;
+  var remaining = PROVISIONAL_THRESHOLD - played;
+  if (remaining === PROVISIONAL_THRESHOLD) return "Provisional rating";
+  return "Provisional · " + remaining + " match" + (remaining === 1 ? "" : "es") + " to settle";
+}
+
+// Confirmation rate trust signal. Computed from the viewer's *own* match
+// history. Returns null until they have ≥3 confirmed matches (otherwise the
+// percentage is too noisy to mean anything). Returns { pct, total }.
+//
+// Counts confirmed vs (confirmed + voided + expired). Disputed-in-flight
+// matches don't count either way — they're still in motion. We deliberately
+// do NOT count "casual matches the user logged for themselves" as anything
+// here; only ranked matches have a meaningful confirmation rate.
+export function computeConfirmationRate(history) {
+  if (!history || !history.length) return null;
+  var ranked = history.filter(function (m) {
+    if (!m.opponent_id) return false; // casual
+    return m.status === "confirmed" || m.status === "voided" || m.status === "expired";
+  });
+  if (ranked.length < 3) return null;
+  var ok = ranked.filter(function (m) { return m.status === "confirmed"; }).length;
+  return { pct: Math.round((ok / ranked.length) * 100), total: ranked.length };
+}
