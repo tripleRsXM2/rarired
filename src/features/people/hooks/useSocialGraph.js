@@ -4,6 +4,7 @@ import { supabase } from "../../../lib/supabase.js";
 import * as S from "../services/socialService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
+import { track } from "../../../lib/analytics.js";
 
 export function useSocialGraph(opts){
   var authUser=(opts&&opts.authUser)||null;
@@ -138,6 +139,7 @@ export function useSocialGraph(opts){
       var nr=await insertNotification(notifPayload);
       if(nr.error) console.error('[sendFriendRequest] notification insert FAILED:', nr.error);
       else console.debug('[sendFriendRequest] notification insert OK');
+      track("friend_request_sent",{target_user_id:target.id});
     } else {
       console.error('[sendFriendRequest] friend request insert failed:', r.error);
     }
@@ -150,6 +152,7 @@ export function useSocialGraph(opts){
     setReceivedRequests(function(r){return r.filter(function(x){return x.requestId!==req.requestId;});});
     setFriends(function(f){return f.concat([req]);});
     await insertNotification({user_id:req.id,type:'request_accepted',from_user_id:authUser.id});
+    track("friend_request_accepted",{requester_user_id:req.id});
     setSocialLoading(function(l){return Object.assign({},l,{[req.id]:false});});
   }
   async function declineRequest(req){
@@ -228,8 +231,10 @@ export function useSocialGraph(opts){
     var r=await S.searchProfilesByName(authUser.id, query.trim());
     if(r.error){setSearchLoading(false);return;}
     var blockedIds=blockedUsers.map(function(b){return b.id;});
-    setSearchResults((r.data||[]).filter(function(u){return!blockedIds.includes(u.id);}));
+    var filtered=(r.data||[]).filter(function(u){return!blockedIds.includes(u.id);});
+    setSearchResults(filtered);
     setShowSearchDrop(true);setSearchLoading(false);
+    track("search_executed",{query_len:query.trim().length,result_count:filtered.length});
   }
 
   return {

@@ -36,6 +36,8 @@ For every feature: trigger → action → reward → investment. Prioritise noti
 ### 3. The Mom Test — instrument, don't guess
 Every meaningful module ships with event tracking so we can learn from real behaviour. No feature is "done" without at least one measurable outcome. Self-reported UX is lying UX — we need the data.
 
+**How we instrument (from Module 3.5):** a single `public.events` table, a client-side `track(name, props)` helper (fire-and-forget, never blocks UX), and the event registry in `analytics-events.md`. Every new module adds its events to that registry in the same commit as the code. Reads are service_role only — nobody browses other users' behaviour in-app.
+
 ## Key trade-offs already made (and why)
 
 | Decision | Rejected alternative | Reason |
@@ -66,4 +68,5 @@ Every meaningful module ships with event tracking so we can learn from real beha
 - Translation / i18n. English-AU only for now.
 
 ## Last Updated By Module
-- v0 — initialised from shipped state at end of Module 3. Future module deltas append here.
+- v0 — initialised from shipped state at end of Module 3.
+- v1 — Module 3.5 (analytics foundation). Added the "how we instrument" note under the Mom Test lens.

@@ -3,6 +3,7 @@ import { useState } from "react";
 import * as M from "../services/matchService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
+import { track } from "../../../lib/analytics.js";
 
 // Translate a Supabase/Postgres error into a user-facing string. We prefer
 // the server's message (it's usually a human-readable NOTICE/RAISE from our
@@ -200,6 +201,7 @@ export function useMatchHistory(opts){
     if(isVerified&&sendNotification){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
+    track("match_logged",{match_id:matchId,is_ranked:isVerified,has_opponent_linked:!!opponentId,sets:clean.length,result:scoreDraft.result});
     return {error:null, matchId, status};
   }
 
@@ -219,6 +221,7 @@ export function useMatchHistory(opts){
     if(sendNotification&&match.submitterId){
       await sendNotification({user_id:match.submitterId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }
+    track("match_confirmed",{match_id:match.id,role:"opponent"});
     return {error:null};
   }
 
@@ -277,6 +280,7 @@ export function useMatchHistory(opts){
     if(sendNotification && notifyId){
       await sendNotification({user_id:notifyId,type:isOpponentView?'match_disputed':'match_counter_proposed',from_user_id:authUser.id,match_id:match.id});
     }
+    track(isOpponentView?"match_disputed":"match_counter_proposed",{match_id:match.id,reason:reasonCode,round:newRevisionCount});
     return {error:null};
   }
 
@@ -314,6 +318,7 @@ export function useMatchHistory(opts){
     if(sendNotification&&otherId){
       await sendNotification({user_id:otherId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }
+    track("match_correction_accepted",{match_id:match.id,round:match.revisionCount||0});
     return {error:null};
   }
 
@@ -335,6 +340,7 @@ export function useMatchHistory(opts){
     if(sendNotification&&otherId){
       await sendNotification({user_id:otherId,type:'match_voided',from_user_id:authUser.id,match_id:match.id});
     }
+    track("match_voided",{match_id:match.id,reason:reason||"voided"});
     return {error:null};
   }
 

@@ -7,6 +7,7 @@ import { avColor } from "../lib/utils/avatar.js";
 import { TABS } from "../lib/constants/ui.js";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
+import { track } from "../lib/analytics.js";
 
 import Providers from "./providers.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -119,6 +120,11 @@ export default function App(){
       bootstrap: async function(supabaseUser, isFresh){
         var res=await currentUser.loadProfile(supabaseUser);
         auth.setAuthInitialized(true);
+        // Module 3.5: fresh sign-in splits into signup-completed vs login-completed
+        // based on whether loadProfile just created the row.
+        if(isFresh){
+          track(res.isNew?"auth_signup_completed":"auth_login_completed",{});
+        }
         await Promise.all([
           matchHistory.loadHistory(supabaseUser.id),
           social.loadSocial(supabaseUser.id, res.profile),

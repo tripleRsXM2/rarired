@@ -5,6 +5,7 @@
 import { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { avColor } from "../../../lib/utils/avatar.js";
+import { track } from "../../../lib/analytics.js";
 import {
   getEffectiveType,
   getNotifLabel,
@@ -144,6 +145,7 @@ function NotifRow({
   }
   function goFeed(e) {
     if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "feed" });
     if (refreshHistory) refreshHistory();
     navigate("/home");
     setShowNotifications(false);
@@ -151,6 +153,7 @@ function NotifRow({
   }
   function goMessages(e) {
     if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "messages" });
     if (openConvById) openConvById(n.entity_id, n.from_user_id);
     else navigate("/people/messages");
     setShowNotifications(false);
@@ -159,6 +162,7 @@ function NotifRow({
   function goProfile(e) {
     if (e) e.stopPropagation();
     if (!n.from_user_id) return;
+    track("notification_opened", { type: n.type, deep_link_target: "profile" });
     if (openProfile) openProfile(n.from_user_id);
     else navigate("/profile/" + n.from_user_id);
     setShowNotifications(false);

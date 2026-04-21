@@ -3,6 +3,7 @@
 // Public-facing profile view: stats, match history, achievements, availability.
 // Settings have been moved to SettingsScreen (accessible via top-bar avatar).
 
+import { useEffect } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
 import {
@@ -10,6 +11,7 @@ import {
   computeMostPlayed,
   formatConfirmedBadge,
 } from "../utils/profileStats.js";
+import { track } from "../../../lib/analytics.js";
 
 var BADGES=[
   {id:"first", label:"First Match",   desc:"Play your first match",             icon:"🎾", check:function(w,p){return p>=1;}},
@@ -53,6 +55,12 @@ export default function ProfileTab({
   var myId = authUser && authUser.id;
   var mostPlayed = computeMostPlayed(history, myId, 5);
   var confirmedBadge = formatConfirmedBadge(profile);
+
+  // Module 3.5: self-view analytics. Fires once per profile-id load.
+  useEffect(function () {
+    if (!profile || !profile.id) return;
+    track("profile_viewed", { target_user_id: profile.id, is_self: true });
+  }, [profile && profile.id]);
 
   return (
     <div style={{maxWidth:680,margin:"0 auto"}}>
