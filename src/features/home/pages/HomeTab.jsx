@@ -13,13 +13,67 @@ var REASON_LABELS = {
   other:         "Other",
 };
 
-// ── IconButton (Strava-style compact footer action) ──────────────────────────
-// Ghost button, 34×34, emoji/text child. `active` = primary-coloured filled
-// look; `accent` = accent-coloured hover for the Rematch button.
-function IconButton({ t, title, onClick, active, accent, children }) {
+// ── Feed icon set (line-art, matches navIcons.jsx style) ────────────────────
+// All 18×18, stroke="currentColor", stroke-width 1.5 — so they follow the
+// parent button's color state (default = textSecondary, active = accent).
+var ICONS = {
+  like: function (size) {
+    var s = size || 18;
+    // Thumb-up outline.
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M6 8.5V15h7.2a1.5 1.5 0 0 0 1.48-1.24l.84-4.76A1.5 1.5 0 0 0 14.04 7.5H10.5V4.5a1.5 1.5 0 0 0-2.94-.43L6 8.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M6 8.5v6.5H3.5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1H6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+  likeFilled: function (size) {
+    var s = size || 18;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M6 8.5V15h7.2a1.5 1.5 0 0 0 1.48-1.24l.84-4.76A1.5 1.5 0 0 0 14.04 7.5H10.5V4.5a1.5 1.5 0 0 0-2.94-.43L6 8.5z" fill="currentColor"/>
+        <path d="M6 8.5v6.5H3.5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1H6z" fill="currentColor"/>
+      </svg>
+    );
+  },
+  comment: function (size) {
+    var s = size || 18;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M15.5 9.5c0 3-2.686 5.5-6 5.5a6.9 6.9 0 0 1-2.5-.466L3 15.5l.966-3.5A5.9 5.9 0 0 1 3 9.5c0-3 2.686-5.5 6-5.5s6.5 2.5 6.5 5.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+  rematch: function (size) {
+    var s = size || 18;
+    // Loop / repeat arrow.
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M3 9a6 6 0 0 1 10.5-3.95L15 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 3.5V7h-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 9a6 6 0 0 1-10.5 3.95L3 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M3 14.5V11h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+  share: function (size) {
+    var s = size || 18;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M7 3h-3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M9 9l6-6M10 3h5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+};
+
+// ── IconButton (Strava-style compact footer action, sidebar-style chrome) ───
+// Transparent by default, colour follows state. No box-fill — mirrors the
+// left sidebar's nav-item idle state. Children are a callable SVG (one of
+// ICONS above) so color flows through via currentColor.
+function IconButton({ t, title, onClick, active, children }) {
   var [hover, setHover] = useState(false);
-  var bg = active ? t.accentSubtle : hover ? t.bgTertiary : "transparent";
-  var color = active ? t.accent : accent ? t.accent : t.textSecondary;
+  var color = active ? t.accent : hover ? t.text : t.textSecondary;
   return (
     <button
       title={title}
@@ -27,11 +81,11 @@ function IconButton({ t, title, onClick, active, accent, children }) {
       onMouseEnter={function () { setHover(true); }}
       onMouseLeave={function () { setHover(false); }}
       style={{
-        width: 34, height: 34, borderRadius: 8,
-        border: "none", background: bg,
+        width: 32, height: 32,
+        border: "none", background: "transparent",
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: color, fontSize: 15, cursor: "pointer",
-        transition: "background 0.13s",
+        color: color, cursor: "pointer",
+        transition: "color 0.13s",
         padding: 0,
       }}>
       {children}
@@ -161,11 +215,10 @@ function FeedCard({
       style={{
         background: t.bgCard,
         border: "1px solid " + t.border,
-        borderRadius: 16,
+        borderRadius: 0,
         overflow: "hidden",
         marginBottom: 14,
         opacity: cardOpacity,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)",
       }}
     >
       {/* ── Header (Strava-style: round avatar, accent name, meta subtitle) ── */}
@@ -554,7 +607,7 @@ function FeedCard({
               t={t}
               title={liked ? "Unlike" : "Like"}
               active={liked}
-              onClick={async function() {
+              onClick={async function () {
                 if (!authUser) return;
                 var prevLiked = liked;
                 var nowLiked = !liked;
@@ -589,19 +642,18 @@ function FeedCard({
                   }
                 }
               }}>
-              {liked ? "👍" : "👍🏻"}
+              {liked ? ICONS.likeFilled() : ICONS.like()}
             </IconButton>
             <IconButton
               t={t}
               title={"Comment" + (comments.length > 0 ? " (" + comments.length + ")" : "")}
-              onClick={function() { setCommentModal(m.id); setCommentDraft(""); }}>
-              💬
+              onClick={function () { setCommentModal(m.id); setCommentDraft(""); }}>
+              {ICONS.comment()}
             </IconButton>
             {openChallenge && opponentClickable && (
               <IconButton
                 t={t}
                 title="Rematch"
-                accent
                 onClick={function () {
                   openChallenge(
                     { id: opponentUserId, name: m.oppName, suburb: m.venue || "", skill: "" },
@@ -609,14 +661,14 @@ function FeedCard({
                     m
                   );
                 }}>
-                🔁
+                {ICONS.rematch()}
               </IconButton>
             )}
             <IconButton
               t={t}
               title="Share"
-              onClick={function() { if (navigator.share) navigator.share({ title: "Match result", text: pName + (isWin ? " won " : " lost ") + "vs " + m.oppName + " " + scoreStr }); }}>
-              ↗
+              onClick={function () { if (navigator.share) navigator.share({ title: "Match result", text: pName + (isWin ? " won " : " lost ") + "vs " + m.oppName + " " + scoreStr }); }}>
+              {ICONS.share()}
             </IconButton>
           </div>
         </div>
@@ -628,9 +680,9 @@ function FeedCard({
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <span style={{ fontSize: 12, color: t.textTertiary }}>Be the first to give kudos!</span>
-          <div style={{ display: "flex", gap: 4 }}>
-            <span style={{ fontSize: 15, color: t.textTertiary, padding: "6px 8px" }}>👍🏻</span>
-            <span style={{ fontSize: 15, color: t.textTertiary, padding: "6px 8px" }}>💬</span>
+          <div style={{ display: "flex", gap: 4, color: t.textTertiary }}>
+            <span style={{ padding: "7px 7px", display: "flex", alignItems: "center" }}>{ICONS.like()}</span>
+            <span style={{ padding: "7px 7px", display: "flex", alignItems: "center" }}>{ICONS.comment()}</span>
           </div>
         </div>
       )}
