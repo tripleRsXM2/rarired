@@ -21,7 +21,13 @@ import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 // Matches + Matches tab). Same typography + winner-from-sets derivation as
 // FeedCard, minus the social footer / action blocks. Header row shows
 // opponent, date, tournament pill, and a tiny result chip on the right.
-function ProfileMatchRow({ m, t, profile }) {
+//
+// Clicking the row opens the rematch composer (Module 4) — reinforces the
+// core loop "played → rematch" without forcing the user to navigate to the
+// opponent's profile first. Only enabled when we have a real opponent user
+// (i.e. the match was between linked accounts, not a typed-in name) and an
+// openChallenge handler is passed in.
+function ProfileMatchRow({ m, t, profile, openChallenge }) {
   var sets = m.sets || [];
   // Viewer's scores are s.you for own matches; for tagged matches the row is
   // still rendered from the viewer's POV — normalizeMatch already flips
@@ -56,14 +62,33 @@ function ProfileMatchRow({ m, t, profile }) {
     },
   ];
 
+  // Opponent user id from viewer POV. If viewer submitted the match, opponent
+  // is m.opponent_id. If the match was tagged to the viewer, the "opponent"
+  // is the submitter. Falls back to null for un-linked (typed-name) matches.
+  var opponentUserId = m.isTagged ? m.submitterId : m.opponent_id;
+  var canRematch = !!openChallenge && !!opponentUserId;
+  function handleRematch(e) {
+    if (e) e.stopPropagation();
+    if (!canRematch) return;
+    openChallenge(
+      { id: opponentUserId, name: m.oppName, suburb: m.venue || "", skill: "" },
+      "rematch",
+      m
+    );
+  }
+
   return (
-    <div style={{
-      background: t.bgCard,
-      border: "1px solid " + t.border,
-      borderRadius: 0,
-      marginBottom: 8,
-      overflow: "hidden",
-    }}>
+    <div
+      onClick={canRematch ? handleRematch : undefined}
+      title={canRematch ? "Rematch " + (m.oppName || "") : undefined}
+      style={{
+        background: t.bgCard,
+        border: "1px solid " + t.border,
+        borderRadius: 0,
+        marginBottom: 8,
+        overflow: "hidden",
+        cursor: canRematch ? "pointer" : "default",
+      }}>
       {/* Header: opponent + date + tourn + result chip */}
       <div style={{ display: "flex", alignItems: "center", padding: "10px 14px", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -93,6 +118,17 @@ function ProfileMatchRow({ m, t, profile }) {
              m.status === "pending_reconfirmation" ? "Re-proposed" :
              m.status === "voided" ? "Voided" :
              m.status === "expired" ? "Unverified" : m.status}
+          </span>
+        )}
+        {canRematch && (
+          <span
+            onClick={handleRematch}
+            title={"Rematch " + (m.oppName || "")}
+            style={{
+              flexShrink: 0, display: "flex", alignItems: "center",
+              color: t.textTertiary, padding: 2,
+            }}>
+            {NAV_ICONS.rematch(14)}
           </span>
         )}
       </div>
@@ -173,6 +209,9 @@ export default function ProfileTab({
   profileTab, setProfileTab,
   onOpenSettings,
   openProfile,
+  // Module 4: rematch from match history — clicking a match row opens the
+  // challenge composer in rematch mode (prefills venue/court from the match).
+  openChallenge,
 }) {
   var wins    = profile.wins         != null ? profile.wins         : history.filter(function(m){return m.result==="win";}).length;
   var losses  = profile.losses       != null ? profile.losses       : history.length - wins;
@@ -413,7 +452,7 @@ export default function ProfileTab({
               <div style={{fontSize:13,color:t.textTertiary}}>Enter a tournament or log a match to get started.</div>
             </div>
             :history.slice(0,3).map(function(m){
-              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} />;
+              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} openChallenge={openChallenge} />;
             })
           }
 
@@ -520,7 +559,7 @@ export default function ProfileTab({
               <div style={{fontSize:13,color:t.textTertiary,lineHeight:1.5}}>Complete a tournament match and log your score to see your history here.</div>
             </div>
             :history.map(function(m){
-              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} />;
+              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} openChallenge={openChallenge} />;
             })
           }
         </div>

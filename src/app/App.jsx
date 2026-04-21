@@ -608,6 +608,7 @@ export default function App(){
             profileTab={profileTab} setProfileTab={setProfileTab}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openProfile={openProfile}
+            openChallenge={openChallenge}
           />
         )}
         {tab==="admin"&&(

@@ -152,48 +152,47 @@ export default function PlayerProfileView({
 
         {/* Module 4: primary action on a public profile is "Challenge".
             Hidden when the viewer isn't signed in or is somehow viewing
-            themselves (route should redirect, but guard anyway). */}
+            themselves (route should redirect, but guard anyway).
+            Sharp-cornered accent block to match the rest of the chrome. */}
         {openChallenge && authUser && profile.id !== authUser.id && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <button
-              onClick={function () { openChallenge(profile, "profile"); }}
-              style={{
-                flex: 1, padding: "12px", borderRadius: 10, border: "none",
-                background: t.accent, color: "#fff",
-                fontSize: 14, fontWeight: 700, letterSpacing: "-0.1px",
-                cursor: "pointer", transition: "opacity 0.15s",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >
-              Challenge {profile.name ? profile.name.split(" ")[0] : ""}
-            </button>
-          </div>
+          <button
+            onClick={function () { openChallenge(profile, "profile"); }}
+            style={{
+              width: "100%", padding: "12px", borderRadius: 0, border: "none",
+              background: t.accent, color: "#fff",
+              fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase",
+              cursor: "pointer", transition: "opacity 0.15s", marginBottom: 14,
+            }}
+            onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+          >
+            Challenge {profile.name ? profile.name.split(" ")[0] : "player"}
+          </button>
         )}
 
-        {/* Ranking card */}
+        {/* Ranking card — sharp, same rhythm as ProfileTab */}
         <div style={{
-          background: t.bgCard, border: "1px solid " + t.border, borderRadius: 10,
-          padding: "12px 16px", marginBottom: 14,
+          background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
+          padding: "12px 14px", marginBottom: 12,
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
               Ranking Points
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: t.text, letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: "-0.4px", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
               {rankPts.toLocaleString()}
             </div>
           </div>
           {streakCount > 0 && (
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
                 Current streak
               </div>
               <div style={{
                 fontSize: 22, fontWeight: 800,
                 color: streakType === "win" ? t.green : t.red,
-                letterSpacing: "-0.3px",
+                letterSpacing: "-0.4px", lineHeight: 1.1,
               }}>
                 {streakLabel}
               </div>
@@ -201,22 +200,18 @@ export default function PlayerProfileView({
           )}
         </div>
 
-        {/* Stats grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 24 }}>
+        {/* Stats strip — 4-col, shared outer border, uppercase caps labels */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, marginBottom: 18, background: t.bgCard, border: "1px solid " + t.border }}>
           {[
             { l: "Matches", v: played, c: t.text },
             { l: "Wins",    v: wins,   c: t.green },
             { l: "Losses",  v: losses, c: t.red },
             { l: "Win %",   v: played ? winRate + "%" : "—", c: t.accent },
-          ].map(function (s) {
+          ].map(function (s, i) {
             return (
-              <div key={s.l} style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 10, padding: "12px 8px", textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: s.c, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.3px" }}>
-                  {s.v}
-                </div>
-                <div style={{ fontSize: 9, color: t.textTertiary, marginTop: 3, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>
-                  {s.l}
-                </div>
+              <div key={s.l} style={{ padding: "10px 8px", textAlign: "center", borderLeft: i === 0 ? "none" : "1px solid " + t.border }}>
+                <div style={{ fontSize: 9, color: t.textTertiary, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: s.c, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.2px", lineHeight: 1.1 }}>{s.v}</div>
               </div>
             );
           })}
@@ -224,32 +219,31 @@ export default function PlayerProfileView({
 
         {/* Head-to-head — only shown when the two players have actually played */}
         {authUser && h2h.totalMatches > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
               Head-to-head
             </div>
             <div style={{
-              background: t.bgCard, border: "1px solid " + t.border, borderRadius: 10,
-              padding: "16px 18px",
+              background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div style={{ textAlign: "center", flex: 1 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>You</div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: h2h.viewerWins > h2h.subjectWins ? t.green : t.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.5px" }}>
+              <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between" }}>
+                <div style={{ textAlign: "center", flex: 1, padding: "12px 10px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>You</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: h2h.viewerWins > h2h.subjectWins ? t.green : t.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.4px", lineHeight: 1.1 }}>
                     {h2h.viewerWins}
                   </div>
                 </div>
-                <div style={{ fontSize: 20, color: t.textTertiary, fontWeight: 300, padding: "0 12px" }}>—</div>
-                <div style={{ textAlign: "center", flex: 1 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <div style={{ fontSize: 14, color: t.textTertiary, fontWeight: 300, alignSelf: "center", padding: "0 4px" }}>—</div>
+                <div style={{ textAlign: "center", flex: 1, padding: "12px 10px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {profile.name || "Them"}
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: h2h.subjectWins > h2h.viewerWins ? t.green : t.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.5px" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: h2h.subjectWins > h2h.viewerWins ? t.green : t.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.4px", lineHeight: 1.1 }}>
                     {h2h.subjectWins}
                   </div>
                 </div>
               </div>
-              <div style={{ textAlign: "center", fontSize: 11, color: t.textTertiary, borderTop: "1px solid " + t.border, paddingTop: 10 }}>
+              <div style={{ textAlign: "center", fontSize: 10, color: t.textTertiary, borderTop: "1px solid " + t.border, padding: "8px 10px", letterSpacing: "0.02em" }}>
                 {h2h.totalMatches} match{h2h.totalMatches !== 1 ? "es" : ""} played
                 {h2h.lastDate ? " · last " + h2h.lastDate : ""}
               </div>
@@ -259,9 +253,9 @@ export default function PlayerProfileView({
 
         {authUser && h2h.totalMatches === 0 && played > 0 && (
           <div style={{
-            marginBottom: 24,
-            padding: "14px 16px",
-            background: t.bgCard, border: "1px dashed " + t.border, borderRadius: 10,
+            marginBottom: 20,
+            padding: "12px 14px",
+            background: t.bgCard, border: "1px dashed " + t.border, borderRadius: 0,
             textAlign: "center",
             fontSize: 12, color: t.textSecondary,
           }}>
@@ -286,7 +280,7 @@ function Shell({ t, onBack, children }) {
           style={{
             margin: "14px 20px 0", padding: "6px 12px",
             background: "transparent", border: "1px solid " + t.border,
-            borderRadius: 8, color: t.textSecondary, fontSize: 12, fontWeight: 600,
+            borderRadius: 0, color: t.textSecondary, fontSize: 12, fontWeight: 600,
             cursor: "pointer",
           }}>
           ← Back
@@ -307,10 +301,10 @@ function Skeleton({ t }) {
           <div style={{ width: 100, height: 12, background: t.bgTertiary, borderRadius: 4 }} />
         </div>
       </div>
-      <div style={{ height: 70, background: t.bgTertiary, borderRadius: 10, marginBottom: 10 }} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+      <div style={{ height: 60, background: t.bgTertiary, borderRadius: 0, marginBottom: 10 }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0 }}>
         {[0, 1, 2, 3].map(function (i) {
-          return <div key={i} style={{ height: 56, background: t.bgTertiary, borderRadius: 10 }} />;
+          return <div key={i} style={{ height: 52, background: t.bgTertiary, borderLeft: i === 0 ? "none" : "1px solid " + t.bg }} />;
         })}
       </div>
     </div>

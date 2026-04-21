@@ -61,12 +61,11 @@ export default function DisputeModal({
   return (
     <div
       onClick={function(){setDisputeModal(null);}}
-      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.35)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',display:'flex',alignItems:'flex-end',justifyContent:'center',zIndex:200}}>
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:16}}>
       <div
         onClick={function(e){e.stopPropagation();}}
-        className="slide-up"
-        style={{background:t.modalBg,borderTop:'1px solid '+t.border,borderRadius:'16px 16px 0 0',padding:'24px 22px 48px',width:'100%',maxWidth:540,maxHeight:'92vh',overflowY:'auto'}}>
-        <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:'0 auto 20px'}}/>
+        className="pop"
+        style={{background:t.modalBg,border:'1px solid '+t.border,borderRadius:16,padding:'22px 22px 24px',width:'100%',maxWidth:540,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 20px 50px rgba(0,0,0,0.35)'}}>
         <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:'-0.3px'}}>
           {isCounter?'Counter-propose':'Dispute Match'}
         </h2>
