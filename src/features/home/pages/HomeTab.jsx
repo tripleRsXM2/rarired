@@ -175,21 +175,28 @@ function FeedCard({
           )}
         </div>
 
-        {/* Player rows */}
-        {[
-          {
-            name: pName,
-            isWinner: isWin,
-            scores:    (m.sets || []).map(function(s) { return s.you;  }),
-            oppScores: (m.sets || []).map(function(s) { return s.them; }),
-          },
-          {
-            name: m.oppName,
-            isWinner: !isWin,
-            scores:    (m.sets || []).map(function(s) { return s.them; }),
-            oppScores: (m.sets || []).map(function(s) { return s.you;  }),
-          },
-        ].map(function(row, ri) {
+        {/* Player rows
+            For own matches (isOwn=true):  pName = viewer, isWin is direct.
+            For tagged matches (isOwn=false): pName = submitter, but isWin is
+            stored from the VIEWER's perspective (result inverted in normalizeMatch),
+            so the submitter's win = !isWin. */}
+        {(function() {
+          var posterWins = isOwn ? isWin : !isWin;
+          return [
+            {
+              name: pName,
+              isWinner: posterWins,
+              scores:    (m.sets || []).map(function(s) { return s.you;  }),
+              oppScores: (m.sets || []).map(function(s) { return s.them; }),
+            },
+            {
+              name: m.oppName,
+              isWinner: !posterWins,
+              scores:    (m.sets || []).map(function(s) { return s.them; }),
+              oppScores: (m.sets || []).map(function(s) { return s.you;  }),
+            },
+          ];
+        })().map(function(row, ri) {
           return (
             <div key={ri} style={{
               display: "flex", alignItems: "center",

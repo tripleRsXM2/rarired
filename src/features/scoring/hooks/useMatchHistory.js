@@ -55,7 +55,10 @@ export function useMatchHistory(opts){
         if(!m.isTagged||!m.submitterId)return m;
         var sp=submitterMap[m.submitterId];
         if(!sp)return m;
-        return Object.assign({},m,{oppName:sp.name||m.oppName,friendName:sp.name||m.oppName});
+        // Only set friendName — oppName must stay as m.opp_name (the current user's
+        // own name from the submitter's perspective), which is used for the scoreboard
+        // opponent row. Overwriting oppName caused both rows to show the submitter name.
+        return Object.assign({},m,{friendName:sp.name||m.friendName});
       });
     }
 
@@ -110,7 +113,7 @@ export function useMatchHistory(opts){
     if(isTagged && fresh.submitterId){
       var spr=await fetchProfilesByIds([fresh.submitterId],'id,name,avatar');
       var sp=(spr.data&&spr.data[0])||{};
-      if(sp.name) fresh=Object.assign({},fresh,{oppName:sp.name,friendName:sp.name});
+      if(sp.name) fresh=Object.assign({},fresh,{friendName:sp.name});
     }
     setHistory(function(prev){
       return prev.map(function(m){ return String(m.id)===String(matchId)?fresh:m; });
