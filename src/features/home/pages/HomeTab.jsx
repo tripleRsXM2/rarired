@@ -128,11 +128,19 @@ function FeedCard({
           {isExpired && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Unverified</span>}
           {isVoided  && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Voided</span>}
           {isOwn && onDelete && !isInDispute && !isVoided && (
-            <button onClick={function() { if (window.confirm("Delete this match?")) onDelete(m); }}
+            <button onClick={async function() {
+                if (!window.confirm("Delete this match?")) return;
+                var res = await onDelete(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
           {m.isTagged && onRemove && isConfirmed && (
-            <button onClick={function() { if (window.confirm("Remove from your feed?")) onRemove(m); }}
+            <button onClick={async function() {
+                if (!window.confirm("Remove from your feed?")) return;
+                var res = await onRemove(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
         </div>
@@ -263,7 +271,10 @@ function FeedCard({
       {isOpponentView && !demo && (
         <div style={{ borderTop: "1px solid " + t.border, padding: "12px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <div style={{ fontSize: 12, color: t.textSecondary, width: "100%", marginBottom: 6, fontWeight: 500 }}>{pName} logged this match — does it look right?</div>
-          <button onClick={function() { confirmOpponentMatch(m); }}
+          <button onClick={async function() {
+              var res = await confirmOpponentMatch(m);
+              if (res && res.error) window.alert(res.error);
+            }}
             style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
             onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
             ✓ Confirm
@@ -316,7 +327,10 @@ function FeedCard({
             <div style={{ fontSize: 11, color: t.red, marginBottom: 8, fontWeight: 500 }}>Final round reached — accept or void.</div>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={function() { acceptCorrection(m); }}
+            <button onClick={async function() {
+                var res = await acceptCorrection(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
               onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
               Accept
@@ -327,7 +341,11 @@ function FeedCard({
                 Counter-propose
               </button>
             )}
-            <button onClick={function() { if (window.confirm("Void this match? This cannot be undone.")) voidMatchAction(m, "mutual_void"); }}
+            <button onClick={async function() {
+                if (!window.confirm("Void this match? This cannot be undone.")) return;
+                var res = await voidMatchAction(m, "mutual_void");
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.red + "44", background: t.redSubtle, color: t.red, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
               Void
             </button>
@@ -380,11 +398,19 @@ function FeedCard({
           <button
             onClick={async function() {
               if (!authUser) return;
+              var prevLiked = liked;
               var nowLiked = !liked;
+              // Optimistic update
               setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = nowLiked; return n; });
               setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? 1 : -1)); return n; });
-              if (nowLiked) { await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
-              else { await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+              var res;
+              if (nowLiked) { res = await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
+              else { res = await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+              // Rollback on failure so the heart + count don't lie
+              if (res && res.error) {
+                setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = prevLiked; return n; });
+                setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
+              }
             }}
             style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>
             <span style={{ fontSize: 14 }}>👍</span>{liked ? "Liked" : "Like"}{likeCount > 0 ? " · " + likeCount : ""}

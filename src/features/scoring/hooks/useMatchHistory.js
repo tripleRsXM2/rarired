@@ -4,6 +4,20 @@ import * as M from "../services/matchService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
 
+// Translate a Supabase/Postgres error into a user-facing string. We prefer
+// the server's message (it's usually a human-readable NOTICE/RAISE from our
+// RPCs) and fall back to a generic per-action message so users never see
+// "Failed. Try again." without any context about *why*.
+function formatRpcError(err, fallback){
+  if(!err) return fallback||'Something went wrong. Please try again.';
+  // Known Postgres codes worth translating
+  if(err.code==='23505') return 'This match is already logged.';
+  if(err.code==='42501') return 'You don\'t have permission to do that.';
+  if(err.code==='P0001' && err.message) return err.message; // RAISE EXCEPTION from our RPC
+  if(err.message) return err.message;
+  return fallback||'Something went wrong. Please try again.';
+}
+
 export function useMatchHistory(opts){
   var authUser=(opts&&opts.authUser)||null;
   var sendNotification=(opts&&opts.sendNotification)||null;
@@ -167,8 +181,8 @@ export function useMatchHistory(opts){
     var ins=await M.insertMatch(payload);
     if(ins.error){
       setHistory(function(h){return h.filter(function(m){return m.id!==localId;});});
-      if(ins.error.code==='23505') return {error:'duplicate',message:'This match has already been logged.'};
-      return {error:ins.error.message};
+      if(ins.error.code==='23505') return {error:'duplicate',message:'This match is already logged.'};
+      return {error:formatRpcError(ins.error,'Could not save match — please try again.')};
     }
 
     var matchId=ins.data.id;
@@ -180,15 +194,22 @@ export function useMatchHistory(opts){
   }
 
   // Opponent confirms — DB function handles both players atomically.
+  // Returns {error:null} on success, {error:<message>} on failure — callers
+  // rely on this to surface server errors (RLS denials, already-confirmed,
+  // stale state) instead of silently leaving the UI in a lie-state.
   async function confirmOpponentMatch(match){
-    if(!authUser) return;
+    if(!authUser) return {error:'not_authenticated'};
     var mr=await M.confirmMatchAndUpdateStats(match.id);
-    if(mr.error){console.error('[confirmOpponentMatch]',mr.error);return;}
+    if(mr.error){
+      console.error('[confirmOpponentMatch]',mr.error);
+      return {error:formatRpcError(mr.error,'Could not confirm match — please try again.')};
+    }
     setHistory(function(h){return h.map(function(m){return m.id===match.id?Object.assign({},m,{status:'confirmed'}):m;});});
     if(refreshProfile) await refreshProfile(authUser.id);
     if(sendNotification&&match.submitterId){
       await sendNotification({user_id:match.submitterId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }
+    return {error:null};
   }
 
   // Internal: submit a correction proposal (dispute or counter-propose).
@@ -224,7 +245,7 @@ export function useMatchHistory(opts){
     var r=await M.proposeCorrection(match.id,proposal,reasonCode,reasonDetail,nextStatus);
     if(r.error){
       console.error('[_submitProposal]',r.error);
-      return {error:r.error.message||'Failed to submit proposal — please try again.'};
+      return {error:formatRpcError(r.error,'Could not submit proposal — please try again.')};
     }
     // Optimistic local state update — proposal result kept in the current
     // user's frame (not the stored submitter frame).
@@ -261,10 +282,15 @@ export function useMatchHistory(opts){
   }
 
   // Accept the other party's proposed correction — DB updates both players atomically.
+  // Returns {error:null | <message>} so ActionReviewDrawer / FeedCard can surface
+  // failures instead of closing on a silent RPC error.
   async function acceptCorrection(match){
-    if(!authUser) return;
+    if(!authUser) return {error:'not_authenticated'};
     var r=await M.acceptCorrectionRpc(match.id);
-    if(r.error){console.error('[acceptCorrection]',r.error);return;}
+    if(r.error){
+      console.error('[acceptCorrection]',r.error);
+      return {error:formatRpcError(r.error,'Could not accept correction — please try again.')};
+    }
     var acceptedResult=match.currentProposal?match.currentProposal.result:match.result;
     var acceptedSets=match.currentProposal?match.currentProposal.sets:match.sets;
     setHistory(function(h){
@@ -278,13 +304,17 @@ export function useMatchHistory(opts){
     if(sendNotification&&otherId){
       await sendNotification({user_id:otherId,type:'match_confirmed',from_user_id:authUser.id,match_id:match.id});
     }
+    return {error:null};
   }
 
   // Void a disputed match — both parties can do this.
   async function voidMatchAction(match, reason){
     if(!authUser) return {error:'not_authenticated'};
     var r=await M.voidMatchRpc(match.id, reason||'voided');
-    if(r.error){console.error('[voidMatchAction]',r.error);return {error:r.error.message};}
+    if(r.error){
+      console.error('[voidMatchAction]',r.error);
+      return {error:formatRpcError(r.error,'Could not void match — please try again.')};
+    }
     setHistory(function(h){
       return h.map(function(m){
         if(m.id!==match.id) return m;
@@ -298,13 +328,29 @@ export function useMatchHistory(opts){
     return {error:null};
   }
 
+  // Delete a match. Optimistically removes the row, then reverts if the DB
+  // delete fails (RLS denial, network, etc). Returns {error:null|<message>}.
   async function deleteMatch(m){
-    if(!authUser)return;
-    if((m.opponent_id||m.tagged_user_id)&&m.status==='confirmed'&&sendNotification){
-      await sendNotification({user_id:m.opponent_id||m.tagged_user_id,type:'match_deleted',from_user_id:authUser.id,match_id:m.id});
+    if(!authUser) return {error:'not_authenticated'};
+    // Snapshot for rollback
+    var snapshot=null;
+    setHistory(function(h){
+      snapshot=h;
+      return h.filter(function(x){return x.id!==m.id;});
+    });
+    var r=await M.deleteMatchRow(m.id, authUser.id);
+    if(r.error){
+      console.error('[deleteMatch]',r.error);
+      if(snapshot) setHistory(snapshot); // rollback
+      return {error:formatRpcError(r.error,'Could not delete match — please try again.')};
     }
-    await M.deleteMatchRow(m.id, authUser.id);
-    setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
+    // Notify opponent on deletion of any non-casual match (confirmed, pending,
+    // or disputed) so they don't see a ghost match disappear without context.
+    var oppId=m.opponent_id||m.tagged_user_id;
+    if(oppId&&m.status!=='voided'&&m.status!=='expired'&&sendNotification){
+      await sendNotification({user_id:oppId,type:'match_deleted',from_user_id:authUser.id,match_id:m.id});
+    }
+    return {error:null};
   }
 
   // Submitter edits and resubmits after opponent requested a correction.
@@ -322,7 +368,10 @@ export function useMatchHistory(opts){
     };
     if(match.opponent_id) payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, clean);
     var r=await M.updateMatch(match.id, payload);
-    if(r.error){console.error('[resubmitMatch]',r.error);return {error:r.error.message};}
+    if(r.error){
+      console.error('[resubmitMatch]',r.error);
+      return {error:formatRpcError(r.error,'Could not resubmit — please try again.')};
+    }
     setHistory(function(h){
       return h.map(function(m){
         if(m.id!==match.id) return m;
@@ -341,8 +390,19 @@ export function useMatchHistory(opts){
   }
 
   async function removeTaggedMatch(m){
-    await M.markMatchTagStatus(m.id,'declined',false);
-    setHistory(function(h){return h.filter(function(x){return x.id!==m.id;});});
+    // Optimistic remove, rollback on RLS/network failure.
+    var snapshot=null;
+    setHistory(function(h){
+      snapshot=h;
+      return h.filter(function(x){return x.id!==m.id;});
+    });
+    var r=await M.markMatchTagStatus(m.id,'declined',false);
+    if(r&&r.error){
+      console.error('[removeTaggedMatch]',r.error);
+      if(snapshot) setHistory(snapshot);
+      return {error:formatRpcError(r.error,'Could not remove match — please try again.')};
+    }
+    return {error:null};
   }
 
   function applyAcceptedTagMatch(matchRow){
