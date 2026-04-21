@@ -304,7 +304,7 @@ export default function App(){
         </div>
 
         {/* CENTER COLUMN */}
-        <div className="cs-center-col cs-outer-pad">
+        <div className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}>
 
           {/* MOBILE top nav — hidden on desktop via .cs-mob-nav CSS */}
           <nav className="cs-mob-nav" style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>

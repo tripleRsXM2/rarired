@@ -35,6 +35,7 @@ var HOME_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h
 
 export default function LeafletMap({
   t, theme, hovered, selected, homeZone,
+  avatarUrl, initialsFallback,
   onHover, onSelect,
 }){
   var elRef = useRef(null);
@@ -178,21 +179,46 @@ export default function LeafletMap({
     if(!z) return;
     var accent = (t && t.accent) || "#14110f";
     var textC = (t && t.accentText) || "#fff";
-    var html =
-      '<div style="width:32px;height:32px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
-        'display:flex;align-items:center;justify-content:center;' +
-        'box-shadow:0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)">' +
-        '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
-      '</div>';
-    // iconAnchor y pushed to 70 so the pin renders ~54px ABOVE the centroid,
-    // clearing the zone number + name label stack below it.
+    var ring = "0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)";
+    var inner;
+    if(avatarUrl){
+      // User photo framed as the home pin — tight little circle with a ring
+      // and a small badge showing it's "home" (tiny house dot).
+      inner =
+        '<div style="position:relative;width:36px;height:36px">' +
+          '<img src="' + avatarUrl + '" alt="" ' +
+            'style="width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;' +
+            'box-shadow:' + ring + '"/>' +
+          '<div style="position:absolute;right:-2px;bottom:-2px;width:16px;height:16px;border-radius:50%;' +
+            'background:' + accent + ';color:' + textC + ';display:flex;align-items:center;justify-content:center;' +
+            'border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25)">' +
+            '<div style="width:9px;height:9px;display:flex">' + HOME_SVG + '</div>' +
+          '</div>' +
+        '</div>';
+    } else if(initialsFallback){
+      inner =
+        '<div style="width:36px;height:36px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
+          'display:flex;align-items:center;justify-content:center;' +
+          'font-weight:700;font-size:13px;letter-spacing:-0.5px;' +
+          'box-shadow:' + ring + '">' + initialsFallback + '</div>';
+    } else {
+      inner =
+        '<div style="width:32px;height:32px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
+          'display:flex;align-items:center;justify-content:center;' +
+          'box-shadow:' + ring + '">' +
+          '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
+        '</div>';
+    }
+    var size = avatarUrl ? 40 : (initialsFallback ? 36 : 32);
+    // iconAnchor y pushed well above the centroid so the pin clears the
+    // zone number + name label stack below it.
     var pin = L.marker(z.center, {
-      icon: L.divIcon({ className: "cs-home-pin", html: html, iconSize: [32,32], iconAnchor: [16,70] }),
+      icon: L.divIcon({ className: "cs-home-pin", html: inner, iconSize: [size,size], iconAnchor: [size/2, 70] }),
       interactive: false,
       zIndexOffset: 1500,
     }).addTo(map);
     homePinRef.current = pin;
-  },[homeZone, t]);
+  },[homeZone, t, avatarUrl, initialsFallback]);
 
   return (
     <div ref={elRef} style={{ position: "absolute", inset: 0 }} />

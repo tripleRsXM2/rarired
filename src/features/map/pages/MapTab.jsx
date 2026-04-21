@@ -23,21 +23,15 @@ export default function MapTab({
   var homeZone = profile && profile.home_zone;
 
   return (
-    <div style={{
-      position:"relative",
-      height:"calc(100vh - 52px - 80px)", // mobile top nav + bottom tabs; desktop still OK
-      minHeight:420,
-      width:"100%",
-      background: t.bg,
-      overflow:"hidden",
-      borderRadius: 0,
-    }}>
+    <div className="cs-map-frame" style={{ width:"100%", background: t.bg }}>
 
       {/* The map */}
       <LeafletMap
         t={t} theme={theme}
         hovered={hovered} selected={selected}
         homeZone={homeZone}
+        avatarUrl={profile && profile.avatar_url}
+        initialsFallback={profile && profile.avatar}
         onHover={setHovered}
         onSelect={setSelected}
       />

@@ -4,6 +4,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
 import { getPresence } from "../services/presenceService.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 var REACTIONS=["👍","❤️","😂","😢","🔥","🎾"];
 var EDIT_WINDOW_MS=15*60*1000; // 15 min
@@ -78,9 +79,7 @@ export default function Messages({t,authUser,dms,openProfile}){
               return (
                 <div key={conv.id} style={{background:t.accentSubtle,border:"1px solid "+t.accent,borderRadius:14,padding:"14px",marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                    <div style={{width:42,height:42,borderRadius:"50%",background:avColor(conv.partner.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0}}>
-                      {(conv.partner.avatar||conv.partner.name||"?").slice(0,2).toUpperCase()}
-                    </div>
+                    <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={42}/>
                     <div>
                       <div style={{fontSize:14,fontWeight:700,color:t.text}}>{conv.partner.name}</div>
                       <div style={{fontSize:12,color:t.textSecondary}}>wants to message you</div>
@@ -127,9 +126,7 @@ export default function Messages({t,authUser,dms,openProfile}){
                 <button key={conv.id} onClick={function(){dms.openConversation(conv);}}
                   style={{width:"100%",background:hasUnread?t.accentSubtle:t.bgCard,border:"1px solid "+(hasUnread?t.accent:t.border),borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"center",cursor:"pointer",textAlign:"left"}}>
                   <div style={{position:"relative",flexShrink:0}}>
-                    <div style={{width:44,height:44,borderRadius:"50%",background:avColor(conv.partner.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff"}}>
-                      {(conv.partner.avatar||conv.partner.name||"?").slice(0,2).toUpperCase()}
-                    </div>
+                    <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={44}/>
                     <PresenceDot profile={conv.partner} t={t}/>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
@@ -217,9 +214,7 @@ export default function Messages({t,authUser,dms,openProfile}){
         <div
           onClick={openProfile&&conv.partner.id?function(){openProfile(conv.partner.id);}:undefined}
           style={{position:"relative",flexShrink:0,cursor:openProfile&&conv.partner.id?"pointer":"default"}}>
-          <div style={{width:36,height:36,borderRadius:"50%",background:avColor(conv.partner.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff"}}>
-            {(conv.partner.avatar||conv.partner.name||"?").slice(0,2).toUpperCase()}
-          </div>
+          <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={36}/>
           <PresenceDot profile={conv.partner} t={t} size={10}/>
         </div>
         <div

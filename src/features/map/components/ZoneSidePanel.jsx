@@ -11,7 +11,7 @@
 // only for the zone dot/number.
 
 import { useEffect, useState } from "react";
-import { avColor } from "../../../lib/utils/avatar.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone } from "../services/mapService.js";
 
@@ -47,6 +47,7 @@ export default function ZoneSidePanel({
         id: authUser.id,
         name: profile.name,
         avatar: profile.avatar,
+        avatar_url: profile.avatar_url,
         skill: profile.skill,
         ranking_points: profile.ranking_points,
         suburb: profile.suburb,
@@ -153,11 +154,7 @@ export default function ZoneSidePanel({
                         background:"transparent", border:"none",
                         textAlign:"left", cursor:"pointer", width:"100%",
                       }}>
-                      <div style={{
-                        width:30, height:30, borderRadius:"50%", background: avColor(p.name),
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        fontSize:11, fontWeight:700, color:"#fff", flexShrink:0,
-                      }}>{(p.avatar||p.name||"?").slice(0,2).toUpperCase()}</div>
+                      <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
                       <div style={{ minWidth:0, flex:1 }}>
                         <div style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                           {p.name}

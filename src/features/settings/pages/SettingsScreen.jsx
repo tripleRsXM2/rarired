@@ -82,7 +82,7 @@ export default function SettingsScreen({
     <div
       className="slide-in-right"
       style={{
-        position:"fixed", inset:0, zIndex:80,
+        position:"fixed", inset:0, zIndex:2000,
         background:t.bg, overflowY:"auto",
         display:"flex", flexDirection:"column",
       }}>
@@ -124,51 +124,66 @@ export default function SettingsScreen({
           <div style={{background:t.bgCard, border:"1px solid "+t.border, borderRadius:12, padding:20, marginBottom:12}}>
             <div style={{fontSize:13, fontWeight:700, color:t.text, marginBottom:16}}>Edit Profile</div>
 
-            {/* Avatar upload */}
+            {/* Avatar upload — tap the badge on the corner */}
             <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
-              <div style={{position:"relative"}}>
+              <div style={{position:"relative",width:84,height:84,flexShrink:0}}>
                 <PlayerAvatar
                   name={profileDraft.name||profile.name}
                   avatar={profileDraft.avatar||profile.avatar}
                   avatarUrl={profileDraft.avatar_url||profile.avatar_url}
-                  size={72}
+                  size={84}
                 />
                 {uploadState.busy&&(
                   <div style={{
                     position:"absolute",inset:0,borderRadius:"50%",
                     background:"rgba(0,0,0,0.55)",color:"#fff",
                     display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:10,fontWeight:700,letterSpacing:"0.05em",
+                    fontSize:12,fontWeight:700,
                   }}>…</div>
                 )}
-              </div>
-              <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
                 <input ref={fileInputRef} type="file" accept="image/*"
-                  onChange={pickAvatarFile}
-                  style={{display:"none"}}/>
-                <button type="button" disabled={uploadState.busy||!authUser}
-                  onClick={function(){ fileInputRef.current && fileInputRef.current.click(); }}
-                  style={{
-                    padding:"8px 14px",borderRadius:7,border:"1px solid "+t.border,
-                    background:"transparent",color:t.text,fontSize:12,fontWeight:600,
-                    cursor: uploadState.busy?"not-allowed":"pointer",textAlign:"left",
-                    opacity: uploadState.busy?0.6:1,
-                  }}>
-                  {profile.avatar_url?"Change photo":"Upload photo"}
-                </button>
-                {profile.avatar_url&&(
-                  <button type="button" disabled={uploadState.busy}
-                    onClick={removeAvatar}
-                    style={{
-                      padding:"8px 14px",borderRadius:7,border:"1px solid "+t.border,
-                      background:"transparent",color:t.red,fontSize:12,fontWeight:500,
-                      cursor:"pointer",textAlign:"left",
-                    }}>
-                    Remove photo
-                  </button>
-                )}
+                  onChange={pickAvatarFile} style={{display:"none"}}/>
+                {/* Plus (upload) OR cross (remove) badge */}
+                {(profile.avatar_url)
+                  ? (
+                    <button type="button" disabled={uploadState.busy}
+                      onClick={removeAvatar}
+                      aria-label="Remove photo"
+                      style={{
+                        position:"absolute",right:-2,bottom:-2,
+                        width:26,height:26,borderRadius:"50%",
+                        background:t.red,color:"#fff",border:"2px solid "+t.bgCard,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:16,fontWeight:700,lineHeight:1,padding:0,
+                        cursor: uploadState.busy?"not-allowed":"pointer",
+                        boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
+                      }}>×</button>
+                  )
+                  : (
+                    <button type="button" disabled={uploadState.busy||!authUser}
+                      onClick={function(){ fileInputRef.current && fileInputRef.current.click(); }}
+                      aria-label="Upload photo"
+                      style={{
+                        position:"absolute",right:-2,bottom:-2,
+                        width:26,height:26,borderRadius:"50%",
+                        background:t.accent,color:t.accentText,border:"2px solid "+t.bgCard,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:18,fontWeight:700,lineHeight:1,padding:0,
+                        cursor: uploadState.busy?"not-allowed":"pointer",
+                        boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
+                      }}>+</button>
+                  )
+                }
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:t.text,marginBottom:2}}>Profile photo</div>
+                <div style={{fontSize:11,color:t.textTertiary,lineHeight:1.4}}>
+                  {profile.avatar_url
+                    ? "Tap × to remove."
+                    : "Tap + to upload."}
+                </div>
                 {uploadState.error&&(
-                  <div style={{fontSize:11,color:t.red,marginTop:2}}>{uploadState.error}</div>
+                  <div style={{fontSize:11,color:t.red,marginTop:4}}>{uploadState.error}</div>
                 )}
               </div>
             </div>

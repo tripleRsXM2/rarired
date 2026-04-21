@@ -21,16 +21,25 @@ import {
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Avatar({ name, size, overlap }) {
+function Avatar({ name, size, overlap, avatarUrl }) {
+  var wrapStyle = {
+    width: size, height: size, borderRadius: "50%",
+    flexShrink: 0,
+    marginLeft: overlap ? -size * 0.28 : 0,
+    overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+  };
+  if(avatarUrl){
+    return (
+      <div style={wrapStyle}>
+        <img src={avatarUrl} alt="" style={{ width:size, height:size, objectFit:"cover", display:"block" }}/>
+      </div>
+    );
+  }
   return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%",
+    <div style={Object.assign({}, wrapStyle, {
       background: avColor(name || "?"),
-      display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.32, fontWeight: 700, color: "#fff",
-      flexShrink: 0,
-      marginLeft: overlap ? -size * 0.28 : 0,
-    }}>
+    })}>
       {(name || "?").slice(0, 2).toUpperCase()}
     </div>
   );
@@ -211,7 +220,7 @@ function NotifRow({
         <div
           onClick={n.from_user_id && openProfile ? goProfile : undefined}
           style={{ position: "relative", flexShrink: 0, cursor: n.from_user_id && openProfile ? "pointer" : "default" }}>
-          <Avatar name={n.fromName} size={34} />
+          <Avatar name={n.fromName} size={34} avatarUrl={n.fromAvatarUrl}/>
           {effectiveType === "action" && isUnread && (
             <div style={{
               position: "absolute", bottom: -2, right: -2,
@@ -464,7 +473,7 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
         {/* Primary event — same layout as NotifRow */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 11 }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
-            <Avatar name={primary.fromName} size={34} />
+            <Avatar name={primary.fromName} size={34} avatarUrl={primary.fromAvatarUrl}/>
             {effectiveType === "action" && isUnread && (
               <div style={{
                 position: "absolute", bottom: -2, right: -2,
