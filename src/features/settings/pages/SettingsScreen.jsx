@@ -13,9 +13,9 @@ import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
 
 var THEME_OPTIONS = [
-  {id:"wimbledon",    label:"Wimbledon",       swatch:"#3D5A1E", bg:"#F4F4F0"},
+  {id:"wimbledon",    label:"Wimbledon",       swatch:"#2F3E38", bg:"#F2EEE8"},
   {id:"ao",          label:"Australian Open",  swatch:"#3B82F6", bg:"#111827"},
-  {id:"french-open", label:"French Open",      swatch:"#C4431A", bg:"#FDF6EE"},
+  {id:"french-open", label:"French Open",      swatch:"#E0783B", bg:"#EEE0CA"},
   {id:"us-open",     label:"US Open",          swatch:"#FFC72C", bg:"#002566"},
 ];
 
