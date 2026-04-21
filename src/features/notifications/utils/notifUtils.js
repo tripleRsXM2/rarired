@@ -18,6 +18,7 @@ var IMPORTANT_TYPES = new Set([
   "message_request_accepted",
   "match_confirmed",
   "match_voided",
+  "match_expired",
 ]);
 
 export function getNotifType(n) {
@@ -48,6 +49,7 @@ export function getNotifLabel(n) {
     case "match_counter_proposed":     return name + " counter-proposed a correction — review needed.";
     case "match_voided":               return "The disputed match with " + name + " was voided.";
     case "match_deleted":              return name + " removed a shared match from your feed.";
+    case "match_expired":              return "Your match with " + name + " expired unconfirmed — it doesn't count towards stats.";
     case "match_reminder":             return "A pending match is expiring soon — check your feed.";
     case "like":                       return name + " liked your match.";
     case "comment":                    return name + " commented on your match.";
@@ -86,6 +88,7 @@ var TYPE_URGENCY_BONUS = {
   message_request_accepted:   60,
   match_confirmed:            50,
   match_voided:               40,
+  match_expired:              30,
 };
 
 export function computePriorityScore(n) {

@@ -104,6 +104,7 @@ function NotifRow({
   acceptMatchTag, declineMatchTag,
   onAcceptFriendRequest, onDeclineFriendRequest,
   setShowNotifications, refreshHistory, openConvById,
+  openProfile,
 }) {
   var navigate     = useNavigate();
   var effectiveType = getEffectiveType(n);
@@ -155,6 +156,14 @@ function NotifRow({
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
+  function goProfile(e) {
+    if (e) e.stopPropagation();
+    if (!n.from_user_id) return;
+    if (openProfile) openProfile(n.from_user_id);
+    else navigate("/profile/" + n.from_user_id);
+    setShowNotifications(false);
+    if (!n.read) onRead(n.id);
+  }
 
   // Swipe hint: show a red strip behind the row when swiped
   var swipeProgress = Math.min(Math.abs(swipeX) / 80, 1);
@@ -198,8 +207,10 @@ function NotifRow({
           willChange: "transform",
         }}
       >
-        {/* Avatar + type badge */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
+        {/* Avatar + type badge — clickable when we have a sender id */}
+        <div
+          onClick={n.from_user_id && openProfile ? goProfile : undefined}
+          style={{ position: "relative", flexShrink: 0, cursor: n.from_user_id && openProfile ? "pointer" : "default" }}>
           <Avatar name={n.fromName} size={34} />
           {effectiveType === "action" && isUnread && (
             <div style={{
@@ -341,11 +352,29 @@ function NotifRow({
             ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
           )}
 
-          {/* match_confirmed: positive feedback */}
+          {/* match_confirmed: positive feedback + deep-link */}
           {n.type === "match_confirmed" && (
-            <div style={{ fontSize: 11, color: t.green, marginTop: 5, fontWeight: 600 }}>
-              Stats updated ✓
-            </div>
+            <>
+              <div style={{ fontSize: 11, color: t.green, marginTop: 5, fontWeight: 600 }}>
+                Stats updated ✓
+              </div>
+              {ctaButton(t, t.green, true, "View in feed →", goFeed)}
+            </>
+          )}
+
+          {/* match_expired / match_deleted — soft CTAs into feed */}
+          {(n.type === "match_expired" || n.type === "match_deleted") && (
+            ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
+          )}
+
+          {/* like / comment — "View match" CTA, lands in feed */}
+          {(n.type === "like" || n.type === "comment") && (
+            ctaButton(t, t.accent, true, "View match →", goFeed)
+          )}
+
+          {/* request_accepted — route to the accepter's profile */}
+          {n.type === "request_accepted" && n.from_user_id && (
+            ctaButton(t, t.accent, true, "View profile →", goProfile)
           )}
         </div>
 
@@ -601,6 +630,7 @@ export default function NotificationsPanel({
   setShowNotifications,
   refreshHistory,
   openConvById,
+  openProfile,
 }) {
   var navigate     = useNavigate();
   var _markAllRead = markAllRead || markNotificationsRead;
@@ -681,6 +711,7 @@ export default function NotificationsPanel({
         setShowNotifications={setShowNotifications}
         refreshHistory={refreshHistory}
         openConvById={openConvById}
+        openProfile={openProfile}
       />
     );
   }
