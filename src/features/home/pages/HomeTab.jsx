@@ -221,30 +221,30 @@ function FeedCard({
         opacity: cardOpacity,
       }}
     >
-      {/* ── Header (Strava-style: round avatar, accent name, meta subtitle) ── */}
-      <div style={{ padding: "16px 16px 0", display: "flex", gap: 12, alignItems: "flex-start" }}>
-        {/* Avatar — round, clickable when the poster is a real linked user */}
+      {/* ── Header — tightened sizing to feel refined, not chunky ── */}
+      <div style={{ padding: "14px 16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+        {/* Avatar — smaller, round, clickable when the poster is a real user */}
         <div
           onClick={posterClickable ? goPoster : undefined}
           style={{
-            width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+            width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
             background: avColor(pName),
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 14, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
+            fontSize: 12, fontWeight: 600, color: "#fff", letterSpacing: "-0.2px",
             cursor: posterClickable ? "pointer" : "default",
           }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
 
         {/* Name + subtitle */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: t.accent, letterSpacing: "-0.2px", lineHeight: 1.2 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: t.accent, letterSpacing: "-0.1px", lineHeight: 1.2 }}>
             <span
               onClick={posterClickable ? goPoster : undefined}
               style={{ cursor: posterClickable ? "pointer" : "default" }}>
               {pName}
             </span>
-            {isOwn && <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 500 }}> · You</span>}
+            {isOwn && <span style={{ fontSize: 10, color: t.textTertiary, fontWeight: 500 }}> · You</span>}
           </div>
-          <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 3, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {subtitleText}
           </div>
         </div>
@@ -254,7 +254,7 @@ function FeedCard({
           {statusPill && (
             <span style={{
               fontSize: 9, fontWeight: 700, color: statusPill.color, background: statusPill.bg,
-              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+              padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
             }}>{statusPill.label}</span>
           )}
           {isOwn && onDelete && !isInDispute && !isVoided && (
@@ -263,7 +263,7 @@ function FeedCard({
                 var res = await onDelete(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
-              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
+              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
           {m.isTagged && onRemove && isConfirmed && (
             <button onClick={async function() {
@@ -271,28 +271,28 @@ function FeedCard({
                 var res = await onRemove(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
-              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
+              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
         </div>
       </div>
 
-      {/* ── Activity title row (Strava's "Evening Run" equivalent) ── */}
-      <div style={{ padding: "12px 16px 6px", display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>🎾</span>
+      {/* ── Activity title row (smaller, refined) ── */}
+      <div style={{ padding: "10px 16px 4px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>🎾</span>
         <h3 style={{
           margin: 0,
-          fontSize: 20, fontWeight: 800, color: t.text,
-          letterSpacing: "-0.4px", lineHeight: 1.15,
+          fontSize: 15, fontWeight: 700, color: t.text,
+          letterSpacing: "-0.25px", lineHeight: 1.15,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           vs {m.oppName || "Unknown"}
         </h3>
       </div>
 
-      {/* ── Stats strip (Strava's Distance/Pace/Time equivalent) ── */}
+      {/* ── Stats strip — tight typography, single-line values ── */}
       {isConfirmed && scoreStr && (
         <div style={{
-          padding: "6px 16px 14px",
+          padding: "4px 16px 12px",
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
           gap: 0,
@@ -305,15 +305,15 @@ function FeedCard({
             return (
               <div key={s.label} style={{
                 borderLeft: i === 0 ? "none" : "1px solid " + t.border,
-                paddingLeft: i === 0 ? 0 : 14,
-                paddingRight: i === 2 ? 0 : 14,
+                paddingLeft: i === 0 ? 0 : 12,
+                paddingRight: i === 2 ? 0 : 12,
               }}>
-                <div style={{ fontSize: 10, color: t.textTertiary, fontWeight: 600, letterSpacing: "0.04em", marginBottom: 2 }}>
+                <div style={{ fontSize: 9, color: t.textTertiary, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 2 }}>
                   {s.label}
                 </div>
                 <div style={{
-                  fontSize: 17, fontWeight: 800, color: s.color,
-                  letterSpacing: "-0.3px", fontVariantNumeric: "tabular-nums", lineHeight: 1.1,
+                  fontSize: 14, fontWeight: 700, color: s.color,
+                  letterSpacing: "-0.2px", fontVariantNumeric: "tabular-nums", lineHeight: 1.1,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {s.value}
@@ -324,29 +324,28 @@ function FeedCard({
         </div>
       )}
 
-      {/* ── Scoreboard (flattened into card; venue/tourn moved to subtitle) ── */}
+      {/* ── Scoreboard — compact ATP-style typography ── */}
       <div style={{
         margin: "0 0 4px",
         borderTop: "1px solid " + t.border,
       }}>
-        {/* Column-label strip — just set numbers, right-aligned, subtle */}
+        {/* Column-label strip — smaller, subtler, right-aligned. No visual weight. */}
         {(m.sets || []).length > 0 && (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "flex-end",
-            padding: "6px 16px 0",
-            background: "transparent",
+            padding: "4px 16px 0",
           }}>
             <div style={{ display: "flex", alignItems: "center" }}>
               {(m.sets || []).map(function(_, i) {
                 return (
                   <div key={i} style={{
-                    width: 28, textAlign: "center",
-                    fontSize: 9, fontWeight: 700, color: t.textTertiary,
+                    width: 24, textAlign: "center",
+                    fontSize: 8, fontWeight: 600, color: t.textTertiary,
                     letterSpacing: "0.04em",
                   }}>S{i + 1}</div>
                 );
               })}
-              <div style={{ width: 22 }} />
+              <div style={{ width: 18 }} />
             </div>
           </div>
         )}
@@ -392,8 +391,7 @@ function FeedCard({
           return (
             <div key={ri} style={{
               display: "flex", alignItems: "center",
-              padding: "10px 16px",
-              // First row under the column-label strip gets a subtle divider; rows after get one too.
+              padding: "7px 16px",
               borderTop: "1px solid " + t.border,
               background: t.bgCard,
             }}>
@@ -402,26 +400,28 @@ function FeedCard({
                 onClick={row.onClick || undefined}
                 style={{
                   flex: 1, minWidth: 0,
-                  fontSize: 14,
-                  fontWeight: row.isWinner ? 700 : 400,
+                  fontSize: 13,
+                  fontWeight: row.isWinner ? 600 : 400,
                   color: row.isWinner ? t.text : t.textSecondary,
-                  letterSpacing: row.isWinner ? "-0.2px" : "0",
+                  letterSpacing: "-0.1px",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   paddingRight: 8,
                   cursor: row.onClick ? "pointer" : "default",
                 }}>{row.name}</div>
 
-              {/* Set scores */}
+              {/* Set scores — refined typography: winner sets in full weight,
+                  loser sets dimmed. Smaller per-column width. */}
               {row.scores.map(function(score, i) {
                 var opp = row.oppScores[i];
                 var wonSet = (score !== "" && score !== undefined && opp !== "" && opp !== undefined)
                   ? Number(score) > Number(opp) : false;
                 return (
                   <div key={i} style={{
-                    width: 28, textAlign: "center",
-                    fontSize: 18, fontWeight: wonSet ? 800 : 400,
+                    width: 24, textAlign: "center",
+                    fontSize: 14, fontWeight: wonSet ? 600 : 400,
                     color: wonSet ? t.text : t.textTertiary,
                     fontVariantNumeric: "tabular-nums",
+                    letterSpacing: "-0.2px",
                     lineHeight: 1,
                   }}>
                     {score !== undefined && score !== "" ? score : "–"}
@@ -429,10 +429,10 @@ function FeedCard({
                 );
               })}
 
-              {/* Winner indicator ◀ */}
-              <div style={{ width: 22, textAlign: "center" }}>
+              {/* Winner indicator ◀ — slim, accent-neutral */}
+              <div style={{ width: 18, textAlign: "center" }}>
                 {row.isWinner && (
-                  <span style={{ fontSize: 10, color: t.green, fontWeight: 700 }}>◀</span>
+                  <span style={{ fontSize: 9, color: t.green, fontWeight: 600 }}>◀</span>
                 )}
               </div>
             </div>
