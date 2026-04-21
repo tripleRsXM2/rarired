@@ -135,7 +135,11 @@ export function useMatchHistory(opts){
     var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
     var isVerified=!!opponentId;
     var status=isVerified?'pending_confirmation':'confirmed';
-    var tournName=scoreModal.casual?'Casual Match':(scoreModal.tournName||'Casual Match');
+    // Casual flow: ranked when a real opponent is linked, casual otherwise.
+    // Tournament flow: always use the tournament's own name.
+    var tournName=scoreModal.casual
+      ?(isVerified?'Ranked':'Casual Match')
+      :(scoreModal.tournName||'Casual Match');
 
     var hash=null;
     if(isVerified) hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
