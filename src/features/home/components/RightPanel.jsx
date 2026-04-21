@@ -20,7 +20,7 @@ function Section({ t, title, children }) {
 }
 
 // ── Leaderboard ────────────────────────────────────────────────────────────────
-function Leaderboard({ t }) {
+function Leaderboard({ t, openProfile }) {
   var [players, setPlayers] = useState([]);
   var [loading, setLoading] = useState(true);
 
@@ -67,12 +67,18 @@ function Leaderboard({ t }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {players.map(function(p, i) {
+        var clickable = !!openProfile;
         return (
-          <div key={p.id} style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "6px 8px", borderRadius: 8,
-            transition: "background 0.13s",
-          }}>
+          <div key={p.id}
+            onClick={clickable ? function() { openProfile(p.id); } : undefined}
+            onMouseEnter={clickable ? function(e) { e.currentTarget.style.background = t.bgTertiary; } : undefined}
+            onMouseLeave={clickable ? function(e) { e.currentTarget.style.background = "transparent"; } : undefined}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "6px 8px", borderRadius: 8,
+              transition: "background 0.13s",
+              cursor: clickable ? "pointer" : "default",
+            }}>
             <span style={{
               width: 20, fontSize: i < 3 ? 14 : 11,
               fontWeight: 700, color: t.textTertiary,
@@ -178,7 +184,7 @@ function PendingActions({ t, authUser, history }) {
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────
-export default function RightPanel({ t, authUser, history, onLogMatch }) {
+export default function RightPanel({ t, authUser, history, onLogMatch, openProfile }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: t.bgCard }}>
 
@@ -210,7 +216,7 @@ export default function RightPanel({ t, authUser, history, onLogMatch }) {
 
       {/* Leaderboard */}
       <Section t={t} title="Leaderboard">
-        <Leaderboard t={t} />
+        <Leaderboard t={t} openProfile={openProfile} />
       </Section>
 
     </div>

@@ -25,6 +25,7 @@ import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
 import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
+import PlayerProfileView from "../features/profile/pages/PlayerProfileView.jsx";
 import AdminTab from "../features/admin/pages/AdminTab.jsx";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
@@ -51,10 +52,22 @@ export default function App(){
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
+  // /profile/<userId> → public profile view. Empty second segment or a match
+  // with the signed-in user's id falls back to the own-profile ProfileTab.
+  var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
+
   // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
   function setTab(x){
     if(x==="people") navigate("/people/friends");
     else navigate("/"+x);
+  }
+
+  // Open another player's profile. If it's the signed-in user, go to the
+  // own-profile tab instead so editing affordances remain available.
+  function openProfile(userId){
+    if(!userId) return;
+    if(auth.authUser&&userId===auth.authUser.id) navigate("/profile");
+    else navigate("/profile/"+userId);
   }
 
   // Redirect bare "/" to /home on first load.
@@ -119,6 +132,22 @@ export default function App(){
       },
     };
   });
+
+  // Module 2 — refresh Discover "People you've played" whenever the relevant
+  // inputs change. Cheap (≤8 profile rows fetched) and self-healing: adding a
+  // friend moves them out of the section automatically.
+  useEffect(function(){
+    if(!auth.authUser) return;
+    social.loadPlayedOpponents(matchHistory.history);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[
+    auth.authUser&&auth.authUser.id,
+    matchHistory.history.length,
+    social.friends.length,
+    social.sentRequests.length,
+    social.receivedRequests.length,
+    social.blockedUsers.length,
+  ]);
 
   // Opens a conversation from the notifications panel. Prefers lookup by
   // entity_id (conversation_id), falls back to the sender's user id for
@@ -206,6 +235,28 @@ export default function App(){
     }
     setReviewDrawer({match,notifId:n.id,notifType:n.type,fromName:n.fromName||"Someone"});
     notifications.setShowNotifications(false);
+  }
+
+  // Module 3: fires a `comment` notification to every match participant
+  // except the commenter. A match has up to two real people (submitter +
+  // opponent) — either of them commenting should reach the other; a third
+  // party commenting reaches both. Keeps the modal thin — all lookup +
+  // participant logic lives here.
+  function notifyMatchOwnerOfComment(matchId){
+    if(!auth.authUser) return;
+    var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
+    if(!match) return;
+    var toNotify=[match.submitterId, match.opponent_id].filter(function(uid,i,arr){
+      return uid && uid!==auth.authUser.id && arr.indexOf(uid)===i;
+    });
+    toNotify.forEach(function(uid){
+      insertNotification({
+        user_id:      uid,
+        type:         "comment",
+        from_user_id: auth.authUser.id,
+        match_id:     match.id,
+      });
+    });
   }
 
   function openCounterPropose(match){
@@ -302,6 +353,7 @@ export default function App(){
               setShowNotifications={notifications.setShowNotifications}
               refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
               openConvById={openConvById}
+              openProfile={openProfile}
             />
           )}
 
@@ -340,6 +392,14 @@ export default function App(){
               confirmOpponentMatch={matchHistory.confirmOpponentMatch}
               acceptCorrection={matchHistory.acceptCorrection}
               voidMatchAction={matchHistory.voidMatchAction}
+              openProfile={openProfile}
+              friends={social.friends}
+              playedOpponents={social.playedOpponents}
+              suggestedPlayers={social.suggestedPlayers}
+              sendFriendRequest={social.sendFriendRequest}
+              friendRelationLabel={social.friendRelationLabel}
+              socialLoading={social.socialLoading}
+              onGoToDiscover={function(){navigate("/people/suggested");}}
             />
           )}
           {tab==="tournaments"&&(
@@ -360,6 +420,7 @@ export default function App(){
             t={t} authUser={auth.authUser} friends={social.friends}
             sentRequests={social.sentRequests} receivedRequests={social.receivedRequests}
             blockedUsers={social.blockedUsers} suggestedPlayers={social.suggestedPlayers}
+            playedOpponents={social.playedOpponents} sameSkillPlayers={social.sameSkillPlayers}
             peopleSearch={social.peopleSearch} setPeopleSearch={social.setPeopleSearch}
             searchResults={social.searchResults} setSearchResults={social.setSearchResults} searchLoading={social.searchLoading}
             showSearchDrop={social.showSearchDrop} setShowSearchDrop={social.setShowSearchDrop}
@@ -371,14 +432,25 @@ export default function App(){
             friendRelationLabel={social.friendRelationLabel} sentReq={social.sentReq} recvReq={social.recvReq}
             setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
             dms={dms}
+            openProfile={openProfile}
           />
         )}
-        {tab==="profile"&&(
+        {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
+          <PlayerProfileView
+            t={t}
+            authUser={auth.authUser}
+            userId={profilePathId}
+            viewerHistory={matchHistory.history}
+            onBack={function(){navigate(-1);}}
+          />
+        )}
+        {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(
           <ProfileTab
             t={t} authUser={auth.authUser} profile={currentUser.profile}
             history={matchHistory.history}
             profileTab={profileTab} setProfileTab={setProfileTab}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+            openProfile={openProfile}
           />
         )}
         {tab==="admin"&&(
@@ -403,6 +475,7 @@ export default function App(){
               t={t} authUser={auth.authUser}
               history={matchHistory.history}
               onLogMatch={openLogMatch}
+              openProfile={openProfile}
             />
           </div>
         )}
@@ -471,6 +544,7 @@ export default function App(){
           commentModal={matchHistory.commentModal} setCommentModal={matchHistory.setCommentModal}
           commentDraft={matchHistory.commentDraft} setCommentDraft={matchHistory.setCommentDraft}
           feedComments={matchHistory.feedComments} setFeedComments={matchHistory.setFeedComments}
+          onCommentPosted={notifyMatchOwnerOfComment}
         />
         <AuthModal
           t={t} showAuth={auth.showAuth} setShowAuth={auth.setShowAuth}

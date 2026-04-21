@@ -17,6 +17,12 @@ export function useSocialGraph(opts){
   var [searchLoading,setSearchLoading]=useState(false);
   var [showSearchDrop,setShowSearchDrop]=useState(false);
   var [suggestedPlayers,setSuggestedPlayers]=useState([]);
+  // Module 2 — Discover surface data.
+  // playedOpponents: derived from the viewer's confirmed match history (real
+  // people they've faced, excluding existing friends/blocked).
+  // sameSkillPlayers: profiles with the same declared skill level.
+  var [playedOpponents,setPlayedOpponents]=useState([]);
+  var [sameSkillPlayers,setSameSkillPlayers]=useState([]);
   var [socialLoading,setSocialLoading]=useState({});
   var searchTimer=useRef(null);
 
@@ -51,15 +57,63 @@ export function useSocialGraph(opts){
       }
 
       var friendIds=accepted.map(function(r){return r.sender_id===userId?r.receiver_id:r.sender_id;});
-      var excludeIds=[userId,...friendIds,...blockedIds];
+      var pendingIds=[
+        ...sentPend.map(function(r){return r.receiver_id;}),
+        ...recvPend.map(function(r){return r.sender_id;}),
+      ];
+      var excludeIds=[userId,...friendIds,...pendingIds,...blockedIds];
       var sq=await S.fetchSuggestedPlayers(userId, (userProfile&&userProfile.suburb)||"Sydney", excludeIds);
       setSuggestedPlayers(sq.data||[]);
+
+      // Same-skill discovery — excludes suggested suburb IDs as well so the
+      // same person doesn't appear in two sections.
+      if(userProfile&&userProfile.skill){
+        var suburbIds=(sq.data||[]).map(function(u){return u.id;});
+        var skillExclude=excludeIds.concat(suburbIds);
+        var sk=await S.fetchSameSkillPlayers(userId, userProfile.skill, skillExclude, 6);
+        setSameSkillPlayers(sk.data||[]);
+      } else {
+        setSameSkillPlayers([]);
+      }
     }catch(e){console.error('loadSocial',e);}
+  }
+
+  // Module 2: derive discovery list from the viewer's confirmed match history.
+  // Unique opponent_ids in recency order, excluding current relationships so a
+  // player doesn't show up in Discover if you're already friends/pending/blocked.
+  // The caller (App.jsx) re-runs this whenever history, friends, or blocked
+  // change — cheap query (fetchProfilesByIds on ≤8 ids).
+  async function loadPlayedOpponents(history){
+    if(!authUser||!history||!history.length){setPlayedOpponents([]);return;}
+    var friendIds=new Set(friends.map(function(f){return f.id;}));
+    var pendingIds=new Set([
+      ...sentRequests.map(function(r){return r.id;}),
+      ...receivedRequests.map(function(r){return r.id;}),
+    ]);
+    var blockedIds=new Set(blockedUsers.map(function(b){return b.id;}));
+    var seen=new Set();
+    var orderedIds=[];
+    for(var i=0;i<history.length;i++){
+      var m=history[i];
+      if(!m||m.status!=='confirmed') continue;
+      var oid=m.opponent_id||(m.isTagged?m.submitterId:null);
+      if(!oid||oid===authUser.id||seen.has(oid)) continue;
+      if(friendIds.has(oid)||pendingIds.has(oid)||blockedIds.has(oid)) continue;
+      seen.add(oid);
+      orderedIds.push(oid);
+      if(orderedIds.length>=8) break;
+    }
+    if(!orderedIds.length){setPlayedOpponents([]);return;}
+    var pr=await fetchProfilesByIds(orderedIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,last_active,show_online_status,show_last_seen');
+    var pMap={};(pr.data||[]).forEach(function(p){pMap[p.id]=p;});
+    // Preserve history order (most recent first)
+    setPlayedOpponents(orderedIds.map(function(id){return pMap[id];}).filter(Boolean));
   }
 
   function resetSocial(){
     setFriends([]); setSentRequests([]); setReceivedRequests([]);
     setBlockedUsers([]); setSuggestedPlayers([]); setSearchResults([]);
+    setPlayedOpponents([]); setSameSkillPlayers([]);
   }
 
   function isFriend(uid){return friends.some(function(f){return f.id===uid;});}
@@ -184,8 +238,10 @@ export function useSocialGraph(opts){
     peopleSearch, setPeopleSearch,
     searchResults, setSearchResults, searchLoading, setSearchLoading,
     showSearchDrop, setShowSearchDrop, suggestedPlayers, setSuggestedPlayers,
+    playedOpponents, setPlayedOpponents,
+    sameSkillPlayers, setSameSkillPlayers,
     socialLoading, searchTimer,
-    loadSocial, resetSocial,
+    loadSocial, loadPlayedOpponents, resetSocial,
     isFriend, sentReq, recvReq, isBlocked, friendRelationLabel,
     sendFriendRequest, acceptRequest, declineRequest, cancelRequest,
     unfriend, blockUser, unblockUser, searchUsers,

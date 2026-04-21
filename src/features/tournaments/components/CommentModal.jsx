@@ -7,6 +7,10 @@ export default function CommentModal({
   commentModal, setCommentModal,
   commentDraft, setCommentDraft,
   feedComments, setFeedComments,
+  // Module 3: fires the `comment` notification to the match submitter after
+  // a successful insert. Takes (matchId) and handles look-up + notification
+  // on the App side so this modal stays thin.
+  onCommentPosted,
 }) {
   var iStyle=inputStyle(t);
   if(!commentModal) return null;
@@ -63,6 +67,7 @@ export default function CommentModal({
                   var cur=(fc[commentModal]||[]).map(function(x){return x.id===tempId?Object.assign({},x,{id:res.data.id}):x;});
                   return Object.assign({},fc,{[commentModal]:cur});
                 });
+                if(onCommentPosted) onCommentPosted(commentModal);
               }
             }}
             style={{padding:"9px 16px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,flexShrink:0}}>

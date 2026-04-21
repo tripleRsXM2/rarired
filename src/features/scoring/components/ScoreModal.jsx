@@ -28,9 +28,12 @@ export default function ScoreModal({
     setSaving(true);
 
     if(isResubmit){
-      var res=await resubmitMatch(scoreModal.match, scoreDraft);
+      var resubRes=await resubmitMatch(scoreModal.match, scoreDraft);
       setSaving(false);
-      if(res&&res.error){setSaveError("Failed to resubmit. Try again.");return;}
+      if(resubRes&&resubRes.error){
+        setSaveError(typeof resubRes.error==='string'?resubRes.error:"Could not resubmit — please try again.");
+        return;
+      }
       setScoreModal(null);
       return;
     }
@@ -48,9 +51,9 @@ export default function ScoreModal({
 
     if(res&&res.error){
       if(res.error==='duplicate'){
-        setSaveError("This match is already logged.");
+        setSaveError(res.message||"This match is already logged.");
       } else if(res.error!=='not_authenticated'){
-        setSaveError("Failed to save. Try again.");
+        setSaveError(typeof res.error==='string'?res.error:"Could not save match — please try again.");
       }
       return;
     }

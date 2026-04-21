@@ -17,18 +17,24 @@ function fmtMsgTime(iso){
 // ── PlayerCard ────────────────────────────────────────────────────────────────
 function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
   sendFriendRequest, cancelRequest, acceptRequest, declineRequest, unfriend, blockUser,
-  onMessage}) {
+  onMessage, openProfile}) {
   var rel=friendRelationLabel(u.id), loading=!!socialLoading[u.id];
   var wr=u.matches_played?Math.round((u.wins||0)/u.matches_played*100):null;
+  function goToProfile(){ if(openProfile) openProfile(u.id); }
+  var clickable=!!openProfile;
   return (
     <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
-      <div style={{position:"relative",flexShrink:0}}>
+      <div
+        onClick={clickable?goToProfile:undefined}
+        style={{position:"relative",flexShrink:0,cursor:clickable?"pointer":"default"}}>
         <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff"}}>
           {(u.avatar||(u.name||"?").slice(0,2)).slice(0,2).toUpperCase()}
         </div>
         <PresenceDot profile={u} t={t}/>
       </div>
-      <div style={{flex:1,minWidth:0}}>
+      <div
+        onClick={clickable?goToProfile:undefined}
+        style={{flex:1,minWidth:0,cursor:clickable?"pointer":"default"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:700,color:t.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name}</div>
           <PresenceLabel profile={u} t={t} style={{flexShrink:0}}/>
@@ -90,6 +96,7 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
 export default function PeopleTab({
   t, authUser, friends, sentRequests, receivedRequests,
   blockedUsers, suggestedPlayers,
+  playedOpponents, sameSkillPlayers,
   peopleSearch, setPeopleSearch,
   searchResults, setSearchResults, searchLoading, showSearchDrop, setShowSearchDrop,
   socialLoading, searchTimer,
@@ -98,6 +105,7 @@ export default function PeopleTab({
   friendRelationLabel, sentReq, recvReq,
   setShowAuth, setAuthMode, setAuthStep,
   dms,
+  openProfile,
 }) {
   var location=useLocation();
   var navigate=useNavigate();
@@ -132,7 +140,7 @@ export default function PeopleTab({
     </div>
   );
 
-  var cardProps={t,socialLoading,friendRelationLabel,sentReq,recvReq,sendFriendRequest,cancelRequest,acceptRequest,declineRequest,unfriend,blockUser};
+  var cardProps={t,socialLoading,friendRelationLabel,sentReq,recvReq,sendFriendRequest,cancelRequest,acceptRequest,declineRequest,unfriend,blockUser,openProfile};
   var iStyle=inputStyle(t);
   var dmUnread=dms?dms.totalUnread():0;
   var dmBadge=(dms?(dms.requests||[]).length:0)+(dms&&dms.conversations?dms.conversations.filter(function(c){return c.hasUnread;}).length:0);
@@ -175,15 +183,23 @@ export default function PeopleTab({
                   var isFriendU=friends.some(function(f){return f.id===u.id;});
                   var isPending=sentRequests.some(function(r){return r.id===u.id;});
                   var isReceived=receivedRequests.some(function(r){return r.id===u.id;});
+                  function goToThisProfile(){
+                    if(!openProfile) return;
+                    setShowSearchDrop(false);
+                    openProfile(u.id);
+                  }
+                  var rowClickable=!!openProfile;
                   return (
-                    <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid "+t.border,cursor:"default"}}>
-                      <div style={{position:"relative",flexShrink:0}}>
+                    <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid "+t.border}}>
+                      <div onMouseDown={rowClickable?goToThisProfile:undefined}
+                        style={{position:"relative",flexShrink:0,cursor:rowClickable?"pointer":"default"}}>
                         <div style={{width:36,height:36,borderRadius:"50%",background:t.accentSubtle,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,overflow:"hidden"}}>
                           {u.avatar?<img src={u.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎾"}
                         </div>
                         <PresenceDot profile={u} t={t} size={9}/>
                       </div>
-                      <div style={{flex:1,minWidth:0}}>
+                      <div onMouseDown={rowClickable?goToThisProfile:undefined}
+                        style={{flex:1,minWidth:0,cursor:rowClickable?"pointer":"default"}}>
                         <div style={{fontSize:14,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.name}</div>
                         <div style={{fontSize:11,color:t.textTertiary}}>{[u.suburb,u.skill].filter(Boolean).join(" · ")}</div>
                       </div>
@@ -211,7 +227,7 @@ export default function PeopleTab({
             {id:"messages",label:"Messages",count:dmBadge||null},
             {id:"friends",label:"Friends",count:friends.length},
             {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
-            {id:"suggested",label:"Suggested",count:null},
+            {id:"suggested",label:"Discover",count:null},
             {id:"blocked",label:"Blocked",count:blockedUsers.length||null},
           ].map(function(tb){
             var on=peopleTab===tb.id;
@@ -229,7 +245,7 @@ export default function PeopleTab({
 
           {/* Messages */}
           {peopleTab==="messages"&&dms&&(
-            <Messages t={t} authUser={authUser} dms={dms}/>
+            <Messages t={t} authUser={authUser} dms={dms} openProfile={openProfile}/>
           )}
 
           {/* Friends */}
@@ -262,10 +278,14 @@ export default function PeopleTab({
                       var loading=!!socialLoading[u.id];
                       return (
                         <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+t.accent,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
-                          <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
+                          <div
+                            onClick={openProfile?function(){openProfile(u.id);}:undefined}
+                            style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0,cursor:openProfile?"pointer":"default"}}>
                             {(u.avatar||"?").slice(0,2).toUpperCase()}
                           </div>
-                          <div style={{flex:1}}>
+                          <div
+                            onClick={openProfile?function(){openProfile(u.id);}:undefined}
+                            style={{flex:1,cursor:openProfile?"pointer":"default"}}>
                             <div style={{fontSize:14,fontWeight:700,color:t.text}}>{u.name}</div>
                             <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>{u.suburb} {u.skill&&"· "+u.skill}</div>
                           </div>
@@ -295,10 +315,14 @@ export default function PeopleTab({
                       var loading=!!socialLoading[u.id];
                       return (
                         <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
-                          <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
+                          <div
+                            onClick={openProfile?function(){openProfile(u.id);}:undefined}
+                            style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0,cursor:openProfile?"pointer":"default"}}>
                             {(u.avatar||"?").slice(0,2).toUpperCase()}
                           </div>
-                          <div style={{flex:1}}>
+                          <div
+                            onClick={openProfile?function(){openProfile(u.id);}:undefined}
+                            style={{flex:1,cursor:openProfile?"pointer":"default"}}>
                             <div style={{fontSize:14,fontWeight:700,color:t.text}}>{u.name}</div>
                             <div style={{fontSize:11,color:t.textSecondary,marginTop:1}}>{u.suburb} {u.skill&&"· "+u.skill}</div>
                             <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>Request pending</div>
@@ -321,34 +345,64 @@ export default function PeopleTab({
               </div>
           )}
 
-          {/* Suggested */}
-          {peopleTab==="suggested"&&(
-            <div>
-              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Players near you</div>
-              <div style={{fontSize:12,color:t.textSecondary,marginBottom:14}}>Same suburb or skill level as you.</div>
-              {suggestedPlayers.length===0
-                ?<div style={{textAlign:"center",padding:"40px 20px"}}>
-                  <div style={{fontSize:32,marginBottom:10}}>🎾</div>
-                  <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:6}}>No suggestions yet</div>
-                  <div style={{fontSize:13,color:t.textSecondary}}>As more players join your area, they'll appear here.</div>
+          {/* Discover — 3 sections: people you've played, near you, similar
+              skill. Empty state only when all three are empty; otherwise show
+              whichever sections have data. */}
+          {peopleTab==="suggested"&&(function(){
+            var playedArr = playedOpponents || [];
+            var suburbArr = suggestedPlayers || [];
+            var skillArr  = sameSkillPlayers || [];
+            var allEmpty  = !playedArr.length && !suburbArr.length && !skillArr.length;
+            return (
+              <div>
+                {allEmpty&&(
+                  <div style={{textAlign:"center",padding:"40px 20px"}}>
+                    <div style={{fontSize:32,marginBottom:10}}>🎾</div>
+                    <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:6}}>No suggestions yet</div>
+                    <div style={{fontSize:13,color:t.textSecondary}}>Log a match or check back as more players join your area.</div>
+                  </div>
+                )}
+
+                {playedArr.length>0&&(
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>People you've played</div>
+                    <div style={{fontSize:12,color:t.textSecondary,marginBottom:12}}>Opponents from confirmed matches — add them to your friends.</div>
+                    {playedArr.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;})}
+                  </div>
+                )}
+
+                {suburbArr.length>0&&(
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Players near you</div>
+                    <div style={{fontSize:12,color:t.textSecondary,marginBottom:12}}>Same suburb as your profile.</div>
+                    {suburbArr.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;})}
+                  </div>
+                )}
+
+                {skillArr.length>0&&(
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Similar skill level</div>
+                    <div style={{fontSize:12,color:t.textSecondary,marginBottom:12}}>Players with the same declared level as you.</div>
+                    {skillArr.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;})}
+                  </div>
+                )}
+
+                <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"16px",marginTop:16,textAlign:"center"}}>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>Invite friends</div>
+                  <div style={{fontSize:12,color:t.textSecondary,marginBottom:14}}>Share CourtSync with people you play with.</div>
+                  <button
+                    onClick={function(){
+                      var url="https://rarired.vercel.app";
+                      if(navigator.share){navigator.share({title:"Join CourtSync",text:"Track your tennis matches and compete in tournaments.",url:url});}
+                      else{navigator.clipboard.writeText(url);alert("Link copied!");}
+                    }}
+                    style={{padding:"10px 24px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
+                    Share invite link
+                  </button>
                 </div>
-                :suggestedPlayers.map(function(u){return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;})
-              }
-              <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"16px",marginTop:16,textAlign:"center"}}>
-                <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>Invite friends</div>
-                <div style={{fontSize:12,color:t.textSecondary,marginBottom:14}}>Share CourtSync with people you play with.</div>
-                <button
-                  onClick={function(){
-                    var url="https://rarired.vercel.app";
-                    if(navigator.share){navigator.share({title:"Join CourtSync",text:"Track your tennis matches and compete in tournaments.",url:url});}
-                    else{navigator.clipboard.writeText(url);alert("Link copied!");}
-                  }}
-                  style={{padding:"10px 24px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
-                  Share invite link
-                </button>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Blocked */}
           {peopleTab==="blocked"&&(

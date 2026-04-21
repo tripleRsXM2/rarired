@@ -14,6 +14,16 @@ export function fetchSuggestedPlayers(userId, suburb, excludeIds){
     .not('id','in','('+excludeIds.join(',')+')')
     .limit(6);
 }
+// Same declared skill level, excluding the viewer, current friends, pending
+// requests, blocked users, and whoever's already covered by the suburb-based
+// suggestions. Used by the Discover surface.
+export function fetchSameSkillPlayers(userId, skill, excludeIds, limit){
+  if(!skill) return Promise.resolve({data:[]});
+  var q=supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
+    .neq('id',userId).eq('skill',skill);
+  if(excludeIds&&excludeIds.length) q=q.not('id','in','('+excludeIds.join(',')+')');
+  return q.limit(limit||6);
+}
 export function searchProfilesByName(userId, query){
   return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,wins,privacy,last_active,show_online_status,show_last_seen')
     .ilike('name','%'+query+'%').neq('id',userId).limit(10);

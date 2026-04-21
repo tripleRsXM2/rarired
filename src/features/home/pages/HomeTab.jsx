@@ -1,4 +1,5 @@
 // src/features/home/pages/HomeTab.jsx
+import { useState } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 
@@ -18,7 +19,18 @@ function FeedCard({
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
+  openProfile,
 }) {
+  // Identity resolvers — who is the "poster" and who is the "opponent" from
+  // the viewer's POV, so the right user IDs get wired into the profile links.
+  // For tagged matches, the poster (pName) is the submitter; for own matches
+  // the poster is the viewer themselves.
+  var posterUserId   = m.isTagged ? (m.submitterId || null) : (authUser && authUser.id) || null;
+  var opponentUserId = m.isTagged ? (authUser && authUser.id) || null : (m.opponent_id || null);
+  function goPoster()   { if (openProfile && posterUserId)   openProfile(posterUserId); }
+  function goOpponent() { if (openProfile && opponentUserId) openProfile(opponentUserId); }
+  var posterClickable   = !demo && !!posterUserId   && (!authUser || posterUserId   !== authUser.id) && !!openProfile;
+  var opponentClickable = !demo && !!opponentUserId && (!authUser || opponentUserId !== authUser.id) && !!openProfile;
   var isWin      = m.result === "win";
   var scoreStr   = (m.sets || []).map(function(s) { return s.you + "-" + s.them; }).join("  ");
   var liked      = !!feedLikes[m.id];
@@ -97,18 +109,25 @@ function FeedCard({
     >
       {/* ── Card header ──────────────────────────────────────────────────── */}
       <div style={{ padding: "14px 16px 12px", display: "flex", gap: 10, alignItems: "center" }}>
-        {/* Avatar */}
-        <div style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: avColor(pName),
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
-        }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
+        {/* Avatar — clickable when the poster is another real user */}
+        <div
+          onClick={posterClickable ? goPoster : undefined}
+          style={{
+            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            background: avColor(pName),
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
+            cursor: posterClickable ? "pointer" : "default",
+          }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
 
         {/* Name + date */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.2px" }}>
-            {pName}
+            <span
+              onClick={posterClickable ? goPoster : undefined}
+              style={{ cursor: posterClickable ? "pointer" : "default" }}>
+              {pName}
+            </span>
             {isOwn && <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 400 }}> · You</span>}
           </div>
           <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 1, letterSpacing: "0.01em" }}>{m.date}</div>
@@ -128,11 +147,19 @@ function FeedCard({
           {isExpired && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Unverified</span>}
           {isVoided  && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Voided</span>}
           {isOwn && onDelete && !isInDispute && !isVoided && (
-            <button onClick={function() { if (window.confirm("Delete this match?")) onDelete(m); }}
+            <button onClick={async function() {
+                if (!window.confirm("Delete this match?")) return;
+                var res = await onDelete(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
           {m.isTagged && onRemove && isConfirmed && (
-            <button onClick={function() { if (window.confirm("Remove from your feed?")) onRemove(m); }}
+            <button onClick={async function() {
+                if (!window.confirm("Remove from your feed?")) return;
+                var res = await onRemove(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
         </div>
@@ -186,12 +213,14 @@ function FeedCard({
             {
               name: pName,
               isWinner: posterWins,
+              onClick: posterClickable ? goPoster : null,
               scores:    (m.sets || []).map(function(s) { return s.you;  }),
               oppScores: (m.sets || []).map(function(s) { return s.them; }),
             },
             {
               name: m.oppName,
               isWinner: !posterWins,
+              onClick: opponentClickable ? goOpponent : null,
               scores:    (m.sets || []).map(function(s) { return s.them; }),
               oppScores: (m.sets || []).map(function(s) { return s.you;  }),
             },
@@ -204,16 +233,19 @@ function FeedCard({
               borderTop: "1px solid " + t.border,
               background: t.bgCard,
             }}>
-              {/* Player name */}
-              <div style={{
-                flex: 1, minWidth: 0,
-                fontSize: 14,
-                fontWeight: row.isWinner ? 700 : 400,
-                color: row.isWinner ? t.text : t.textSecondary,
-                letterSpacing: row.isWinner ? "-0.2px" : "0",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                paddingRight: 8,
-              }}>{row.name}</div>
+              {/* Player name — clickable when that row is a real user */}
+              <div
+                onClick={row.onClick || undefined}
+                style={{
+                  flex: 1, minWidth: 0,
+                  fontSize: 14,
+                  fontWeight: row.isWinner ? 700 : 400,
+                  color: row.isWinner ? t.text : t.textSecondary,
+                  letterSpacing: row.isWinner ? "-0.2px" : "0",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  paddingRight: 8,
+                  cursor: row.onClick ? "pointer" : "default",
+                }}>{row.name}</div>
 
               {/* Set scores */}
               {row.scores.map(function(score, i) {
@@ -263,7 +295,10 @@ function FeedCard({
       {isOpponentView && !demo && (
         <div style={{ borderTop: "1px solid " + t.border, padding: "12px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <div style={{ fontSize: 12, color: t.textSecondary, width: "100%", marginBottom: 6, fontWeight: 500 }}>{pName} logged this match — does it look right?</div>
-          <button onClick={function() { confirmOpponentMatch(m); }}
+          <button onClick={async function() {
+              var res = await confirmOpponentMatch(m);
+              if (res && res.error) window.alert(res.error);
+            }}
             style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
             onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
             ✓ Confirm
@@ -316,7 +351,10 @@ function FeedCard({
             <div style={{ fontSize: 11, color: t.red, marginBottom: 8, fontWeight: 500 }}>Final round reached — accept or void.</div>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={function() { acceptCorrection(m); }}
+            <button onClick={async function() {
+                var res = await acceptCorrection(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
               onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
               Accept
@@ -327,7 +365,11 @@ function FeedCard({
                 Counter-propose
               </button>
             )}
-            <button onClick={function() { if (window.confirm("Void this match? This cannot be undone.")) voidMatchAction(m, "mutual_void"); }}
+            <button onClick={async function() {
+                if (!window.confirm("Void this match? This cannot be undone.")) return;
+                var res = await voidMatchAction(m, "mutual_void");
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.red + "44", background: t.redSubtle, color: t.red, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
               Void
             </button>
@@ -380,11 +422,38 @@ function FeedCard({
           <button
             onClick={async function() {
               if (!authUser) return;
+              var prevLiked = liked;
               var nowLiked = !liked;
+              // Optimistic update
               setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = nowLiked; return n; });
               setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? 1 : -1)); return n; });
-              if (nowLiked) { await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
-              else { await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+              var res;
+              if (nowLiked) { res = await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
+              else { res = await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+              // Rollback on failure so the heart + count don't lie
+              if (res && res.error) {
+                setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = prevLiked; return n; });
+                setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
+                return;
+              }
+              // Module 3: notify every match participant except the liker.
+              // A match has up to two real people — submitter and opponent.
+              // Either of them reacting to the match should reach the other;
+              // a third-party liker reaches both. Unlike doesn't re-notify.
+              // Fire-and-forget so the button stays snappy.
+              if (nowLiked) {
+                var toNotify = [m.submitterId, m.opponent_id].filter(function (uid, i, arr) {
+                  return uid && uid !== authUser.id && arr.indexOf(uid) === i;
+                });
+                toNotify.forEach(function (uid) {
+                  supabase.from("notifications").insert({
+                    user_id:      uid,
+                    type:         "like",
+                    from_user_id: authUser.id,
+                    match_id:     m.id,
+                  });
+                });
+              }
             }}
             style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>
             <span style={{ fontSize: 14 }}>👍</span>{liked ? "Liked" : "Like"}{likeCount > 0 ? " · " + likeCount : ""}
@@ -442,7 +511,14 @@ export default function HomeTab({
   setDisputeModal, setDisputeDraft,
   deleteMatch, removeTaggedMatch,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
+  openProfile,
+  friends, playedOpponents, suggestedPlayers,
+  sendFriendRequest, friendRelationLabel, socialLoading,
+  onGoToDiscover,
 }) {
+  // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
+  // friend_requests graph as the People tab; no schema change, stays in sync.
+  var [feedFilter, setFeedFilter] = useState("everyone");
   var DEMO_FEED = [
     { id: "demo-1", oppName: "Alex Chen",     tournName: "Summer Open",       date: "Today",     sets: [{ you: 6, them: 3 }, { you: 6, them: 4 }], result: "win",  playerName: "Jordan Smith", playerAvatar: "JS", isOwn: false, status: "confirmed" },
     { id: "demo-2", oppName: "Sam Williams",  tournName: "Casual Match",      date: "Yesterday", sets: [{ you: 4, them: 6 }, { you: 3, them: 6 }], result: "loss", playerName: "Riley Brown",  playerAvatar: "RB", isOwn: false, status: "confirmed" },
@@ -454,6 +530,7 @@ export default function HomeTab({
     setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
     setDisputeModal, setDisputeDraft,
     confirmOpponentMatch, acceptCorrection, voidMatchAction,
+    openProfile,
   };
 
   function openLogMatch() {
@@ -527,24 +604,75 @@ export default function HomeTab({
         </button>
       </div>
 
-      {/* Filter pills */}
+      {/* Filter pills — functional. Friends = matches where poster or opponent
+          is in the viewer's friends list. */}
       <div style={{ display: "flex", gap: 6, padding: "0 20px 18px", maxWidth: 720 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: t.accent, background: t.accentSubtle, padding: "5px 14px", borderRadius: 20 }}>Everyone</span>
-        <span style={{ fontSize: 12, fontWeight: 500, color: t.textTertiary, background: t.bgCard, border: "1px solid " + t.border, padding: "5px 14px", borderRadius: 20, opacity: 0.6 }}>Friends</span>
+        {[
+          { id: "everyone", label: "Everyone" },
+          { id: "friends",  label: "Friends"  },
+        ].map(function (f) {
+          var on = feedFilter === f.id;
+          return (
+            <button key={f.id}
+              onClick={function () { setFeedFilter(f.id); }}
+              style={{
+                fontSize: 12, fontWeight: on ? 700 : 500,
+                color: on ? t.accent : t.textTertiary,
+                background: on ? t.accentSubtle : t.bgCard,
+                border: on ? "1px solid transparent" : "1px solid " + t.border,
+                padding: "5px 14px", borderRadius: 20,
+                cursor: "pointer",
+              }}>
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Feed */}
       <div style={{ padding: "0 20px 40px", maxWidth: 720 }}>
-        {history.length === 0
-          ? (
-            <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 14, padding: "48px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: 44, marginBottom: 14 }}>🎾</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: t.text, marginBottom: 8, letterSpacing: "-0.3px" }}>Nothing here yet</div>
-              <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.7, marginBottom: 24, maxWidth: 280, margin: "0 auto 24px" }}>Log your first match and it'll show up in your feed.</div>
-              <button onClick={openLogMatch} style={{ padding: "13px 28px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 14, fontWeight: 700, letterSpacing: "-0.1px" }}>Log your first match</button>
-            </div>
-          )
-          : history.map(function(m) {
+        {(function () {
+          // Apply feed filter once, render the chosen slice.
+          var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));
+          var filtered = history;
+          if (feedFilter === "friends") {
+            filtered = history.filter(function (m) {
+              var posterId = m.isTagged ? m.submitterId : (authUser && authUser.id);
+              var oppId    = m.opponent_id;
+              return (posterId && friendIdSet.has(posterId)) ||
+                     (oppId    && friendIdSet.has(oppId));
+            });
+          }
+
+          if (history.length === 0) {
+            return (
+              <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 14, padding: "48px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: 44, marginBottom: 14 }}>🎾</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: t.text, marginBottom: 8, letterSpacing: "-0.3px" }}>Nothing here yet</div>
+                <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.7, marginBottom: 24, maxWidth: 280, margin: "0 auto 24px" }}>Log your first match and it'll show up in your feed.</div>
+                <button onClick={openLogMatch} style={{ padding: "13px 28px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 14, fontWeight: 700, letterSpacing: "-0.1px" }}>Log your first match</button>
+              </div>
+            );
+          }
+
+          if (feedFilter === "friends" && filtered.length === 0) {
+            return (
+              <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🫱🏼‍🫲🏽</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No matches from friends yet</div>
+                <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.6, marginBottom: 20, maxWidth: 280, margin: "0 auto 20px" }}>
+                  Once you add friends, their matches will appear here.
+                </div>
+                {onGoToDiscover && (
+                  <button onClick={onGoToDiscover} style={{ padding: "11px 22px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700 }}>
+                    Find players
+                  </button>
+                )}
+              </div>
+            );
+          }
+
+          return filtered.map(function (m) {
             var isOwn = !m.isTagged;
             return (
               <FeedCard
@@ -556,15 +684,63 @@ export default function HomeTab({
                 {...feedCardProps}
               />
             );
-          })
-        }
-        {history.length > 0 && (
-          <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 12, padding: "20px", textAlign: "center", marginTop: 4 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 4 }}>Find players to follow</div>
-            <div style={{ fontSize: 12, color: t.textSecondary, marginBottom: 14 }}>See your friends' matches in your feed when the community grows.</div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: t.textTertiary, background: t.bgTertiary, border: "1px solid " + t.border, padding: "7px 16px", borderRadius: 8 }}>Coming soon</span>
-          </div>
-        )}
+          });
+        })()}
+
+        {/* Live discovery widget — replaces the old "Coming soon" placeholder.
+            Shows up to 3 players (prefer played-before, fall back to suburb)
+            with an inline Add/Pending/Friends pill + "See all" CTA. */}
+        {history.length > 0 && (function () {
+          var rec = (playedOpponents && playedOpponents.length ? playedOpponents : (suggestedPlayers || [])).slice(0, 3);
+          if (!rec.length || !friendRelationLabel) return null;
+          return (
+            <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 12, padding: "16px", marginTop: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>Find players to follow</div>
+                  <div style={{ fontSize: 12, color: t.textSecondary, marginTop: 2 }}>People near you and opponents you've played.</div>
+                </div>
+                {onGoToDiscover && (
+                  <button onClick={onGoToDiscover} style={{ background: "none", border: "none", color: t.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>See all</button>
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {rec.map(function (u) {
+                  var rel = friendRelationLabel(u.id);
+                  var loading = !!(socialLoading && socialLoading[u.id]);
+                  return (
+                    <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div onClick={function () { if (openProfile) openProfile(u.id); }}
+                        style={{ width: 34, height: 34, borderRadius: "50%", background: avColor(u.name || "?"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
+                        {(u.avatar || u.name || "?").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div onClick={function () { if (openProfile) openProfile(u.id); }}
+                        style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.name}</div>
+                        <div style={{ fontSize: 11, color: t.textTertiary }}>{[u.suburb, u.skill].filter(Boolean).join(" · ") || "New player"}</div>
+                      </div>
+                      {rel === "none" && sendFriendRequest && (
+                        <button disabled={loading} onClick={function () { sendFriendRequest(u); }}
+                          style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: t.accent, color: "#fff", fontSize: 12, fontWeight: 600, opacity: loading ? 0.6 : 1, cursor: "pointer", flexShrink: 0 }}>
+                          {loading ? "…" : "Add"}
+                        </button>
+                      )}
+                      {rel === "sent" && (
+                        <span style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid " + t.border, color: t.textSecondary, fontSize: 11, fontWeight: 500, flexShrink: 0 }}>Pending</span>
+                      )}
+                      {rel === "friends" && (
+                        <span style={{ padding: "6px 12px", borderRadius: 8, color: t.accent, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>Friends ✓</span>
+                      )}
+                      {rel === "received" && (
+                        <span style={{ padding: "6px 12px", borderRadius: 8, color: t.green, fontSize: 11, fontWeight: 600, flexShrink: 0 }}>Added you</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

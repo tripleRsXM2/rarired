@@ -35,21 +35,24 @@ export default function DisputeModal({
     if(!disputeDraft.reasonCode){setError('Please select a reason.');return;}
     setSaving(true);
     if(isNotMyMatch||wouldAutoVoid){
-      var res=await voidMatchAction(match, isNotMyMatch?'not_my_match':'max_revisions');
+      var voidRes=await voidMatchAction(match, isNotMyMatch?'not_my_match':'max_revisions');
       setSaving(false);
-      if(!res||res.error){setError('Failed. Try again.');return;}
+      if(!voidRes||voidRes.error){
+        setError(voidRes&&voidRes.error?voidRes.error:'Could not void match — please try again.');
+        return;
+      }
       setDisputeModal(null);
       return;
     }
     var clean=disputeDraft.sets.filter(function(s){return s.you!==''||s.them!=='';});
     if(!clean.length){setError('Add at least one set score.');setSaving(false);return;}
     var proposal={sets:clean,result:disputeDraft.result,date:disputeDraft.date,venue:disputeDraft.venue,court:disputeDraft.court};
-    var res=isCounter
+    var propRes=isCounter
       ?await counterPropose(match,disputeDraft.reasonCode,disputeDraft.reasonDetail,proposal)
       :await disputeWithProposal(match,disputeDraft.reasonCode,disputeDraft.reasonDetail,proposal);
     setSaving(false);
-    if(res&&res.error){
-      setError(typeof res.error==='string'?res.error:(res.error?.message||'Failed to submit. Try again.'));
+    if(propRes&&propRes.error){
+      setError(typeof propRes.error==='string'?propRes.error:(propRes.error?.message||'Failed to submit. Try again.'));
       return;
     }
     setDisputeModal(null);

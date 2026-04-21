@@ -1,0 +1,303 @@
+# Core Loop Foundation — Living Build Log
+
+> **Product vision (locked):** CourtSync is a verified social tennis identity product first, and a lightweight coordination product second.
+
+This document is the single source of truth for the match-truth system and the staged build of profile, discovery, notification, challenge, ELO, and feed modules on top of it. Updated after every module.
+
+---
+
+## Match state machine
+
+```
+pending_confirmation
+  ├─[opponent confirms]──────────▶ confirmed        (stats updated)
+  ├─[opponent disputes]──────────▶ disputed         (pending_action_by = submitter)
+  └─[72h elapses, pg_cron]───────▶ expired          (no stats)
+
+disputed
+  ├─[submitter counter-proposes]▶ pending_reconfirmation  (pending_action_by = opponent)
+  ├─[submitter accepts]──────────▶ confirmed        (stats updated)
+  ├─[either party voids]─────────▶ voided           (reason: not_my_match | mutual_void)
+  └─[48h elapses, pg_cron]───────▶ voided           (reason: timeout)
+
+pending_reconfirmation
+  ├─[opponent counter-proposes]──▶ disputed         (pending_action_by = submitter)
+  ├─[opponent accepts]───────────▶ confirmed        (stats updated)
+  ├─[either party voids]─────────▶ voided           (reason: not_my_match | mutual_void)
+  ├─[revision_count ≥ 3]─────────▶ voided           (reason: max_revisions, auto on next counter)
+  └─[48h elapses, pg_cron]───────▶ voided           (reason: timeout)
+
+confirmed  — terminal (delete only; no reopen)
+voided     — terminal
+expired    — terminal (unverified, no stats)
+```
+
+Casual matches (no `opponent_id`) skip pending_confirmation entirely → written directly as `confirmed` with `tournName = "Casual Match"` and no stat impact. Ranked casual matches (has `opponent_id`) enter the full state machine with `tournName = "Ranked"`.
+
+Roles at each state:
+- `proposalBy` — who last made a proposal (dispute or counter). Null on fresh pending_confirmation.
+- `pendingActionBy` — who is expected to act next. The other player, after any proposal.
+
+---
+
+## Services / RPC inventory
+
+| Function | Kind | RPC guarantees | Client owns |
+|---|---|---|---|
+| `fetchOwnMatches` / `fetchOpponentMatches` | SELECT | — | — |
+| `insertMatch` | client INSERT (RLS) | — | only rows where `user_id = auth.uid()` |
+| `fetchMatchById` | SELECT | — | — |
+| `updateMatch` / `deleteMatchRow` | client UPDATE/DELETE (RLS) | — | only own rows |
+| `confirmMatchAndUpdateStats` | **RPC SECURITY DEFINER** | status transition, atomic stats bump on both profiles | — |
+| `acceptCorrectionRpc` | **RPC SECURITY DEFINER** | copies proposal → match, atomic stats bump, clears proposal state | — |
+| `voidMatchRpc` | **RPC SECURITY DEFINER** | status=voided, reason recorded, clears proposal state | — |
+| `proposeCorrection` | **RPC SECURITY DEFINER** | writes match_history + match_revisions atomically, sets `pending_action_by`, increments `revision_count`, refreshes `dispute_expires_at` | — |
+| `expireStaleMatches` | RPC (runs under pg_cron every 15 min) | pending>72h → expired; disputed>48h → voided w/ timeout | — |
+| `expireStalePendingMatches` / `expireDisputedMatches` | client UPDATE fallback | idempotent with the RPC | safe to call on loadHistory |
+| `markMatchTagStatus` | client UPDATE | — | legacy tag_status flow |
+
+**Principle:** every state transition is owned by an RPC. The client never writes `status`, `result`, `sets`, or `current_proposal` directly. Client-side `updateMatch` is reserved for non-transitional metadata.
+
+---
+
+## Notification event matrix
+
+| Transition | Notification | Receiver | Wired? |
+|---|---|---|---|
+| submit ranked match | `match_tag` | opponent | ✅ useMatchHistory.submitMatch |
+| opponent confirms | `match_confirmed` | submitter | ✅ useMatchHistory.confirmOpponentMatch |
+| opponent disputes | `match_disputed` | submitter | ✅ useMatchHistory.disputeWithProposal |
+| submitter counters | `match_counter_proposed` | opponent | ✅ useMatchHistory.counterPropose |
+| accept correction | `match_confirmed` | other party | ✅ useMatchHistory.acceptCorrection |
+| void match | `match_voided` | other party | ✅ useMatchHistory.voidMatchAction |
+| reminder (<24h to expiry) | `match_reminder` | opponent | ⚠ localStorage-gated (resets on device wipe) |
+| **pg_cron auto-expire** | *(none)* | *(none)* | ❌ **gap — opponent never learns the ranked match auto-expired** |
+| **match deleted by submitter while pending/disputed** | `match_deleted` | opponent | ❌ **gap — only fires for confirmed matches** |
+
+Non-critical gaps, documented so we fix them in later modules.
+
+---
+
+## Module 0 — Audit + harden current truth loop
+
+**Objective:** make the existing match-truth loop observable and rollback-safe on the client so users never end up with UI in a lie-state relative to the server. No feature additions, no schema changes.
+
+**Findings (from audit):**
+
+1. **`confirmOpponentMatch`** (useMatchHistory.js) — on RPC error, logs to console and returns `undefined`. Callers have no way to know and the optimistic `setHistory` has already run. If the RPC failed, the card stays visually "confirmed" but DB is untouched.
+2. **`acceptCorrection`** — same pattern. ActionReviewDrawer already expects `{error}`, but the hook returns nothing on failure, so the drawer closes successfully on silent failures.
+3. **`voidMatchAction`** — same pattern. DisputeModal and ActionReviewDrawer both expect `{error}` but get `undefined`.
+4. **`deleteMatch`** — direct client DELETE with no error check. RLS denial is invisible; local state shows the row gone while DB still has it.
+5. **Feed likes** (HomeTab.jsx) — optimistic update, no rollback on Supabase error.
+6. **Generic error strings** — `"Failed. Try again."` in DisputeModal/ScoreModal hides RLS denials, unique-constraint violations, stale state errors.
+
+**Files to touch (Module 0):**
+
+1. `src/features/scoring/hooks/useMatchHistory.js` — make `confirmOpponentMatch`, `acceptCorrection`, `voidMatchAction`, `deleteMatch`, `removeTaggedMatch`, `resubmitMatch` always return `{ error: null | string }`. Revert optimistic updates on error.
+2. `src/features/home/pages/HomeTab.jsx` — wrap feed like/unlike in try/catch with rollback; surface confirm/accept/void errors using native alert (minimal; full toast system is a later polish).
+3. `src/features/scoring/components/DisputeModal.jsx` — display the actual error message from `voidMatchAction` / `counterPropose` instead of the generic string.
+4. `src/features/scoring/components/ScoreModal.jsx` — same treatment: real error text.
+5. `src/features/notifications/components/ActionReviewDrawer.jsx` — already expects `{error}`, verify it now receives real messages.
+
+No SQL migrations in Module 0.
+
+**Acceptance:**
+- If a mutation fails, the UI doesn't pretend it succeeded.
+- Error text tells the user whether it's network/permission/conflict, not "try again".
+- Smoke: log match → confirm succeeds; log match → dispute → counter → accept succeeds; void path works; build passes.
+
+### Module 0 — delivered
+
+**Files changed:**
+- `src/features/scoring/hooks/useMatchHistory.js`
+  - Added `formatRpcError(err, fallback)` helper that translates Postgres codes (`23505` duplicate, `42501` RLS denial, `P0001` RAISE EXCEPTION from our RPCs) into human-readable strings and falls back to a per-action message.
+  - `confirmOpponentMatch`, `acceptCorrection` — now return `{ error: null | string }` consistently. Optimistic `setHistory` only runs on success.
+  - `voidMatchAction`, `_submitProposal`, `resubmitMatch`, `submitMatch` — error messages now routed through `formatRpcError` instead of raw `err.message` or generic strings.
+  - `deleteMatch` — optimistic remove is now snapshotted and rolled back if `deleteMatchRow` fails (RLS denial no longer leaves an orphaned local state). Returns `{ error }`. Also extended `match_deleted` notification to fire for pending/disputed matches too (not just confirmed).
+  - `removeTaggedMatch` — same snapshot/rollback pattern; returns `{ error }`.
+- `src/features/home/pages/HomeTab.jsx`
+  - Confirm / Accept / Void / Delete / Remove CTAs now `await` and `alert()` the error message on failure instead of silently no-oping.
+  - Feed like/unlike optimistic update is now rolled back if the Supabase write fails.
+- `src/features/scoring/components/DisputeModal.jsx`
+  - Void error path shows the actual server message.
+  - Renamed shadow `res` variables to fix `no-redeclare` lint errors.
+- `src/features/scoring/components/ScoreModal.jsx`
+  - Resubmit and save errors surface real text.
+  - Renamed shadow `res` to fix lint.
+
+**Schema changes:** none.
+
+**Verification:**
+- `npm run build` — ✅ passes (697 kB bundle, unchanged structure).
+- `npm run lint` — no new errors introduced by these changes. Remaining errors are pre-existing (`authUser`, `bumpStats` unused, etc.) and unrelated to the truth loop.
+- Code review: every RPC mutation now returns a consistent `{ error }` shape; every caller surfaces the message.
+
+**Open risks / deferred to later modules:**
+- `match_reminder` still localStorage-gated — deferred to the notifications module, needs a DB-backed `reminder_sent_at` flag.
+- `match_expired` notification on pg_cron expiry — deferred, needs a SQL migration to fire notifications when `expire_stale_matches()` runs.
+- Native `window.alert()` is a placeholder; a proper toast system is a later polish item.
+
+---
+
+## Module 1 — Meaningful player profiles
+
+**Objective:** turn `/profile` from a self-view-only screen into a real identity surface that any user can view for any other user. Trust signals and head-to-head history are first-class. No schema changes.
+
+**Audit findings relevant to Module 1:**
+- `profiles` table already has the core identity fields we need: `name, avatar, suburb, skill, style, bio, wins, losses, matches_played, ranking_points, streak_count, streak_type`. Stats are bumped by existing RPCs on confirm/accept.
+- `ProfileTab.jsx` is hardcoded to render the logged-in user's profile. There is no `/profile/:userId` route.
+- `fetchProfile(userId)` in `profileService.js` already returns `select('*')` — we can reuse it for any user. No RLS policy seen that restricts profile SELECT.
+- Feed cards, match history, leaderboards, DMs — none navigate to a player's profile. The whole app is identity-less from a viewing perspective.
+- The viewer's own `matchHistory.history` array is the source of truth for H2H against any subject. Viewer can compute H2H without needing to fetch the subject's matches (which would hit RLS).
+- Recent form for *another* user isn't available without an RPC. Scope decision: recent form shows only on the viewer's own profile in Module 1; public profile shows H2H + aggregate stats instead. Full public recent form is a Module 5 item.
+
+**Files touched:**
+
+New:
+- `src/features/profile/utils/profileStats.js` — pure helpers: `computeRecentForm`, `computeStreakFromMatches`, `computeMostPlayed`, `computeHeadToHead`.
+- `src/features/profile/hooks/usePlayerProfile.js` — loads a profile row by userId for the public-view flow.
+- `src/features/profile/pages/PlayerProfileView.jsx` — read-only public profile (hero, trust indicator, stats, H2H).
+
+Modified:
+- `src/app/App.jsx` — detect `/profile/<userId>` in pathParts; mount `PlayerProfileView` when viewing someone else, or redirect to `/profile` when viewing yourself. Add an `openProfile(userId)` helper and pass it down.
+- `src/features/home/pages/HomeTab.jsx` — make poster name/avatar and opponent name in the scoreboard row clickable → `openProfile`.
+- `src/features/profile/pages/ProfileTab.jsx` — add trust indicator ("✓ X confirmed matches"), recent form chips, most-played opponents row (own profile only).
+
+Deferred to Module 2:
+- People tab navigation — will be part of the discovery/follow overhaul.
+
+**Schema changes:** none.
+
+**Acceptance:**
+- Tapping any opponent/poster name in the feed opens that player's profile.
+- Public profile shows real stats + H2H against viewer + trust indicator.
+- Own profile shows everything public plus recent form and most-played opponents.
+- After a confirmed match, stats on both the viewer's own profile and the opponent's profile visibly update (on refresh).
+- Build passes.
+
+### Module 1 — delivered
+
+**Files changed / added:**
+- `src/features/profile/utils/profileStats.js` *(new)* — pure derivation helpers: `computeRecentForm`, `computeStreakFromMatches`, `computeMostPlayed`, `computeHeadToHead`, `formatConfirmedBadge`. All filter on `status === 'confirmed'` so the "verified identity first" principle is built into the math — disputed/voided/expired matches never contribute to any displayed stat.
+- `src/features/profile/hooks/usePlayerProfile.js` *(new)* — small hook that calls `fetchProfile(userId)` with loading/error/cancellation state for the public-view flow.
+- `src/features/profile/pages/PlayerProfileView.jsx` *(new)* — read-only public profile: hero with avatar, name, suburb, skill/style badges; trust indicator ("✓ N confirmed matches"); ranking card with streak; 4-stat grid (Matches / Wins / Losses / Win %); head-to-head vs viewer when they've played. Includes its own skeleton + empty + error states so layout doesn't jump.
+- `src/app/App.jsx` — detects `/profile/<userId>` in the path and mounts `PlayerProfileView` when viewing someone else; falls back to `ProfileTab` for own-profile view. Added `openProfile(userId)` helper that normalises the redirect when a player taps their own avatar.
+- `src/features/home/pages/HomeTab.jsx` — poster avatar, poster name, and both scoreboard player rows are now clickable and navigate to the corresponding player's profile. Carefully gated: only real linked users (with `opponent_id` / `submitterId`) are clickable; casual freetext opponents, own rows, and demo cards stay non-interactive.
+- `src/features/profile/pages/ProfileTab.jsx` — added trust badge in the hero, "Recent form" chip row (last 5 W/L), and "Most played" opponents row in Overview. Most-played chips are clickable when the opponent is a real user.
+
+**Schema changes:** none.
+
+**Verification:**
+- `npm run build` — ✅ passes (709 kB bundle, +12 kB for the new surfaces).
+- `npm run lint` — no new errors on any touched file. One pre-existing warning on `App.jsx` useEffect deps (unchanged from before). `HomeTab.jsx` has two pre-existing unused-vars errors (`commentModal`, `commentDraft`) — not introduced by this module.
+- Build log updated with audit findings and design decisions.
+
+**Open risks / deferred:**
+- Public profile doesn't show the subject's own match history because of RLS. Plan: add a `get_public_match_history(user_id, limit)` RPC in Module 5 so we can surface the subject's recent form + last-5 results on their public view too.
+- People tab navigation → profile is not wired yet — deferred to Module 2 which rebuilds discovery.
+- DM header, notification sender, leaderboard avatar — none navigate to profile yet. Plan: sweep these entry points in Module 2 (discovery/follow pass) and Module 3 (notifications deep-link pass).
+- No "Challenge" / "Rematch" CTA on the public profile yet — deferred to Module 4.
+
+## Module 2 — Player discovery + follow graph
+
+**Objective:** turn the app from a solo log into a networked one. Users can discover real players, follow them, and see a Friends-filtered feed. No schema changes.
+
+**Design decision — follow graph = `friend_requests`:**
+- Tennis is a two-player domain; a match *requires* mutual acknowledgement. The existing `friend_requests` system with `pending/accepted/declined` already models that.
+- Reusing it means no new table, no new RLS, no new realtime channel, no duplicated state. The social graph is already there; Module 2 just exposes more of it.
+- Semantically: accepted = mutual follow. Pending = one-direction follow request. Matches Strava more than Twitter — aligned with the domain.
+- Documented trade-off: no asymmetric "follow without friendship" is possible with this model. If the product ever needs "follow pro player X without being their friend", that's a Module 5+ schema change.
+
+**Files changed:**
+- `src/features/people/services/socialService.js` — added `fetchSameSkillPlayers(userId, skill, excludeIds, limit)` for the skill-level discovery section.
+- `src/features/people/hooks/useSocialGraph.js` —
+  - New state: `playedOpponents`, `sameSkillPlayers`.
+  - `loadSocial` also fetches same-skill players and excludes suburb-suggested IDs so a player doesn't appear in two sections. Pending request IDs added to the exclude list.
+  - New method `loadPlayedOpponents(history)` — extracts unique opponent/submitter IDs from confirmed history, filters out friends/pending/blocked/self, fetches profiles, stores in `playedOpponents`.
+  - `resetSocial` clears the new state.
+- `src/app/App.jsx` — new effect calls `social.loadPlayedOpponents(matchHistory.history)` whenever history, friends, pending, or blocked change. Cheap (≤8 profile rows) and self-healing. Passes `openProfile`, `friends`, `playedOpponents`, `suggestedPlayers`, `sendFriendRequest`, `friendRelationLabel`, `socialLoading`, `onGoToDiscover` to HomeTab. Passes `playedOpponents`, `sameSkillPlayers`, `openProfile` to PeopleTab.
+- `src/features/people/pages/PeopleTab.jsx` —
+  - `PlayerCard` avatar + name area now clickable → profile.
+  - Search dropdown rows clickable → profile (scoped to avatar+name area, not action buttons).
+  - Received-request and sent-request rows get clickable avatar/name.
+  - The `suggested` sub-tab is relabelled **Discover** and rebuilt as three stacked sections: *People you've played* (from history), *Players near you* (suburb), *Similar skill level* (same declared level). Each renders `PlayerCard` with follow actions. Empty state only when all three are empty.
+- `src/features/home/pages/HomeTab.jsx` —
+  - Friends filter pill is now functional. `friends`-only view filters history to matches where poster or opponent is in `friends`. New empty state encourages going to Discover.
+  - Old "Find players to follow · Coming soon" placeholder replaced with a **live mini-discovery widget**: up to 3 players (prefer played-before, fall back to suburb), each with clickable avatar/name → profile, inline Add/Pending/Friends pill, and a "See all" CTA that deep-links to the Discover tab.
+
+**Schema changes:** none.
+
+**Acceptance:**
+- ✅ User can search → open a result's profile → add them via the inline Add button.
+- ✅ Adding a friend moves them out of Discover automatically (effect re-runs).
+- ✅ Friends feed filter shows only matches involving friends.
+- ✅ Discover surface replaces the dead "coming soon" block on the feed.
+- ✅ People tab navigation to profiles finishes the Module 1 deferral — PlayerCard, request rows, and search results all route to `/profile/:userId`.
+- ✅ Build passes (715 kB, +6 kB from Module 1).
+- ✅ No new lint errors introduced.
+
+**Open risks / deferred:**
+- `profiles.suburb` exact-match is brittle ("Bondi" vs "Bondi Beach" won't match). Good enough for MVP; a normalised lookup or fuzzy match is a Module 6 polish item.
+- `fetchSameSkillPlayers` exact-string match on `skill`. Works today because skill levels are a small fixed enum.
+- Discovery widget on feed has no skeleton — briefly empty while `loadSocial` + `loadPlayedOpponents` resolve. Not worth a skeleton at this stage.
+- No relevance-scored sort yet. Order-by-query-limit is fine for MVP; blended played-recency + last_active scoring is a later polish item.
+- Friends filter doesn't persist across navigation. If usage warrants, persist to localStorage later.
+- DM header, leaderboard avatar, notification sender avatar — still not wired to profiles. Deferred to Module 3 (notifications sweep) and Module 6 (polish sweep).
+
+## Module 3 — Notifications that pull users back
+
+**Objective:** close every deep-link gap in the notification tray, fire notifications for social events that weren't generating them, and make `match_reminder` + `match_expired` reliable across devices. One schema-light migration (backwards-compatible, idempotent).
+
+**Audit findings:**
+- Most notification types already had inline CTAs or handled correctly. Gaps: `match_confirmed` / `match_deleted` / `like` / `comment` / `request_accepted` had no deep-link CTAs.
+- `like` and `comment` notifications **never fired at all** — the insert points (feed_likes in HomeTab, feed_comments in CommentModal) wrote the row but skipped notifying the match submitter.
+- `match_reminder` was gated by `localStorage` so it re-fires on device switch or browser reset.
+- `expire_stale_matches()` RPC mutates `match_history` but never inserts into `notifications`, so opponents never learn that a ranked match silently auto-expired or auto-voided by timeout.
+- DM header, leaderboard avatar, and notification sender avatar were static — no way to navigate to a player's profile from those surfaces (Module 1/2 deferrals).
+
+**Files changed:**
+
+SQL migration (new, `supabase/migrations/20260421_notification_fire_gaps.sql`):
+- Adds `match_history.reminder_sent_at timestamptz` column (`add column if not exists` — safe to re-run).
+- Replaces `expire_stale_matches()` with a `plpgsql` version that uses `UPDATE ... RETURNING` to capture both-sides IDs, then INSERTs `match_expired` / `match_voided` notifications for each party with a `NOT EXISTS` dedupe guard so the pg_cron job can't double-fire. SECURITY DEFINER preserved.
+
+Code:
+- `src/features/scoring/utils/matchUtils.js` — `normalizeMatch` now exposes `reminderSentAt`.
+- `src/features/scoring/hooks/useMatchHistory.js` — `loadHistory` reminder check uses `m.reminderSentAt` instead of localStorage; on fire, sets the DB flag via `updateMatch({reminder_sent_at})` and patches local state so the same session can't re-send.
+- `src/features/home/pages/HomeTab.jsx` — after a successful `feed_likes.insert`, fires a `like` notification to `m.submitterId` (guarded against self-like).
+- `src/features/tournaments/components/CommentModal.jsx` — new `onCommentPosted(matchId)` prop fired after successful `feed_comments.insert`; App wires it to a helper that fires the `comment` notification to the match submitter.
+- `src/app/App.jsx` — `notifyMatchOwnerOfComment(matchId)` helper looks up the match in local history and emits the notification. `openProfile` now plumbed into `NotificationsPanel` and `RightPanel`.
+- `src/features/notifications/components/NotificationsPanel.jsx` —
+  - Sender avatar is now a clickable target that navigates to `/profile/<from_user_id>`.
+  - New `goProfile` helper.
+  - CTAs added for `match_confirmed` (View in feed →), `match_expired` + `match_deleted` (View in feed →), `like` + `comment` (View match →), `request_accepted` (View profile →).
+- `src/features/notifications/utils/notifUtils.js` — `match_expired` added to `IMPORTANT_TYPES` (so it sits above "activity" in the tray), registered in the urgency bonus table, and given a human label ("Your match with X expired unconfirmed — it doesn't count towards stats.").
+- `src/features/home/components/RightPanel.jsx` — leaderboard row is now clickable (row hover-highlight and cursor-pointer) and navigates to the player's profile.
+- `src/features/people/components/Messages.jsx` — DM header partner avatar + name are clickable → profile.
+- `src/features/people/pages/PeopleTab.jsx` — threads `openProfile` into `Messages`.
+
+**Schema changes:**
+- Additive column on `match_history.reminder_sent_at` — safe, no backfill needed.
+- Replaces `expire_stale_matches()` body only; signature, SECURITY DEFINER, and cron schedule unchanged.
+- **Must be applied** before `match_expired` and the reliable-reminder flow take effect. Migration is idempotent; the client code is gracefully degraded if the migration hasn't run yet (reminder may re-fire on reload — harmless).
+
+**Acceptance:**
+- ✅ Every notification type has a sensible tap action (profile / match / feed / conversation / in-context review).
+- ✅ Notification sender avatar clicks through to that player's profile.
+- ✅ Liking a match fires a `like` notification to the match submitter (first like only — unliking doesn't send).
+- ✅ Commenting on someone else's match fires a `comment` notification.
+- ✅ Leaderboard rows click through to profile.
+- ✅ DM header partner avatar + name click through to profile.
+- ✅ Build passes (717 kB, +2 kB from Module 2).
+- ✅ No new lint errors.
+
+**Open risks / deferred:**
+- Migration must be applied manually via Supabase CLI or dashboard. Until then, `match_expired` never fires (harmless — pg_cron still updates status) and `reminder_sent_at` writes fail silently (reminder re-fires on reload).
+- Like/comment fire-and-forget — no rollback if the notification insert fails. Acceptable because the feed interaction itself already succeeded.
+- No notification for "user started following you as a friend" distinct from `friend_request` → `request_accepted` flow — the follow graph IS friend_requests by design (Module 2), so the events we already have cover this.
+- No batching on high-frequency likes. If a user rapidly spams like/unlike, every `like` fires a notification. Cheap (notifications table insert), but could spam the match owner's tray. A dedupe RPC similar to `upsert_message_notification` is a Module 6 polish item.
+
+
+
+
+
