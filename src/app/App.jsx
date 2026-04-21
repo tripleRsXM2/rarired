@@ -40,7 +40,9 @@ import AuthModal from "../features/auth/components/AuthModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
-import CommentModal from "../features/tournaments/components/CommentModal.jsx";
+// CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
+// tabs) which lives under HomeTab. matchHistory.commentModal state is kept
+// for any legacy caller and is harmless if set.
 import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
 import ChallengeModal from "../features/challenges/components/ChallengeModal.jsx";
 import { useToasts, ToastStack } from "../components/ui/Toast.jsx";
@@ -504,7 +506,7 @@ export default function App(){
               t={t} authUser={auth.authUser} profile={currentUser.profile} history={matchHistory.history}
               feedLikes={matchHistory.feedLikes} setFeedLikes={matchHistory.setFeedLikes}
               feedLikeCounts={matchHistory.feedLikeCounts} setFeedLikeCounts={matchHistory.setFeedLikeCounts}
-              feedComments={matchHistory.feedComments} commentModal={matchHistory.commentModal}
+              feedComments={matchHistory.feedComments} setFeedComments={matchHistory.setFeedComments} commentModal={matchHistory.commentModal}
               setCommentModal={matchHistory.setCommentModal}
               commentDraft={matchHistory.commentDraft} setCommentDraft={matchHistory.setCommentDraft}
               setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
@@ -521,6 +523,10 @@ export default function App(){
               playedOpponents={social.playedOpponents}
               suggestedPlayers={social.suggestedPlayers}
               sendFriendRequest={social.sendFriendRequest}
+              cancelRequest={social.cancelRequest}
+              acceptRequest={social.acceptRequest}
+              sentReq={social.sentReq}
+              recvReq={social.recvReq}
               friendRelationLabel={social.friendRelationLabel}
               socialLoading={social.socialLoading}
               onGoToDiscover={function(){navigate("/people/suggested");}}
@@ -528,6 +534,7 @@ export default function App(){
               toast={toast}
               pendingFreshCount={matchHistory.pendingFreshCount}
               refreshFeed={matchHistory.refreshFeed}
+              notifyMatchOwnerOfComment={notifyMatchOwnerOfComment}
             />
           )}
           {tab==="map"&&(
@@ -687,13 +694,8 @@ export default function App(){
             voidMatchAction={matchHistory.voidMatchAction}
           />
         )}
-        <CommentModal
-          t={t} authUser={auth.authUser} profile={currentUser.profile}
-          commentModal={matchHistory.commentModal} setCommentModal={matchHistory.setCommentModal}
-          commentDraft={matchHistory.commentDraft} setCommentDraft={matchHistory.setCommentDraft}
-          feedComments={matchHistory.feedComments} setFeedComments={matchHistory.setFeedComments}
-          onCommentPosted={notifyMatchOwnerOfComment}
-        />
+        {/* CommentModal retired — FeedInteractionsModal (mounted inside
+            HomeTab) now owns the comment list + composer as the Comments tab. */}
         <ChallengeModal
           t={t}
           composer={challenges.composer}
