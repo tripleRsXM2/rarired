@@ -185,8 +185,10 @@ export default function App(){
   // ── In-context notification review drawer ────────────────────────────────
   var [reviewDrawer,setReviewDrawer]=useState(null); // { match, notifId, notifType, fromName }
 
-  function openReviewDrawer(n){
-    // Find the match in local history using match_id from the notification.
+  // Notif types that always carry a proposal — stale local match needs a DB refresh.
+  var PROPOSAL_NOTIF_TYPES=new Set(['match_disputed','match_correction_requested','match_counter_proposed']);
+
+  async function openReviewDrawer(n){
     var matchId=n.match_id;
     if(!matchId)return;
     var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
@@ -194,6 +196,13 @@ export default function App(){
       // Not in local history yet — reload then navigate to feed as fallback.
       if(auth.authUser)matchHistory.loadHistory(auth.authUser.id);
       return;
+    }
+    // If the notification requires a proposal but the local copy doesn't have one
+    // yet (realtime notification arrived before the history was reloaded), fetch a
+    // fresh row from DB so the drawer has accurate data to display.
+    if(PROPOSAL_NOTIF_TYPES.has(n.type)&&!match.currentProposal){
+      var fresh=await matchHistory.refreshSingleMatch(String(matchId),match.isTagged);
+      if(fresh) match=fresh;
     }
     setReviewDrawer({match,notifId:n.id,notifType:n.type,fromName:n.fromName||"Someone"});
     notifications.setShowNotifications(false);
