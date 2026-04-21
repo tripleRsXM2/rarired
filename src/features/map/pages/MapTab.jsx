@@ -37,9 +37,10 @@ export default function MapTab({
         onCourtSelect={setSelectedCourt}
       />
 
-      {/* Title pill — floats top-left over the map */}
+      {/* Title pill — sits top-left, shifted right of the Leaflet zoom
+          control (+/−) so the two don't stack. */}
       <div style={{
-        position:"absolute", top:12, left:12, zIndex:500,
+        position:"absolute", top:12, left:56, zIndex:500,
         background: t.bgCard, border:"1px solid "+t.border,
         borderRadius:8, padding:"8px 14px",
         display:"flex", alignItems:"center", gap:10,
