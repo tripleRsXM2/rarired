@@ -6,7 +6,6 @@ import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
 import { TABS } from "../lib/constants/ui.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
-import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
 import { track } from "../lib/analytics.js";
