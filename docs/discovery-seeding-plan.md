@@ -40,7 +40,7 @@ Share-link button on the Discover tab. Uses `navigator.share` when available, fa
 
 ### Local relevance — what "near" means today
 
-**Exact string match on `profiles.suburb`.** Case-sensitive. "Bondi" and "Bondi Beach" do NOT match each other; "bondi" and "Bondi" do NOT match. This is brittle but adequate at seed scale — real users will converge on consistent spellings within a suburb.
+**Case-insensitive, trimmed `ilike` on `profiles.suburb` (Module 6).** Equivalent to exact string match but ignoring case + whitespace, so "Bondi", "bondi", and " Bondi " all match each other. Still does NOT match "Bondi Beach" against "Bondi" — that needs a normalised lookup or alias table, deferred. At seed scale this is enough; real users in a single suburb will converge on the same spelling once the cluster forms.
 
 ### How Discovery behaves at low density
 
@@ -144,3 +144,4 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Seed metrics are hypotheses, will be tracked live once Module 3.5 (analytics foundation) lands.
+- v1 — Module 6 (polish): suburb match upgraded to case-insensitive + trimmed via `ilike`. Stops missing the obvious "Bondi" vs "bondi" / trailing-space cases.

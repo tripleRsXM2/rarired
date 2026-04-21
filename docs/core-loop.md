@@ -150,3 +150,4 @@ Every metric here is now **measurable via the `events` table** (Module 3.5). See
 - v1 — Module 3.5 (analytics foundation). Every metric in this doc is now mapped to a concrete event or a direct table query. See `analytics-events.md`.
 - v2 — Module 4 (challenge / rematch). New secondary loop + 6 new post-action rows. Challenge is now the only coordination surface; it explicitly converts intent into a logged match via the existing flow.
 - v3 — Module 5 (real ELO + leaderboard). The "aha moment" (rating change after confirmed win) is now backed by real ELO math with provisional period. Suburb-scoped leaderboard adds a local-network reinforcement signal.
+- v4 — Module 6 (feed polish). Community-pulse one-liner above the feed surfaces "this week" activity (own + friends) as a glance-able social-proof signal — keeps users engaged on no-match days. Toasts replace alerts in the post-action UX. Tray noise reduced via like dedupe + comment grouping.

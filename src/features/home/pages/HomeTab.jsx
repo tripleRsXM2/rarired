@@ -20,7 +20,7 @@ function FeedCard({
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
-  openProfile, openChallenge,
+  openProfile, openChallenge, toast,
 }) {
   // Identity resolvers — who is the "poster" and who is the "opponent" from
   // the viewer's POV, so the right user IDs get wired into the profile links.
@@ -151,7 +151,7 @@ function FeedCard({
             <button onClick={async function() {
                 if (!window.confirm("Delete this match?")) return;
                 var res = await onDelete(m);
-                if (res && res.error) window.alert(res.error);
+                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
@@ -159,7 +159,7 @@ function FeedCard({
             <button onClick={async function() {
                 if (!window.confirm("Remove from your feed?")) return;
                 var res = await onRemove(m);
-                if (res && res.error) window.alert(res.error);
+                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
@@ -298,7 +298,7 @@ function FeedCard({
           <div style={{ fontSize: 12, color: t.textSecondary, width: "100%", marginBottom: 6, fontWeight: 500 }}>{pName} logged this match — does it look right?</div>
           <button onClick={async function() {
               var res = await confirmOpponentMatch(m);
-              if (res && res.error) window.alert(res.error);
+              if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
             }}
             style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
             onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
@@ -354,7 +354,7 @@ function FeedCard({
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={async function() {
                 var res = await acceptCorrection(m);
-                if (res && res.error) window.alert(res.error);
+                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
               onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
@@ -369,7 +369,7 @@ function FeedCard({
             <button onClick={async function() {
                 if (!window.confirm("Void this match? This cannot be undone.")) return;
                 var res = await voidMatchAction(m, "mutual_void");
-                if (res && res.error) window.alert(res.error);
+                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.red + "44", background: t.redSubtle, color: t.red, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
               Void
@@ -437,24 +437,37 @@ function FeedCard({
                 setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
                 return;
               }
-              // Module 3: notify every match participant except the liker.
-              // A match has up to two real people — submitter and opponent.
-              // Either of them reacting to the match should reach the other;
-              // a third-party liker reaches both. Unlike doesn't re-notify.
-              // Fire-and-forget so the button stays snappy.
+              // Module 3 + 6: notify every match participant except the liker.
+              // Module 6 dedupe: don't re-fire a `like` notification from the
+              // same user for the same match within an hour — prevents toggle
+              // spam from polluting the recipient's tray. Always emits the
+              // analytics event though (we want the raw signal).
               if (nowLiked) {
                 var toNotify = [m.submitterId, m.opponent_id].filter(function (uid, i, arr) {
                   return uid && uid !== authUser.id && arr.indexOf(uid) === i;
                 });
-                toNotify.forEach(function (uid) {
-                  supabase.from("notifications").insert({
-                    user_id:      uid,
-                    type:         "like",
-                    from_user_id: authUser.id,
-                    match_id:     m.id,
-                  });
-                });
                 track("feed_like", { match_id: m.id, participants_notified: toNotify.length });
+                if (toNotify.length) {
+                  var oneHourAgoIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+                  supabase.from("notifications")
+                    .select("id")
+                    .eq("type", "like")
+                    .eq("match_id", m.id)
+                    .eq("from_user_id", authUser.id)
+                    .gte("created_at", oneHourAgoIso)
+                    .limit(1)
+                    .then(function (r) {
+                      if (r.error || (r.data && r.data.length)) return; // dedupe hit
+                      toNotify.forEach(function (uid) {
+                        supabase.from("notifications").insert({
+                          user_id:      uid,
+                          type:         "like",
+                          from_user_id: authUser.id,
+                          match_id:     m.id,
+                        });
+                      });
+                    });
+                }
               }
             }}
             style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>
@@ -534,6 +547,7 @@ export default function HomeTab({
   sendFriendRequest, friendRelationLabel, socialLoading,
   onGoToDiscover,
   openChallenge,
+  toast,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
@@ -550,6 +564,7 @@ export default function HomeTab({
     setDisputeModal, setDisputeDraft,
     confirmOpponentMatch, acceptCorrection, voidMatchAction,
     openProfile, openChallenge,
+    toast,
   };
 
   function openLogMatch() {
@@ -622,6 +637,41 @@ export default function HomeTab({
           + Log match
         </button>
       </div>
+
+      {/* Module 6: community-pulse one-liner. Compact stats from the user's
+          existing local data (history + friends list) — no extra query. Gives
+          a reason to glance at the feed on a no-match day. */}
+      {(function () {
+        if (!history || !history.length) return null;
+        var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));
+        var oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        var thisWeek = history.filter(function (m) {
+          if (m.status !== "confirmed") return false;
+          var d = m.rawDate ? new Date(m.rawDate).getTime() : 0;
+          return d >= oneWeekAgo;
+        });
+        var friendsThisWeek = thisWeek.filter(function (m) {
+          var poster = m.isTagged ? m.submitterId : (authUser && authUser.id);
+          var opp    = m.opponent_id;
+          return (poster && friendIdSet.has(poster)) || (opp && friendIdSet.has(opp));
+        });
+        if (!thisWeek.length) return null;
+        var msg = friendsThisWeek.length > 0
+          ? friendsThisWeek.length + " friend match" + (friendsThisWeek.length !== 1 ? "es" : "") + " this week · " + thisWeek.length + " in your feed"
+          : thisWeek.length + " confirmed match" + (thisWeek.length !== 1 ? "es" : "") + " this week";
+        return (
+          <div style={{
+            padding: "0 20px 12px", maxWidth: 720,
+            fontSize: 11, color: t.textTertiary,
+            display: "flex", alignItems: "center", gap: 6,
+            letterSpacing: "0.02em",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
+            <span style={{ fontWeight: 600 }}>This week:</span>
+            <span>{msg}</span>
+          </div>
+        );
+      })()}
 
       {/* Filter pills — functional. Friends = matches where poster or opponent
           is in the viewer's friends list. */}
