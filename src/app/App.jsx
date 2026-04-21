@@ -27,6 +27,8 @@ import PeopleTab from "../features/people/pages/PeopleTab.jsx";
 import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
 import PlayerProfileView from "../features/profile/pages/PlayerProfileView.jsx";
 import AdminTab from "../features/admin/pages/AdminTab.jsx";
+import MapTab from "../features/map/pages/MapTab.jsx";
+import { setHomeZone } from "../features/map/services/mapService.js";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
 import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
@@ -48,7 +50,7 @@ export default function App(){
   var navigate=useNavigate();
 
   // Derive active top-level tab from the URL path.
-  var validTabs=["home","tournaments","people","profile","admin"];
+  var validTabs=["home","map","tournaments","people","profile","admin"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -68,6 +70,23 @@ export default function App(){
     if(!userId) return;
     if(auth.authUser&&userId===auth.authUser.id) navigate("/profile");
     else navigate("/profile/"+userId);
+  }
+
+  // ── Map tab — home-zone handlers ──────────────────────────────────────────
+  // Persist profile.home_zone to Supabase and mirror into local profile state
+  // so the map pin + settings UI update without a refresh.
+  async function applyHomeZone(zoneId){
+    if(!auth.authUser) return;
+    var r = await setHomeZone(auth.authUser.id, zoneId);
+    if(r.error){ alert(r.error.message||"Could not set home zone"); return; }
+    currentUser.setProfile(function(p){ return Object.assign({}, p, {home_zone: zoneId}); });
+  }
+  function clearHomeZone(){ applyHomeZone(null); }
+
+  // Side-panel "Browse players here" — park on People/Friends for now.
+  // A proper zone-filtered Discover view is a later iteration.
+  function browseZonePlayers(){
+    navigate("/people/suggested");
   }
 
   // Redirect bare "/" to /home on first load.
@@ -400,6 +419,17 @@ export default function App(){
               friendRelationLabel={social.friendRelationLabel}
               socialLoading={social.socialLoading}
               onGoToDiscover={function(){navigate("/people/suggested");}}
+            />
+          )}
+          {tab==="map"&&(
+            <MapTab
+              t={t} theme={theme}
+              authUser={auth.authUser}
+              profile={currentUser.profile}
+              onSetHomeZone={applyHomeZone}
+              onClearHomeZone={clearHomeZone}
+              onOpenProfile={openProfile}
+              onBrowseZonePlayers={browseZonePlayers}
             />
           )}
           {tab==="tournaments"&&(

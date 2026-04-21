@@ -18,6 +18,20 @@ Three sources feed the Discover tab (`/people/suggested`), stacked in this order
 
 All three queries filter out the viewer's existing friends, pending requests, and blocked users.
 
+### Map tab (Module 4) — zone-based spatial discovery
+
+A fourth top-level surface. Full-bleed Leaflet map of Sydney divided into **six hand-curated matchmaking zones** (CBD, East, Inner West, Lower North Shore, Northern Beaches, South/Bayside). Each zone:
+
+- Renders as a colored polygon on a Carto basemap
+- Lists its curated public / bookable tennis venues (~27 real courts)
+- Surfaces "Players here" — anyone who has declared this zone via `profiles.home_zone`
+
+Tapping a zone opens a right-hand side panel with the zone name + blurb, courts nearby (count + list), and players in the zone. Two actions:
+- **Set as home area** — writes `profiles.home_zone`. The map then draws a home pin on that zone and the user is listed in that zone's "Players here" section. Toggleable from the same button (switches to "Clear") and from Settings → Home zone.
+- **Browse players here** — routes to the existing People / Discover surface for now (zone-filtered Discover is deferred).
+
+Why zones instead of real suburb boundaries: zones are a compression layer between the brittle `profiles.suburb` field (every user types differently) and a map surface that needs a small, memorable set of regions. Six zones are the right count — readable, each has recognisable landmarks, aligned with how Sydneysiders already talk about the city.
+
 ### Search
 
 `searchProfilesByName(userId, query)` — server-side `ilike('name', '%q%').neq('id', userId).limit(10)`. Debounced 400ms on input. Dropdown surfaces name, suburb, skill; clickable rows jump to profile; inline Add button for non-friends.
@@ -144,3 +158,4 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Seed metrics are hypotheses, will be tracked live once Module 3.5 (analytics foundation) lands.
+- v1 — Module 4 (Map tab): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.

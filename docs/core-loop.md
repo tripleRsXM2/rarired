@@ -23,6 +23,7 @@ Every arrow in this chain is currently shipped. Modules 0–3 hardened the chain
 
 1. **Social browse loop** — open app → scroll feed → see friend's match → like or comment → friend gets notified → friend returns. This loop does NOT require the user to log anything, which is how we hold engagement on days without a match.
 2. **Discovery loop** — open People tab (Discover) → see played / near-you / same-skill suggestions → follow one → their future matches appear in friends feed → you engage. Grows graph density.
+2a. **Spatial browse loop** (Module 4) — open Map tab → scan the six zones → tap a zone → see courts + players who've set this zone as home → tap a profile → add friend. Same discovery outcome as loop 2, different entry point — and the visible *density per zone* works as a motivator to declare a home zone yourself.
 3. **Dispute loop** (edge case but critical for trust) — submitter logs → opponent disputes with correction → submitter accepts or counters → resolution → stats fire. Without this loop reliable, the whole ranking trust story collapses.
 4. **Reminder loop** — pending match, <24h to expiry → reminder notification → opponent confirms → loop completes. Rescues matches from silently expiring.
 
@@ -139,3 +140,4 @@ These are the metrics we should measure once the analytics foundation (Module 3.
 
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Metrics section awaits Module 3.5 (analytics foundation) to become real numbers instead of hypotheses.
+- v1 — Module 4 (Map tab): added the spatial-browse secondary loop (loop 2a).

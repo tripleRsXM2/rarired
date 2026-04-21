@@ -11,6 +11,8 @@ import { initials } from "../../../lib/utils/avatar.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
+import { ZONES } from "../../map/data/zones.js";
+import { setHomeZone } from "../../map/services/mapService.js";
 
 var THEME_OPTIONS = [
   {id:"wimbledon",    label:"Wimbledon",       swatch:"#006F4A", bg:"#F0F2EA"},
@@ -274,6 +276,50 @@ export default function SettingsScreen({
               </div>
             );
           })}
+        </div>
+
+        {/* ── Home zone ──────────────────────────────────────────────────────── */}
+        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
+          <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
+            <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>Home zone</div>
+            <div style={{fontSize:11,color:t.textTertiary}}>Your home court area — shows a pin on the Map and lists you as available in that zone.</div>
+          </div>
+          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:6}}>
+            {ZONES.map(function(z){
+              var on=(profile.home_zone||null)===z.id;
+              return (
+                <button key={z.id}
+                  onClick={async function(){
+                    var nextVal = on ? null : z.id;
+                    var prev = profile.home_zone||null;
+                    setProfile(function(p){return Object.assign({},p,{home_zone:nextVal});});
+                    if(authUser){
+                      var r = await setHomeZone(authUser.id, nextVal);
+                      if(r.error){
+                        setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
+                        console.error("Home zone save error:", r.error);
+                      }
+                    }
+                  }}
+                  style={{
+                    display:"flex",alignItems:"center",gap:12,
+                    padding:"10px 12px",
+                    borderRadius:9,border:"1px solid "+(on?t.accent:t.border),
+                    background:on?t.accentSubtle:"transparent",
+                    cursor:"pointer",textAlign:"left",
+                  }}>
+                  <div style={{width:24,height:24,borderRadius:"50%",background:z.color,flexShrink:0,
+                    boxShadow:"0 0 0 2px "+t.bgCard,color:"#fff",display:"flex",alignItems:"center",
+                    justifyContent:"center",fontSize:11,fontWeight:700}}>{z.num}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,color:on?t.accent:t.text,fontWeight:on?700:500}}>{z.name}</div>
+                    <div style={{fontSize:11,color:t.textTertiary,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{z.blurb}</div>
+                  </div>
+                  {on&&<span style={{fontSize:13,color:t.accent,flexShrink:0}}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Appearance ─────────────────────────────────────────────────────── */}

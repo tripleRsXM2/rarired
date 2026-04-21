@@ -18,6 +18,17 @@ var NAV_ITEMS = [
     }
   },
   {
+    id: "map", label: "Map",
+    icon: function(){
+      return (
+        <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
+          <path d="M2 4.5v10l4-1.5 6 2 4-1.5v-10l-4 1.5-6-2-4 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+          <path d="M6 3v10M12 5v10" stroke="currentColor" strokeWidth="1.5"/>
+        </svg>
+      );
+    }
+  },
+  {
     id: "tournaments", label: "Compete",
     icon: function(){
       return (
