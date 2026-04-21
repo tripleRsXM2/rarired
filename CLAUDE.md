@@ -1,5 +1,11 @@
 # CourtSync — Claude Project Context
 
+## Product Vision (locked — never contradict this)
+
+> **CourtSync is a verified social tennis identity product first, and a lightweight coordination product second.**
+
+Every feature decision, UI trade-off, and prioritisation call must be consistent with this. If a proposed change leans toward heavy scheduling/coordination tooling at the expense of social identity and verification, push back or flag it.
+
 ## Git Workflow
 
 ### Branch ownership

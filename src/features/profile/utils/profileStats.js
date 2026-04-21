@@ -1,0 +1,120 @@
+// src/features/profile/utils/profileStats.js
+// Pure derivation helpers for profile stats. No React, no Supabase, no side
+// effects — everything takes an array of normalised match objects and returns
+// a derived summary. Shared by ProfileTab (own profile) and PlayerProfileView
+// (anyone's public profile).
+//
+// A "match" in this module is the normalised shape from normalizeMatch():
+//   { id, result: 'win'|'loss', sets, status, date, rawDate, oppName,
+//     opponent_id, submitterId, isTagged, ... }
+//
+// Only confirmed matches count — anything disputed/voided/expired is ignored
+// so the product vision ("verified tennis identity first") stays enforced.
+
+function isConfirmed(m) {
+  return m && m.status === "confirmed";
+}
+
+// Last N confirmed matches as a sequence of 'W' | 'L'. The first entry is the
+// most recent match. Returns [] if no confirmed history.
+export function computeRecentForm(history, limit) {
+  var cap = typeof limit === "number" ? limit : 5;
+  if (!history || !history.length) return [];
+  return history
+    .filter(isConfirmed)
+    .slice(0, cap)
+    .map(function (m) { return m.result === "win" ? "W" : "L"; });
+}
+
+// Compute current streak by walking the confirmed history from most recent
+// backwards until the result flips. Used when a profile row doesn't have a
+// precomputed streak_count (e.g. fresh accounts, or just as a sanity check).
+export function computeStreakFromMatches(history) {
+  if (!history || !history.length) return { count: 0, type: null };
+  var confirmed = history.filter(isConfirmed);
+  if (!confirmed.length) return { count: 0, type: null };
+  var type = confirmed[0].result;
+  var count = 0;
+  for (var i = 0; i < confirmed.length; i++) {
+    if (confirmed[i].result === type) count++;
+    else break;
+  }
+  return { count: count, type: type };
+}
+
+// Group confirmed matches by opponent. Returns top N opponents by play count.
+// Each entry: { opponentId, opponentName, plays, wins, losses, lastDate }.
+// myId is the viewer's user id; used only to skip any rows that somehow
+// reference the viewer as their own opponent.
+export function computeMostPlayed(history, myId, limit) {
+  var cap = typeof limit === "number" ? limit : 5;
+  if (!history || !history.length) return [];
+  var buckets = {};
+  history.filter(isConfirmed).forEach(function (m) {
+    // Prefer opponent_id (real user) over oppName (freetext); fall back to
+    // a name-based key so freetext opponents still group correctly.
+    var key = m.opponent_id || ("name:" + (m.oppName || "unknown"));
+    if (key === myId) return;
+    if (!buckets[key]) {
+      buckets[key] = {
+        opponentId: m.opponent_id || null,
+        opponentName: m.oppName || "Unknown",
+        plays: 0, wins: 0, losses: 0,
+        lastDate: m.rawDate || null,
+      };
+    }
+    var b = buckets[key];
+    b.plays += 1;
+    if (m.result === "win") b.wins += 1; else b.losses += 1;
+    if (m.rawDate && (!b.lastDate || m.rawDate > b.lastDate)) b.lastDate = m.rawDate;
+  });
+  return Object.values(buckets)
+    .sort(function (a, b) {
+      if (b.plays !== a.plays) return b.plays - a.plays;
+      return (b.lastDate || "").localeCompare(a.lastDate || "");
+    })
+    .slice(0, cap);
+}
+
+// Head-to-head against a specific subject player. Computed purely from the
+// VIEWER's match history (which always includes matches where the viewer is
+// either the submitter or the opponent — so RLS never restricts us here).
+// Returns { viewerWins, subjectWins, totalMatches, lastDate, lastResult }.
+// lastResult is 'win' | 'loss' from the viewer's POV.
+export function computeHeadToHead(viewerHistory, viewerId, subjectId) {
+  var empty = { viewerWins: 0, subjectWins: 0, totalMatches: 0, lastDate: null, lastResult: null };
+  if (!viewerHistory || !viewerId || !subjectId || viewerId === subjectId) return empty;
+  var matches = viewerHistory.filter(function (m) {
+    if (!isConfirmed(m)) return false;
+    return m.opponent_id === subjectId || m.submitterId === subjectId;
+  });
+  if (!matches.length) return empty;
+  var viewerWins = 0, subjectWins = 0;
+  matches.forEach(function (m) {
+    // m.result is in the viewer's frame (normalizeMatch flips result for
+    // tagged rows). So if viewer won, viewerWins++.
+    if (m.result === "win") viewerWins++;
+    else subjectWins++;
+  });
+  // Most recent match by raw date
+  var sorted = matches.slice().sort(function (a, b) {
+    return (b.rawDate || "").localeCompare(a.rawDate || "");
+  });
+  var latest = sorted[0];
+  return {
+    viewerWins: viewerWins,
+    subjectWins: subjectWins,
+    totalMatches: matches.length,
+    lastDate: latest.date || null,
+    lastResult: latest.result || null,
+  };
+}
+
+// Confirmed ratio (trust indicator) — just a formatted string based on
+// profile.matches_played. matches_played is bumped ONLY on confirm, so it's
+// a clean confirmed-match count. Returns null if no matches.
+export function formatConfirmedBadge(profile) {
+  var n = profile && profile.matches_played;
+  if (!n) return null;
+  return n === 1 ? "1 confirmed match" : n + " confirmed matches";
+}

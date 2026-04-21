@@ -28,9 +28,12 @@ export default function ScoreModal({
     setSaving(true);
 
     if(isResubmit){
-      var res=await resubmitMatch(scoreModal.match, scoreDraft);
+      var resubRes=await resubmitMatch(scoreModal.match, scoreDraft);
       setSaving(false);
-      if(res&&res.error){setSaveError("Failed to resubmit. Try again.");return;}
+      if(resubRes&&resubRes.error){
+        setSaveError(typeof resubRes.error==='string'?resubRes.error:"Could not resubmit — please try again.");
+        return;
+      }
       setScoreModal(null);
       return;
     }
@@ -48,9 +51,9 @@ export default function ScoreModal({
 
     if(res&&res.error){
       if(res.error==='duplicate'){
-        setSaveError("This match is already logged.");
+        setSaveError(res.message||"This match is already logged.");
       } else if(res.error!=='not_authenticated'){
-        setSaveError("Failed to save. Try again.");
+        setSaveError(typeof res.error==='string'?res.error:"Could not save match — please try again.");
       }
       return;
     }
@@ -69,12 +72,11 @@ export default function ScoreModal({
   return (
     <div
       onClick={function(){setScoreModal(null);if(!isResubmit){setCasualOppName("");setCasualOppId(null);}}}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}}>
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:"0 16px"}}>
       <div
         onClick={function(e){e.stopPropagation();}}
-        className="slide-up"
-        style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"24px 22px 48px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
-        <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 20px"}}/>
+        className="pop"
+        style={{background:t.modalBg,border:"1px solid "+t.border,borderRadius:16,padding:"28px 24px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
         <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>{isResubmit?"Edit & Resubmit":"Log Result"}</h2>
 
         {/* Resubmit mode: locked opponent */}
@@ -138,12 +140,12 @@ export default function ScoreModal({
                 <span style={{fontSize:13}}>{isVerified?"✓":"○"}</span>
                 <div>
                   <div style={{fontSize:11,fontWeight:700,color:isVerified?t.accent:t.textSecondary}}>
-                    {isVerified?"Verified match":"Casual match"}
+                    {isVerified?"Ranked match":"Casual match"}
                   </div>
                   <div style={{fontSize:10,color:t.textTertiary,marginTop:1}}>
                     {isVerified
-                      ?"Opponent will confirm — stats update after they accept"
-                      :"Logged for records only — does not affect ELO or W/L"}
+                      ?"Counts toward ELO — opponent will confirm to lock it in"
+                      :"Logged for records only — no ELO or W/L impact"}
                   </div>
                 </div>
               </div>

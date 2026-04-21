@@ -25,6 +25,7 @@ import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
 import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
+import PlayerProfileView from "../features/profile/pages/PlayerProfileView.jsx";
 import AdminTab from "../features/admin/pages/AdminTab.jsx";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
@@ -51,10 +52,22 @@ export default function App(){
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
+  // /profile/<userId> → public profile view. Empty second segment or a match
+  // with the signed-in user's id falls back to the own-profile ProfileTab.
+  var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
+
   // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
   function setTab(x){
     if(x==="people") navigate("/people/friends");
     else navigate("/"+x);
+  }
+
+  // Open another player's profile. If it's the signed-in user, go to the
+  // own-profile tab instead so editing affordances remain available.
+  function openProfile(userId){
+    if(!userId) return;
+    if(auth.authUser&&userId===auth.authUser.id) navigate("/profile");
+    else navigate("/profile/"+userId);
   }
 
   // Redirect bare "/" to /home on first load.
@@ -185,8 +198,10 @@ export default function App(){
   // ── In-context notification review drawer ────────────────────────────────
   var [reviewDrawer,setReviewDrawer]=useState(null); // { match, notifId, notifType, fromName }
 
-  function openReviewDrawer(n){
-    // Find the match in local history using match_id from the notification.
+  // Notif types that always carry a proposal — stale local match needs a DB refresh.
+  var PROPOSAL_NOTIF_TYPES=new Set(['match_disputed','match_correction_requested','match_counter_proposed']);
+
+  async function openReviewDrawer(n){
     var matchId=n.match_id;
     if(!matchId)return;
     var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
@@ -194,6 +209,13 @@ export default function App(){
       // Not in local history yet — reload then navigate to feed as fallback.
       if(auth.authUser)matchHistory.loadHistory(auth.authUser.id);
       return;
+    }
+    // If the notification requires a proposal but the local copy doesn't have one
+    // yet (realtime notification arrived before the history was reloaded), fetch a
+    // fresh row from DB so the drawer has accurate data to display.
+    if(PROPOSAL_NOTIF_TYPES.has(n.type)&&!match.currentProposal){
+      var fresh=await matchHistory.refreshSingleMatch(String(matchId),match.isTagged);
+      if(fresh) match=fresh;
     }
     setReviewDrawer({match,notifId:n.id,notifType:n.type,fromName:n.fromName||"Someone"});
     notifications.setShowNotifications(false);
@@ -331,6 +353,7 @@ export default function App(){
               confirmOpponentMatch={matchHistory.confirmOpponentMatch}
               acceptCorrection={matchHistory.acceptCorrection}
               voidMatchAction={matchHistory.voidMatchAction}
+              openProfile={openProfile}
             />
           )}
           {tab==="tournaments"&&(
@@ -364,12 +387,22 @@ export default function App(){
             dms={dms}
           />
         )}
-        {tab==="profile"&&(
+        {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
+          <PlayerProfileView
+            t={t}
+            authUser={auth.authUser}
+            userId={profilePathId}
+            viewerHistory={matchHistory.history}
+            onBack={function(){navigate(-1);}}
+          />
+        )}
+        {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(
           <ProfileTab
             t={t} authUser={auth.authUser} profile={currentUser.profile}
             history={matchHistory.history}
             profileTab={profileTab} setProfileTab={setProfileTab}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+            openProfile={openProfile}
           />
         )}
         {tab==="admin"&&(

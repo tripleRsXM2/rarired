@@ -18,7 +18,18 @@ function FeedCard({
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
+  openProfile,
 }) {
+  // Identity resolvers — who is the "poster" and who is the "opponent" from
+  // the viewer's POV, so the right user IDs get wired into the profile links.
+  // For tagged matches, the poster (pName) is the submitter; for own matches
+  // the poster is the viewer themselves.
+  var posterUserId   = m.isTagged ? (m.submitterId || null) : (authUser && authUser.id) || null;
+  var opponentUserId = m.isTagged ? (authUser && authUser.id) || null : (m.opponent_id || null);
+  function goPoster()   { if (openProfile && posterUserId)   openProfile(posterUserId); }
+  function goOpponent() { if (openProfile && opponentUserId) openProfile(opponentUserId); }
+  var posterClickable   = !demo && !!posterUserId   && (!authUser || posterUserId   !== authUser.id) && !!openProfile;
+  var opponentClickable = !demo && !!opponentUserId && (!authUser || opponentUserId !== authUser.id) && !!openProfile;
   var isWin      = m.result === "win";
   var scoreStr   = (m.sets || []).map(function(s) { return s.you + "-" + s.them; }).join("  ");
   var liked      = !!feedLikes[m.id];
@@ -97,18 +108,25 @@ function FeedCard({
     >
       {/* ── Card header ──────────────────────────────────────────────────── */}
       <div style={{ padding: "14px 16px 12px", display: "flex", gap: 10, alignItems: "center" }}>
-        {/* Avatar */}
-        <div style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: avColor(pName),
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
-        }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
+        {/* Avatar — clickable when the poster is another real user */}
+        <div
+          onClick={posterClickable ? goPoster : undefined}
+          style={{
+            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            background: avColor(pName),
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
+            cursor: posterClickable ? "pointer" : "default",
+          }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
 
         {/* Name + date */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.2px" }}>
-            {pName}
+            <span
+              onClick={posterClickable ? goPoster : undefined}
+              style={{ cursor: posterClickable ? "pointer" : "default" }}>
+              {pName}
+            </span>
             {isOwn && <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 400 }}> · You</span>}
           </div>
           <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 1, letterSpacing: "0.01em" }}>{m.date}</div>
@@ -128,47 +146,133 @@ function FeedCard({
           {isExpired && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Unverified</span>}
           {isVoided  && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Voided</span>}
           {isOwn && onDelete && !isInDispute && !isVoided && (
-            <button onClick={function() { if (window.confirm("Delete this match?")) onDelete(m); }}
+            <button onClick={async function() {
+                if (!window.confirm("Delete this match?")) return;
+                var res = await onDelete(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
           {m.isTagged && onRemove && isConfirmed && (
-            <button onClick={function() { if (window.confirm("Remove from your feed?")) onRemove(m); }}
+            <button onClick={async function() {
+                if (!window.confirm("Remove from your feed?")) return;
+                var res = await onRemove(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
           )}
         </div>
       </div>
 
-      {/* ── Match result block ────────────────────────────────────────────── */}
+      {/* ── Scoreboard ──────────────────────────────────────────────────── */}
       <div style={{
         margin: "0 12px 14px",
         borderRadius: 10,
-        border: "1px solid " + resultColor + "30",
-        background: isWin ? t.greenSubtle : t.redSubtle,
-        padding: "14px 16px",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        overflow: "hidden",
+        border: "1px solid " + resultColor + "40",
       }}>
-        <div>
-          <div style={{
-            fontSize: 10, fontWeight: 700, color: resultColor,
-            textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4,
-          }}>{isWin ? "Victory" : "Defeat"}</div>
-          <div style={{
-            fontSize: 20, fontWeight: 800, color: t.text,
-            letterSpacing: "-0.5px", lineHeight: 1.2,
-          }}>vs {m.oppName}</div>
-          {(m.venue || m.court) && (
-            <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 4 }}>
-              {[m.venue, m.court].filter(Boolean).join(" · ")}
+        {/* Scoreboard header: venue/tournament on left, set labels on right */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "6px 14px",
+          background: t.bgTertiary,
+          borderBottom: "1px solid " + t.border,
+        }}>
+          <span style={{
+            fontSize: 10, fontWeight: 600, color: t.textTertiary,
+            letterSpacing: "0.04em", textTransform: "uppercase",
+          }}>
+            {[m.venue, m.court].filter(Boolean).join(" · ") ||
+             (m.tournName && m.tournName !== "Casual Match" ? m.tournName : "Casual")}
+          </span>
+          {(m.sets || []).length > 0 && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {(m.sets || []).map(function(_, i) {
+                return (
+                  <div key={i} style={{
+                    width: 28, textAlign: "center",
+                    fontSize: 9, fontWeight: 700, color: t.textTertiary,
+                    letterSpacing: "0.04em",
+                  }}>S{i + 1}</div>
+                );
+              })}
+              <div style={{ width: 22 }} />
             </div>
           )}
         </div>
-        {scoreStr && (
-          <div style={{
-            fontSize: 26, fontWeight: 800, color: resultColor,
-            fontVariantNumeric: "tabular-nums", letterSpacing: "-1px",
-            lineHeight: 1, flexShrink: 0,
-          }}>{scoreStr}</div>
-        )}
+
+        {/* Player rows
+            For own matches (isOwn=true):  pName = viewer, isWin is direct.
+            For tagged matches (isOwn=false): pName = submitter, but isWin is
+            stored from the VIEWER's perspective (result inverted in normalizeMatch),
+            so the submitter's win = !isWin. */}
+        {(function() {
+          var posterWins = isOwn ? isWin : !isWin;
+          return [
+            {
+              name: pName,
+              isWinner: posterWins,
+              onClick: posterClickable ? goPoster : null,
+              scores:    (m.sets || []).map(function(s) { return s.you;  }),
+              oppScores: (m.sets || []).map(function(s) { return s.them; }),
+            },
+            {
+              name: m.oppName,
+              isWinner: !posterWins,
+              onClick: opponentClickable ? goOpponent : null,
+              scores:    (m.sets || []).map(function(s) { return s.them; }),
+              oppScores: (m.sets || []).map(function(s) { return s.you;  }),
+            },
+          ];
+        })().map(function(row, ri) {
+          return (
+            <div key={ri} style={{
+              display: "flex", alignItems: "center",
+              padding: "10px 14px",
+              borderTop: "1px solid " + t.border,
+              background: t.bgCard,
+            }}>
+              {/* Player name — clickable when that row is a real user */}
+              <div
+                onClick={row.onClick || undefined}
+                style={{
+                  flex: 1, minWidth: 0,
+                  fontSize: 14,
+                  fontWeight: row.isWinner ? 700 : 400,
+                  color: row.isWinner ? t.text : t.textSecondary,
+                  letterSpacing: row.isWinner ? "-0.2px" : "0",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  paddingRight: 8,
+                  cursor: row.onClick ? "pointer" : "default",
+                }}>{row.name}</div>
+
+              {/* Set scores */}
+              {row.scores.map(function(score, i) {
+                var opp = row.oppScores[i];
+                var wonSet = (score !== "" && score !== undefined && opp !== "" && opp !== undefined)
+                  ? Number(score) > Number(opp) : false;
+                return (
+                  <div key={i} style={{
+                    width: 28, textAlign: "center",
+                    fontSize: 18, fontWeight: wonSet ? 800 : 400,
+                    color: wonSet ? t.text : t.textTertiary,
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                  }}>
+                    {score !== undefined && score !== "" ? score : "–"}
+                  </div>
+                );
+              })}
+
+              {/* Winner indicator ◀ */}
+              <div style={{ width: 22, textAlign: "center" }}>
+                {row.isWinner && (
+                  <span style={{ fontSize: 10, color: t.green, fontWeight: 700 }}>◀</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ── PENDING: submitter view ───────────────────────────────────────── */}
@@ -190,7 +294,10 @@ function FeedCard({
       {isOpponentView && !demo && (
         <div style={{ borderTop: "1px solid " + t.border, padding: "12px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <div style={{ fontSize: 12, color: t.textSecondary, width: "100%", marginBottom: 6, fontWeight: 500 }}>{pName} logged this match — does it look right?</div>
-          <button onClick={function() { confirmOpponentMatch(m); }}
+          <button onClick={async function() {
+              var res = await confirmOpponentMatch(m);
+              if (res && res.error) window.alert(res.error);
+            }}
             style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
             onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
             ✓ Confirm
@@ -243,7 +350,10 @@ function FeedCard({
             <div style={{ fontSize: 11, color: t.red, marginBottom: 8, fontWeight: 500 }}>Final round reached — accept or void.</div>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={function() { acceptCorrection(m); }}
+            <button onClick={async function() {
+                var res = await acceptCorrection(m);
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "opacity 0.15s" }}
               onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
               Accept
@@ -254,7 +364,11 @@ function FeedCard({
                 Counter-propose
               </button>
             )}
-            <button onClick={function() { if (window.confirm("Void this match? This cannot be undone.")) voidMatchAction(m, "mutual_void"); }}
+            <button onClick={async function() {
+                if (!window.confirm("Void this match? This cannot be undone.")) return;
+                var res = await voidMatchAction(m, "mutual_void");
+                if (res && res.error) window.alert(res.error);
+              }}
               style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1px solid " + t.red + "44", background: t.redSubtle, color: t.red, fontSize: 13, fontWeight: 600, minWidth: 80 }}>
               Void
             </button>
@@ -307,11 +421,19 @@ function FeedCard({
           <button
             onClick={async function() {
               if (!authUser) return;
+              var prevLiked = liked;
               var nowLiked = !liked;
+              // Optimistic update
               setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = nowLiked; return n; });
               setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? 1 : -1)); return n; });
-              if (nowLiked) { await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
-              else { await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+              var res;
+              if (nowLiked) { res = await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
+              else { res = await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+              // Rollback on failure so the heart + count don't lie
+              if (res && res.error) {
+                setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = prevLiked; return n; });
+                setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
+              }
             }}
             style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>
             <span style={{ fontSize: 14 }}>👍</span>{liked ? "Liked" : "Like"}{likeCount > 0 ? " · " + likeCount : ""}
@@ -369,6 +491,7 @@ export default function HomeTab({
   setDisputeModal, setDisputeDraft,
   deleteMatch, removeTaggedMatch,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
+  openProfile,
 }) {
   var DEMO_FEED = [
     { id: "demo-1", oppName: "Alex Chen",     tournName: "Summer Open",       date: "Today",     sets: [{ you: 6, them: 3 }, { you: 6, them: 4 }], result: "win",  playerName: "Jordan Smith", playerAvatar: "JS", isOwn: false, status: "confirmed" },
@@ -381,6 +504,7 @@ export default function HomeTab({
     setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
     setDisputeModal, setDisputeDraft,
     confirmOpponentMatch, acceptCorrection, voidMatchAction,
+    openProfile,
   };
 
   function openLogMatch() {
@@ -437,7 +561,7 @@ export default function HomeTab({
 
   // ── Authenticated feed ─────────────────────────────────────────────────────
   return (
-    <div>
+    <div style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
       {/* Page header */}
       <div style={{ padding: "28px 20px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18, maxWidth: 720 }}>
         <div>
