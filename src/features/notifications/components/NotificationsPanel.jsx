@@ -168,6 +168,13 @@ function NotifRow({
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
+  function goChallenges(e) {
+    if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "challenges" });
+    navigate("/people/challenges");
+    setShowNotifications(false);
+    if (!n.read) onRead(n.id);
+  }
 
   // Swipe hint: show a red strip behind the row when swiped
   var swipeProgress = Math.min(Math.abs(swipeX) / 80, 1);
@@ -379,6 +386,34 @@ function NotifRow({
           {/* request_accepted — route to the accepter's profile */}
           {n.type === "request_accepted" && n.from_user_id && (
             ctaButton(t, t.accent, true, "View profile →", goProfile)
+          )}
+
+          {/* Module 4: challenge notifications all land in the Challenges
+              sub-tab where the right action lives. challenge_received is
+              "action" so it gets primary styling. */}
+          {n.type === "challenge_received" && (
+            <button
+              onClick={function (e) {
+                e.stopPropagation();
+                if (!n.read) onRead(n.id);
+                goChallenges(e);
+              }}
+              style={{
+                display: "inline-block", marginTop: 8,
+                padding: "5px 14px", borderRadius: 6,
+                border: "none", background: t.accent, color: "#fff",
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+                transition: "opacity 0.13s", letterSpacing: "0.01em",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >Open challenge →</button>
+          )}
+          {n.type === "challenge_accepted" && (
+            ctaButton(t, t.green, true, "Log result →", goChallenges)
+          )}
+          {(n.type === "challenge_declined" || n.type === "challenge_expired") && (
+            ctaButton(t, t.textSecondary, false, "View challenges →", goChallenges)
           )}
         </div>
 

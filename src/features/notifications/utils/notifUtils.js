@@ -11,6 +11,8 @@ var ACTION_TYPES = new Set([
   "match_reminder",
   "friend_request",
   "message_request",
+  // Module 4: incoming challenge needs a yes/no response.
+  "challenge_received",
 ]);
 
 var IMPORTANT_TYPES = new Set([
@@ -19,6 +21,10 @@ var IMPORTANT_TYPES = new Set([
   "match_confirmed",
   "match_voided",
   "match_expired",
+  // Module 4: outcomes of a challenge you sent.
+  "challenge_accepted",
+  "challenge_declined",
+  "challenge_expired",
 ]);
 
 export function getNotifType(n) {
@@ -53,6 +59,10 @@ export function getNotifLabel(n) {
     case "match_reminder":             return "A pending match is expiring soon — check your feed.";
     case "like":                       return name + " liked your match.";
     case "comment":                    return name + " commented on your match.";
+    case "challenge_received":         return name + " challenged you to a match.";
+    case "challenge_accepted":         return name + " accepted your challenge — log the result when you've played.";
+    case "challenge_declined":         return name + " declined your challenge.";
+    case "challenge_expired":          return "Your challenge to " + name + " expired without a response.";
     default:                           return "New notification.";
   }
 }
@@ -89,6 +99,11 @@ var TYPE_URGENCY_BONUS = {
   match_confirmed:            50,
   match_voided:               40,
   match_expired:              30,
+  // Module 4
+  challenge_received:        300,  // ranked just below match_tag — needs response
+  challenge_accepted:         70,  // positive, prompts log-result
+  challenge_declined:         20,
+  challenge_expired:          15,
 };
 
 export function computePriorityScore(n) {

@@ -24,6 +24,11 @@ export function useMatchHistory(opts){
   var sendNotification=(opts&&opts.sendNotification)||null;
   var bumpStats=(opts&&opts.bumpStats)||null;
   var refreshProfile=(opts&&opts.refreshProfile)||null;
+  // Module 4: optional callback fired after a successful match insert when
+  // the match was logged via the "Log result" path on an accepted challenge.
+  // Receives (challengeId, matchId). Used by App.jsx to flip the challenge
+  // row to 'completed' and emit rematch_converted_to_match.
+  var onMatchLoggedFromChallenge=(opts&&opts.onMatchLoggedFromChallenge)||null;
 
   var [history,setHistory]=useState([]);
   var [feedLikes,setFeedLikes]=useState({});
@@ -202,6 +207,11 @@ export function useMatchHistory(opts){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
     track("match_logged",{match_id:matchId,is_ranked:isVerified,has_opponent_linked:!!opponentId,sets:clean.length,result:scoreDraft.result});
+    // Module 4: convert accepted challenge → completed when this match was
+    // logged via the "Log result" CTA on an accepted challenge.
+    if(scoreModal.sourceChallengeId && onMatchLoggedFromChallenge){
+      onMatchLoggedFromChallenge(scoreModal.sourceChallengeId, matchId);
+    }
     return {error:null, matchId, status};
   }
 

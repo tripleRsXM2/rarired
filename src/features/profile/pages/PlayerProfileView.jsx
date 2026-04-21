@@ -19,7 +19,7 @@ import {
 import { track } from "../../../lib/analytics.js";
 
 export default function PlayerProfileView({
-  t, authUser, userId, viewerHistory, onBack,
+  t, authUser, userId, viewerHistory, onBack, openChallenge,
 }) {
   var state = usePlayerProfile(userId);
   var profile = state.profile;
@@ -117,6 +117,27 @@ export default function PlayerProfileView({
           }}>
             <span>✓</span>
             <span>{confirmedBadge}</span>
+          </div>
+        )}
+
+        {/* Module 4: primary action on a public profile is "Challenge".
+            Hidden when the viewer isn't signed in or is somehow viewing
+            themselves (route should redirect, but guard anyway). */}
+        {openChallenge && authUser && profile.id !== authUser.id && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={function () { openChallenge(profile, "profile"); }}
+              style={{
+                flex: 1, padding: "12px", borderRadius: 10, border: "none",
+                background: t.accent, color: "#fff",
+                fontSize: 14, fontWeight: 700, letterSpacing: "-0.1px",
+                cursor: "pointer", transition: "opacity 0.15s",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >
+              Challenge {profile.name ? profile.name.split(" ")[0] : ""}
+            </button>
           </div>
         )}
 
