@@ -198,5 +198,52 @@ Deferred to Module 2:
 - DM header, notification sender, leaderboard avatar — none navigate to profile yet. Plan: sweep these entry points in Module 2 (discovery/follow pass) and Module 3 (notifications deep-link pass).
 - No "Challenge" / "Rematch" CTA on the public profile yet — deferred to Module 4.
 
+## Module 2 — Player discovery + follow graph
+
+**Objective:** turn the app from a solo log into a networked one. Users can discover real players, follow them, and see a Friends-filtered feed. No schema changes.
+
+**Design decision — follow graph = `friend_requests`:**
+- Tennis is a two-player domain; a match *requires* mutual acknowledgement. The existing `friend_requests` system with `pending/accepted/declined` already models that.
+- Reusing it means no new table, no new RLS, no new realtime channel, no duplicated state. The social graph is already there; Module 2 just exposes more of it.
+- Semantically: accepted = mutual follow. Pending = one-direction follow request. Matches Strava more than Twitter — aligned with the domain.
+- Documented trade-off: no asymmetric "follow without friendship" is possible with this model. If the product ever needs "follow pro player X without being their friend", that's a Module 5+ schema change.
+
+**Files changed:**
+- `src/features/people/services/socialService.js` — added `fetchSameSkillPlayers(userId, skill, excludeIds, limit)` for the skill-level discovery section.
+- `src/features/people/hooks/useSocialGraph.js` —
+  - New state: `playedOpponents`, `sameSkillPlayers`.
+  - `loadSocial` also fetches same-skill players and excludes suburb-suggested IDs so a player doesn't appear in two sections. Pending request IDs added to the exclude list.
+  - New method `loadPlayedOpponents(history)` — extracts unique opponent/submitter IDs from confirmed history, filters out friends/pending/blocked/self, fetches profiles, stores in `playedOpponents`.
+  - `resetSocial` clears the new state.
+- `src/app/App.jsx` — new effect calls `social.loadPlayedOpponents(matchHistory.history)` whenever history, friends, pending, or blocked change. Cheap (≤8 profile rows) and self-healing. Passes `openProfile`, `friends`, `playedOpponents`, `suggestedPlayers`, `sendFriendRequest`, `friendRelationLabel`, `socialLoading`, `onGoToDiscover` to HomeTab. Passes `playedOpponents`, `sameSkillPlayers`, `openProfile` to PeopleTab.
+- `src/features/people/pages/PeopleTab.jsx` —
+  - `PlayerCard` avatar + name area now clickable → profile.
+  - Search dropdown rows clickable → profile (scoped to avatar+name area, not action buttons).
+  - Received-request and sent-request rows get clickable avatar/name.
+  - The `suggested` sub-tab is relabelled **Discover** and rebuilt as three stacked sections: *People you've played* (from history), *Players near you* (suburb), *Similar skill level* (same declared level). Each renders `PlayerCard` with follow actions. Empty state only when all three are empty.
+- `src/features/home/pages/HomeTab.jsx` —
+  - Friends filter pill is now functional. `friends`-only view filters history to matches where poster or opponent is in `friends`. New empty state encourages going to Discover.
+  - Old "Find players to follow · Coming soon" placeholder replaced with a **live mini-discovery widget**: up to 3 players (prefer played-before, fall back to suburb), each with clickable avatar/name → profile, inline Add/Pending/Friends pill, and a "See all" CTA that deep-links to the Discover tab.
+
+**Schema changes:** none.
+
+**Acceptance:**
+- ✅ User can search → open a result's profile → add them via the inline Add button.
+- ✅ Adding a friend moves them out of Discover automatically (effect re-runs).
+- ✅ Friends feed filter shows only matches involving friends.
+- ✅ Discover surface replaces the dead "coming soon" block on the feed.
+- ✅ People tab navigation to profiles finishes the Module 1 deferral — PlayerCard, request rows, and search results all route to `/profile/:userId`.
+- ✅ Build passes (715 kB, +6 kB from Module 1).
+- ✅ No new lint errors introduced.
+
+**Open risks / deferred:**
+- `profiles.suburb` exact-match is brittle ("Bondi" vs "Bondi Beach" won't match). Good enough for MVP; a normalised lookup or fuzzy match is a Module 6 polish item.
+- `fetchSameSkillPlayers` exact-string match on `skill`. Works today because skill levels are a small fixed enum.
+- Discovery widget on feed has no skeleton — briefly empty while `loadSocial` + `loadPlayedOpponents` resolve. Not worth a skeleton at this stage.
+- No relevance-scored sort yet. Order-by-query-limit is fine for MVP; blended played-recency + last_active scoring is a later polish item.
+- Friends filter doesn't persist across navigation. If usage warrants, persist to localStorage later.
+- DM header, leaderboard avatar, notification sender avatar — still not wired to profiles. Deferred to Module 3 (notifications sweep) and Module 6 (polish sweep).
+
+
 
 
