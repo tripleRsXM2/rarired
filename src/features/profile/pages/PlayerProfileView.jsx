@@ -9,18 +9,30 @@
 // no match history for the subject (RLS-restricted). Those surfaces are for
 // later modules when we have an RPC for public match data.
 
+import { useEffect } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
 import {
   computeHeadToHead,
   formatConfirmedBadge,
 } from "../utils/profileStats.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function PlayerProfileView({
   t, authUser, userId, viewerHistory, onBack,
 }) {
   var state = usePlayerProfile(userId);
   var profile = state.profile;
+
+  // Module 3.5: fire once per public-profile view, once the real profile has
+  // loaded. Skeleton / error / not-found states don't count.
+  useEffect(function () {
+    if (!profile || !profile.id) return;
+    track("profile_viewed", {
+      target_user_id: profile.id,
+      is_self: false,
+    });
+  }, [profile && profile.id]);
 
   // Loading / error / not-found shells — all styled the same as the real
   // profile hero so the layout doesn't jump when the fetch resolves.

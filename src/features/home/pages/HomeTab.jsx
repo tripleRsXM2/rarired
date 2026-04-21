@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
+import { track } from "../../../lib/analytics.js";
 
 var REASON_LABELS = {
   wrong_score:   "Score is wrong",
@@ -453,6 +454,7 @@ function FeedCard({
                     match_id:     m.id,
                   });
                 });
+                track("feed_like", { match_id: m.id, participants_notified: toNotify.length });
               }
             }}
             style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>

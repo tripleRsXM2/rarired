@@ -90,34 +90,36 @@ These are the reasons a user opens the app on a day they didn't originally plan 
 
 ## Key product metrics tied to the loop
 
-These are the metrics we should measure once the analytics foundation (Module 3.5) lands. Hypotheses first — numbers to validate them later.
+Every metric here is now **measurable via the `events` table** (Module 3.5). See `analytics-events.md` for the full event catalogue and sample queries.
 
 ### Activation
-- **Time from signup to first match logged** (target: <7 days median).
-- **% of signups that log a match within 14 days** (target: >50%).
-- **% of first matches that are ranked (linked opponent)** vs casual (target: >30% ranked).
-- **% of ranked matches confirmed within 72h** (target: >70%).
+- **Time from signup to first match logged** (target: <7 days median) — `auth_signup_completed` → `match_logged`.
+- **% of signups that log a match within 14 days** (target: >50%) — same events.
+- **% of first matches that are ranked (linked opponent)** vs casual (target: >30% ranked) — `match_logged` filtered by `props.is_ranked`.
+- **% of ranked matches confirmed within 72h** (target: >70%) — `match_logged(is_ranked=true)` → `match_confirmed` delta.
 
 ### Retention
-- **% of users who return on Day 1 / Day 7 / Day 30** after signup.
-- **Session frequency** — sessions per active user per week.
-- **Return-after-notification rate** — % of notifications that result in an app open within 24h of delivery.
+- **% of users who return on Day 1 / Day 7 / Day 30** after signup — cohort on `auth_signup_completed.user_id`, presence of `app_open` in the window.
+- **Session frequency** — distinct `session_id` per `user_id` per week.
+- **Return-after-notification rate** — % of notifications that result in an `app_open` within 24h of delivery — join `notifications.created_at` against `app_open` event timestamps.
+- **Notification tap-through rate by type** — `notification_opened` grouped by `props.type`, divided by notifications created in the same window.
 
 ### Loop health
-- **Median time from match-log → confirmed** (target: <24h for ranked).
-- **Dispute rate** — % of ranked matches that enter `disputed` or `pending_reconfirmation`. (Too high = trust issue; too low might mean confirmations are rubber-stamped.)
-- **Expiry rate** — % of pending matches that hit 72h without confirmation (target: <20%).
-- **Repeat-opponent rate** — % of confirmed matches where both players have played each other before (proxy for rivalry / density).
+- **Median time from match-log → confirmed** (target: <24h for ranked) — `match_logged` → `match_confirmed` delta.
+- **Dispute rate** — % of ranked matches that fire `match_disputed`. (Too high = trust issue; too low = rubber-stamp confirmations.)
+- **Expiry rate** — % of `match_logged(is_ranked=true)` that never see a `match_confirmed` within 72h (target: <20%).
+- **Repeat-opponent rate** — derived from `match_history` directly (confirmed matches where both players have played each other before). No event needed — this is a query on the match table.
 
 ### Density
-- **Ratio of ranked matches to total matches** (up-and-to-the-right over time).
-- **% of feed cards that belong to a friend** (vs yourself-only feed).
-- **Friends per active user** (distribution, not mean).
+- **Ratio of ranked matches to total matches** — `match_logged` grouped by `props.is_ranked`.
+- **% of feed cards that belong to a friend** — derived from `match_history` joined against `friend_requests`. No event needed.
+- **Friends per active user** (distribution, not mean) — derived from `friend_requests`.
+- **Discovery → follow conversion** — users who fire `discover_tab_viewed` then fire `friend_request_sent` in the same session.
 
 ### Social reward
-- **Average likes per confirmed match** among friends.
-- **Average comments per confirmed match.**
-- **Tap-through rate on `like` / `comment` / `match_confirmed` notifications.**
+- **Average likes per confirmed match** among friends — derived from `feed_likes` (or `feed_like` events).
+- **Average comments per confirmed match** — `feed_comment` events grouped by `props.match_id`.
+- **Tap-through rate on `like` / `comment` / `match_confirmed` notifications** — `notification_opened` filtered by `props.type`.
 
 ## Open Questions
 
@@ -138,4 +140,5 @@ These are the metrics we should measure once the analytics foundation (Module 3.
 - Any scheduled content (drip notifications on a timer rather than event-driven).
 
 ## Last Updated By Module
-- v0 — initialised from shipped state at end of Module 3. Metrics section awaits Module 3.5 (analytics foundation) to become real numbers instead of hypotheses.
+- v0 — initialised from shipped state at end of Module 3.
+- v1 — Module 3.5 (analytics foundation). Every metric in this doc is now mapped to a concrete event or a direct table query. See `analytics-events.md`.

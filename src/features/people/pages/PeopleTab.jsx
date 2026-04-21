@@ -4,6 +4,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";
+import { track } from "../../../lib/analytics.js";
 
 function fmtMsgTime(iso){
   if(!iso)return"";
@@ -127,6 +128,18 @@ export default function PeopleTab({
       messagesEndRef.current.scrollIntoView({behavior:"smooth"});
     }
   },[dms&&dms.threadMessages&&dms.threadMessages.length, dms&&dms.activeConv]);
+
+  // Module 3.5: Discover tab view. Section counts are snapshotted at view time
+  // so we can measure whether empty-states correlate with drop-off.
+  useEffect(function(){
+    if(peopleTab!=="suggested"||!authUser) return;
+    track("discover_tab_viewed",{
+      played_opponents_count: (playedOpponents||[]).length,
+      suburb_suggestions_count: (suggestedPlayers||[]).length,
+      skill_suggestions_count: (sameSkillPlayers||[]).length,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[peopleTab,authUser&&authUser.id]);
 
   if(!authUser) return (
     <div style={{maxWidth:680,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
