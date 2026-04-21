@@ -18,7 +18,18 @@ function FeedCard({
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
+  openProfile,
 }) {
+  // Identity resolvers — who is the "poster" and who is the "opponent" from
+  // the viewer's POV, so the right user IDs get wired into the profile links.
+  // For tagged matches, the poster (pName) is the submitter; for own matches
+  // the poster is the viewer themselves.
+  var posterUserId   = m.isTagged ? (m.submitterId || null) : (authUser && authUser.id) || null;
+  var opponentUserId = m.isTagged ? (authUser && authUser.id) || null : (m.opponent_id || null);
+  function goPoster()   { if (openProfile && posterUserId)   openProfile(posterUserId); }
+  function goOpponent() { if (openProfile && opponentUserId) openProfile(opponentUserId); }
+  var posterClickable   = !demo && !!posterUserId   && (!authUser || posterUserId   !== authUser.id) && !!openProfile;
+  var opponentClickable = !demo && !!opponentUserId && (!authUser || opponentUserId !== authUser.id) && !!openProfile;
   var isWin      = m.result === "win";
   var scoreStr   = (m.sets || []).map(function(s) { return s.you + "-" + s.them; }).join("  ");
   var liked      = !!feedLikes[m.id];
@@ -97,18 +108,25 @@ function FeedCard({
     >
       {/* ── Card header ──────────────────────────────────────────────────── */}
       <div style={{ padding: "14px 16px 12px", display: "flex", gap: 10, alignItems: "center" }}>
-        {/* Avatar */}
-        <div style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: avColor(pName),
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
-        }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
+        {/* Avatar — clickable when the poster is another real user */}
+        <div
+          onClick={posterClickable ? goPoster : undefined}
+          style={{
+            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            background: avColor(pName),
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
+            cursor: posterClickable ? "pointer" : "default",
+          }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
 
         {/* Name + date */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.2px" }}>
-            {pName}
+            <span
+              onClick={posterClickable ? goPoster : undefined}
+              style={{ cursor: posterClickable ? "pointer" : "default" }}>
+              {pName}
+            </span>
             {isOwn && <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 400 }}> · You</span>}
           </div>
           <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 1, letterSpacing: "0.01em" }}>{m.date}</div>
@@ -194,12 +212,14 @@ function FeedCard({
             {
               name: pName,
               isWinner: posterWins,
+              onClick: posterClickable ? goPoster : null,
               scores:    (m.sets || []).map(function(s) { return s.you;  }),
               oppScores: (m.sets || []).map(function(s) { return s.them; }),
             },
             {
               name: m.oppName,
               isWinner: !posterWins,
+              onClick: opponentClickable ? goOpponent : null,
               scores:    (m.sets || []).map(function(s) { return s.them; }),
               oppScores: (m.sets || []).map(function(s) { return s.you;  }),
             },
@@ -212,16 +232,19 @@ function FeedCard({
               borderTop: "1px solid " + t.border,
               background: t.bgCard,
             }}>
-              {/* Player name */}
-              <div style={{
-                flex: 1, minWidth: 0,
-                fontSize: 14,
-                fontWeight: row.isWinner ? 700 : 400,
-                color: row.isWinner ? t.text : t.textSecondary,
-                letterSpacing: row.isWinner ? "-0.2px" : "0",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                paddingRight: 8,
-              }}>{row.name}</div>
+              {/* Player name — clickable when that row is a real user */}
+              <div
+                onClick={row.onClick || undefined}
+                style={{
+                  flex: 1, minWidth: 0,
+                  fontSize: 14,
+                  fontWeight: row.isWinner ? 700 : 400,
+                  color: row.isWinner ? t.text : t.textSecondary,
+                  letterSpacing: row.isWinner ? "-0.2px" : "0",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  paddingRight: 8,
+                  cursor: row.onClick ? "pointer" : "default",
+                }}>{row.name}</div>
 
               {/* Set scores */}
               {row.scores.map(function(score, i) {
@@ -468,6 +491,7 @@ export default function HomeTab({
   setDisputeModal, setDisputeDraft,
   deleteMatch, removeTaggedMatch,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
+  openProfile,
 }) {
   var DEMO_FEED = [
     { id: "demo-1", oppName: "Alex Chen",     tournName: "Summer Open",       date: "Today",     sets: [{ you: 6, them: 3 }, { you: 6, them: 4 }], result: "win",  playerName: "Jordan Smith", playerAvatar: "JS", isOwn: false, status: "confirmed" },
@@ -480,6 +504,7 @@ export default function HomeTab({
     setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
     setDisputeModal, setDisputeDraft,
     confirmOpponentMatch, acceptCorrection, voidMatchAction,
+    openProfile,
   };
 
   function openLogMatch() {

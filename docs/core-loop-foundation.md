@@ -139,4 +139,64 @@ No SQL migrations in Module 0.
 
 ---
 
-*(Remaining modules 1–6 filled in as they're built.)*
+## Module 1 — Meaningful player profiles
+
+**Objective:** turn `/profile` from a self-view-only screen into a real identity surface that any user can view for any other user. Trust signals and head-to-head history are first-class. No schema changes.
+
+**Audit findings relevant to Module 1:**
+- `profiles` table already has the core identity fields we need: `name, avatar, suburb, skill, style, bio, wins, losses, matches_played, ranking_points, streak_count, streak_type`. Stats are bumped by existing RPCs on confirm/accept.
+- `ProfileTab.jsx` is hardcoded to render the logged-in user's profile. There is no `/profile/:userId` route.
+- `fetchProfile(userId)` in `profileService.js` already returns `select('*')` — we can reuse it for any user. No RLS policy seen that restricts profile SELECT.
+- Feed cards, match history, leaderboards, DMs — none navigate to a player's profile. The whole app is identity-less from a viewing perspective.
+- The viewer's own `matchHistory.history` array is the source of truth for H2H against any subject. Viewer can compute H2H without needing to fetch the subject's matches (which would hit RLS).
+- Recent form for *another* user isn't available without an RPC. Scope decision: recent form shows only on the viewer's own profile in Module 1; public profile shows H2H + aggregate stats instead. Full public recent form is a Module 5 item.
+
+**Files touched:**
+
+New:
+- `src/features/profile/utils/profileStats.js` — pure helpers: `computeRecentForm`, `computeStreakFromMatches`, `computeMostPlayed`, `computeHeadToHead`.
+- `src/features/profile/hooks/usePlayerProfile.js` — loads a profile row by userId for the public-view flow.
+- `src/features/profile/pages/PlayerProfileView.jsx` — read-only public profile (hero, trust indicator, stats, H2H).
+
+Modified:
+- `src/app/App.jsx` — detect `/profile/<userId>` in pathParts; mount `PlayerProfileView` when viewing someone else, or redirect to `/profile` when viewing yourself. Add an `openProfile(userId)` helper and pass it down.
+- `src/features/home/pages/HomeTab.jsx` — make poster name/avatar and opponent name in the scoreboard row clickable → `openProfile`.
+- `src/features/profile/pages/ProfileTab.jsx` — add trust indicator ("✓ X confirmed matches"), recent form chips, most-played opponents row (own profile only).
+
+Deferred to Module 2:
+- People tab navigation — will be part of the discovery/follow overhaul.
+
+**Schema changes:** none.
+
+**Acceptance:**
+- Tapping any opponent/poster name in the feed opens that player's profile.
+- Public profile shows real stats + H2H against viewer + trust indicator.
+- Own profile shows everything public plus recent form and most-played opponents.
+- After a confirmed match, stats on both the viewer's own profile and the opponent's profile visibly update (on refresh).
+- Build passes.
+
+### Module 1 — delivered
+
+**Files changed / added:**
+- `src/features/profile/utils/profileStats.js` *(new)* — pure derivation helpers: `computeRecentForm`, `computeStreakFromMatches`, `computeMostPlayed`, `computeHeadToHead`, `formatConfirmedBadge`. All filter on `status === 'confirmed'` so the "verified identity first" principle is built into the math — disputed/voided/expired matches never contribute to any displayed stat.
+- `src/features/profile/hooks/usePlayerProfile.js` *(new)* — small hook that calls `fetchProfile(userId)` with loading/error/cancellation state for the public-view flow.
+- `src/features/profile/pages/PlayerProfileView.jsx` *(new)* — read-only public profile: hero with avatar, name, suburb, skill/style badges; trust indicator ("✓ N confirmed matches"); ranking card with streak; 4-stat grid (Matches / Wins / Losses / Win %); head-to-head vs viewer when they've played. Includes its own skeleton + empty + error states so layout doesn't jump.
+- `src/app/App.jsx` — detects `/profile/<userId>` in the path and mounts `PlayerProfileView` when viewing someone else; falls back to `ProfileTab` for own-profile view. Added `openProfile(userId)` helper that normalises the redirect when a player taps their own avatar.
+- `src/features/home/pages/HomeTab.jsx` — poster avatar, poster name, and both scoreboard player rows are now clickable and navigate to the corresponding player's profile. Carefully gated: only real linked users (with `opponent_id` / `submitterId`) are clickable; casual freetext opponents, own rows, and demo cards stay non-interactive.
+- `src/features/profile/pages/ProfileTab.jsx` — added trust badge in the hero, "Recent form" chip row (last 5 W/L), and "Most played" opponents row in Overview. Most-played chips are clickable when the opponent is a real user.
+
+**Schema changes:** none.
+
+**Verification:**
+- `npm run build` — ✅ passes (709 kB bundle, +12 kB for the new surfaces).
+- `npm run lint` — no new errors on any touched file. One pre-existing warning on `App.jsx` useEffect deps (unchanged from before). `HomeTab.jsx` has two pre-existing unused-vars errors (`commentModal`, `commentDraft`) — not introduced by this module.
+- Build log updated with audit findings and design decisions.
+
+**Open risks / deferred:**
+- Public profile doesn't show the subject's own match history because of RLS. Plan: add a `get_public_match_history(user_id, limit)` RPC in Module 5 so we can surface the subject's recent form + last-5 results on their public view too.
+- People tab navigation → profile is not wired yet — deferred to Module 2 which rebuilds discovery.
+- DM header, notification sender, leaderboard avatar — none navigate to profile yet. Plan: sweep these entry points in Module 2 (discovery/follow pass) and Module 3 (notifications deep-link pass).
+- No "Challenge" / "Rematch" CTA on the public profile yet — deferred to Module 4.
+
+
+

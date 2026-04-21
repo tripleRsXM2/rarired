@@ -25,6 +25,7 @@ import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
 import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
+import PlayerProfileView from "../features/profile/pages/PlayerProfileView.jsx";
 import AdminTab from "../features/admin/pages/AdminTab.jsx";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
@@ -51,10 +52,22 @@ export default function App(){
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
+  // /profile/<userId> → public profile view. Empty second segment or a match
+  // with the signed-in user's id falls back to the own-profile ProfileTab.
+  var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
+
   // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
   function setTab(x){
     if(x==="people") navigate("/people/friends");
     else navigate("/"+x);
+  }
+
+  // Open another player's profile. If it's the signed-in user, go to the
+  // own-profile tab instead so editing affordances remain available.
+  function openProfile(userId){
+    if(!userId) return;
+    if(auth.authUser&&userId===auth.authUser.id) navigate("/profile");
+    else navigate("/profile/"+userId);
   }
 
   // Redirect bare "/" to /home on first load.
@@ -340,6 +353,7 @@ export default function App(){
               confirmOpponentMatch={matchHistory.confirmOpponentMatch}
               acceptCorrection={matchHistory.acceptCorrection}
               voidMatchAction={matchHistory.voidMatchAction}
+              openProfile={openProfile}
             />
           )}
           {tab==="tournaments"&&(
@@ -373,12 +387,22 @@ export default function App(){
             dms={dms}
           />
         )}
-        {tab==="profile"&&(
+        {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
+          <PlayerProfileView
+            t={t}
+            authUser={auth.authUser}
+            userId={profilePathId}
+            viewerHistory={matchHistory.history}
+            onBack={function(){navigate(-1);}}
+          />
+        )}
+        {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(
           <ProfileTab
             t={t} authUser={auth.authUser} profile={currentUser.profile}
             history={matchHistory.history}
             profileTab={profileTab} setProfileTab={setProfileTab}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+            openProfile={openProfile}
           />
         )}
         {tab==="admin"&&(
