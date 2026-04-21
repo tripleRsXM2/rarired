@@ -25,6 +25,7 @@ Every arrow in this chain is currently shipped. Modules 0–3 hardened the chain
 2. **Discovery loop** — open People tab (Discover) → see played / near-you / same-skill suggestions → follow one → their future matches appear in friends feed → you engage. Grows graph density.
 3. **Dispute loop** (edge case but critical for trust) — submitter logs → opponent disputes with correction → submitter accepts or counters → resolution → stats fire. Without this loop reliable, the whole ranking trust story collapses.
 4. **Reminder loop** — pending match, <24h to expiry → reminder notification → opponent confirms → loop completes. Rescues matches from silently expiring.
+5. **Challenge loop** (Module 4) — viewer opens friend's profile or a confirmed match card → taps Challenge / Rematch → sends a `challenge_received` notification with optional time/venue/message → other party accepts/declines from notification or `/people/challenges` → on Accept the challenge sits in "Ready to play" → after IRL match, either party taps "Log result" to convert directly into the standard `match_logged → match_confirmed` flow with `tournName='Ranked'`. Closes the gap between "I want to play this person again" and the actual match cycle. The only coordination surface in the product — intentionally not chat, not a calendar.
 
 ### Activation path (new user)
 
@@ -73,6 +74,11 @@ These are the reasons a user opens the app on a day they didn't originally plan 
 | Comment on match | Inline preview, new row in feed_comments | `comment` to every match participant except commenter | No |
 | Add friend | Inline "Pending" state | `friend_request` to target | No |
 | Accept friend request | Both sides see each other as friends | `request_accepted` to sender | No |
+| Send challenge | Inline "Awaiting response" pill on `/people/challenges` Sent | `challenge_received` to target | No |
+| Accept challenge | Row moves to "Ready to play" for both sides | `challenge_accepted` to challenger | No |
+| Decline challenge | Row terminal, removed from challenger's pending list | `challenge_declined` to challenger | No |
+| Convert challenge → match | Standard ScoreModal opens prefilled (opponent linked, venue/court from challenge); challenge row flips to `completed` and links `match_id` | `match_tag` to opponent (existing path) | After opponent confirms — yes |
+| Auto-expire challenge (7d, pg_cron) | Row terminal, removed from challenger's pending list | `challenge_expired` to challenger | No |
 
 ## Design / Decision Principles
 
@@ -142,3 +148,4 @@ Every metric here is now **measurable via the `events` table** (Module 3.5). See
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3.
 - v1 — Module 3.5 (analytics foundation). Every metric in this doc is now mapped to a concrete event or a direct table query. See `analytics-events.md`.
+- v2 — Module 4 (challenge / rematch). New secondary loop + 6 new post-action rows. Challenge is now the only coordination surface; it explicitly converts intent into a logged match via the existing flow.

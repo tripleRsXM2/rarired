@@ -18,10 +18,10 @@ The product compass. What CourtSync is, who it serves, what we optimise for, and
 3. **Lightweight coordination** — just enough to line up another match (rematch, challenge). Not a booking platform.
 
 ### What we are explicitly NOT building
-- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows.
+- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. The challenge surface (Module 4) is intentionally just a notification + freetext venue / time / message — not a booking product.
 - **Venue operations.** Not a tool for clubs to manage their members or courts.
 - **Tournament operations.** The tournament surface we have is intentionally minimal; we're not competing with Matchtag / PlayByPoint on ladder ops.
-- **A generic chat app.** DMs exist to support rematch coordination and light banter between friends — they are not a messaging product on their own.
+- **A generic chat app.** DMs exist to support rematch coordination and light banter between friends — they are not a messaging product on their own. Challenges deliberately don't have a comment thread; if users want to negotiate, they DM.
 
 ## Design / Decision Principles
 
@@ -70,3 +70,4 @@ Every meaningful module ships with event tracking so we can learn from real beha
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3.
 - v1 — Module 3.5 (analytics foundation). Added the "how we instrument" note under the Mom Test lens.
+- v2 — Module 4 (challenge / rematch). Sharpened the "NOT building" section: challenge is the lightweight coordination surface, not a booking product or chat thread.

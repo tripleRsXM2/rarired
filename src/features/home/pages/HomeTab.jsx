@@ -20,7 +20,7 @@ function FeedCard({
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
   confirmOpponentMatch, acceptCorrection, voidMatchAction,
-  openProfile,
+  openProfile, openChallenge,
 }) {
   // Identity resolvers — who is the "poster" and who is the "opponent" from
   // the viewer's POV, so the right user IDs get wired into the profile links.
@@ -470,6 +470,22 @@ function FeedCard({
             style={{ flex: 1, padding: "10px 8px", border: "none", background: "transparent", color: t.textSecondary, fontSize: 11, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em" }}>
             <span style={{ fontSize: 14 }}>↗</span>Share
           </button>
+          {/* Module 4: Rematch CTA. Only when the opponent is a real linked
+              user (we can target them) and not the viewer. Borrows the share
+              column visually — keeps the row 4-up evenly spaced. */}
+          {openChallenge && opponentClickable && (
+            <button
+              onClick={function () {
+                openChallenge(
+                  { id: opponentUserId, name: m.oppName, suburb: m.venue || "", skill: "" },
+                  "rematch",
+                  m
+                );
+              }}
+              style={{ flex: 1, padding: "10px 8px", border: "none", borderLeft: "1px solid " + t.border, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", cursor: "pointer" }}>
+              <span style={{ fontSize: 14 }}>🔁</span>Rematch
+            </button>
+          )}
         </div>
       )}
       {demo && (
@@ -517,6 +533,7 @@ export default function HomeTab({
   friends, playedOpponents, suggestedPlayers,
   sendFriendRequest, friendRelationLabel, socialLoading,
   onGoToDiscover,
+  openChallenge,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
@@ -532,7 +549,7 @@ export default function HomeTab({
     setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
     setDisputeModal, setDisputeDraft,
     confirmOpponentMatch, acceptCorrection, voidMatchAction,
-    openProfile,
+    openProfile, openChallenge,
   };
 
   function openLogMatch() {

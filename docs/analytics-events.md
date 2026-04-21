@@ -40,14 +40,18 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `friend_request_accepted` | `acceptRequest` succeeds | `requester_user_id` |
 | `discover_tab_viewed` | Entering the `/people/suggested` sub-tab | `played_opponents_count`, `suburb_suggestions_count`, `skill_suggestions_count` |
 
-### Reserved (defined but not fired until their module ships)
+### Module 4 events (now fired)
 
-| Event | Planned module | Triggered by |
+| Event | Triggered by | Props |
 |---|---|---|
-| `challenge_sent` | Module 4 | New challenge/rematch created |
-| `challenge_accepted` | Module 4 | Challenge accepted |
-| `challenge_declined` | Module 4 | Challenge declined |
-| `rematch_converted_to_match` | Module 4 | Accepted challenge flows into match log |
+| `challenge_sent` | `useChallenges.sendChallenge` after insert | `target_user_id`, `has_proposed_time`, `has_venue`, `has_message`, `source` ("profile" \| "rematch") |
+| `challenge_accepted` | `useChallenges.acceptChallenge` after status update | `challenger_user_id`, `days_since_sent` |
+| `challenge_declined` | `useChallenges.declineChallenge` | `challenger_user_id` |
+| `rematch_converted_to_match` | `useMatchHistory.submitMatch` when `scoreModal.sourceChallengeId` is set | `challenge_id`, `match_id`, `days_since_accepted` |
+
+### Reserved (defined but not fired until later modules)
+
+*(Currently empty — all reserved events have been promoted by Module 4.)*
 
 ### Event → loop-stage mapping
 
@@ -64,6 +68,7 @@ This is why these events were chosen. Each is the proof-point for one stage of t
 | Social reward | `feed_like`, `feed_comment` |
 | Graph density | `friend_request_sent` → `friend_request_accepted` |
 | Discovery works | `discover_tab_viewed` → (same user then) `friend_request_sent` within session |
+| Challenge → match conversion | `challenge_sent` → `challenge_accepted` → `rematch_converted_to_match` → `match_logged` (linked via `props.challenge_id` / `props.match_id`) |
 
 ### Key metric queries (example SQL, run as service_role)
 
@@ -150,3 +155,4 @@ from logged l left join confirmed c using (mid);
 
 ## Last Updated By Module
 - v0 — introduced by Module 3.5 (analytics foundation) with 16 registered events covering the full core loop + 4 reserved for Module 4.
+- v1 — Module 4 promoted all 4 reserved events (`challenge_sent`, `challenge_accepted`, `challenge_declined`, `rematch_converted_to_match`) to fired with concrete props. Total registered events: 20 fired, 0 reserved.
