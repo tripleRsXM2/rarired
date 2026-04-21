@@ -237,18 +237,25 @@ export default function App(){
     notifications.setShowNotifications(false);
   }
 
-  // Module 3: fires a `comment` notification to the match submitter after a
-  // comment is inserted. Keeps the modal thin — all match lookup + perms live
-  // here on the app side.
+  // Module 3: fires a `comment` notification to every match participant
+  // except the commenter. A match has up to two real people (submitter +
+  // opponent) — either of them commenting should reach the other; a third
+  // party commenting reaches both. Keeps the modal thin — all lookup +
+  // participant logic lives here.
   function notifyMatchOwnerOfComment(matchId){
     if(!auth.authUser) return;
     var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
-    if(!match||!match.submitterId||match.submitterId===auth.authUser.id) return;
-    insertNotification({
-      user_id:      match.submitterId,
-      type:         "comment",
-      from_user_id: auth.authUser.id,
-      match_id:     match.id,
+    if(!match) return;
+    var toNotify=[match.submitterId, match.opponent_id].filter(function(uid,i,arr){
+      return uid && uid!==auth.authUser.id && arr.indexOf(uid)===i;
+    });
+    toNotify.forEach(function(uid){
+      insertNotification({
+        user_id:      uid,
+        type:         "comment",
+        from_user_id: auth.authUser.id,
+        match_id:     match.id,
+      });
     });
   }
 

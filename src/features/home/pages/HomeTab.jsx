@@ -436,15 +436,22 @@ function FeedCard({
                 setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
                 return;
               }
-              // Module 3: fire `like` notification to the match submitter on
-              // first like (not on unlike, not when liking your own match).
+              // Module 3: notify every match participant except the liker.
+              // A match has up to two real people — submitter and opponent.
+              // Either of them reacting to the match should reach the other;
+              // a third-party liker reaches both. Unlike doesn't re-notify.
               // Fire-and-forget so the button stays snappy.
-              if (nowLiked && m.submitterId && m.submitterId !== authUser.id) {
-                supabase.from("notifications").insert({
-                  user_id:      m.submitterId,
-                  type:         "like",
-                  from_user_id: authUser.id,
-                  match_id:     m.id,
+              if (nowLiked) {
+                var toNotify = [m.submitterId, m.opponent_id].filter(function (uid, i, arr) {
+                  return uid && uid !== authUser.id && arr.indexOf(uid) === i;
+                });
+                toNotify.forEach(function (uid) {
+                  supabase.from("notifications").insert({
+                    user_id:      uid,
+                    type:         "like",
+                    from_user_id: authUser.id,
+                    match_id:     m.id,
+                  });
                 });
               }
             }}
