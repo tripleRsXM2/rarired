@@ -1,0 +1,132 @@
+# Notification Taxonomy
+
+## Purpose
+The reference for every notification CourtSync fires. Keeps the tray coherent, stops duplicates, defines priority, and makes sure every type deep-links to the right object. Any new notification type must be added here in the same module that introduces it.
+
+## Current Product Rule
+
+### Categories (priority order)
+
+Every notification belongs to exactly one category. Category drives ordering and UI treatment.
+
+1. **action** — requires a response from the recipient. Red-accent bar, section header "Needs your attention". Not dismissable by swipe (can't silence unresolved disputes).
+2. **important** — meaningful update, no action required, still wants to be noticed. Section header "Updates". Dismissable.
+3. **activity** — passive social signal. Section header "Activity". Dismissable; likes + disputes get grouped.
+
+A fourth soft state — **demoted** — exists: when a dispute is later confirmed or voided, the old `match_disputed` / `match_correction_requested` / `match_counter_proposed` rows are reclassified as `important` (no longer action-required) via `applySmartDemotion`.
+
+### Event types
+
+| Type | Category | Trigger | Recipient | Deep-link |
+|---|---|---|---|---|
+| `match_tag` | action | Submitter logs a ranked match | Linked opponent | Inline Confirm/Decline buttons on the notif row |
+| `match_disputed` | action | Opponent disputes a pending match with a correction | Submitter | Opens `ActionReviewDrawer` (in-context, no page navigation) |
+| `match_correction_requested` | action | *(reserved — currently fired as `match_disputed`; kept for labelling)* | Submitter | Opens `ActionReviewDrawer` |
+| `match_counter_proposed` | action | Submitter counter-proposes a different correction | Opponent | Opens `ActionReviewDrawer` |
+| `match_reminder` | action | <24h left on a pending match (DB-gated via `match_history.reminder_sent_at`) | Opponent | `View in feed →` |
+| `friend_request` | action | Someone sends a friend request | Target | Inline Accept / Decline (or `View requests →` fallback) |
+| `message_request` | action | Non-friend sends a DM | Target | `View message →` opens conversation |
+| `request_accepted` | important | Target accepts your friend request | Original sender | `View profile →` — opens `/profile/:from_user_id` |
+| `message_request_accepted` | important | Target accepts your DM request | Original sender | `View message →` |
+| `match_confirmed` | important | Opponent confirms a pending match, OR either party accepts a correction | Other party | `View in feed →` + "Stats updated ✓" label |
+| `match_voided` | important | Either party voids during dispute, or auto-void on max_revisions / timeout | Other party | `View in feed →` (soft CTA) |
+| `match_expired` | important | pg_cron `expire_stale_matches()` flips a pending match to expired at 72h | Both parties | `View in feed →` |
+| `match_deleted` | activity | Submitter deletes a non-voided, non-expired match | Opponent | `View in feed →` |
+| `like` | activity | Someone hearts a match; fires to every participant except the liker | Match participants (minus liker) | `View match →` |
+| `comment` | activity | Someone comments on a match; fires to every participant except commenter | Match participants (minus commenter) | `View match →` |
+| `message` | activity | Someone sends a DM in an existing conversation | Other participant | `View message →` |
+
+### Priority scoring
+
+Live in `notifUtils.computePriorityScore(n)`. Final score drives sort order within the tray:
+
+```
+score = TYPE_BASE_SCORE[effectiveType]   (action 3000 / important 2000 / activity 1000)
+      + TYPE_URGENCY_BONUS[n.type]        (match_disputed 450 … match_expired 30)
+      + (n.read ? 0 : 80)                 (unread bump)
+      + recency_decay                     (0–200 over 7 days)
+```
+
+Smart demotion (`applySmartDemotion`) runs *before* scoring: if a match has been `confirmed` or `voided`, any lingering dispute-family notifications for the same match are marked `_demoted = true` and scored as `important` instead of `action`.
+
+### Read / unread / seen logic
+
+Three layers, deliberately:
+
+1. **Unread** — `notifications.read = false`. DB-backed. Survives reloads.
+2. **Seen** — session-scoped `seenIds: Set<notifId>` in `useNotifications`. Added when the tray *opens*. Cleared on mount/reload.
+3. **Read** — explicit DB flip to `read = true`. Happens when:
+   - The user taps a single notification row.
+   - The user hits "Mark all read" (skips action-type items so unresolved disputes aren't silenced).
+   - The tray opens — **non-action** items auto-flip to read on the server (so they don't re-badge on reload), but action items stay unread until resolved.
+
+Badge count = `count(n: !n.read && !seenIds.has(n.id))`. The `seenIds` bit is why opening the tray drops the badge to 0 for action items even though they remain unread in the DB.
+
+### Grouping (anti-chaos)
+
+`groupNotifications(notifications)` in `notifUtils.js` produces display items of three kinds:
+
+1. **single** — one notification, one row.
+2. **thread** — multiple dispute-family rows for the same `match_id`. Highest-priority item is the primary, the rest become context chips below.
+3. **like_group** — multiple `like` notifications on the same match. Stacked avatars, single row ("A and 3 others liked your match").
+
+Rules:
+- **Action-required notifications are never hidden** inside a thread. They always appear as the primary of their thread or as a standalone single.
+- `match_tag` / `match_disputed` / `match_correction_requested` / `match_counter_proposed` / `match_voided` / `match_confirmed` all belong to the **dispute family** and group by `match_id`.
+- `like` groups by `match_id`. `comment` does not group currently (see open questions).
+
+### Deep-link destinations
+
+From Module 3 — `NotificationsPanel.NotifRow`:
+
+| Action | Helper |
+|---|---|
+| Open match in feed | `goFeed()` — reloads history, navigates `/home`, closes tray, marks read |
+| Open conversation | `goMessages()` — calls `openConvById(entity_id, from_user_id)`, navigates `/people/messages` |
+| Open sender's profile | `goProfile()` — calls `openProfile(from_user_id)`, navigates `/profile/:id` |
+| Open in-context review drawer | `onReviewMatch(n)` — mounts `ActionReviewDrawer`, no navigation |
+
+Sender avatar on every tray row is itself a tap target → sender's profile.
+
+### Copy principles
+
+- **Name the actor.** "Mikey sent you a friend request." not "You have a new request."
+- **State the action, not the UI affordance.** "Confirm or dispute" not "Tap to open dispute modal."
+- **Past tense for completed events.** "Mikey confirmed your match result." not "Mikey is confirming…"
+- **Present tense + urgency for action required.** "Response needed." "Review needed."
+- **Short.** One sentence. If you need two, you're probably trying to encode context that belongs in the deep-link target.
+- **Avoid UI-internal jargon.** Users don't know what `pending_reconfirmation` means. Say "counter-proposed a correction."
+- **No emoji in the label itself.** The section header and accent handle tone.
+- All labels centralised in `notifUtils.getNotifLabel(n)`. Keep it there.
+
+## Design / Decision Principles
+
+1. **One event, one notification, one recipient.** If it fires twice, it's a bug.
+2. **Never send yourself a notification.** All insertion sites filter `from_user_id === user_id` — if this is missed, the tray becomes spam.
+3. **Action-category is sacred.** Nothing that doesn't genuinely require user action goes into `action`. No "celebrate your 10th match!" style noise; that's `activity`.
+4. **Deep-link to the object, not a list.** Every notification resolves to one specific match, profile, or conversation. Tray + "View in feed" is the fallback when there's no better target.
+5. **Batching before silencing.** A dispute thread of 4 rows should collapse to 1 primary + 3 context chips, not 4 rows and not 1 row with 3 hidden. Silent suppression breaks the "visible re-entry" contract.
+6. **Server is the source of truth for `read`; client handles `seen`.** This is why opening the tray can instantly clear the badge even before the DB write completes.
+
+## Open Questions
+
+- **Comment grouping.** Multiple comments on the same match currently show as separate `activity` rows. Should they collapse the way `like` does? Probably yes. Deferred to Module 6 polish.
+- **Rapid like/unlike dedupe.** A user spamming like → unlike → like fires a fresh `like` notification each time. A dedupe RPC (like the existing `upsert_message_notification`) would help. Deferred.
+- **`match_correction_requested` vs `match_disputed`.** Currently we only ever fire `match_disputed` on the initial dispute. The `match_correction_requested` type is defined and labelled but unused. Either retire it or split the two (e.g. dispute = "I didn't play" flavour, correction_requested = "the score was wrong"). Decide before Module 5.
+- **Notification settings.** No per-type mute / DND UI today. Unclear whether users will ask for it before we have scale.
+- **Email / push channel.** Everything lives in the in-app tray. When do we add email digests? Native push? Probably Module 7+.
+- **Auto-read action items on dismissal.** Currently action items that get resolved elsewhere (e.g. accepted via ActionReviewDrawer) are dismissed by `onDismissNotif`. If that path is missed, they linger. Worth a sweep.
+- **Reminder cadence.** One reminder at <24h. Should we send a second at <6h? Open.
+
+## Out of Scope (for now)
+
+- Per-user notification preferences UI.
+- Email / native push delivery channels.
+- Digest-style notifications ("this week your matches…").
+- Sound / haptic / badge tuning (no native layer yet).
+- Separate notification-retention policies (e.g., auto-delete activity older than 30 days).
+- Admin-issued system notifications.
+- Friend-of-friend / reshare style notifications.
+
+## Last Updated By Module
+- v0 — initialised from shipped state at end of Module 3. Includes Module 3's deep-link + fire-gap work (like/comment fire to both participants, `match_expired` live, sender avatar clickable).
