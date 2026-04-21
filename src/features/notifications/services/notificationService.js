@@ -13,6 +13,13 @@ export function insertNotification(payload){
 export function deleteNotification(id){
   return supabase.from('notifications').delete().eq('id',id);
 }
+export function markNotificationRead(id){
+  return supabase.from('notifications').update({read:true}).eq('id',id);
+}
+export function markNotificationsReadByIds(ids){
+  if(!ids||!ids.length)return Promise.resolve({data:null,error:null});
+  return supabase.from('notifications').update({read:true}).in('id',ids);
+}
 
 // Upsert-style message notification: one per conversation per recipient.
 // Insert only — relies on the upsert_message_notification security-definer

@@ -38,6 +38,30 @@ export function useMatchHistory(opts){
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
     var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true);});
     var normalized=ownNorm.concat(oppNorm).sort(function(a,b){return b.date<a.date?-1:1;});
+
+    // ── Enrich tagged matches with submitter names ──────────────────────────
+    // For isTagged=true rows, m.opp_name is the current user's own name
+    // (it's what the submitter typed for their opponent). The real "opponent"
+    // from the tagged user's view is the submitter (m.submitterId / m.user_id).
+    var taggedIds=[...new Set(normalized
+      .filter(function(m){return m.isTagged&&m.submitterId;})
+      .map(function(m){return m.submitterId;})
+    )];
+    if(taggedIds.length){
+      var spr=await fetchProfilesByIds(taggedIds,'id,name,avatar');
+      var submitterMap={};
+      (spr.data||[]).forEach(function(p){submitterMap[p.id]=p;});
+      normalized=normalized.map(function(m){
+        if(!m.isTagged||!m.submitterId)return m;
+        var sp=submitterMap[m.submitterId];
+        if(!sp)return m;
+        // Only set friendName — oppName must stay as m.opp_name (the current user's
+        // own name from the submitter's perspective), which is used for the scoreboard
+        // opponent row. Overwriting oppName caused both rows to show the submitter name.
+        return Object.assign({},m,{friendName:sp.name||m.friendName});
+      });
+    }
+
     var matchIds=normalized.map(function(m){return m.id;});
     setHistory(normalized);
     // Client-side reminder: notify opponent when <24h left on pending match
@@ -76,6 +100,27 @@ export function useMatchHistory(opts){
     setHistory([]); setFeedLikes({}); setFeedLikeCounts({}); setFeedComments({});
   }
 
+  // Fetch a fresh single row from DB, normalize it, patch it into local history,
+  // and return the fresh normalized match. Used by openReviewDrawer in App.jsx
+  // to fix stale local state when a notification arrives before the history is
+  // reloaded (e.g. counter-proposal notification fires but currentProposal is
+  // still null in the cached match).
+  async function refreshSingleMatch(matchId, isTagged){
+    var r=await M.fetchMatchById(matchId);
+    if(!r.data) return null;
+    var fresh=normalizeMatch(r.data, !!isTagged);
+    // Re-enrich submitter name for tagged matches
+    if(isTagged && fresh.submitterId){
+      var spr=await fetchProfilesByIds([fresh.submitterId],'id,name,avatar');
+      var sp=(spr.data&&spr.data[0])||{};
+      if(sp.name) fresh=Object.assign({},fresh,{friendName:sp.name});
+    }
+    setHistory(function(prev){
+      return prev.map(function(m){ return String(m.id)===String(matchId)?fresh:m; });
+    });
+    return fresh;
+  }
+
   // Submit a new match result.
   // Verified → pending_confirmation. Casual → confirmed, no ELO impact.
   async function submitMatch(params){
@@ -90,7 +135,11 @@ export function useMatchHistory(opts){
     var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
     var isVerified=!!opponentId;
     var status=isVerified?'pending_confirmation':'confirmed';
-    var tournName=scoreModal.casual?'Casual Match':(scoreModal.tournName||'Casual Match');
+    // Casual flow: ranked when a real opponent is linked, casual otherwise.
+    // Tournament flow: always use the tournament's own name.
+    var tournName=scoreModal.casual
+      ?(isVerified?'Ranked':'Casual Match')
+      :(scoreModal.tournName||'Casual Match');
 
     var hash=null;
     if(isVerified) hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
@@ -321,7 +370,7 @@ export function useMatchHistory(opts){
     showOppDrop, setShowOppDrop,
     scoreModal, setScoreModal, scoreDraft, setScoreDraft,
     disputeModal, setDisputeModal, disputeDraft, setDisputeDraft,
-    loadHistory, resetHistory,
+    loadHistory, resetHistory, refreshSingleMatch,
     submitMatch, deleteMatch, resubmitMatch, removeTaggedMatch, applyAcceptedTagMatch,
     confirmOpponentMatch, disputeWithProposal, counterPropose, acceptCorrection, voidMatchAction,
   };

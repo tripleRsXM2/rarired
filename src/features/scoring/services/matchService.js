@@ -55,6 +55,9 @@ export function proposeCorrection(matchId, proposal, reasonCode, reasonDetail, n
     p_next_status: nextStatus,
   });
 }
+export function fetchMatchById(matchId){
+  return supabase.from('match_history').select('*').eq('id',matchId).single();
+}
 export function updateMatch(matchId, payload){
   return supabase.from('match_history').update(payload).eq('id',matchId);
 }

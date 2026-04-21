@@ -80,6 +80,16 @@ export default function Providers({ t, theme, children }){
       // ── Skeleton loader ───────────────────────────────────────────────────
       ".cs-skeleton{background:linear-gradient(90deg,"+t.bgTertiary+" 25%,"+t.border+" 50%,"+t.bgTertiary+" 75%);",
         "background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:6px}",
+
+      // ── Notification panel — responsive positioning ───────────────────────
+      // Mobile: dropdown below the bell button (top-right)
+      ".cs-notif-panel{position:fixed;top:58px;right:12px;width:calc(100vw - 24px);max-height:480px;",
+        "border-radius:14px;overflow:hidden;animation:pop .2s cubic-bezier(.34,2.27,.64,1) both}",
+      // Desktop ≥1024px: full-height slide-in from right edge
+      "@media(min-width:1024px){",
+        ".cs-notif-panel{top:0;right:0;left:auto;width:380px;height:100vh;max-height:100vh;",
+          "border-radius:0;border-left:1px solid "+t.border+";animation:slideInRight .26s cubic-bezier(.32,.72,0,1) both}",
+      "}",
     ].join("");
     document.head.appendChild(el);
     document.body.style.background=t.bg;

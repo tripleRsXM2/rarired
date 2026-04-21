@@ -138,37 +138,110 @@ function FeedCard({
         </div>
       </div>
 
-      {/* ── Match result block ────────────────────────────────────────────── */}
+      {/* ── Scoreboard ──────────────────────────────────────────────────── */}
       <div style={{
         margin: "0 12px 14px",
         borderRadius: 10,
-        border: "1px solid " + resultColor + "30",
-        background: isWin ? t.greenSubtle : t.redSubtle,
-        padding: "14px 16px",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        overflow: "hidden",
+        border: "1px solid " + resultColor + "40",
       }}>
-        <div>
-          <div style={{
-            fontSize: 10, fontWeight: 700, color: resultColor,
-            textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4,
-          }}>{isWin ? "Victory" : "Defeat"}</div>
-          <div style={{
-            fontSize: 20, fontWeight: 800, color: t.text,
-            letterSpacing: "-0.5px", lineHeight: 1.2,
-          }}>vs {m.oppName}</div>
-          {(m.venue || m.court) && (
-            <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 4 }}>
-              {[m.venue, m.court].filter(Boolean).join(" · ")}
+        {/* Scoreboard header: venue/tournament on left, set labels on right */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "6px 14px",
+          background: t.bgTertiary,
+          borderBottom: "1px solid " + t.border,
+        }}>
+          <span style={{
+            fontSize: 10, fontWeight: 600, color: t.textTertiary,
+            letterSpacing: "0.04em", textTransform: "uppercase",
+          }}>
+            {[m.venue, m.court].filter(Boolean).join(" · ") ||
+             (m.tournName && m.tournName !== "Casual Match" ? m.tournName : "Casual")}
+          </span>
+          {(m.sets || []).length > 0 && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {(m.sets || []).map(function(_, i) {
+                return (
+                  <div key={i} style={{
+                    width: 28, textAlign: "center",
+                    fontSize: 9, fontWeight: 700, color: t.textTertiary,
+                    letterSpacing: "0.04em",
+                  }}>S{i + 1}</div>
+                );
+              })}
+              <div style={{ width: 22 }} />
             </div>
           )}
         </div>
-        {scoreStr && (
-          <div style={{
-            fontSize: 26, fontWeight: 800, color: resultColor,
-            fontVariantNumeric: "tabular-nums", letterSpacing: "-1px",
-            lineHeight: 1, flexShrink: 0,
-          }}>{scoreStr}</div>
-        )}
+
+        {/* Player rows
+            For own matches (isOwn=true):  pName = viewer, isWin is direct.
+            For tagged matches (isOwn=false): pName = submitter, but isWin is
+            stored from the VIEWER's perspective (result inverted in normalizeMatch),
+            so the submitter's win = !isWin. */}
+        {(function() {
+          var posterWins = isOwn ? isWin : !isWin;
+          return [
+            {
+              name: pName,
+              isWinner: posterWins,
+              scores:    (m.sets || []).map(function(s) { return s.you;  }),
+              oppScores: (m.sets || []).map(function(s) { return s.them; }),
+            },
+            {
+              name: m.oppName,
+              isWinner: !posterWins,
+              scores:    (m.sets || []).map(function(s) { return s.them; }),
+              oppScores: (m.sets || []).map(function(s) { return s.you;  }),
+            },
+          ];
+        })().map(function(row, ri) {
+          return (
+            <div key={ri} style={{
+              display: "flex", alignItems: "center",
+              padding: "10px 14px",
+              borderTop: "1px solid " + t.border,
+              background: t.bgCard,
+            }}>
+              {/* Player name */}
+              <div style={{
+                flex: 1, minWidth: 0,
+                fontSize: 14,
+                fontWeight: row.isWinner ? 700 : 400,
+                color: row.isWinner ? t.text : t.textSecondary,
+                letterSpacing: row.isWinner ? "-0.2px" : "0",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                paddingRight: 8,
+              }}>{row.name}</div>
+
+              {/* Set scores */}
+              {row.scores.map(function(score, i) {
+                var opp = row.oppScores[i];
+                var wonSet = (score !== "" && score !== undefined && opp !== "" && opp !== undefined)
+                  ? Number(score) > Number(opp) : false;
+                return (
+                  <div key={i} style={{
+                    width: 28, textAlign: "center",
+                    fontSize: 18, fontWeight: wonSet ? 800 : 400,
+                    color: wonSet ? t.text : t.textTertiary,
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                  }}>
+                    {score !== undefined && score !== "" ? score : "–"}
+                  </div>
+                );
+              })}
+
+              {/* Winner indicator ◀ */}
+              <div style={{ width: 22, textAlign: "center" }}>
+                {row.isWinner && (
+                  <span style={{ fontSize: 10, color: t.green, fontWeight: 700 }}>◀</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ── PENDING: submitter view ───────────────────────────────────────── */}
@@ -437,7 +510,7 @@ export default function HomeTab({
 
   // ── Authenticated feed ─────────────────────────────────────────────────────
   return (
-    <div>
+    <div style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
       {/* Page header */}
       <div style={{ padding: "28px 20px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18, maxWidth: 720 }}>
         <div>

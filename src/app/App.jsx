@@ -29,6 +29,7 @@ import AdminTab from "../features/admin/pages/AdminTab.jsx";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
 import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
+import ActionReviewDrawer from "../features/notifications/components/ActionReviewDrawer.jsx";
 import AuthModal from "../features/auth/components/AuthModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
@@ -181,6 +182,44 @@ export default function App(){
     matchHistory.setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10),venue:"",court:""});
   }
 
+  // ── In-context notification review drawer ────────────────────────────────
+  var [reviewDrawer,setReviewDrawer]=useState(null); // { match, notifId, notifType, fromName }
+
+  // Notif types that always carry a proposal — stale local match needs a DB refresh.
+  var PROPOSAL_NOTIF_TYPES=new Set(['match_disputed','match_correction_requested','match_counter_proposed']);
+
+  async function openReviewDrawer(n){
+    var matchId=n.match_id;
+    if(!matchId)return;
+    var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
+    if(!match){
+      // Not in local history yet — reload then navigate to feed as fallback.
+      if(auth.authUser)matchHistory.loadHistory(auth.authUser.id);
+      return;
+    }
+    // If the notification requires a proposal but the local copy doesn't have one
+    // yet (realtime notification arrived before the history was reloaded), fetch a
+    // fresh row from DB so the drawer has accurate data to display.
+    if(PROPOSAL_NOTIF_TYPES.has(n.type)&&!match.currentProposal){
+      var fresh=await matchHistory.refreshSingleMatch(String(matchId),match.isTagged);
+      if(fresh) match=fresh;
+    }
+    setReviewDrawer({match,notifId:n.id,notifType:n.type,fromName:n.fromName||"Someone"});
+    notifications.setShowNotifications(false);
+  }
+
+  function openCounterPropose(match){
+    // Opens the existing DisputeModal in counter mode — reuse existing UX.
+    matchHistory.setDisputeModal({match,mode:'counter'});
+    matchHistory.setDisputeDraft({
+      reasonCode:'',reasonDetail:'',
+      sets:(match.currentProposal&&match.currentProposal.sets)||match.sets||[{you:'',them:''}],
+      result:match.result,
+      date:match.rawDate||new Date().toISOString().slice(0,10),
+      venue:match.venue||'',court:match.court||'',
+    });
+  }
+
   return (
     <Providers t={t} theme={theme}>
       {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
@@ -194,7 +233,7 @@ export default function App(){
             unreadCount={notifications.unreadCount()}
             showNotifications={notifications.showNotifications}
             setShowNotifications={notifications.setShowNotifications}
-            markNotificationsRead={notifications.markNotificationsRead}
+            markSeen={notifications.markSeen}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openLogin={auth.openLogin}
           />
@@ -213,7 +252,7 @@ export default function App(){
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {auth.authUser&&(
                   <button
-                    onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markNotificationsRead();}}
+                    onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markSeen();}}
                     style={{position:"relative",width:32,height:32,borderRadius:t.r,background:notifications.unreadCount()>0?t.accentSubtle:"transparent",border:"1px solid "+(notifications.unreadCount()>0?t.accent:t.border),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all 0.2s"}}>
                     🔔
                     {notifications.unreadCount()>0&&(
@@ -244,9 +283,22 @@ export default function App(){
           {notifications.showNotifications&&auth.authUser&&(
             <NotificationsPanel
               t={t} notifications={notifications.notifications}
-              markNotificationsRead={notifications.markNotificationsRead}
+              markAllRead={notifications.markAllRead}
+              markOneRead={notifications.markOneRead}
+              dismissNotification={notifications.dismissNotification}
+              dismissNotifications={notifications.dismissNotifications}
               acceptMatchTag={notifications.acceptMatchTag}
               declineMatchTag={notifications.declineMatchTag}
+              onAcceptFriendRequest={function(n){
+                // Build the req shape acceptRequest expects, then dismiss notif
+                social.acceptRequest({id:n.from_user_id,requestId:n.entity_id,name:n.fromName,avatar:n.fromAvatar});
+                notifications.dismissNotification(n.id);
+              }}
+              onDeclineFriendRequest={function(n){
+                social.declineRequest({id:n.from_user_id,requestId:n.entity_id});
+                notifications.dismissNotification(n.id);
+              }}
+              onReviewMatch={openReviewDrawer}
               setShowNotifications={notifications.setShowNotifications}
               refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
               openConvById={openConvById}
@@ -395,6 +447,25 @@ export default function App(){
           counterPropose={matchHistory.counterPropose}
           voidMatchAction={matchHistory.voidMatchAction}
         />
+        {/* In-context review drawer — opened from notification tray */}
+        {reviewDrawer&&auth.authUser&&(
+          <ActionReviewDrawer
+            t={t}
+            match={reviewDrawer.match}
+            notifType={reviewDrawer.notifType}
+            fromName={reviewDrawer.fromName}
+            onClose={function(){setReviewDrawer(null);}}
+            onDismissNotif={function(){
+              if(reviewDrawer.notifId)notifications.dismissNotification(reviewDrawer.notifId);
+            }}
+            acceptCorrection={matchHistory.acceptCorrection}
+            onCounter={function(match){
+              setReviewDrawer(null);
+              openCounterPropose(match);
+            }}
+            voidMatchAction={matchHistory.voidMatchAction}
+          />
+        )}
         <CommentModal
           t={t} authUser={auth.authUser} profile={currentUser.profile}
           commentModal={matchHistory.commentModal} setCommentModal={matchHistory.setCommentModal}
