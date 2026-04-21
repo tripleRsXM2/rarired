@@ -133,6 +133,22 @@ export default function App(){
     };
   });
 
+  // Module 2 — refresh Discover "People you've played" whenever the relevant
+  // inputs change. Cheap (≤8 profile rows fetched) and self-healing: adding a
+  // friend moves them out of the section automatically.
+  useEffect(function(){
+    if(!auth.authUser) return;
+    social.loadPlayedOpponents(matchHistory.history);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[
+    auth.authUser&&auth.authUser.id,
+    matchHistory.history.length,
+    social.friends.length,
+    social.sentRequests.length,
+    social.receivedRequests.length,
+    social.blockedUsers.length,
+  ]);
+
   // Opens a conversation from the notifications panel. Prefers lookup by
   // entity_id (conversation_id), falls back to the sender's user id for
   // legacy notifications created before entity_id was being stored.
@@ -354,6 +370,13 @@ export default function App(){
               acceptCorrection={matchHistory.acceptCorrection}
               voidMatchAction={matchHistory.voidMatchAction}
               openProfile={openProfile}
+              friends={social.friends}
+              playedOpponents={social.playedOpponents}
+              suggestedPlayers={social.suggestedPlayers}
+              sendFriendRequest={social.sendFriendRequest}
+              friendRelationLabel={social.friendRelationLabel}
+              socialLoading={social.socialLoading}
+              onGoToDiscover={function(){navigate("/people/suggested");}}
             />
           )}
           {tab==="tournaments"&&(
@@ -374,6 +397,7 @@ export default function App(){
             t={t} authUser={auth.authUser} friends={social.friends}
             sentRequests={social.sentRequests} receivedRequests={social.receivedRequests}
             blockedUsers={social.blockedUsers} suggestedPlayers={social.suggestedPlayers}
+            playedOpponents={social.playedOpponents} sameSkillPlayers={social.sameSkillPlayers}
             peopleSearch={social.peopleSearch} setPeopleSearch={social.setPeopleSearch}
             searchResults={social.searchResults} setSearchResults={social.setSearchResults} searchLoading={social.searchLoading}
             showSearchDrop={social.showSearchDrop} setShowSearchDrop={social.setShowSearchDrop}
@@ -385,6 +409,7 @@ export default function App(){
             friendRelationLabel={social.friendRelationLabel} sentReq={social.sentReq} recvReq={social.recvReq}
             setShowAuth={auth.setShowAuth} setAuthMode={auth.setAuthMode} setAuthStep={auth.setAuthStep}
             dms={dms}
+            openProfile={openProfile}
           />
         )}
         {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
