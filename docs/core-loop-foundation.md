@@ -244,6 +244,60 @@ Deferred to Module 2:
 - Friends filter doesn't persist across navigation. If usage warrants, persist to localStorage later.
 - DM header, leaderboard avatar, notification sender avatar — still not wired to profiles. Deferred to Module 3 (notifications sweep) and Module 6 (polish sweep).
 
+## Module 3 — Notifications that pull users back
+
+**Objective:** close every deep-link gap in the notification tray, fire notifications for social events that weren't generating them, and make `match_reminder` + `match_expired` reliable across devices. One schema-light migration (backwards-compatible, idempotent).
+
+**Audit findings:**
+- Most notification types already had inline CTAs or handled correctly. Gaps: `match_confirmed` / `match_deleted` / `like` / `comment` / `request_accepted` had no deep-link CTAs.
+- `like` and `comment` notifications **never fired at all** — the insert points (feed_likes in HomeTab, feed_comments in CommentModal) wrote the row but skipped notifying the match submitter.
+- `match_reminder` was gated by `localStorage` so it re-fires on device switch or browser reset.
+- `expire_stale_matches()` RPC mutates `match_history` but never inserts into `notifications`, so opponents never learn that a ranked match silently auto-expired or auto-voided by timeout.
+- DM header, leaderboard avatar, and notification sender avatar were static — no way to navigate to a player's profile from those surfaces (Module 1/2 deferrals).
+
+**Files changed:**
+
+SQL migration (new, `supabase/migrations/20260421_notification_fire_gaps.sql`):
+- Adds `match_history.reminder_sent_at timestamptz` column (`add column if not exists` — safe to re-run).
+- Replaces `expire_stale_matches()` with a `plpgsql` version that uses `UPDATE ... RETURNING` to capture both-sides IDs, then INSERTs `match_expired` / `match_voided` notifications for each party with a `NOT EXISTS` dedupe guard so the pg_cron job can't double-fire. SECURITY DEFINER preserved.
+
+Code:
+- `src/features/scoring/utils/matchUtils.js` — `normalizeMatch` now exposes `reminderSentAt`.
+- `src/features/scoring/hooks/useMatchHistory.js` — `loadHistory` reminder check uses `m.reminderSentAt` instead of localStorage; on fire, sets the DB flag via `updateMatch({reminder_sent_at})` and patches local state so the same session can't re-send.
+- `src/features/home/pages/HomeTab.jsx` — after a successful `feed_likes.insert`, fires a `like` notification to `m.submitterId` (guarded against self-like).
+- `src/features/tournaments/components/CommentModal.jsx` — new `onCommentPosted(matchId)` prop fired after successful `feed_comments.insert`; App wires it to a helper that fires the `comment` notification to the match submitter.
+- `src/app/App.jsx` — `notifyMatchOwnerOfComment(matchId)` helper looks up the match in local history and emits the notification. `openProfile` now plumbed into `NotificationsPanel` and `RightPanel`.
+- `src/features/notifications/components/NotificationsPanel.jsx` —
+  - Sender avatar is now a clickable target that navigates to `/profile/<from_user_id>`.
+  - New `goProfile` helper.
+  - CTAs added for `match_confirmed` (View in feed →), `match_expired` + `match_deleted` (View in feed →), `like` + `comment` (View match →), `request_accepted` (View profile →).
+- `src/features/notifications/utils/notifUtils.js` — `match_expired` added to `IMPORTANT_TYPES` (so it sits above "activity" in the tray), registered in the urgency bonus table, and given a human label ("Your match with X expired unconfirmed — it doesn't count towards stats.").
+- `src/features/home/components/RightPanel.jsx` — leaderboard row is now clickable (row hover-highlight and cursor-pointer) and navigates to the player's profile.
+- `src/features/people/components/Messages.jsx` — DM header partner avatar + name are clickable → profile.
+- `src/features/people/pages/PeopleTab.jsx` — threads `openProfile` into `Messages`.
+
+**Schema changes:**
+- Additive column on `match_history.reminder_sent_at` — safe, no backfill needed.
+- Replaces `expire_stale_matches()` body only; signature, SECURITY DEFINER, and cron schedule unchanged.
+- **Must be applied** before `match_expired` and the reliable-reminder flow take effect. Migration is idempotent; the client code is gracefully degraded if the migration hasn't run yet (reminder may re-fire on reload — harmless).
+
+**Acceptance:**
+- ✅ Every notification type has a sensible tap action (profile / match / feed / conversation / in-context review).
+- ✅ Notification sender avatar clicks through to that player's profile.
+- ✅ Liking a match fires a `like` notification to the match submitter (first like only — unliking doesn't send).
+- ✅ Commenting on someone else's match fires a `comment` notification.
+- ✅ Leaderboard rows click through to profile.
+- ✅ DM header partner avatar + name click through to profile.
+- ✅ Build passes (717 kB, +2 kB from Module 2).
+- ✅ No new lint errors.
+
+**Open risks / deferred:**
+- Migration must be applied manually via Supabase CLI or dashboard. Until then, `match_expired` never fires (harmless — pg_cron still updates status) and `reminder_sent_at` writes fail silently (reminder re-fires on reload).
+- Like/comment fire-and-forget — no rollback if the notification insert fails. Acceptable because the feed interaction itself already succeeded.
+- No notification for "user started following you as a friend" distinct from `friend_request` → `request_accepted` flow — the follow graph IS friend_requests by design (Module 2), so the events we already have cover this.
+- No batching on high-frequency likes. If a user rapidly spams like/unlike, every `like` fires a notification. Cheap (notifications table insert), but could spam the match owner's tray. A dedupe RPC similar to `upsert_message_notification` is a Module 6 polish item.
+
+
 
 
 

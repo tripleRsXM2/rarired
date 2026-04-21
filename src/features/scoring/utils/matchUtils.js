@@ -47,5 +47,8 @@ export function normalizeMatch(m, isTagged){
     disputeExpiresAt:m.dispute_expires_at||null,
     voidedAt:m.voided_at||null,
     voidedReason:m.voided_reason||null,
+    // Module 3: DB-backed "<24h expiry reminder sent" flag. null = never sent.
+    // Lets the client gate match_reminder firing without relying on localStorage.
+    reminderSentAt:m.reminder_sent_at||null,
   };
 }

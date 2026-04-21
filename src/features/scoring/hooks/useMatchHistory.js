@@ -78,17 +78,27 @@ export function useMatchHistory(opts){
 
     var matchIds=normalized.map(function(m){return m.id;});
     setHistory(normalized);
-    // Client-side reminder: notify opponent when <24h left on pending match
+    // Client-side reminder: notify opponent when <24h left on a pending match
+    // the viewer submitted. DB-backed: match_history.reminder_sent_at flag is
+    // set via updateMatch after firing so the same match never re-reminds
+    // across devices or browser resets. Fire-and-forget; failure just means
+    // we may re-send the reminder next load (still harmless — match_reminder
+    // is non-action and cheap).
     normalized.forEach(function(m){
       if(m.status!=='pending_confirmation'||!m.expiresAt||!m.opponent_id||m.isTagged) return;
+      if(m.reminderSentAt) return;
       var msLeft=new Date(m.expiresAt)-Date.now();
-      if(msLeft>0&&msLeft<24*60*60*1000){
-        var key='reminded_'+m.id;
-        if(!localStorage.getItem(key)){
-          localStorage.setItem(key,'1');
-          if(sendNotification) sendNotification({user_id:m.opponent_id,type:'match_reminder',from_user_id:userId,match_id:m.id});
-        }
+      if(msLeft<=0||msLeft>=24*60*60*1000) return;
+      if(sendNotification){
+        sendNotification({user_id:m.opponent_id,type:'match_reminder',from_user_id:userId,match_id:m.id});
       }
+      // Mark sent in DB (best-effort). Also patch local state so a second
+      // loadHistory in the same session doesn't re-send.
+      var nowIso=new Date().toISOString();
+      M.updateMatch(m.id,{reminder_sent_at:nowIso});
+      setHistory(function(h){
+        return h.map(function(x){return x.id===m.id?Object.assign({},x,{reminderSentAt:nowIso}):x;});
+      });
     });
     if(!matchIds.length) return;
     var lr=await M.fetchFeedLikes(userId, matchIds);

@@ -237,6 +237,21 @@ export default function App(){
     notifications.setShowNotifications(false);
   }
 
+  // Module 3: fires a `comment` notification to the match submitter after a
+  // comment is inserted. Keeps the modal thin — all match lookup + perms live
+  // here on the app side.
+  function notifyMatchOwnerOfComment(matchId){
+    if(!auth.authUser) return;
+    var match=matchHistory.history.find(function(m){return String(m.id)===String(matchId);});
+    if(!match||!match.submitterId||match.submitterId===auth.authUser.id) return;
+    insertNotification({
+      user_id:      match.submitterId,
+      type:         "comment",
+      from_user_id: auth.authUser.id,
+      match_id:     match.id,
+    });
+  }
+
   function openCounterPropose(match){
     // Opens the existing DisputeModal in counter mode — reuse existing UX.
     matchHistory.setDisputeModal({match,mode:'counter'});
@@ -331,6 +346,7 @@ export default function App(){
               setShowNotifications={notifications.setShowNotifications}
               refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
               openConvById={openConvById}
+              openProfile={openProfile}
             />
           )}
 
@@ -452,6 +468,7 @@ export default function App(){
               t={t} authUser={auth.authUser}
               history={matchHistory.history}
               onLogMatch={openLogMatch}
+              openProfile={openProfile}
             />
           </div>
         )}
@@ -520,6 +537,7 @@ export default function App(){
           commentModal={matchHistory.commentModal} setCommentModal={matchHistory.setCommentModal}
           commentDraft={matchHistory.commentDraft} setCommentDraft={matchHistory.setCommentDraft}
           feedComments={matchHistory.feedComments} setFeedComments={matchHistory.setFeedComments}
+          onCommentPosted={notifyMatchOwnerOfComment}
         />
         <AuthModal
           t={t} showAuth={auth.showAuth} setShowAuth={auth.setShowAuth}

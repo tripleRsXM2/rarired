@@ -434,6 +434,18 @@ function FeedCard({
               if (res && res.error) {
                 setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = prevLiked; return n; });
                 setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
+                return;
+              }
+              // Module 3: fire `like` notification to the match submitter on
+              // first like (not on unlike, not when liking your own match).
+              // Fire-and-forget so the button stays snappy.
+              if (nowLiked && m.submitterId && m.submitterId !== authUser.id) {
+                supabase.from("notifications").insert({
+                  user_id:      m.submitterId,
+                  type:         "like",
+                  from_user_id: authUser.id,
+                  match_id:     m.id,
+                });
               }
             }}
             style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>

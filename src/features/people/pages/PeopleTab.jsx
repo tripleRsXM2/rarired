@@ -245,7 +245,7 @@ export default function PeopleTab({
 
           {/* Messages */}
           {peopleTab==="messages"&&dms&&(
-            <Messages t={t} authUser={authUser} dms={dms}/>
+            <Messages t={t} authUser={authUser} dms={dms} openProfile={openProfile}/>
           )}
 
           {/* Friends */}
