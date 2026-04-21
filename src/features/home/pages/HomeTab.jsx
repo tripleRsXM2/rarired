@@ -13,6 +13,32 @@ var REASON_LABELS = {
   other:         "Other",
 };
 
+// ── IconButton (Strava-style compact footer action) ──────────────────────────
+// Ghost button, 34×34, emoji/text child. `active` = primary-coloured filled
+// look; `accent` = accent-coloured hover for the Rematch button.
+function IconButton({ t, title, onClick, active, accent, children }) {
+  var [hover, setHover] = useState(false);
+  var bg = active ? t.accentSubtle : hover ? t.bgTertiary : "transparent";
+  var color = active ? t.accent : accent ? t.accent : t.textSecondary;
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      onMouseEnter={function () { setHover(true); }}
+      onMouseLeave={function () { setHover(false); }}
+      style={{
+        width: 34, height: 34, borderRadius: 8,
+        border: "none", background: bg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: color, fontSize: 15, cursor: "pointer",
+        transition: "background 0.13s",
+        padding: 0,
+      }}>
+      {children}
+    </button>
+  );
+}
+
 // ── FeedCard ──────────────────────────────────────────────────────────────────
 function FeedCard({
   m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
@@ -94,7 +120,40 @@ function FeedCard({
     return changed(field) ? { color: t.orange, fontWeight: 700 } : { color: t.text };
   }
 
-  var resultColor = isWin ? t.green : t.red;
+  // ── Strava-style composition helpers ──────────────────────────────────
+  // Compute set-level win counts ONCE here so we can reuse for:
+  //   (a) the stats strip's "Sets" value
+  //   (b) the scoreboard's winner-row derivation (existing logic)
+  var setWinCounts = (function () {
+    var sets = m.sets || [];
+    var ys = 0, ts = 0;
+    sets.forEach(function (s) {
+      var y = Number(s.you), th = Number(s.them);
+      if (!Number.isNaN(y) && !Number.isNaN(th) && y !== th) {
+        if (y > th) ys++; else ts++;
+      }
+    });
+    return { ys: ys, ts: ts };
+  })();
+
+  // The label in the header subtitle — "Ranked" / "Casual" / tournament name.
+  var matchKindLabel = m.tournName && m.tournName !== "Casual Match"
+    ? m.tournName
+    : "Casual";
+
+  // Strava-style subtitle: "Yesterday · Ranked · Moore Park"
+  var subtitleParts = [m.date];
+  if (matchKindLabel) subtitleParts.push(matchKindLabel);
+  if (m.venue) subtitleParts.push(m.court ? m.venue + " · " + m.court : m.venue);
+  var subtitleText = subtitleParts.filter(Boolean).join(" · ");
+
+  // Compact status pill shown in the header top-right.
+  var statusPill = isPending && !isOpponentView ? { label: "Pending",    color: t.orange,       bg: t.orangeSubtle }
+                  : isDisputed                  ? { label: "Disputed",   color: t.red,          bg: t.redSubtle }
+                  : isPendingReconf             ? { label: "Re-proposed",color: t.orange,       bg: t.orangeSubtle }
+                  : isExpired                   ? { label: "Unverified", color: t.textTertiary, bg: t.bgTertiary }
+                  : isVoided                    ? { label: "Voided",     color: t.textTertiary, bg: t.bgTertiary }
+                  : null;
 
   return (
     <div
@@ -102,58 +161,56 @@ function FeedCard({
       style={{
         background: t.bgCard,
         border: "1px solid " + t.border,
-        borderRadius: 12,
+        borderRadius: 16,
         overflow: "hidden",
-        marginBottom: 12,
+        marginBottom: 14,
         opacity: cardOpacity,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)",
       }}
     >
-      {/* ── Card header ──────────────────────────────────────────────────── */}
-      <div style={{ padding: "14px 16px 12px", display: "flex", gap: 10, alignItems: "center" }}>
-        {/* Avatar — clickable when the poster is another real user */}
+      {/* ── Header (Strava-style: round avatar, accent name, meta subtitle) ── */}
+      <div style={{ padding: "16px 16px 0", display: "flex", gap: 12, alignItems: "flex-start" }}>
+        {/* Avatar — round, clickable when the poster is a real linked user */}
         <div
           onClick={posterClickable ? goPoster : undefined}
           style={{
-            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
             background: avColor(pName),
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
+            fontSize: 14, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px",
             cursor: posterClickable ? "pointer" : "default",
           }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
 
-        {/* Name + date */}
+        {/* Name + subtitle */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.2px" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: t.accent, letterSpacing: "-0.2px", lineHeight: 1.2 }}>
             <span
               onClick={posterClickable ? goPoster : undefined}
               style={{ cursor: posterClickable ? "pointer" : "default" }}>
               {pName}
             </span>
-            {isOwn && <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 400 }}> · You</span>}
+            {isOwn && <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 500 }}> · You</span>}
           </div>
-          <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 1, letterSpacing: "0.01em" }}>{m.date}</div>
+          <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 3, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {subtitleText}
+          </div>
         </div>
 
-        {/* Badges */}
+        {/* Top-right: status pill + close-button (kept minimal) */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-          {m.tournName && m.tournName !== "Casual Match" && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: t.accent, background: t.accentSubtle, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>{m.tournName}</span>
+          {statusPill && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: statusPill.color, background: statusPill.bg,
+              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>{statusPill.label}</span>
           )}
-          {m.tournName === "Casual Match" && (
-            <span style={{ fontSize: 9, fontWeight: 600, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Casual</span>
-          )}
-          {isPending && !isOpponentView && <span style={{ fontSize: 9, fontWeight: 700, color: t.orange, background: t.orangeSubtle, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Pending</span>}
-          {isDisputed     && <span style={{ fontSize: 9, fontWeight: 700, color: t.red,    background: t.redSubtle,    padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Disputed</span>}
-          {isPendingReconf && <span style={{ fontSize: 9, fontWeight: 700, color: t.orange, background: t.orangeSubtle, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Re-proposed</span>}
-          {isExpired && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Unverified</span>}
-          {isVoided  && <span style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, background: t.bgTertiary, padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase" }}>Voided</span>}
           {isOwn && onDelete && !isInDispute && !isVoided && (
             <button onClick={async function() {
                 if (!window.confirm("Delete this match?")) return;
                 var res = await onDelete(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
-              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
+              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
           {m.isTagged && onRemove && isConfirmed && (
             <button onClick={async function() {
@@ -161,33 +218,71 @@ function FeedCard({
                 var res = await onRemove(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
-              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1 }}>✕</button>
+              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 14, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
         </div>
       </div>
 
-      {/* ── Scoreboard ──────────────────────────────────────────────────── */}
-      <div style={{
-        margin: "0 12px 14px",
-        borderRadius: 10,
-        overflow: "hidden",
-        border: "1px solid " + resultColor + "40",
-      }}>
-        {/* Scoreboard header: venue/tournament on left, set labels on right */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "6px 14px",
-          background: t.bgTertiary,
-          borderBottom: "1px solid " + t.border,
+      {/* ── Activity title row (Strava's "Evening Run" equivalent) ── */}
+      <div style={{ padding: "12px 16px 6px", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>🎾</span>
+        <h3 style={{
+          margin: 0,
+          fontSize: 20, fontWeight: 800, color: t.text,
+          letterSpacing: "-0.4px", lineHeight: 1.15,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
-          <span style={{
-            fontSize: 10, fontWeight: 600, color: t.textTertiary,
-            letterSpacing: "0.04em", textTransform: "uppercase",
+          vs {m.oppName || "Unknown"}
+        </h3>
+      </div>
+
+      {/* ── Stats strip (Strava's Distance/Pace/Time equivalent) ── */}
+      {isConfirmed && scoreStr && (
+        <div style={{
+          padding: "6px 16px 14px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 0,
+        }}>
+          {[
+            { label: "Result", value: isWin ? "Won" : "Lost", color: isWin ? t.green : t.red },
+            { label: "Sets",   value: setWinCounts.ys + setWinCounts.ts > 0 ? (isOwn ? setWinCounts.ys : setWinCounts.ts) + "–" + (isOwn ? setWinCounts.ts : setWinCounts.ys) : "–", color: t.text },
+            { label: "Score",  value: scoreStr.replace(/\s+/g, " "), color: t.text },
+          ].map(function (s, i) {
+            return (
+              <div key={s.label} style={{
+                borderLeft: i === 0 ? "none" : "1px solid " + t.border,
+                paddingLeft: i === 0 ? 0 : 14,
+                paddingRight: i === 2 ? 0 : 14,
+              }}>
+                <div style={{ fontSize: 10, color: t.textTertiary, fontWeight: 600, letterSpacing: "0.04em", marginBottom: 2 }}>
+                  {s.label}
+                </div>
+                <div style={{
+                  fontSize: 17, fontWeight: 800, color: s.color,
+                  letterSpacing: "-0.3px", fontVariantNumeric: "tabular-nums", lineHeight: 1.1,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {s.value}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Scoreboard (flattened into card; venue/tourn moved to subtitle) ── */}
+      <div style={{
+        margin: "0 0 4px",
+        borderTop: "1px solid " + t.border,
+      }}>
+        {/* Column-label strip — just set numbers, right-aligned, subtle */}
+        {(m.sets || []).length > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "flex-end",
+            padding: "6px 16px 0",
+            background: "transparent",
           }}>
-            {[m.venue, m.court].filter(Boolean).join(" · ") ||
-             (m.tournName && m.tournName !== "Casual Match" ? m.tournName : "Casual")}
-          </span>
-          {(m.sets || []).length > 0 && (
             <div style={{ display: "flex", alignItems: "center" }}>
               {(m.sets || []).map(function(_, i) {
                 return (
@@ -200,8 +295,8 @@ function FeedCard({
               })}
               <div style={{ width: 22 }} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Player rows.
             Winner-row derivation: we trust the SCOREBOARD, not the stored
@@ -244,7 +339,8 @@ function FeedCard({
           return (
             <div key={ri} style={{
               display: "flex", alignItems: "center",
-              padding: "10px 14px",
+              padding: "10px 16px",
+              // First row under the column-label strip gets a subtle divider; rows after get one too.
               borderTop: "1px solid " + t.border,
               background: t.bgCard,
             }}>
@@ -431,93 +527,111 @@ function FeedCard({
         </div>
       )}
 
-      {/* ── CONFIRMED: social actions ─────────────────────────────────────── */}
+      {/* ── CONFIRMED: Strava-style social footer ──────────────────────────
+          Left: kudos-style social-proof text ("N likes · M comments" or
+                the empty-state prompt). Right: compact icon-first buttons.
+          No big colored labels — the card visualization is the hero. */}
       {isConfirmed && !demo && (
-        <div style={{ borderTop: "1px solid " + t.border, display: "flex" }}>
-          <button
-            onClick={async function() {
-              if (!authUser) return;
-              var prevLiked = liked;
-              var nowLiked = !liked;
-              // Optimistic update
-              setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = nowLiked; return n; });
-              setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? 1 : -1)); return n; });
-              var res;
-              if (nowLiked) { res = await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
-              else { res = await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
-              // Rollback on failure so the heart + count don't lie
-              if (res && res.error) {
-                setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = prevLiked; return n; });
-                setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
-                return;
-              }
-              // Module 3 + 6: notify every match participant except the liker.
-              // Module 6 dedupe: don't re-fire a `like` notification from the
-              // same user for the same match within an hour — prevents toggle
-              // spam from polluting the recipient's tray. Always emits the
-              // analytics event though (we want the raw signal).
-              if (nowLiked) {
-                var toNotify = [m.submitterId, m.opponent_id].filter(function (uid, i, arr) {
-                  return uid && uid !== authUser.id && arr.indexOf(uid) === i;
-                });
-                track("feed_like", { match_id: m.id, participants_notified: toNotify.length });
-                if (toNotify.length) {
-                  var oneHourAgoIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-                  supabase.from("notifications")
-                    .select("id")
-                    .eq("type", "like")
-                    .eq("match_id", m.id)
-                    .eq("from_user_id", authUser.id)
-                    .gte("created_at", oneHourAgoIso)
-                    .limit(1)
-                    .then(function (r) {
-                      if (r.error || (r.data && r.data.length)) return; // dedupe hit
-                      toNotify.forEach(function (uid) {
-                        supabase.from("notifications").insert({
-                          user_id:      uid,
-                          type:         "like",
-                          from_user_id: authUser.id,
-                          match_id:     m.id,
+        <div style={{
+          borderTop: "1px solid " + t.border,
+          padding: "10px 14px",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+        }}>
+          {/* Left: engagement summary / kudos prompt */}
+          <div style={{ fontSize: 12, color: t.textSecondary, fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {(function () {
+              var bits = [];
+              if (likeCount > 0) bits.push(likeCount + (likeCount === 1 ? " like" : " likes"));
+              if (comments.length > 0) bits.push(comments.length + (comments.length === 1 ? " comment" : " comments"));
+              if (!bits.length) return <span style={{ color: t.textTertiary }}>Be the first to give kudos!</span>;
+              return bits.join(" · ");
+            })()}
+          </div>
+
+          {/* Right: minimal icon actions (Like · Comment · Rematch · Share) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <IconButton
+              t={t}
+              title={liked ? "Unlike" : "Like"}
+              active={liked}
+              onClick={async function() {
+                if (!authUser) return;
+                var prevLiked = liked;
+                var nowLiked = !liked;
+                setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = nowLiked; return n; });
+                setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? 1 : -1)); return n; });
+                var res;
+                if (nowLiked) { res = await supabase.from("feed_likes").insert({ match_id: m.id, user_id: authUser.id }); }
+                else { res = await supabase.from("feed_likes").delete().eq("match_id", m.id).eq("user_id", authUser.id); }
+                if (res && res.error) {
+                  setFeedLikes(function(l) { var n = Object.assign({}, l); n[m.id] = prevLiked; return n; });
+                  setFeedLikeCounts(function(c) { var n = Object.assign({}, c); n[m.id] = Math.max(0, (n[m.id] || 0) + (nowLiked ? -1 : 1)); return n; });
+                  return;
+                }
+                if (nowLiked) {
+                  var toNotify = [m.submitterId, m.opponent_id].filter(function (uid, i, arr) {
+                    return uid && uid !== authUser.id && arr.indexOf(uid) === i;
+                  });
+                  track("feed_like", { match_id: m.id, participants_notified: toNotify.length });
+                  if (toNotify.length) {
+                    var oneHourAgoIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+                    supabase.from("notifications")
+                      .select("id").eq("type", "like").eq("match_id", m.id)
+                      .eq("from_user_id", authUser.id).gte("created_at", oneHourAgoIso).limit(1)
+                      .then(function (r) {
+                        if (r.error || (r.data && r.data.length)) return;
+                        toNotify.forEach(function (uid) {
+                          supabase.from("notifications").insert({
+                            user_id: uid, type: "like", from_user_id: authUser.id, match_id: m.id,
+                          });
                         });
                       });
-                    });
+                  }
                 }
-              }
-            }}
-            style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: liked ? t.accent : t.textSecondary, fontSize: 11, fontWeight: liked ? 700 : 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", transition: "color 0.15s" }}>
-            <span style={{ fontSize: 14 }}>👍</span>{liked ? "Liked" : "Like"}{likeCount > 0 ? " · " + likeCount : ""}
-          </button>
-          <button
-            onClick={function() { setCommentModal(m.id); setCommentDraft(""); }}
-            style={{ flex: 1, padding: "10px 8px", border: "none", borderRight: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 11, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em" }}>
-            <span style={{ fontSize: 14 }}>💬</span>Comment{comments.length > 0 ? " (" + comments.length + ")" : ""}
-          </button>
-          <button
-            onClick={function() { if (navigator.share) navigator.share({ title: "Match result", text: pName + (isWin ? " won " : " lost ") + "vs " + m.oppName + " " + scoreStr }); }}
-            style={{ flex: 1, padding: "10px 8px", border: "none", background: "transparent", color: t.textSecondary, fontSize: 11, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em" }}>
-            <span style={{ fontSize: 14 }}>↗</span>Share
-          </button>
-          {/* Module 4: Rematch CTA. Only when the opponent is a real linked
-              user (we can target them) and not the viewer. Borrows the share
-              column visually — keeps the row 4-up evenly spaced. */}
-          {openChallenge && opponentClickable && (
-            <button
-              onClick={function () {
-                openChallenge(
-                  { id: opponentUserId, name: m.oppName, suburb: m.venue || "", skill: "" },
-                  "rematch",
-                  m
-                );
-              }}
-              style={{ flex: 1, padding: "10px 8px", border: "none", borderLeft: "1px solid " + t.border, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, letterSpacing: "0.02em", cursor: "pointer" }}>
-              <span style={{ fontSize: 14 }}>🔁</span>Rematch
-            </button>
-          )}
+              }}>
+              {liked ? "👍" : "👍🏻"}
+            </IconButton>
+            <IconButton
+              t={t}
+              title={"Comment" + (comments.length > 0 ? " (" + comments.length + ")" : "")}
+              onClick={function() { setCommentModal(m.id); setCommentDraft(""); }}>
+              💬
+            </IconButton>
+            {openChallenge && opponentClickable && (
+              <IconButton
+                t={t}
+                title="Rematch"
+                accent
+                onClick={function () {
+                  openChallenge(
+                    { id: opponentUserId, name: m.oppName, suburb: m.venue || "", skill: "" },
+                    "rematch",
+                    m
+                  );
+                }}>
+                🔁
+              </IconButton>
+            )}
+            <IconButton
+              t={t}
+              title="Share"
+              onClick={function() { if (navigator.share) navigator.share({ title: "Match result", text: pName + (isWin ? " won " : " lost ") + "vs " + m.oppName + " " + scoreStr }); }}>
+              ↗
+            </IconButton>
+          </div>
         </div>
       )}
       {demo && (
-        <div style={{ borderTop: "1px solid " + t.border, padding: "10px 16px", display: "flex", gap: 16 }}>
-          {["👍 Like", "💬 Comment", "↗ Share"].map(function(a) { return <span key={a} style={{ fontSize: 11, color: t.textTertiary, fontWeight: 500, letterSpacing: "0.02em" }}>{a}</span>; })}
+        <div style={{
+          borderTop: "1px solid " + t.border,
+          padding: "10px 14px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontSize: 12, color: t.textTertiary }}>Be the first to give kudos!</span>
+          <div style={{ display: "flex", gap: 4 }}>
+            <span style={{ fontSize: 15, color: t.textTertiary, padding: "6px 8px" }}>👍🏻</span>
+            <span style={{ fontSize: 15, color: t.textTertiary, padding: "6px 8px" }}>💬</span>
+          </div>
         </div>
       )}
 
