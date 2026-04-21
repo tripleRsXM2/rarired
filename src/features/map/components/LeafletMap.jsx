@@ -37,6 +37,12 @@ export default function LeafletMap({
   var mapRef = useRef(null);
   var zoneLayersRef = useRef({});    // id -> L.polygon
   var zoneLabelsRef = useRef({});    // id -> L.marker (number + name)
+  var zoneCentersRef = useRef({});   // id -> [lat,lng] of the actually-rendered
+                                     //   polygon's bounding-box centre. Used by
+                                     //   both the label and the home pin so they
+                                     //   always line up with what's drawn, even
+                                     //   when the source GeoJSON is missing some
+                                     //   of a zone's member suburbs.
   var homePinRef = useRef(null);
   var tileLayersRef = useRef({ base: null });
 
@@ -79,6 +85,15 @@ export default function LeafletMap({
       poly.on("click",     function(){ onSelect && onSelect(z.id); });
       zoneLayersRef.current[z.id] = poly;
 
+      // Derive the label position from the actual rendered shape's bbox
+      // centre instead of the hardcoded z.center — the GeoJSON is missing a
+      // handful of member suburbs for some zones (e.g. Palm Beach is absent
+      // from Northern Beaches), which pulls the "true" centroid off the
+      // visible polygon.
+      var bbCenter = poly.getBounds().getCenter();
+      var labelLatLng = [bbCenter.lat, bbCenter.lng];
+      zoneCentersRef.current[z.id] = labelLatLng;
+
       // Number badge + zone name label
       var html =
         '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;pointer-events:none">' +
@@ -89,7 +104,7 @@ export default function LeafletMap({
             'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:130px;line-height:1.15">' +
             z.name.toUpperCase() + '</div>' +
         '</div>';
-      var label = L.marker(z.center, {
+      var label = L.marker(labelLatLng, {
         icon: L.divIcon({ className: "cs-zone-label", html: html, iconSize: [140, 56], iconAnchor: [70, 28] }),
         interactive: false,
         zIndexOffset: 500,
@@ -176,9 +191,12 @@ export default function LeafletMap({
         'box-shadow:0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)">' +
         '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
       '</div>';
-    // iconAnchor y pushed above the centroid so the pin clears the zone
-    // number + name label stack below it.
-    var pin = L.marker(z.center, {
+    // Anchor the pin to the same polygon-derived centre the zone label uses,
+    // so home stays visually attached to the rendered shape. iconAnchor y
+    // pushes the pin ~54px above that point, clearing the number + name
+    // label stack (which is ±28px around the centre).
+    var center = zoneCentersRef.current[homeZone] || z.center;
+    var pin = L.marker(center, {
       icon: L.divIcon({ className: "cs-home-pin", html: html, iconSize: [32,32], iconAnchor: [16,70] }),
       interactive: false,
       zIndexOffset: 1500,
