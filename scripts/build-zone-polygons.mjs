@@ -110,13 +110,19 @@ Object.entries(ZONE_MEMBERS).forEach(function(entry){
   });
   if(!polys.length){ out[zoneId] = null; return; }
 
+  // turf@7 changed union's signature to take a FeatureCollection; passing
+  // two Features (the old API) throws "Must have at least 2 geometries"
+  // and kills the iteration — losing every suburb after the first.
   var merged = polys[0];
+  var failed = 0;
   for(var i=1;i<polys.length;i++){
     try {
-      var u = turf.union(merged, polys[i]);
+      var u = turf.union(turf.featureCollection([merged, polys[i]]));
       if(u) merged = u;
-    } catch(e){ /* skip self-intersections */ }
+      else failed++;
+    } catch(e){ failed++; }
   }
+  if(failed) console.log("  " + zoneId + ": " + failed + "/" + (polys.length-1) + " union steps skipped");
   // Light simplify — keeps real curves but drops sub-metre noise so the
   // polygons don't balloon the bundle. Tolerance is in degrees (~10m here).
   var simp = turf.simplify(merged, { tolerance: 0.00008, highQuality: true, mutate: false });
