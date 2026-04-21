@@ -16,17 +16,13 @@ import { COURTS } from "../data/courts.js";
 
 // Pick a basemap tile set that reads OK against the current theme.
 // Dark themes (ao, us-open) use dark-matter; light themes use positron.
+// Both are "nolabels" — we deliberately don't layer streetnames or suburb
+// labels on top so the zones read as the primary content.
 function tileUrlFor(theme){
   var dark = theme === "ao" || theme === "us-open";
   return dark
     ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
-}
-function labelTileUrlFor(theme){
-  var dark = theme === "ao" || theme === "us-open";
-  return dark
-    ? "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png";
 }
 
 var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="17" y1="9" x2="17" y2="15"/></svg>';
@@ -35,15 +31,19 @@ var HOME_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h
 
 export default function LeafletMap({
   t, theme, hovered, selected, homeZone,
-  avatarUrl, initialsFallback,
-  onHover, onSelect,
+  onHover, onSelect, onCourtSelect,
 }){
   var elRef = useRef(null);
   var mapRef = useRef(null);
   var zoneLayersRef = useRef({});    // id -> L.polygon
   var zoneLabelsRef = useRef({});    // id -> L.marker (number + name)
   var homePinRef = useRef(null);
-  var tileLayersRef = useRef({ base: null, labels: null });
+  var tileLayersRef = useRef({ base: null });
+
+  // Stash onCourtSelect in a ref so the init effect (which runs once) always
+  // reads the latest callback — otherwise the first render's closure sticks.
+  var courtSelectRef = useRef(onCourtSelect);
+  courtSelectRef.current = onCourtSelect;
 
   // Init map once. Re-render policy: don't destroy/recreate on theme change;
   // swap the tile layers in place in a separate effect below.
@@ -60,13 +60,7 @@ export default function LeafletMap({
       subdomains: "abcd",
       maxZoom: 19,
     }).addTo(map);
-    var labels = L.tileLayer(labelTileUrlFor(theme), {
-      subdomains: "abcd",
-      maxZoom: 19,
-      pane: "shadowPane",
-    }).addTo(map);
     tileLayersRef.current.base = base;
-    tileLayersRef.current.labels = labels;
 
     // Zone polygons — each zone may have 1..N outer shapes (MultiPolygon).
     // Leaflet accepts a list of rings; we pass the whole array so holes and
@@ -110,7 +104,7 @@ export default function LeafletMap({
       map.fitBounds(group.getBounds(), { padding: [24, 24] });
     }
 
-    // Court markers
+    // Court markers — tap opens CourtInfoCard via the onCourtSelect ref.
     COURTS.forEach(function(c){
       var html =
         '<div style="width:22px;height:22px;border-radius:50%;background:#fff;border:1.5px solid rgba(20,18,17,0.9);' +
@@ -122,10 +116,12 @@ export default function LeafletMap({
         zIndexOffset: 1000,
       }).addTo(map);
       m.bindTooltip(
-        '<div style="font:500 11px/1.3 system-ui,sans-serif"><b>' + c.name + '</b><br>' +
-          '<span style="opacity:0.65;font-size:10px">' + c.courts + ' court' + (c.courts===1?'':'s') + '</span></div>',
+        '<div style="font:500 11px/1.3 system-ui,sans-serif"><b>' + c.name + '</b></div>',
         { direction: "top", offset: [0,-10], opacity: 1 }
       );
+      m.on("click", function(){
+        if(courtSelectRef.current) courtSelectRef.current(c);
+      });
     });
 
     mapRef.current = map;
@@ -138,16 +134,11 @@ export default function LeafletMap({
     var map = mapRef.current;
     if(!map || !tileLayersRef.current.base) return;
     map.removeLayer(tileLayersRef.current.base);
-    map.removeLayer(tileLayersRef.current.labels);
     var base = L.tileLayer(tileUrlFor(theme), {
       attribution: "© OpenStreetMap · © CARTO",
       subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
-    var labels = L.tileLayer(labelTileUrlFor(theme), {
-      subdomains: "abcd", maxZoom: 19, pane: "shadowPane",
-    }).addTo(map);
     tileLayersRef.current.base = base;
-    tileLayersRef.current.labels = labels;
   },[theme]);
 
   // Restyle zones when hover / selected change.
@@ -179,46 +170,21 @@ export default function LeafletMap({
     if(!z) return;
     var accent = (t && t.accent) || "#14110f";
     var textC = (t && t.accentText) || "#fff";
-    var ring = "0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)";
-    var inner;
-    if(avatarUrl){
-      // User photo framed as the home pin — tight little circle with a ring
-      // and a small badge showing it's "home" (tiny house dot).
-      inner =
-        '<div style="position:relative;width:36px;height:36px">' +
-          '<img src="' + avatarUrl + '" alt="" ' +
-            'style="width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;' +
-            'box-shadow:' + ring + '"/>' +
-          '<div style="position:absolute;right:-2px;bottom:-2px;width:16px;height:16px;border-radius:50%;' +
-            'background:' + accent + ';color:' + textC + ';display:flex;align-items:center;justify-content:center;' +
-            'border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25)">' +
-            '<div style="width:9px;height:9px;display:flex">' + HOME_SVG + '</div>' +
-          '</div>' +
-        '</div>';
-    } else if(initialsFallback){
-      inner =
-        '<div style="width:36px;height:36px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
-          'display:flex;align-items:center;justify-content:center;' +
-          'font-weight:700;font-size:13px;letter-spacing:-0.5px;' +
-          'box-shadow:' + ring + '">' + initialsFallback + '</div>';
-    } else {
-      inner =
-        '<div style="width:32px;height:32px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
-          'display:flex;align-items:center;justify-content:center;' +
-          'box-shadow:' + ring + '">' +
-          '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
-        '</div>';
-    }
-    var size = avatarUrl ? 40 : (initialsFallback ? 36 : 32);
-    // iconAnchor y pushed well above the centroid so the pin clears the
-    // zone number + name label stack below it.
+    var html =
+      '<div style="width:32px;height:32px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'box-shadow:0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)">' +
+        '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
+      '</div>';
+    // iconAnchor y pushed above the centroid so the pin clears the zone
+    // number + name label stack below it.
     var pin = L.marker(z.center, {
-      icon: L.divIcon({ className: "cs-home-pin", html: inner, iconSize: [size,size], iconAnchor: [size/2, 70] }),
+      icon: L.divIcon({ className: "cs-home-pin", html: html, iconSize: [32,32], iconAnchor: [16,70] }),
       interactive: false,
       zIndexOffset: 1500,
     }).addTo(map);
     homePinRef.current = pin;
-  },[homeZone, t, avatarUrl, initialsFallback]);
+  },[homeZone, t]);
 
   return (
     <div ref={elRef} style={{ position: "absolute", inset: 0 }} />

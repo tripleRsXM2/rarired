@@ -30,6 +30,8 @@ A fourth top-level surface. Full-bleed Leaflet map of Sydney divided into **six 
 - Lists its curated public / bookable tennis venues (~27 real courts)
 - Surfaces "Players here" — anyone who has declared this zone via `profiles.home_zone`
 
+Tapping a court marker opens a **CourtInfoCard** modal with the court name, suburb, zone, court count, and two outbound links: a "Book a court" button for venues where we have a verified booking URL, and a "View on Google Maps" link for everything else. No imagery is embedded — operator photos aren't licensed to us, so we link out rather than host.
+
 Tapping a zone opens a right-hand side panel with the zone name + blurb, courts nearby (count + list), and players in the zone. Two actions:
 - **Set as home area** — writes `profiles.home_zone`. The map then draws a home pin on that zone and the user is listed in that zone's "Players here" section. Toggleable from the same button (switches to "Clear") and from Settings → Home zone.
 - **Browse players here** — routes to the existing People / Discover surface for now (zone-filtered Discover is deferred).
@@ -164,3 +166,4 @@ Targets for the first atomic network. Once analytics lands, we track these weekl
 - v0 — initialised from shipped state at end of Module 3. Seed metrics are hypotheses, will be tracked live once Module 3.5 (analytics foundation) lands.
 - v1 — Module 4 (Map tab): added the zone-based spatial discovery surface, `profiles.home_zone`, and the home-pin interaction.
 - v1.1 — avatar upload + location display rule: `profiles.avatar_url` + `avatars` storage bucket; name subtitle prefers home-zone over suburb everywhere.
+- v1.2 — CourtInfoCard: tapping a court marker opens an info modal that links out to Google Maps and (where known) the operator's own booking page. No embedded imagery. Street-name labels removed from map base tiles.

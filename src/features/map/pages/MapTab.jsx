@@ -11,6 +11,7 @@
 import { useState } from "react";
 import LeafletMap from "../components/LeafletMap.jsx";
 import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
+import CourtInfoCard from "../components/CourtInfoCard.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
 
 export default function MapTab({
@@ -19,6 +20,7 @@ export default function MapTab({
 }){
   var [hovered,setHovered]=useState(null);
   var [selected,setSelected]=useState(null);
+  var [selectedCourt,setSelectedCourt]=useState(null);
   var selectedZone = selected ? ZONE_BY_ID[selected] : null;
   var homeZone = profile && profile.home_zone;
 
@@ -30,10 +32,9 @@ export default function MapTab({
         t={t} theme={theme}
         hovered={hovered} selected={selected}
         homeZone={homeZone}
-        avatarUrl={profile && profile.avatar_url}
-        initialsFallback={profile && profile.avatar}
         onHover={setHovered}
         onSelect={setSelected}
+        onCourtSelect={setSelectedCourt}
       />
 
       {/* Title pill — floats top-left over the map */}
@@ -84,6 +85,10 @@ export default function MapTab({
         onClearHome={onClearHomeZone}
         onOpenProfile={onOpenProfile}
       />
+
+      {/* Court info modal — opens on court marker tap */}
+      <CourtInfoCard t={t} court={selectedCourt}
+        onClose={function(){ setSelectedCourt(null); }}/>
     </div>
   );
 }

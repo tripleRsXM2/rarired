@@ -18,7 +18,7 @@ The product compass. What CourtSync is, who it serves, what we optimise for, and
 3. **Lightweight coordination** — just enough to line up another match (rematch, challenge). Not a booking platform.
 
 ### What we are explicitly NOT building
-- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. The Map tab (v1 shipped in Module 4) lists public courts but does not book them — it's a *discovery* surface, not a *reservation* surface. This line stays bright.
+- **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. The Map tab (v1 shipped in Module 4) lists public courts but does not book them — it's a *discovery* surface, not a *reservation* surface. Tapping a court opens an info card that **links out** to Google Maps and (where verified) the operator's own booking page; CourtSync never processes the booking itself. This line stays bright.
 - **Venue operations.** Not a tool for clubs to manage their members or courts.
 - **Tournament operations.** The tournament surface we have is intentionally minimal; we're not competing with Matchtag / PlayByPoint on ladder ops.
 - **A generic chat app.** DMs exist to support rematch coordination and light banter between friends — they are not a messaging product on their own.
@@ -68,3 +68,4 @@ Every meaningful module ships with event tracking so we can learn from real beha
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3. Future module deltas append here.
 - v1 — Module 4 (Map tab): clarified that the map surfaces public courts without booking them — Map is a *discovery* surface, not a *reservation* surface. Line held.
+- v1.1 — CourtInfoCard explicitly links out to external booking (Google Maps + operator site); CourtSync never processes the booking. Line held again.

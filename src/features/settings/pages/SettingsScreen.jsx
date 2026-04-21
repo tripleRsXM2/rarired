@@ -39,6 +39,7 @@ export default function SettingsScreen({
   // ── Avatar upload state ────────────────────────────────────────────────────
   var fileInputRef = useRef(null);
   var [uploadState,setUploadState] = useState({ busy:false, error:null });
+  var [avatarMenuOpen,setAvatarMenuOpen] = useState(false);
 
   async function pickAvatarFile(e){
     var f = e.target.files && e.target.files[0];
@@ -124,8 +125,10 @@ export default function SettingsScreen({
           <div style={{background:t.bgCard, border:"1px solid "+t.border, borderRadius:12, padding:20, marginBottom:12}}>
             <div style={{fontSize:13, fontWeight:700, color:t.text, marginBottom:16}}>Edit Profile</div>
 
-            {/* Avatar upload — tap the badge on the corner */}
-            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
+            {/* Avatar — camera badge in the corner. If a photo exists, camera
+                opens a small menu (Change / Remove). If not, it opens the picker
+                directly. */}
+            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18,position:"relative"}}>
               <div style={{position:"relative",width:84,height:84,flexShrink:0}}>
                 <PlayerAvatar
                   name={profileDraft.name||profile.name}
@@ -143,45 +146,63 @@ export default function SettingsScreen({
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*"
                   onChange={pickAvatarFile} style={{display:"none"}}/>
-                {/* Plus (upload) OR cross (remove) badge */}
-                {(profile.avatar_url)
-                  ? (
-                    <button type="button" disabled={uploadState.busy}
-                      onClick={removeAvatar}
-                      aria-label="Remove photo"
-                      style={{
-                        position:"absolute",right:-2,bottom:-2,
-                        width:26,height:26,borderRadius:"50%",
-                        background:t.red,color:"#fff",border:"2px solid "+t.bgCard,
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        fontSize:16,fontWeight:700,lineHeight:1,padding:0,
-                        cursor: uploadState.busy?"not-allowed":"pointer",
-                        boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
-                      }}>×</button>
-                  )
-                  : (
-                    <button type="button" disabled={uploadState.busy||!authUser}
-                      onClick={function(){ fileInputRef.current && fileInputRef.current.click(); }}
-                      aria-label="Upload photo"
-                      style={{
-                        position:"absolute",right:-2,bottom:-2,
-                        width:26,height:26,borderRadius:"50%",
-                        background:t.accent,color:t.accentText,border:"2px solid "+t.bgCard,
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        fontSize:18,fontWeight:700,lineHeight:1,padding:0,
-                        cursor: uploadState.busy?"not-allowed":"pointer",
-                        boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
-                      }}>+</button>
-                  )
-                }
+                <button type="button"
+                  disabled={uploadState.busy||!authUser}
+                  onClick={function(){
+                    if(profile.avatar_url){
+                      setAvatarMenuOpen(function(v){return!v;});
+                    } else {
+                      fileInputRef.current && fileInputRef.current.click();
+                    }
+                  }}
+                  aria-label="Change photo"
+                  style={{
+                    position:"absolute",right:-2,bottom:-2,
+                    width:28,height:28,borderRadius:"50%",
+                    background:t.accent,color:t.accentText,border:"2px solid "+t.bgCard,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    padding:0, cursor: uploadState.busy?"not-allowed":"pointer",
+                    boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
+                  }}>
+                  {/* Camera glyph */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </button>
+
+                {/* Pop-up menu when a photo exists */}
+                {avatarMenuOpen && profile.avatar_url && (
+                  <>
+                    <div onClick={function(){setAvatarMenuOpen(false);}}
+                      style={{position:"fixed",inset:0,zIndex:10}}/>
+                    <div style={{
+                      position:"absolute",left:"100%",marginLeft:8,top:"50%",transform:"translateY(-20%)",
+                      background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,
+                      boxShadow:"0 8px 24px rgba(0,0,0,0.18)",overflow:"hidden",zIndex:20,minWidth:150,
+                    }}>
+                      <button type="button"
+                        onClick={function(){
+                          setAvatarMenuOpen(false);
+                          fileInputRef.current && fileInputRef.current.click();
+                        }}
+                        style={{display:"block",width:"100%",padding:"10px 14px",border:"none",
+                          background:"transparent",color:t.text,fontSize:13,textAlign:"left",cursor:"pointer"}}>
+                        Change photo
+                      </button>
+                      <button type="button"
+                        onClick={function(){ setAvatarMenuOpen(false); removeAvatar(); }}
+                        style={{display:"block",width:"100%",padding:"10px 14px",border:"none",
+                          borderTop:"1px solid "+t.border,background:"transparent",color:t.red,
+                          fontSize:13,textAlign:"left",cursor:"pointer",fontWeight:500}}>
+                        Remove photo
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:t.text,marginBottom:2}}>Profile photo</div>
-                <div style={{fontSize:11,color:t.textTertiary,lineHeight:1.4}}>
-                  {profile.avatar_url
-                    ? "Tap × to remove."
-                    : "Tap + to upload."}
-                </div>
+                <div style={{fontSize:13,fontWeight:600,color:t.text}}>Profile photo</div>
                 {uploadState.error&&(
                   <div style={{fontSize:11,color:t.red,marginTop:4}}>{uploadState.error}</div>
                 )}

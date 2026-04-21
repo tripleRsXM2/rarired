@@ -6,7 +6,7 @@ import { supabase } from "../../../lib/supabase.js";
 export function fetchPlayersInZone(zoneId, limit){
   var l = limit || 20;
   return supabase.from("profiles")
-    .select("id,name,avatar,suburb,skill,ranking_points,last_active,home_zone")
+    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone")
     .eq("home_zone", zoneId)
     .order("last_active", { ascending: false, nullsFirst: false })
     .limit(l);
