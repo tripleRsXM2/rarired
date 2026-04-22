@@ -337,41 +337,47 @@ function FeedCard({
               padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
             }}>{statusPill.label}</span>
           )}
-          {/* Submitter can delete when: not actively disputed, and either
-              casual OR already voided (ranked matches affect ELO so they can
-              only be removed via the dispute/void flow). See canSubmitterDelete
-              above for the full reasoning. */}
+          {/* Unified ranked-integrity rule:
+              Confirmed ranked matches are LOCKED for BOTH sides — submitter
+              can't delete AND tagged opponent can't hide from feed. The
+              match is part of the shared record that drives ELO + league
+              standings, so neither party should be able to unilaterally
+              remove it from view. Voided/expired ranked matches ARE removable
+              (already reverted / never counted); casual matches are always
+              removable for both sides (no ranking impact). */}
           {canSubmitterDelete && (
             <button onClick={async function() {
                 if (!window.confirm(isVoided ? "Remove this voided match from your feed?" : "Delete this match?")) return;
                 var res = await onDelete(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
+              title="Delete match"
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
-          {/* Ranked + own + confirmed/pending/expired → tiny lock glyph so
-              the user understands why no × appears. Hidden on voided since
-              those ARE deletable. */}
-          {isOwn && isRanked && !isVoided && !isInDispute && (
+          {m.isTagged && onRemove && (isConfirmed || isVoided || isExpired) && (!isRanked || isVoided || isExpired) && (
+            <button onClick={async function() {
+                if (!window.confirm("Remove from your feed?")) return;
+                var res = await onRemove(m);
+                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
+              }}
+              title="Remove from my feed"
+              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
+          )}
+          {/* Padlock glyph — shown on locked ranked cards for BOTH sides
+              (submitter + tagged opponent) so the missing × isn't a mystery.
+              Hidden on voided (those ARE deletable) and on in-dispute cards
+              (they're mid-flow, lock would be confusing). */}
+          {isRanked && !isVoided && !isInDispute && (isOwn || (m.isTagged && isConfirmed)) && (
             <span
-              title="Ranked match — dispute or void to remove (protects ELO integrity)"
+              title={isOwn
+                ? "Ranked match — dispute or void to remove (protects ELO integrity)"
+                : "Ranked match — part of the shared record. Can't be removed from your feed."}
               style={{ color: t.textTertiary, display: "flex", alignItems: "center", padding: 2, opacity: 0.6 }}>
               <svg width="12" height="12" viewBox="0 0 18 18" fill="none">
                 <rect x="4" y="8" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
                 <path d="M6 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </span>
-          )}
-          {/* Tagged user (opponent) can hide confirmed OR voided / expired
-              matches from their own feed. Dispute/pending still blocked — the
-              match-truth flow handles those. */}
-          {m.isTagged && onRemove && (isConfirmed || isVoided || isExpired) && (
-            <button onClick={async function() {
-                if (!window.confirm("Remove from your feed?")) return;
-                var res = await onRemove(m);
-                if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
-              }}
-              style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
           )}
         </div>
       </div>
