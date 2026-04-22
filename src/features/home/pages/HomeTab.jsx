@@ -233,6 +233,14 @@ function FeedCard({
   var statusColor = isDisputed ? t.red
                    : (isPending || isPendingReconf) ? t.orange
                    : null;
+  // Ranked integrity: any match with a non-casual tournName counts toward the
+  // opponent's record and ranking points. Once it's submitted, the submitter
+  // can no longer delete it unilaterally from the feed — the proper paths are
+  // dispute (to correct) or void (to revert ranking impact). Voided ranked
+  // matches CAN be removed from the feed because voiding already reversed any
+  // ranking effect.
+  var isRanked       = !!m.tournName && m.tournName !== "Casual Match" && m.tournName !== "Casual";
+  var canSubmitterDelete = isOwn && onDelete && !isInDispute && (!isRanked || isVoided);
   var cardBorder = statusColor
                    ? (needsAction ? "2px solid " + statusColor : "1px solid " + statusColor + "88")
                    : "1px solid " + t.border;
@@ -288,16 +296,30 @@ function FeedCard({
               padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
             }}>{statusPill.label}</span>
           )}
-          {/* Submitter can delete when: not actively disputed. Includes voided
-              matches now — a voided card is terminal dead weight on the feed
-              and the user should be able to clear it. */}
-          {isOwn && onDelete && !isInDispute && (
+          {/* Submitter can delete when: not actively disputed, and either
+              casual OR already voided (ranked matches affect ELO so they can
+              only be removed via the dispute/void flow). See canSubmitterDelete
+              above for the full reasoning. */}
+          {canSubmitterDelete && (
             <button onClick={async function() {
                 if (!window.confirm(isVoided ? "Remove this voided match from your feed?" : "Delete this match?")) return;
                 var res = await onDelete(m);
                 if (res && res.error) (toast ? toast(res.error, "error") : window.alert(res.error));
               }}
               style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 13, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>✕</button>
+          )}
+          {/* Ranked + own + confirmed/pending/expired → tiny lock glyph so
+              the user understands why no × appears. Hidden on voided since
+              those ARE deletable. */}
+          {isOwn && isRanked && !isVoided && !isInDispute && (
+            <span
+              title="Ranked match — dispute or void to remove (protects ELO integrity)"
+              style={{ color: t.textTertiary, display: "flex", alignItems: "center", padding: 2, opacity: 0.6 }}>
+              <svg width="12" height="12" viewBox="0 0 18 18" fill="none">
+                <rect x="4" y="8" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M6 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </span>
           )}
           {/* Tagged user (opponent) can hide confirmed OR voided / expired
               matches from their own feed. Dispute/pending still blocked — the
@@ -954,8 +976,11 @@ export default function HomeTab({
             {history.length} match{history.length !== 1 ? "es" : ""} logged
           </div>
         </div>
+        {/* Hidden at ≥1440px because RightPanel's Quick Actions already has
+            a "Log match" button — showing both is duplicated chrome. */}
         <button
           onClick={openLogMatch}
+          className="cs-hide-at-rightpanel"
           style={{ padding: "10px 18px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, flexShrink: 0, letterSpacing: "-0.1px", transition: "opacity 0.15s" }}
           onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
           + Log match

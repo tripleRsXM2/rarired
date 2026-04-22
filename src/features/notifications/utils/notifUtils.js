@@ -253,11 +253,13 @@ export function groupNotifications(rawNotifications) {
 }
 
 // ── Clearing rules ─────────────────────────────────────────────────────────────
-export function canDismiss(n) {
-  return getEffectiveType(n) !== "action";
-}
+// Every notification is dismissable. Deleting the notification row never
+// affects the underlying object (match, dispute, challenge) — it just
+// removes the nag from the inbox. If the user has already resolved the
+// action elsewhere (or simply wants to declutter), let them clear it.
+export function canDismiss(n) { return !!n; }
 
-// Can an entire display item be dismissed?
+// Can an entire display item be dismissed? All four kinds are dismissable.
 export function canDismissItem(item) {
   if (item.kind === "single")        return canDismiss(item.n);
   if (item.kind === "thread")        return canDismiss(item.primary);

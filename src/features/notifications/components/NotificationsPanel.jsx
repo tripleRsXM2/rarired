@@ -6,6 +6,7 @@ import { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import {
   getEffectiveType,
   getNotifLabel,
@@ -70,21 +71,28 @@ function ctaButton(t, color, subtle, label, onClick) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DismissBtn({ t, onDismiss }) {
+  // SVG x glyph at normal opacity — clearer affordance than the faint ×
+  // we had before. Dismissing a notification is safe (the underlying
+  // match/dispute/challenge isn't affected), so we don't need to make
+  // this hard to find.
   return (
     <button
       onClick={function (e) { e.stopPropagation(); onDismiss(); }}
-      title="Dismiss"
+      title="Dismiss notification"
+      aria-label="Dismiss notification"
       style={{
-        background: "none", border: "none",
-        color: t.textTertiary, fontSize: 16, lineHeight: 1,
-        padding: "2px 5px", cursor: "pointer",
-        borderRadius: 4, opacity: 0.5,
-        transition: "opacity 0.13s, color 0.13s",
-        flexShrink: 0,
+        background: "none", border: "1px solid " + t.border,
+        color: t.textSecondary,
+        padding: "4px", cursor: "pointer",
+        borderRadius: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+        transition: "color 0.13s, border-color 0.13s, background 0.13s",
+        flexShrink: 0, lineHeight: 0,
       }}
-      onMouseEnter={function (e) { e.currentTarget.style.opacity = "1"; e.currentTarget.style.color = t.text; }}
-      onMouseLeave={function (e) { e.currentTarget.style.opacity = "0.5"; e.currentTarget.style.color = t.textTertiary; }}
-    >×</button>
+      onMouseEnter={function (e) { e.currentTarget.style.color = t.red; e.currentTarget.style.borderColor = t.red; }}
+      onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; e.currentTarget.style.borderColor = t.border; }}
+    >
+      {NAV_ICONS.x(12)}
+    </button>
   );
 }
 

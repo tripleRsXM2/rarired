@@ -48,11 +48,16 @@ export default function Providers({ t, theme, children }){
       // ≥1200px: expand sidebar to show labels
       "@media(min-width:1200px){.cs-sidebar-col{width:220px;min-width:220px}}",
 
-      // ≥1440px: show right panel
+      // ≥1440px: show right panel + hide chrome that duplicates right-panel actions
       "@media(min-width:1440px){",
         ".cs-right-col{display:flex;flex-direction:column;width:292px;min-width:292px;",
           "flex-shrink:0;position:sticky;top:0;height:100vh;border-left:1px solid "+t.border+";",
           "overflow-y:auto;gap:0}",
+        // Anything tagged .cs-hide-at-rightpanel is duplicated by the right
+        // panel at this breakpoint (e.g. the feed header "+ Log match" button
+        // is covered by RightPanel's Quick Actions). Hide it to avoid two
+        // affordances for the same action.
+        ".cs-hide-at-rightpanel{display:none!important}",
       "}",
 
       // Hide mobile chrome on desktop
