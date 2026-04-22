@@ -250,6 +250,11 @@ export function useMatchHistory(opts){
       sets:clean, result:scoreDraft.result, notes:'',
       venue:scoreDraft.venue||'', court:scoreDraft.court||'',
       status, opponent_id:opponentId, submitterId:authUser.id, isTagged:false,
+      // Module 7 — preserve the league tag on the local row so the feed
+      // card shows the correct league pill immediately (before the next
+      // loadHistory sweep picks up the DB row). oppAvatarUrl stays null
+      // locally; it populates after loadHistory enriches participants.
+      league_id: scoreDraft.leagueId || null,
     };
     setHistory(function(h){return [nm].concat(h);});
 

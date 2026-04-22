@@ -576,6 +576,7 @@ export default function App(){
               goToChallengesTab={function(){navigate("/people/challenges");}}
               /* Module 7 — simple id→name index for league pills on feed cards */
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
+              onOpenLeague={function(id){ navigate("/people/leagues?id=" + id); }}
             />
           )}
           {tab==="map"&&(

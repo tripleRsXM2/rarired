@@ -110,7 +110,7 @@ function IconButton({ t, title, onClick, active, children }) {
 
 // ── FeedCard ──────────────────────────────────────────────────────────────────
 function FeedCard({
-  m, isOwn, pName, pAvatar, pAvatarUrl, oppAvatarUrl, demo, onDelete, onRemove, leaguesIndex,
+  m, isOwn, pName, pAvatar, pAvatarUrl, oppAvatarUrl, demo, onDelete, onRemove, leaguesIndex, onOpenLeague,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
@@ -320,16 +320,23 @@ function FeedCard({
 
         {/* Top-right: status pill + close-button (kept minimal) */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-          {/* Module 7: league pill. Distinct from tournName because it links
-              the match to a private leaderboard — not just a label. Accent
-              colour so it reads as a positive social tag, not a status. */}
+          {/* Module 7: league pill — clickable, deep-links to the league's
+              standings view so users can tap from a feed card straight into
+              the scoreboard context. */}
           {leagueName && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, color: t.accent, background: t.accentSubtle,
-              border: "1px solid " + t.accent + "33",
-              padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
-              maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }} title={"League · " + leagueName}>{leagueName}</span>
+            <button
+              onClick={function (e) {
+                e.stopPropagation();
+                if (onOpenLeague && m.league_id) onOpenLeague(m.league_id);
+              }}
+              title={"Open league · " + leagueName}
+              style={{
+                fontSize: 9, fontWeight: 700, color: t.accent, background: t.accentSubtle,
+                border: "1px solid " + t.accent + "33",
+                padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+                maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                cursor: onOpenLeague ? "pointer" : "default",
+              }}>{leagueName}</button>
           )}
           {statusPill && (
             <span style={{
@@ -889,8 +896,9 @@ export default function HomeTab({
   notifyMatchOwnerOfComment,
   // Module 4: next-challenge banner at top of feed + deep-link into People.
   challengesList, challengesProfileMap, onLogConvertedMatch, goToChallengesTab,
-  // Module 7 — simple id→name map so league-tagged matches can render a pill
-  leaguesIndex,
+  // Module 7 — simple id→name map so league-tagged matches can render a pill,
+  // and a callback to deep-link into a specific league's detail view.
+  leaguesIndex, onOpenLeague,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
@@ -934,6 +942,7 @@ export default function HomeTab({
     toast,
     onOpenInteractions: openInteractions,
     leaguesIndex: leaguesIndex || {},
+    onOpenLeague: onOpenLeague,
   };
 
   function openLogMatch() {

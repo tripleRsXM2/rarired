@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import CreateLeagueModal from "./CreateLeagueModal.jsx";
@@ -33,7 +34,24 @@ export default function LeaguesPanel({
   var [selectedId, setSelectedId]   = useState(null);
   var [showCreate, setShowCreate]   = useState(false);
 
+  var location = useLocation();
+  var navigate = useNavigate();
+
   function report(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
+
+  // Deep-link: a feed-card league pill navigates to "/people/leagues?id=<uuid>".
+  // Auto-select the requested league on mount / URL change, then strip the
+  // query param so refreshing doesn't keep reopening it.
+  useEffect(function () {
+    var params = new URLSearchParams(location.search);
+    var urlId = params.get("id");
+    if (urlId && urlId !== selectedId) {
+      setSelectedId(urlId);
+      // Clean the URL so back/refresh doesn't fight the user
+      navigate("/people/leagues", { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Load detail lazily when a league is opened
   useEffect(function () {
