@@ -90,8 +90,12 @@ function ChallengeRow({ c, t, partner, openProfile, leftActions, rightActions })
 export default function ChallengesPanel({
   t, authUser, challenges, profileMap, loading, openProfile,
   acceptChallenge, declineChallenge, cancelChallenge,
-  onLogConvertedMatch,   // (challenge) => void  — opens ScoreModal prefilled
+  onLogConvertedMatch,   // (challenge, partnerProfile) => void  — opens ScoreModal prefilled
   toast,                 // optional — non-blocking error reporter
+  // Module 4 — when there are no challenges, turn the empty state into a
+  // friends-list so the user has a one-tap path into the challenge composer
+  // instead of being told "go to a profile and tap Challenge".
+  friends, openChallenge,
 }) {
   function reportErr(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
   if (!authUser) return null;
@@ -107,14 +111,74 @@ export default function ChallengesPanel({
   function busy(id) { return !!(loading && loading[id]); }
 
   if (!incoming.length && !outgoing.length && !accepted.length) {
-    return (
-      <div style={{ textAlign: "center", padding: "48px 20px" }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🎾</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No challenges yet</div>
-        <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.5, maxWidth: 320, margin: "0 auto" }}>
-          Open a friend's profile and tap <strong>Challenge</strong> to set up a match.
-          You can also rematch from any confirmed match card on the feed.
+    var friendsList = Array.isArray(friends) ? friends : [];
+    // No challenges AND no friends → original empty state (nothing to act on).
+    if (!friendsList.length || !openChallenge) {
+      return (
+        <div style={{ textAlign: "center", padding: "48px 20px" }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🎾</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No challenges yet</div>
+          <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.5, maxWidth: 320, margin: "0 auto" }}>
+            Open a friend's profile and tap <strong>Challenge</strong> to set up a match.
+            You can also rematch from any confirmed match card on the feed.
+          </div>
         </div>
+      );
+    }
+    // No challenges BUT have friends → show friends list with a one-tap
+    // Challenge button per row. Reduces the path from "want to play → played"
+    // from 3 taps (open People → open profile → tap Challenge) to 1 tap.
+    return (
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+          Start a challenge
+        </div>
+        <div style={{ fontSize: 12, color: t.textSecondary, marginBottom: 14, lineHeight: 1.5 }}>
+          No active challenges. Tap a friend below to set up a match.
+        </div>
+        {friendsList.map(function (f) {
+          return (
+            <div key={f.id} style={{
+              background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
+              padding: "10px 14px", marginBottom: 8,
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <div
+                onClick={function () { if (openProfile) openProfile(f.id); }}
+                style={{
+                  width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                  background: avColor(f.name),
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 700, color: "#fff",
+                  cursor: openProfile ? "pointer" : "default",
+                }}>
+                {((f.avatar && f.avatar.length <= 2) ? f.avatar : (f.name || "?").slice(0, 2).toUpperCase())}
+              </div>
+              <div
+                onClick={function () { if (openProfile) openProfile(f.id); }}
+                style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "-0.1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {f.name || "Player"}
+                </div>
+                {(f.suburb || f.skill) && (
+                  <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 1 }}>
+                    {[f.suburb, f.skill].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={function () { openChallenge(f, "profile"); }}
+                style={{
+                  flexShrink: 0, padding: "7px 12px", borderRadius: 0, border: "none",
+                  background: t.accent, color: "#fff",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase",
+                  cursor: "pointer",
+                }}>
+                Challenge
+              </button>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -160,10 +224,13 @@ export default function ChallengesPanel({
               <ChallengeRow
                 key={c.id} c={c} t={t} partner={p} openProfile={openProfile}
                 rightActions={<>
+                  {/* Mutually accepted — only action now is to log the result
+                      once played. Replaces the old Accept/Decline/Counter
+                      trio because those choices have already been resolved. */}
                   <button
                     onClick={function () { if (onLogConvertedMatch) onLogConvertedMatch(c, p); }}
                     style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    Log result
+                    Log match info
                   </button>
                   <button disabled={busy(c.id)}
                     onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) reportErr(r.error); } }}

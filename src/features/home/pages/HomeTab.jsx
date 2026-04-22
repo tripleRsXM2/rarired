@@ -5,6 +5,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
+import NextChallengeBanner from "../../challenges/components/NextChallengeBanner.jsx";
 
 var REASON_LABELS = {
   wrong_score:   "Score is wrong",
@@ -869,6 +870,8 @@ export default function HomeTab({
   pendingFreshCount,
   refreshFeed,
   notifyMatchOwnerOfComment,
+  // Module 4: next-challenge banner at top of feed + deep-link into People.
+  challengesList, challengesProfileMap, onLogConvertedMatch, goToChallengesTab,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
@@ -1021,6 +1024,21 @@ export default function HomeTab({
           </div>
         );
       })()}
+
+      {/* Next-challenge banner — single lean card for the most-imminent
+          accepted challenge. Full list lives in People → Challenges. */}
+      {challengesList && (
+        <div style={{ padding: "0 20px", maxWidth: 720 }}>
+          <NextChallengeBanner
+            t={t}
+            authUser={authUser}
+            challenges={challengesList}
+            profileMap={challengesProfileMap}
+            onLogScores={onLogConvertedMatch}
+            onOpenChallenges={goToChallengesTab}
+          />
+        </div>
+      )}
 
       {/* Filter pills — functional. Friends = matches where poster or opponent
           is in the viewer's friends list. */}

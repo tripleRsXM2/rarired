@@ -1,6 +1,30 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
+import { COURTS } from "../../map/data/courts.js";
+
+// Sort COURTS so venues in the viewer's own suburb float to the top, then
+// same-zone (implicit "nearby" bucket from the map), then alphabetical. This
+// keeps the dropdown useful when the list grows — the default cursor lands
+// on the venues the viewer is most likely to actually play at.
+function sortCourtsForViewer(viewerSuburb){
+  var vs = (viewerSuburb || "").trim().toLowerCase();
+  // derive the viewer's likely zone from their suburb so we can bump
+  // same-zone courts above alphabetical order.
+  var myZone = null;
+  if(vs){
+    var hit = COURTS.find(function(c){ return (c.suburb||"").toLowerCase() === vs; });
+    if(hit) myZone = hit.zone;
+  }
+  return COURTS.slice().sort(function(a,b){
+    var aSub = (a.suburb||"").toLowerCase();
+    var bSub = (b.suburb||"").toLowerCase();
+    var aTier = vs && aSub === vs ? 0 : (myZone && a.zone === myZone ? 1 : 2);
+    var bTier = vs && bSub === vs ? 0 : (myZone && b.zone === myZone ? 1 : 2);
+    if(aTier !== bTier) return aTier - bTier;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 export default function ScoreModal({
   t, authUser, scoreModal, setScoreModal,
@@ -10,6 +34,9 @@ export default function ScoreModal({
   showOppDrop, setShowOppDrop,
   friends, suggestedPlayers,
   submitMatch, resubmitMatch, recordResult,
+  // Module 6.7 — viewer's suburb drives the court-dropdown priority so
+  // they see their local courts first. Optional; falls back to pure A→Z.
+  viewerSuburb,
 }) {
   var iStyle=inputStyle(t);
   var [saving,setSaving]=useState(false);
@@ -245,21 +272,73 @@ export default function ScoreModal({
           })}
         </div>
 
-        {/* Venue + Court */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-          <div>
-            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Venue</label>
-            <input value={scoreDraft.venue||""} placeholder="e.g. Moore Park"
-              onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{venue:e.target.value});});}}
-              style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
-          </div>
-          <div>
-            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Court</label>
-            <input value={scoreDraft.court||""} placeholder="e.g. Court 3"
-              onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{court:e.target.value});});}}
-              style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
-          </div>
-        </div>
+        {/* Venue + Court
+            Venue is a dropdown sourced from the same COURTS list as the Map
+            — so map selection and log-match selection stay in sync. Sorted
+            by viewer suburb first, then same-zone, then alphabetical.
+            "Custom venue..." reveals a free-text input as a fallback for
+            private clubs or courts we haven't catalogued yet. */}
+        {(function(){
+          var sortedCourts = sortCourtsForViewer(viewerSuburb);
+          var currentVenue = scoreDraft.venue || "";
+          var matchesKnownCourt = !!currentVenue && sortedCourts.some(function(c){ return c.name === currentVenue; });
+          var isCustom = !!currentVenue && !matchesKnownCourt;
+
+          // The <select> value is either the known court name, "__custom__"
+          // when the user has typed a free-text venue, or "" for placeholder.
+          var selectValue = matchesKnownCourt ? currentVenue : (isCustom ? "__custom__" : "");
+
+          function handleSelect(e){
+            var v = e.target.value;
+            if(v === "__custom__"){
+              // entering custom mode — keep whatever's already in venue (may be blank)
+              setScoreDraft(function(d){ return Object.assign({}, d, { venue: d.venue || "" }); });
+              return;
+            }
+            setScoreDraft(function(d){ return Object.assign({}, d, { venue: v }); });
+          }
+
+          return (
+            <div style={{marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Venue</label>
+                  <select
+                    value={selectValue}
+                    onChange={handleSelect}
+                    style={Object.assign({},iStyle,{fontSize:13,marginBottom:0,appearance:"auto"})}>
+                    <option value="">— Select court —</option>
+                    {sortedCourts.map(function(c){
+                      var isLocal = viewerSuburb && (c.suburb||"").toLowerCase() === (viewerSuburb||"").toLowerCase();
+                      var label = isLocal ? (c.name + " · " + c.suburb + " ★") : (c.name + " · " + c.suburb);
+                      return <option key={c.name} value={c.name}>{label}</option>;
+                    })}
+                    <option value="__custom__">Custom venue…</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Court</label>
+                  <input value={scoreDraft.court||""} placeholder="e.g. Court 3"
+                    onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{court:e.target.value});});}}
+                    style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
+                </div>
+              </div>
+
+              {/* Free-text fallback — only when "Custom venue…" is picked */}
+              {isCustom && (
+                <div style={{marginTop:8}}>
+                  <input value={currentVenue} placeholder="Type venue name"
+                    autoFocus
+                    onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{venue:e.target.value});});}}
+                    style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
+                  <div style={{fontSize:10,color:t.textTertiary,marginTop:4,letterSpacing:"0.02em"}}>
+                    Can't find your court? Type the venue name here.
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Error */}
         {saveError&&(

@@ -556,6 +556,11 @@ export default function App(){
               pendingFreshCount={matchHistory.pendingFreshCount}
               refreshFeed={matchHistory.refreshFeed}
               notifyMatchOwnerOfComment={notifyMatchOwnerOfComment}
+              /* Module 4 — next-challenge banner + deep-link into Challenges tab */
+              challengesList={challenges.challenges}
+              challengesProfileMap={challenges.profileMap}
+              onLogConvertedMatch={openConvertToMatch}
+              goToChallengesTab={function(){navigate("/people/challenges");}}
             />
           )}
           {tab==="map"&&(
@@ -685,6 +690,7 @@ export default function App(){
           friends={social.friends} suggestedPlayers={social.suggestedPlayers}
           submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
+          viewerSuburb={currentUser.profile&&currentUser.profile.suburb}
         />
         <DisputeModal
           t={t}

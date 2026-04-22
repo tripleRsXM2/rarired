@@ -390,6 +390,9 @@ export default function PeopleTab({
               cancelChallenge={challenges.cancelChallenge}
               onLogConvertedMatch={openConvertToMatch}
               toast={toast}
+              /* Empty-state friends list → 1-tap Challenge button per row */
+              friends={friends}
+              openChallenge={openChallenge}
             />
           )}
 
