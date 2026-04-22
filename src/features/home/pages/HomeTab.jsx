@@ -4,6 +4,7 @@ import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 import NextChallengeBanner from "../../challenges/components/NextChallengeBanner.jsx";
 
@@ -109,7 +110,7 @@ function IconButton({ t, title, onClick, active, children }) {
 
 // ── FeedCard ──────────────────────────────────────────────────────────────────
 function FeedCard({
-  m, isOwn, pName, pAvatar, demo, onDelete, onRemove,
+  m, isOwn, pName, pAvatar, pAvatarUrl, demo, onDelete, onRemove,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
@@ -263,16 +264,14 @@ function FeedCard({
     >
       {/* ── Header — tightened sizing to feel refined, not chunky ── */}
       <div style={{ padding: "14px 16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
-        {/* Avatar — smaller, round, clickable when the poster is a real user */}
+        {/* Poster avatar — real photo if we have one (uploaded avatar_url),
+            else deterministic colour + initials via PlayerAvatar. Clickable
+            when the poster is a linked user. */}
         <div
           onClick={posterClickable ? goPoster : undefined}
-          style={{
-            width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-            background: avColor(pName),
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 600, color: "#fff", letterSpacing: "-0.2px",
-            cursor: posterClickable ? "pointer" : "default",
-          }}>{pAvatar || (pName || "?").slice(0, 2).toUpperCase()}</div>
+          style={{ flexShrink: 0, cursor: posterClickable ? "pointer" : "default" }}>
+          <PlayerAvatar name={pName} avatar={pAvatar} avatarUrl={pAvatarUrl} size={34} />
+        </div>
 
         {/* Name + subtitle */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1140,11 +1139,17 @@ export default function HomeTab({
 
           return filtered.map(function (m) {
             var isOwn = !m.isTagged;
+            // pAvatarUrl: for own matches the viewer IS the poster → use
+            // their profile.avatar_url. For tagged matches the submitter is
+            // the poster → useMatchHistory attaches their avatar_url as
+            // m.posterAvatarUrl via the fetchProfilesByIds enrichment step.
+            var posterAvatarUrl = isOwn ? (profile && profile.avatar_url) : (m.posterAvatarUrl || null);
             return (
               <FeedCard
                 key={m.id} m={m} isOwn={isOwn} demo={false}
                 pName={isOwn ? profile.name : (m.friendName || m.oppName)}
                 pAvatar={isOwn ? profile.avatar : ""}
+                pAvatarUrl={posterAvatarUrl}
                 onDelete={isOwn ? deleteMatch : null}
                 onRemove={m.isTagged ? removeTaggedMatch : null}
                 {...feedCardProps}

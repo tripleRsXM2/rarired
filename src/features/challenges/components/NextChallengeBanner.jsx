@@ -16,8 +16,8 @@
 //   • not dismissed in this session (local state only, resets on reload)
 
 import { useState } from "react";
-import { avColor } from "../../../lib/utils/avatar.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 function fmtShortWhen(iso){
   if(!iso) return null;
@@ -81,14 +81,10 @@ export default function NextChallengeBanner({
       marginBottom: 14,
       display: "flex", alignItems: "center", gap: 12,
     }}>
-      {/* Partner avatar — small, reinforces who you're playing */}
-      <div style={{
-        width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-        background: avColor(partner.name),
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "-0.2px",
-      }}>
-        {((partner.avatar && partner.avatar.length<=2) ? partner.avatar : (partner.name||"?").slice(0,2).toUpperCase())}
+      {/* Partner avatar — real photo if uploaded, else deterministic
+          colour + initials. Reinforces WHO you're about to play. */}
+      <div style={{ flexShrink: 0 }}>
+        <PlayerAvatar name={partner.name} avatar={partner.avatar} profile={partner} size={32} />
       </div>
 
       {/* Copy — one line on desktop, wraps cleanly on narrow screens */}

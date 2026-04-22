@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
 function Section({ t, title, children }) {
@@ -133,14 +134,8 @@ function Leaderboard({ t, openProfile, viewerSuburb }) {
             }}>
               {i < 3 ? medals[i] : i + 1}
             </span>
-            <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: avColor(p.name),
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
-            }}>
-              {p.avatar || (p.name || "?").slice(0, 2).toUpperCase()}
-            </div>
+            <PlayerAvatar name={p.name} avatar={p.avatar} profile={p} size={28} />
+
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 13, fontWeight: 600, color: t.text,

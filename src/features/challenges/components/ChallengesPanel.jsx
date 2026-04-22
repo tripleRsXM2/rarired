@@ -9,7 +9,7 @@
 // negotiate logistics they can DM. We deliberately don't add comments on
 // challenges.
 
-import { avColor } from "../../../lib/utils/avatar.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 function fmtProposedAt(iso) {
   if (!iso) return null;
@@ -33,14 +33,8 @@ function ChallengeRow({ c, t, partner, openProfile, leftActions, rightActions })
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div
           onClick={goPartner}
-          style={{
-            width: 38, height: 38, borderRadius: "50%",
-            background: avColor((partner && partner.name) || "?"),
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0,
-            cursor: openProfile ? "pointer" : "default",
-          }}>
-          {((partner && (partner.avatar || partner.name)) || "?").slice(0, 2).toUpperCase()}
+          style={{ flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
+          <PlayerAvatar name={partner && partner.name} avatar={partner && partner.avatar} profile={partner} size={38} />
         </div>
         <div onClick={goPartner} style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>
@@ -145,14 +139,8 @@ export default function ChallengesPanel({
             }}>
               <div
                 onClick={function () { if (openProfile) openProfile(f.id); }}
-                style={{
-                  width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-                  background: avColor(f.name),
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 700, color: "#fff",
-                  cursor: openProfile ? "pointer" : "default",
-                }}>
-                {((f.avatar && f.avatar.length <= 2) ? f.avatar : (f.name || "?").slice(0, 2).toUpperCase())}
+                style={{ flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
+                <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={34} />
               </div>
               <div
                 onClick={function () { if (openProfile) openProfile(f.id); }}
