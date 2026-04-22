@@ -115,7 +115,11 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
         </div>
 
         {/* ── Scrollable body ─────────────────────────────────────────────── */}
-        <div style={{ padding: "14px 20px 16px", overflowY: "auto", flex: 1 }}>
+        {/* minHeight: 0 is load-bearing — without it, flex items default to
+            min-height:auto (= content height), which makes the body refuse to
+            shrink, blows past the parent's maxHeight:88vh, and pushes the
+            sticky header + footer off the viewport. */}
+        <div style={{ padding: "14px 20px 16px", overflowY: "auto", flex: 1, minHeight: 0 }}>
 
           {/* Name */}
           <div style={{ marginBottom: 12 }}>
