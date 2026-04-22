@@ -160,8 +160,25 @@ A player's **"N confirmed matches"** badge (green tick, shown on own and public 
 - Post-confirmation stat corrections.
 - Match expiry time tuning per-user / per-suburb.
 
+## League standings (Module 7)
+
+Leagues are a **read-side lens** on the existing match truth system. A league adds a private, scoped leaderboard for a group of friends without changing anything about how global matches are verified, confirmed, disputed, or ranked via ELO.
+
+**Key rules for league standings:**
+- Only matches with `match_history.status = 'confirmed'` count toward a league's standings. Pending, disputed, pending_reconfirmation, voided, and expired matches are never summed.
+- The existing confirmation / dispute / void / expiry RPCs are **unchanged**. An AFTER trigger on `match_history` invokes the `recalculate_league_standings` function whenever a league-tagged row changes state.
+- Standings are persisted in `league_standings` for fast reads but are a pure function of current `match_history` rows. Full idempotent recomputation means drift is self-healing.
+- League participation does **not** affect global ELO or `profiles.ranking_points`. Global rating is computed from every confirmed match regardless of league tagging; leagues are scoped stats that live alongside, not inside, the global system.
+- `match_history.league_id` is immutable post-insert. A match's league membership cannot be rewritten after the fact.
+- Both participants must be active league members for a match to be accepted with a league tag. Enforced at the DB layer via the `validate_match_league` BEFORE trigger.
+
+**What this means for the confirmation flow:** nothing. A league match goes through the exact same `pending_confirmation → confirmed | disputed → ...` state machine as every other match. Standings just observe the outcome.
+
+See `docs/leagues-and-seasons.md` for the full spec.
+
 ## Last Updated By Module
 - v0 — initialised from shipped state at end of Module 3.
 - v1 — Module 4 (challenges) noted as the conversion path from intent → ranked match log; no trust math change.
 - v2 — Module 5 (real ELO). Linear placeholder replaced by ELO with provisional period. Single-source-of-truth `apply_match_outcome` RPC. Provisional + confirmation-rate trust pills surfaced on profile UI.
 - v3 — Scoreboard + ScoreModal sanity: feed card winner-arrow + row-bold are now derived from **set scores**, not the stored `result` field. If the sets unambiguously pick a winner we trust that. This self-heals the classic "user tapped Loss but entered winning sets" data-entry bug without touching the stored row. Stored `result` still drives the outer resultColor border + share text. ScoreModal now warns once at save time when the selected Win/Loss disagrees with the set math, but does not block (retirement / incomplete matches are valid).
+- v4 — Module 7 (leagues V1 schema). Added `match_history.league_id` nullable column + persisted `league_standings` as read-side lens. No change to match truth flow, global ELO, confirmation, dispute, or void rules.
