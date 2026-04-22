@@ -27,7 +27,10 @@ export default function EmojiPicker({ t, onPick, onClose, anchor }) {
   var [recents, setRecents] = useState(function () { return readRecents(); });
   var rootRef = useRef(null);
 
-  // Close on outside tap / Escape
+  // Close on outside tap / Escape. The outside-click listeners are attached
+  // on the next frame so the same click that opened the picker (via its
+  // trigger button) doesn't immediately hit `document` and close us again —
+  // that's what was breaking the "+" → picker flow on desktop.
   useEffect(function () {
     function onDoc(e) {
       if (!rootRef.current) return;
@@ -35,10 +38,13 @@ export default function EmojiPicker({ t, onPick, onClose, anchor }) {
       onClose && onClose();
     }
     function onKey(e) { if (e.key === "Escape") onClose && onClose(); }
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("touchstart", onDoc);
+    var rafId = requestAnimationFrame(function () {
+      document.addEventListener("mousedown", onDoc);
+      document.addEventListener("touchstart", onDoc);
+    });
     document.addEventListener("keydown", onKey);
     return function () {
+      cancelAnimationFrame(rafId);
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("touchstart", onDoc);
       document.removeEventListener("keydown", onKey);

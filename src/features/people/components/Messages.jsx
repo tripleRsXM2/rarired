@@ -28,6 +28,16 @@ import {
 var QUICK_REACTIONS = ["👍", "❤️", "😂", "😢", "🔥", "🎾"];
 var EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 min
 
+// ── Inline SVG icons for the action menu. Match the rest of the app's
+// nav-icon style (18px, 1.5 stroke, rounded caps). currentColor means the
+// menu-item's text color drives the glyph. ────────────────────────────────
+
+function IconReply(p)  { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><path d="M7 5L3 9l4 4M3 9h7a4 4 0 0 1 4 4v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>); }
+function IconCopy(p)   { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><rect x="5" y="5" width="10" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M3 13V3.5A1.5 1.5 0 0 1 4.5 2H12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
+function IconEdit(p)   { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><path d="M12.5 2.5l3 3L6 15H3v-3l9.5-9.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M11 4l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
+function IconTrash(p)  { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><path d="M3.5 5h11M7 5V3.5A1 1 0 0 1 8 2.5h2a1 1 0 0 1 1 1V5M5 5l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M7.5 8v4M10.5 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
+function IconUnsend(p) { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5 13L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
+
 export default function Messages({ t, authUser, dms, openProfile }) {
   var [menuState, setMenuState] = useState(null);          // { message, rect }
   var [showSettings, setShowSettings] = useState(false);
@@ -97,17 +107,32 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   // ── Long-press / right-click context menu ────────────────────────────────
 
+  // Ref-based flag used to suppress the synthesized `click` that fires
+  // after a touchend on iOS/Android — otherwise a tap would trigger BOTH
+  // the long-press menu AND the follow-up click-to-menu on the same bubble.
+  var suppressClickRef = useRef(false);
+
   function handleTouchStart(e, msg) {
     var el = e.currentTarget;
+    suppressClickRef.current = true;
     touchTimer.current = setTimeout(function () {
       setMenuState({ message: msg, rect: el.getBoundingClientRect() });
-      // Haptic hint where supported (iOS safari ignores; android / desktop may).
       if (navigator && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
     }, 450);
   }
-  function handleTouchEnd() { clearTimeout(touchTimer.current); }
+  function handleTouchEnd() {
+    clearTimeout(touchTimer.current);
+    // Release the click-suppression after the synthesized click has fired.
+    setTimeout(function () { suppressClickRef.current = false; }, 350);
+  }
   function handleContextMenu(e, msg) {
     e.preventDefault();
+    setMenuState({ message: msg, rect: e.currentTarget.getBoundingClientRect() });
+  }
+  function handleBubbleClick(e, msg) {
+    // On touch devices, skip — the long-press already handled interaction.
+    if (suppressClickRef.current) return;
+    // Desktop left-click opens the same action menu that right-click does.
     setMenuState({ message: msg, rect: e.currentTarget.getBoundingClientRect() });
   }
   function closeMenu() { setMenuState(null); }
@@ -393,6 +418,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                         onTouchStart={function (e) { handleTouchStart(e, msg); }}
                         onTouchEnd={handleTouchEnd}
                         onTouchMove={handleTouchEnd}
+                        onClick={function (e) { handleBubbleClick(e, msg); }}
                         onContextMenu={function (e) { handleContextMenu(e, msg); }}
                         style={{
                           background: mine ? t.accent : t.bgCard,
@@ -447,18 +473,21 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           window.innerHeight,
           200, 280
         );
-        var canEdit = menuState.message.sender_id === myId && !menuState.message.deleted_at &&
+        var isMine = menuState.message.sender_id === myId;
+        var canEdit = isMine && !menuState.message.deleted_at &&
           (Date.now() - new Date(menuState.message.created_at)) < EDIT_WINDOW_MS;
+        // Delete options are gated to OWN messages only — you can't remove
+        // someone else's bubble from their device.
         var items = [
-          { label: "↩  Reply", show: true,
+          { label: "Reply", icon: IconReply, show: true,
             action: function () { dms.setReplyTo(menuState.message); closeMenu(); setTimeout(function () { inputRef.current && inputRef.current.focus(); }, 50); } },
-          { label: "📋  Copy", show: !menuState.message.deleted_at,
+          { label: "Copy", icon: IconCopy, show: !menuState.message.deleted_at,
             action: function () { navigator.clipboard && navigator.clipboard.writeText(menuState.message.content); closeMenu(); } },
-          { label: "✏️  Edit", show: canEdit,
+          { label: "Edit", icon: IconEdit, show: canEdit,
             action: function () { dms.startEdit(menuState.message); closeMenu(); } },
-          { label: "Delete for me", show: !menuState.message.deleted_at, danger: false,
+          { label: "Delete for me", icon: IconTrash, show: isMine && !menuState.message.deleted_at,
             action: function () { hideForMe(menuState.message.id); } },
-          { label: "Unsend", show: menuState.message.sender_id === myId && !menuState.message.deleted_at, danger: true,
+          { label: "Unsend", icon: IconUnsend, show: isMine && !menuState.message.deleted_at, danger: true,
             action: function () { dms.deleteMessage(menuState.message.id); closeMenu(); } },
         ].filter(function (i) { return i.show; });
         return (
@@ -495,11 +524,18 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                   }}>+</button>
               </div>
               {items.map(function (item) {
+                var Icon = item.icon;
                 return (
                   <button key={item.label} onClick={item.action}
-                    style={{ display: "block", width: "100%", padding: "12px 16px", border: "none", background: "transparent",
-                      color: item.danger ? t.red : t.text, fontSize: 14, textAlign: "left", cursor: "pointer", borderTop: "1px solid " + t.border }}>
-                    {item.label}
+                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%",
+                      padding: "11px 14px", border: "none",
+                      background: item.danger ? (t.redSubtle || "rgba(220,38,38,0.08)") : "transparent",
+                      color: item.danger ? t.red : t.text,
+                      fontSize: 14, fontWeight: item.danger ? 600 : 500,
+                      textAlign: "left", cursor: "pointer",
+                      borderTop: "1px solid " + t.border }}>
+                    <span style={{ display: "inline-flex", flexShrink: 0 }}>{Icon ? <Icon/> : null}</span>
+                    <span>{item.label}</span>
                   </button>
                 );
               })}

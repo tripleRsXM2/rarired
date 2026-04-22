@@ -57,6 +57,38 @@ export function useDMs(opts) {
   friendIdsRef.current = friends.map(function (f) { return f.id; });
   function isFriendId(uid) { return friendIdsRef.current.indexOf(uid) >= 0; }
 
+  // When the friends list first populates (loadSocial runs in parallel with
+  // loadConversations during bootstrap, so friends is usually empty at the
+  // moment loadConversations resolves), any pending-INCOMING conversation
+  // from a friend is stuck in `requests` and invisible from the main list.
+  // Re-scan whenever friends grows: move friend-incoming pendings into the
+  // accepted list, both locally and in the DB.
+  useEffect(function () {
+    if (!authUser || !friends.length || !requests.length) return;
+    var fIds = friends.map(function (f) { return f.id; });
+    var hits = requests.filter(function (r) {
+      return fIds.indexOf(r.partner && r.partner.id) >= 0;
+    });
+    if (!hits.length) return;
+    // Optimistic local upgrade first so the UI updates immediately.
+    setConversations(function (cs) {
+      var existing = {};
+      cs.forEach(function (c) { existing[c.id] = true; });
+      var upgraded = hits
+        .filter(function (h) { return !existing[h.id]; })
+        .map(function (h) { return Object.assign({}, h, { status: "accepted", hasUnread: !!h.last_message_at }); });
+      return upgraded.length ? upgraded.concat(cs) : cs;
+    });
+    setRequests(function (rs) {
+      var ids = {};
+      hits.forEach(function (h) { ids[h.id] = true; });
+      return rs.filter(function (r) { return !ids[r.id]; });
+    });
+    // Persist to DB (fire-and-forget, idempotent).
+    hits.forEach(function (h) { D.updateConversationStatus(h.id, "accepted"); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friends.length, requests.length, authUser && authUser.id]);
+
   // ── Load ────────────────────────────────────────────────────────────────
 
   async function loadConversations() {

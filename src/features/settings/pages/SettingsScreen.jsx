@@ -222,36 +222,38 @@ export default function SettingsScreen({
                 (source of truth), not from the draft. */}
             <div style={{marginBottom:10}}>
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase"}}>Home zone</label>
-              <select
-                value={profile.home_zone||""}
-                onChange={async function(e){
-                  var nextVal = e.target.value || null;
-                  var prev = profile.home_zone||null;
-                  if(nextVal===prev) return;
-                  // Optimistic local update on both profile + draft so every
-                  // surface renders the new zone immediately.
-                  setProfile(function(p){return Object.assign({},p,{home_zone:nextVal});});
-                  setProfileDraft(function(d){return Object.assign({},d,{home_zone:nextVal});});
-                  if(authUser){
-                    var r = await setHomeZone(authUser.id, nextVal);
-                    if(r.error){
-                      setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
-                      setProfileDraft(function(d){return Object.assign({},d,{home_zone:prev});});
-                      console.error("Home zone save error:", r.error);
+              <div style={{position:"relative"}}>
+                <select
+                  value={profile.home_zone||""}
+                  onChange={async function(e){
+                    var nextVal = e.target.value || null;
+                    var prev = profile.home_zone||null;
+                    if(nextVal===prev) return;
+                    setProfile(function(p){return Object.assign({},p,{home_zone:nextVal});});
+                    setProfileDraft(function(d){return Object.assign({},d,{home_zone:nextVal});});
+                    if(authUser){
+                      var r = await setHomeZone(authUser.id, nextVal);
+                      if(r.error){
+                        setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
+                        setProfileDraft(function(d){return Object.assign({},d,{home_zone:prev});});
+                        console.error("Home zone save error:", r.error);
+                      }
                     }
-                  }
-                }}
-                style={Object.assign({},iStyle,{appearance:"none",WebkitAppearance:"none",paddingRight:28,
-                  backgroundImage:"linear-gradient(45deg,transparent 50%,"+t.textSecondary+" 50%),linear-gradient(135deg,"+t.textSecondary+" 50%,transparent 50%)",
-                  backgroundPosition:"calc(100% - 14px) 50%, calc(100% - 9px) 50%",
-                  backgroundSize:"5px 5px, 5px 5px",
-                  backgroundRepeat:"no-repeat",
-                })}>
-                <option value="">Select your home zone…</option>
-                {ZONES.map(function(z){
-                  return <option key={z.id} value={z.id}>{z.name}</option>;
-                })}
-              </select>
+                  }}
+                  style={Object.assign({},iStyle,{appearance:"none",WebkitAppearance:"none",MozAppearance:"none",paddingRight:32})}>
+                  <option value="">Select your home zone…</option>
+                  {ZONES.map(function(z){
+                    return <option key={z.id} value={z.id}>{z.name}</option>;
+                  })}
+                </select>
+                {/* SVG chevron — replaces the old CSS-gradient hack that
+                    could render as two giant overlapping triangles mid
+                    theme-swap. */}
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"
+                  style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:t.textSecondary}}>
+                  <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
             </div>
             {[{l:"Skill level",k:"skill",opts:SKILL_LEVELS},{l:"Play style",k:"style",opts:PLAY_STYLES}].map(function(f){
               return (
