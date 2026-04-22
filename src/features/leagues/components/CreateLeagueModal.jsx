@@ -87,24 +87,38 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
   return (
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 200, padding: 16,
+      }}>
+      {/* The modal itself is the scroll container. maxHeight uses calc()
+          against the viewport minus the 32px padding on the backdrop, so
+          it's explicit about leaving breathing room instead of relying on
+          the brittle flex-column + min-height:0 pattern (which was getting
+          ignored on wider viewports and clipping the header + footer). */}
       <div
         onClick={function (e) { e.stopPropagation(); }}
         className="pop"
         style={{
           background: t.modalBg, border: "1px solid " + t.border, borderRadius: 16,
-          width: "100%", maxWidth: 480, maxHeight: "88vh",
-          display: "flex", flexDirection: "column",
+          width: "100%", maxWidth: 480,
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
           boxShadow: "0 20px 50px rgba(0,0,0,0.35)",
-          overflow: "hidden",
+          position: "relative",
         }}>
 
-        {/* ── Sticky header ───────────────────────────────────────────────── */}
+        {/* ── Sticky header — position:sticky pins it inside the scroll
+             container while the form body scrolls underneath. Far more
+             robust than the previous flex-column pattern. */}
         <div style={{
+          position: "sticky", top: 0, zIndex: 2,
           padding: "16px 20px 12px",
           borderBottom: "1px solid " + t.border,
           background: t.modalBg,
-          flexShrink: 0,
         }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: t.text, margin: 0, letterSpacing: "-0.2px" }}>
             New league
@@ -114,12 +128,8 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
           </p>
         </div>
 
-        {/* ── Scrollable body ─────────────────────────────────────────────── */}
-        {/* minHeight: 0 is load-bearing — without it, flex items default to
-            min-height:auto (= content height), which makes the body refuse to
-            shrink, blows past the parent's maxHeight:88vh, and pushes the
-            sticky header + footer off the viewport. */}
-        <div style={{ padding: "14px 20px 16px", overflowY: "auto", flex: 1, minHeight: 0 }}>
+        {/* ── Scrollable body (in normal flow — parent scrolls) ────────────── */}
+        <div style={{ padding: "14px 20px 16px" }}>
 
           {/* Name */}
           <div style={{ marginBottom: 12 }}>
@@ -232,13 +242,14 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
           )}
         </div>
 
-        {/* ── Sticky footer ───────────────────────────────────────────────── */}
+        {/* ── Sticky footer — bottom:0 pins it to the bottom of the scroll
+             container (the modal itself), regardless of content length. */}
         <div style={{
+          position: "sticky", bottom: 0, zIndex: 2,
           padding: "12px 20px 14px",
           borderTop: "1px solid " + t.border,
           background: t.modalBg,
           display: "flex", gap: 8,
-          flexShrink: 0,
         }}>
           <button
             onClick={onClose}
