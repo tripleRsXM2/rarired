@@ -23,6 +23,7 @@ import { usePresenceHeartbeat } from "../features/people/hooks/usePresenceHeartb
 import { useNotifications } from "../features/notifications/hooks/useNotifications.js";
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
 import { useChallenges } from "../features/challenges/hooks/useChallenges.js";
+import { useLeagues } from "../features/leagues/hooks/useLeagues.js";
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
@@ -147,6 +148,7 @@ export default function App(){
     requireAuth:auth.requireAuth,
   });
   var challenges=useChallenges({ authUser:auth.authUser });
+  var leagues=useLeagues({ authUser:auth.authUser });
 
   var myId=auth.authUser?auth.authUser.id:"local-user";
 
@@ -183,6 +185,7 @@ export default function App(){
         dms.resetDMs();
         notifications.resetNotifications();
         challenges.resetChallenges();
+        leagues.resetLeagues();
         setProfileTab("overview");
         setShowSettings(false);
         setReviewDrawer(null);
@@ -607,6 +610,7 @@ export default function App(){
             challenges={challenges}
             openChallenge={openChallenge}
             openConvertToMatch={openConvertToMatch}
+            leagues={leagues}
             toast={toast}
           />
         )}

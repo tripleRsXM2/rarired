@@ -207,6 +207,13 @@ function NotifRow({
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
+  function goLeagues(e) {
+    if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "leagues" });
+    navigate("/people/leagues");
+    setShowNotifications(false);
+    if (!n.read) onRead(n.id);
+  }
 
   // Swipe hint: show a red strip behind the row when swiped
   var swipeProgress = Math.min(Math.abs(swipeX) / 80, 1);
@@ -443,6 +450,18 @@ function NotifRow({
           )}
           {(n.type === "challenge_declined" || n.type === "challenge_expired") && (
             ctaButton(t, t.textSecondary, false, "View challenges →", goChallenges)
+          )}
+
+          {/* Module 7: league notifications deep-link to People → Leagues
+              where Accept/Decline (invite) or the standings view (joined)
+              live. league_invite is "important" — positive CTA, not "action"
+              since the inline Accept button exists inside the leagues panel
+              already and the nag value is lower than an unresolved dispute. */}
+          {n.type === "league_invite" && (
+            ctaButton(t, t.accent, true, "View invite →", goLeagues)
+          )}
+          {n.type === "league_joined" && (
+            ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
           )}
         </div>
 

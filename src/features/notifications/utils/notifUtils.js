@@ -25,6 +25,9 @@ var IMPORTANT_TYPES = new Set([
   "challenge_accepted",
   "challenge_declined",
   "challenge_expired",
+  // Module 7: leagues.
+  "league_invite",   // invited to a private league — respond from the row
+  "league_joined",   // someone accepted an invite → positive social signal
 ]);
 
 export function getNotifType(n) {
@@ -63,6 +66,9 @@ export function getNotifLabel(n) {
     case "challenge_accepted":         return name + " accepted your challenge — log the result when you've played.";
     case "challenge_declined":         return name + " declined your challenge.";
     case "challenge_expired":          return "Your challenge to " + name + " expired without a response.";
+    // Module 7 — leagues
+    case "league_invite":              return name + " invited you to a private league.";
+    case "league_joined":              return name + " joined your league.";
     default:                           return "New notification.";
   }
 }
@@ -104,6 +110,9 @@ var TYPE_URGENCY_BONUS = {
   challenge_accepted:         70,  // positive, prompts log-result
   challenge_declined:         20,
   challenge_expired:          15,
+  // Module 7 — leagues
+  league_invite:              90,  // inbox signal to review + join
+  league_joined:              25,  // positive, non-urgent
 };
 
 export function computePriorityScore(n) {

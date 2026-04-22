@@ -5,6 +5,7 @@ import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";
 import { track } from "../../../lib/analytics.js";
 import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
+import LeaguesPanel from "../../leagues/components/LeaguesPanel.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
@@ -117,6 +118,7 @@ export default function PeopleTab({
   challenges,
   openChallenge,
   openConvertToMatch,
+  leagues,           // Module 7 — useLeagues hook surface
   toast,
 }) {
   var location=useLocation();
@@ -124,7 +126,7 @@ export default function PeopleTab({
 
   // Derive active sub-tab from URL: /people/messages → "messages"
   // Module 4: 'challenges' is the new coordination inbox.
-  var validPeopleTabs=["messages","friends","requests","challenges","suggested","blocked"];
+  var validPeopleTabs=["messages","friends","requests","challenges","leagues","suggested","blocked"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var peopleTab=(pathParts[1]&&validPeopleTabs.includes(pathParts[1]))?pathParts[1]:"friends";
 
@@ -251,11 +253,13 @@ export default function PeopleTab({
           {(function(){
             var chCounts = (challenges && challenges.counts) ? challenges.counts() : {incoming:0,outgoing:0,accepted:0};
             var chBadge = chCounts.incoming + chCounts.accepted; // bold sections
+            var lgBadge = (leagues && leagues.counts) ? leagues.counts().pendingInvites : 0;
             return [
               {id:"messages",label:"Messages",count:dmBadge||null},
               {id:"friends",label:"Friends",count:friends.length},
               {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
               {id:"challenges",label:"Challenges",count:chBadge||null},
+              {id:"leagues",label:"Leagues",count:lgBadge||null},
               {id:"suggested",label:"Discover",count:null},
               {id:"blocked",label:"Blocked",count:blockedUsers.length||null},
             ];
@@ -391,6 +395,25 @@ export default function PeopleTab({
               /* Empty-state friends list → 1-tap Challenge button per row */
               friends={friends}
               openChallenge={openChallenge}
+            />
+          )}
+
+          {/* Leagues — private friend seasons (Module 7). */}
+          {peopleTab==="leagues"&&leagues&&(
+            <LeaguesPanel
+              t={t} authUser={authUser}
+              leagues={leagues.leagues}
+              profileMap={leagues.profileMap}
+              detailCache={leagues.detailCache}
+              loadLeagueDetail={leagues.loadLeagueDetail}
+              createLeague={leagues.createLeague}
+              inviteToLeague={leagues.inviteToLeague}
+              respondToInvite={leagues.respondToInvite}
+              removeMember={leagues.removeMember}
+              archiveLeague={leagues.archiveLeague}
+              friends={friends}
+              openProfile={openProfile}
+              toast={toast}
             />
           )}
 
