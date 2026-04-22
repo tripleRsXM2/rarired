@@ -5,7 +5,7 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
 import Messages from "./Messages.jsx";
 import { makeTheme } from "../../../lib/theme.js";
 
-var t = makeTheme("wimbledon");
+var t = makeTheme("grass");
 
 function makeDms(overrides) {
   var base = {
