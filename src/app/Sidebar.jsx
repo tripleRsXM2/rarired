@@ -56,41 +56,16 @@ export default function Sidebar({
         }}>CourtSync</span>
       </div>
 
-      {/* Primary nav */}
-      <div style={{ flex: 1, padding: "10px 10px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {NAV_ITEMS.map(function(nav) {
-          var active = tab === nav.id;
-          return (
-            <button
-              key={nav.id}
-              className="cs-nav-item"
-              onClick={function() { handleNav(nav.id); }}
-              style={{
-                color: active ? t.accent : t.textSecondary,
-                background: active ? t.accentSubtle : "transparent",
-                fontWeight: active ? 600 : 400,
-              }}
-            >
-              <span style={{ color: active ? t.accent : t.textSecondary, flexShrink: 0, display: "flex" }}>
-                {nav.icon()}
-              </span>
-              <span className="cs-nav-label" style={{ color: active ? t.accent : t.text, fontWeight: active ? 600 : 400 }}>
-                {nav.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Bottom controls */}
-      <div style={{
-        padding: "10px 10px",
-        borderTop: "1px solid " + t.border,
-        display: "flex", flexDirection: "column", gap: 2,
-        flexShrink: 0,
-      }}>
-        {/* Notifications */}
-        {authUser && (
+      {/* Notifications — promoted to the top of the sidebar, directly
+          beneath the CourtSync title. Sits in its own segmented block
+          (its own borderBottom) so it reads as header chrome, not part of
+          the primary nav list below it. */}
+      {authUser && (
+        <div style={{
+          padding: "8px 10px",
+          borderBottom: "1px solid " + t.border,
+          flexShrink: 0,
+        }}>
           <button
             className="cs-nav-item"
             onClick={function() {
@@ -117,8 +92,43 @@ export default function Sidebar({
               Notifications{unreadCount > 0 ? " · " + unreadCount : ""}
             </span>
           </button>
-        )}
+        </div>
+      )}
 
+      {/* Primary nav */}
+      <div style={{ flex: 1, padding: "10px 10px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+        {NAV_ITEMS.map(function(nav) {
+          var active = tab === nav.id;
+          return (
+            <button
+              key={nav.id}
+              className="cs-nav-item"
+              onClick={function() { handleNav(nav.id); }}
+              style={{
+                color: active ? t.accent : t.textSecondary,
+                background: active ? t.accentSubtle : "transparent",
+                fontWeight: active ? 600 : 400,
+              }}
+            >
+              <span style={{ color: active ? t.accent : t.textSecondary, flexShrink: 0, display: "flex" }}>
+                {nav.icon()}
+              </span>
+              <span className="cs-nav-label" style={{ color: active ? t.accent : t.text, fontWeight: active ? 600 : 400 }}>
+                {nav.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Bottom controls — user avatar / login only. Notifications moved
+          up under the logo so they read as header chrome, not nav. */}
+      <div style={{
+        padding: "10px 10px",
+        borderTop: "1px solid " + t.border,
+        display: "flex", flexDirection: "column", gap: 2,
+        flexShrink: 0,
+      }}>
         {/* User avatar / login */}
         {authUser ? (
           <button
