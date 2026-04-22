@@ -58,14 +58,20 @@ export default function ScoreModal({
 
   // Compute who the sets say won, in the submitter's frame:
   // "you" > "them" = submitter win. Returns "win" | "loss" | null (tied/empty).
+  // Skip sets with blank / non-numeric scores on either side — Number("") is
+  // 0, not NaN, so the old naive check counted "6-" as a 6-0 submitter win
+  // and falsely triggered the mismatch warning on retirements.
   function winnerBySets(sets){
     if(!sets||!sets.length) return null;
     var ys=0, ts=0;
     sets.forEach(function(s){
-      var y=Number(s.you), th=Number(s.them);
-      if(!Number.isNaN(y)&&!Number.isNaN(th)&&y!==th){
-        if(y>th) ys++; else ts++;
-      }
+      var yStr = s.you  == null ? "" : String(s.you).trim();
+      var tStr = s.them == null ? "" : String(s.them).trim();
+      if(yStr === "" || tStr === "") return;
+      var y=Number(yStr), th=Number(tStr);
+      if(Number.isNaN(y)||Number.isNaN(th)) return;
+      if(y===th) return;
+      if(y>th) ys++; else ts++;
     });
     if(ys===ts) return null;
     return ys>ts ? "win" : "loss";

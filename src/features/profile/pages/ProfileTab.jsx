@@ -35,12 +35,18 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
   // side the viewer is on.
   var viewerIsSubmitter = !m.isTagged;
   // Set-count winner derivation (trust the board, not the stored result).
+  // Blank/non-numeric scores MUST be skipped — Number("") is 0, not NaN, so
+  // a naive "isNaN" check counts "6-" incomplete sets as 6-0 wins and
+  // flips the arrow on retirement / in-progress matches.
   var ys = 0, ts = 0;
   sets.forEach(function (s) {
-    var y = Number(s.you), th = Number(s.them);
-    if (!Number.isNaN(y) && !Number.isNaN(th) && y !== th) {
-      if (y > th) ys++; else ts++;
-    }
+    var yStr = s.you == null ? "" : String(s.you).trim();
+    var tStr = s.them == null ? "" : String(s.them).trim();
+    if (yStr === "" || tStr === "") return;
+    var y = Number(yStr), th = Number(tStr);
+    if (Number.isNaN(y) || Number.isNaN(th)) return;
+    if (y === th) return;
+    if (y > th) ys++; else ts++;
   });
   var isWinStored = m.result === "win";
   var viewerWins = ys !== ts

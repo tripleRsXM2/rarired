@@ -129,7 +129,6 @@ function FeedCard({
   function goOpponent() { if (openProfile && opponentUserId) openProfile(opponentUserId); }
   var posterClickable   = !demo && !!posterUserId   && (!authUser || posterUserId   !== authUser.id) && !!openProfile;
   var opponentClickable = !demo && !!opponentUserId && (!authUser || opponentUserId !== authUser.id) && !!openProfile;
-  var isWin      = m.result === "win";
   var scoreStr   = (m.sets || []).map(function(s) { return s.you + "-" + s.them; }).join("  ");
   var liked      = !!feedLikes[m.id];
   var likeCount  = feedLikeCounts[m.id] || 0;
@@ -195,17 +194,43 @@ function FeedCard({
   // Compute set-level win counts ONCE here so we can reuse for:
   //   (a) the stats strip's "Sets" value
   //   (b) the scoreboard's winner-row derivation (existing logic)
+  //   (c) the RESULT / border / share-text self-heal below
+  //
+  // Critical: skip sets with a blank OR non-numeric score on EITHER side.
+  // `Number("") === 0` (not NaN!) so a naive `Number().isNaN` check counts
+  // a "6-" incomplete set as a 6-0 win, which completely messes up the
+  // derived winner on retirement / in-progress matches. Matches the
+  // server-side NULLIF('') behaviour in recalculate_league_standings.
   var setWinCounts = (function () {
     var sets = m.sets || [];
     var ys = 0, ts = 0;
     sets.forEach(function (s) {
-      var y = Number(s.you), th = Number(s.them);
-      if (!Number.isNaN(y) && !Number.isNaN(th) && y !== th) {
-        if (y > th) ys++; else ts++;
-      }
+      var yStr = s.you == null ? "" : String(s.you).trim();
+      var tStr = s.them == null ? "" : String(s.them).trim();
+      if (yStr === "" || tStr === "") return;             // incomplete set → skip
+      var y = Number(yStr), th = Number(tStr);
+      if (Number.isNaN(y) || Number.isNaN(th)) return;    // garbage → skip
+      if (y === th) return;                                // tied within a set → skip
+      if (y > th) ys++; else ts++;
     });
     return { ys: ys, ts: ts };
   })();
+
+  // ── Self-healing winner ──────────────────────────────────────────────────
+  // ys/ts are in the SUBMITTER'S frame. When the viewer is the submitter
+  // (isOwn), viewer-won === (ys > ts). When the viewer is tagged as the
+  // opponent, viewer-won === (ts > ys).
+  //
+  // If the sets unambiguously pick a winner, trust them — this heals the
+  // classic "tapped the wrong Win/Loss button but entered winning sets"
+  // data-entry bug without rewriting the DB row. If the sets are tied
+  // or every set was incomplete (all skipped), fall back to the stored
+  // result field (already in viewer's frame via normalizeMatch).
+  var setsSayViewerWon = (setWinCounts.ys !== setWinCounts.ts)
+    ? (isOwn ? setWinCounts.ys > setWinCounts.ts
+             : setWinCounts.ts > setWinCounts.ys)
+    : null;
+  var isWin = setsSayViewerWon !== null ? setsSayViewerWon : (m.result === "win");
 
   // The label in the header subtitle — league name (Module 7) > tournament
   // > Casual. League takes precedence because it's a more specific identity
@@ -437,16 +462,13 @@ function FeedCard({
             fall back to the stored `result` via `isWin` in the original
             tagged-frame logic. */}
         {(function() {
-          var sets = m.sets || [];
-          var ys = 0, ts = 0;
-          sets.forEach(function (s) {
-            var y = Number(s.you), th = Number(s.them);
-            if (!Number.isNaN(y) && !Number.isNaN(th) && y !== th) {
-              if (y > th) ys++; else ts++;
-            }
-          });
+          // Reuse the top-level setWinCounts (already skips blank/NaN/tied
+          // sets) instead of recomputing with the legacy 6-vs-0-from-"" bug.
+          var ys = setWinCounts.ys, ts = setWinCounts.ts;
           // s.you is always the submitter's score in the DB, and pName is
           // always the submitter (own or tagged). So ys > ts means pName won.
+          // Fallback: if sets are inconclusive, trust the stored result (in
+          // viewer's frame), inverting it when the viewer isn't the poster.
           var posterWins = ys !== ts ? (ys > ts) : (isOwn ? isWin : !isWin);
           return [
             {
