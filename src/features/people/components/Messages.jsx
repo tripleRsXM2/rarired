@@ -87,6 +87,14 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   }
   useEffect(function () { autoGrow(inputRef.current); }, [dms.msgDraft, dms.activeConv && dms.activeConv.id]);
 
+  // IMPORTANT — every hook must be called before the conditional `return`
+  // below. `visibleMessages` was a useMemo placed after the early-return
+  // in the list view, which crashed the thread view the moment activeConv
+  // went from null to a row (hook count changed). Hoisted here.
+  var visibleMessages = useMemo(function () {
+    return filterHiddenMessages(dms.threadMessages, hiddenIds);
+  }, [dms.threadMessages, hiddenIds]);
+
   // ── Long-press / right-click context menu ────────────────────────────────
 
   function handleTouchStart(e, msg) {
@@ -227,9 +235,6 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   var unreadStartIdx = computeUnreadDividerIdx(dms.threadMessages, myId, conv.lastReadAt);
   var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(dms.threadMessages, myId, dms.partnerLastReadAt);
-  var visibleMessages = useMemo(function () {
-    return filterHiddenMessages(dms.threadMessages, hiddenIds);
-  }, [dms.threadMessages, hiddenIds]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "60vh" }}>

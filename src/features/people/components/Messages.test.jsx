@@ -156,4 +156,25 @@ describe("Messages — thread view", function () {
     // Picker dialog has role=dialog and aria-label "Pick an emoji"
     expect(screen.getByRole("dialog", { name: /pick an emoji/i })).toBeInTheDocument();
   });
+
+  // Regression: Rules-of-Hooks violation would throw on list → thread
+  // transition. We re-render the same instance with activeConv flipping
+  // from null to a real conversation — React will throw "Rendered more
+  // hooks than during the previous render" if any hook is called after
+  // an early return.
+  it("does not crash when activeConv goes from null to set (hook stability)", function () {
+    var dms = makeDms();
+    var utils = render(<Messages t={t} authUser={authUser} dms={dms} />);
+    expect(screen.getByText(/No messages yet/i)).toBeInTheDocument();
+
+    var dms2 = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "me-uid", content: "hi", created_at: new Date().toISOString() },
+      ],
+    });
+    // Re-render the SAME root — this is what triggers the hook-count check.
+    utils.rerender(<Messages t={t} authUser={authUser} dms={dms2} />);
+    expect(screen.getByText("hi")).toBeInTheDocument();
+  });
 });
