@@ -564,6 +564,8 @@ export default function App(){
               challengesProfileMap={challenges.profileMap}
               onLogConvertedMatch={openConvertToMatch}
               goToChallengesTab={function(){navigate("/people/challenges");}}
+              /* Module 7 — simple id→name index for league pills on feed cards */
+              leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
             />
           )}
           {tab==="map"&&(
@@ -632,6 +634,8 @@ export default function App(){
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openProfile={openProfile}
             openChallenge={openChallenge}
+            myLeagues={leagues.leagues}
+            onOpenLeagues={function(){navigate("/people/leagues");}}
           />
         )}
         {tab==="admin"&&(
@@ -695,6 +699,7 @@ export default function App(){
           submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
           viewerSuburb={currentUser.profile&&currentUser.profile.suburb}
+          myLeagues={leagues.leagues}
         />
         <DisputeModal
           t={t}

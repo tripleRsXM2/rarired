@@ -37,6 +37,10 @@ export default function ScoreModal({
   // Module 6.7 — viewer's suburb drives the court-dropdown priority so
   // they see their local courts first. Optional; falls back to pure A→Z.
   viewerSuburb,
+  // Module 7 — leagues the viewer is actively in. When the opponent is a
+  // linked user we offer a league picker so this match can count toward
+  // a shared leaderboard. See leagues-and-seasons.md.
+  myLeagues,
 }) {
   var iStyle=inputStyle(t);
   var [saving,setSaving]=useState(false);
@@ -214,6 +218,45 @@ export default function ScoreModal({
           </div>
           :(!isResubmit&&<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>)
         }
+
+        {/* League selector — only shown for linked-opponent ranked matches.
+            Casual/typed-in matches (no opponent_id) can't be league-tagged
+            because the server trigger requires both participants to be
+            active members. If the viewer isn't in any active league, the
+            selector is hidden. */}
+        {(function(){
+          if (isResubmit) return null;
+          if (!isVerified) return null;  // casual / freetext opponent → can't tag
+          var active = (myLeagues || []).filter(function(lg){
+            return lg.status === "active" && lg.my_status === "active";
+          });
+          if (!active.length) return null;
+          var currentId = scoreDraft.leagueId || "";
+          return (
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                Count toward a league?
+              </label>
+              <select
+                value={currentId}
+                onChange={function(e){
+                  var v = e.target.value || null;
+                  setScoreDraft(function(d){ return Object.assign({}, d, { leagueId: v }); });
+                }}
+                style={Object.assign({},iStyle,{fontSize:13,marginBottom:0,appearance:"auto"})}>
+                <option value="">No — just a ranked match</option>
+                {active.map(function(lg){
+                  return <option key={lg.id} value={lg.id}>{lg.name}</option>;
+                })}
+              </select>
+              {currentId && (
+                <div style={{fontSize:10,color:t.textTertiary,marginTop:4,letterSpacing:"0.02em"}}>
+                  Your opponent must be an active member of this league, or the log will be rejected.
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Date */}
         <div style={{marginBottom:16}}>

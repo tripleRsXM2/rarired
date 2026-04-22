@@ -110,7 +110,7 @@ function IconButton({ t, title, onClick, active, children }) {
 
 // ── FeedCard ──────────────────────────────────────────────────────────────────
 function FeedCard({
-  m, isOwn, pName, pAvatar, pAvatarUrl, demo, onDelete, onRemove,
+  m, isOwn, pName, pAvatar, pAvatarUrl, demo, onDelete, onRemove, leaguesIndex,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
@@ -207,10 +207,15 @@ function FeedCard({
     return { ys: ys, ts: ts };
   })();
 
-  // The label in the header subtitle — "Ranked" / "Casual" / tournament name.
-  var matchKindLabel = m.tournName && m.tournName !== "Casual Match"
-    ? m.tournName
-    : "Casual";
+  // The label in the header subtitle — league name (Module 7) > tournament
+  // > Casual. League takes precedence because it's a more specific identity
+  // than "Ranked" and it's the whole reason the match was logged there.
+  var leagueName = m.league_id && leaguesIndex ? (leaguesIndex[m.league_id] || null) : null;
+  var matchKindLabel = leagueName
+    ? leagueName
+    : (m.tournName && m.tournName !== "Casual Match"
+        ? m.tournName
+        : "Casual");
 
   // Strava-style subtitle: "Yesterday · Ranked · Moore Park"
   var subtitleParts = [m.date];
@@ -290,6 +295,17 @@ function FeedCard({
 
         {/* Top-right: status pill + close-button (kept minimal) */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          {/* Module 7: league pill. Distinct from tournName because it links
+              the match to a private leaderboard — not just a label. Accent
+              colour so it reads as a positive social tag, not a status. */}
+          {leagueName && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: t.accent, background: t.accentSubtle,
+              border: "1px solid " + t.accent + "33",
+              padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+              maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }} title={"League · " + leagueName}>{leagueName}</span>
+          )}
           {statusPill && (
             <span style={{
               fontSize: 9, fontWeight: 700, color: statusPill.color, background: statusPill.bg,
@@ -871,6 +887,8 @@ export default function HomeTab({
   notifyMatchOwnerOfComment,
   // Module 4: next-challenge banner at top of feed + deep-link into People.
   challengesList, challengesProfileMap, onLogConvertedMatch, goToChallengesTab,
+  // Module 7 — simple id→name map so league-tagged matches can render a pill
+  leaguesIndex,
 }) {
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
@@ -913,6 +931,7 @@ export default function HomeTab({
     openProfile, openChallenge,
     toast,
     onOpenInteractions: openInteractions,
+    leaguesIndex: leaguesIndex || {},
   };
 
   function openLogMatch() {

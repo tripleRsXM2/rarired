@@ -50,5 +50,8 @@ export function normalizeMatch(m, isTagged){
     // Module 3: DB-backed "<24h expiry reminder sent" flag. null = never sent.
     // Lets the client gate match_reminder firing without relying on localStorage.
     reminderSentAt:m.reminder_sent_at||null,
+    // Module 7 — league tag (nullable). The feed card renders a league pill
+    // when present; name resolution happens upstream via a leagues map.
+    league_id: m.league_id || null,
   };
 }

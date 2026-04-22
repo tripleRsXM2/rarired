@@ -245,6 +245,10 @@ export function useMatchHistory(opts){
     if(opponentId) payload.opponent_id=opponentId;
     if(hash) payload.match_hash=hash;
     if(isVerified) payload.expires_at=new Date(Date.now()+72*60*60*1000).toISOString();
+    // Module 7 — optional league tag. Server trigger (validate_match_league)
+    // enforces the hard rules (both players are active members, league is
+    // active, max_matches_per_opponent not exceeded); client just forwards.
+    if(isVerified && scoreDraft.leagueId) payload.league_id=scoreDraft.leagueId;
 
     var ins=await M.insertMatch(payload);
     if(ins.error){
