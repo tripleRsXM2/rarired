@@ -1,12 +1,12 @@
 import { useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";
 import { track } from "../../../lib/analytics.js";
 import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 function fmtMsgTime(iso){
   if(!iso)return"";
@@ -30,9 +30,7 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
       <div
         onClick={clickable?goToProfile:undefined}
         style={{position:"relative",flexShrink:0,cursor:clickable?"pointer":"default"}}>
-        <div style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff"}}>
-          {(u.avatar||(u.name||"?").slice(0,2)).slice(0,2).toUpperCase()}
-        </div>
+        <PlayerAvatar name={u.name} avatar={u.avatar} profile={u} size={44}/>
         <PresenceDot profile={u} t={t}/>
       </div>
       <div
@@ -312,8 +310,8 @@ export default function PeopleTab({
                         <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+t.accent,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
                           <div
                             onClick={openProfile?function(){openProfile(u.id);}:undefined}
-                            style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0,cursor:openProfile?"pointer":"default"}}>
-                            {(u.avatar||"?").slice(0,2).toUpperCase()}
+                            style={{flexShrink:0,cursor:openProfile?"pointer":"default"}}>
+                            <PlayerAvatar name={u.name} avatar={u.avatar} profile={u} size={44}/>
                           </div>
                           <div
                             onClick={openProfile?function(){openProfile(u.id);}:undefined}
@@ -349,8 +347,8 @@ export default function PeopleTab({
                         <div key={u.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
                           <div
                             onClick={openProfile?function(){openProfile(u.id);}:undefined}
-                            style={{width:44,height:44,borderRadius:"50%",background:avColor(u.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0,cursor:openProfile?"pointer":"default"}}>
-                            {(u.avatar||"?").slice(0,2).toUpperCase()}
+                            style={{flexShrink:0,cursor:openProfile?"pointer":"default"}}>
+                            <PlayerAvatar name={u.name} avatar={u.avatar} profile={u} size={44}/>
                           </div>
                           <div
                             onClick={openProfile?function(){openProfile(u.id);}:undefined}

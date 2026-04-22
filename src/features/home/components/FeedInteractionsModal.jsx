@@ -15,33 +15,15 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase.js";
-import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { fetchMatchLikers } from "../services/feedService.js";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
+// Thin wrapper so existing call sites that pass `{ profile, size }` keep
+// working — delegates to the shared PlayerAvatar primitive for consistent
+// photo-or-initials behaviour across the app.
 function Avatar({ profile, size }) {
-  var s = size || 40;
-  if (profile && profile.avatar_url) {
-    return (
-      <div style={{
-        width: s, height: s, borderRadius: "50%", overflow: "hidden",
-        flexShrink: 0, background: "#eee",
-      }}>
-        <img src={profile.avatar_url} alt="" style={{ width: s, height: s, objectFit: "cover", display: "block" }}/>
-      </div>
-    );
-  }
-  var name = (profile && profile.name) || "?";
-  return (
-    <div style={{
-      width: s, height: s, borderRadius: "50%", flexShrink: 0,
-      background: avColor(name),
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: s * 0.32, fontWeight: 700, color: "#fff",
-    }}>
-      {name.slice(0, 2).toUpperCase()}
-    </div>
-  );
+  return <PlayerAvatar name={profile && profile.name} avatar={profile && profile.avatar} profile={profile} size={size || 40}/>;
 }
 
 function RelationButton({ t, u, viewerId, friendRelationLabel, sendFriendRequest, cancelRequest, sentReq, recvReq, acceptRequest, socialLoading }) {
@@ -254,18 +236,16 @@ export default function FeedInteractionsModal({
                 </div>
               )}
               {comments.map(function (c) {
+                // c.author is just a string today (legacy feed_comments schema),
+                // so PlayerAvatar falls back to deterministic colour + initials.
+                // If/when we attach avatar_url to comments we can pass it here.
                 return (
                   <div key={c.id} style={{
                     display: "flex", gap: 10, alignItems: "flex-start",
                     padding: "10px 16px",
                     borderBottom: "1px solid " + t.border,
                   }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: "50%",
-                      background: avColor(c.author || "?"),
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0,
-                    }}>{(c.author || "?").slice(0, 2).toUpperCase()}</div>
+                    <PlayerAvatar name={c.author} size={32}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: t.text }}>{c.author}</div>
                       <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.45, marginTop: 1 }}>{c.text}</div>
@@ -280,9 +260,7 @@ export default function FeedInteractionsModal({
         {/* Footer — comment composer (only when comments tab + signed in) */}
         {tab === "comments" && authUser && (
           <div style={{ padding: "10px 12px", borderTop: "1px solid " + t.border, display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: avColor(profile && profile.name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-              {(profile && profile.avatar) || ((profile && profile.name) || "?").slice(0, 2).toUpperCase()}
-            </div>
+            <PlayerAvatar name={profile && profile.name} avatar={profile && profile.avatar} profile={profile} size={28}/>
             <input
               value={commentDraft}
               placeholder="Add a comment…"
