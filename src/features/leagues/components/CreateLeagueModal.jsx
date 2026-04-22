@@ -5,6 +5,7 @@
 // wizards. Invites happen after creation from the league detail view.
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { inputStyle } from "../../../lib/theme.js";
 
 var MATCH_FORMATS = [
@@ -72,7 +73,15 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
   // Chrome matches ScoreModal exactly — same backdrop opacity, same blur,
   // same padding, same borderRadius, same maxWidth, same maxHeight, same
   // internal 28/24px inset. The only difference is content.
-  return (
+  //
+  // Rendered via createPortal to document.body because the People tab wraps
+  // its content in a `.fade-up` div whose `transform` creates a CSS
+  // containing block for position:fixed descendants — that's what was
+  // pushing the modal off-center when it lived inside the tab. Portaling
+  // out escapes the transformed ancestor so the backdrop is fixed to the
+  // actual viewport, exactly like ScoreModal (which is rendered at the
+  // App root and therefore never hits this problem).
+  return createPortal((
     <div
       onClick={onClose}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "0 16px" }}>
@@ -219,5 +228,5 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }

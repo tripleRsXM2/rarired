@@ -10,6 +10,7 @@
 // Detail view is opened by selecting a league id; back = null it.
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import CreateLeagueModal from "./CreateLeagueModal.jsx";
@@ -540,10 +541,13 @@ function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toa
     setInvited(function (v) { var n = Object.assign({}, v); n[friend.id] = true; return n; });
   }
 
-  return (
+  // Same portal fix as CreateLeagueModal — the People tab wraps its content
+  // in a .fade-up div whose transform creates a CSS containing block that
+  // breaks position:fixed children. Portaling out escapes that.
+  return createPortal((
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "0 16px" }}>
       <div
         onClick={function (e) { e.stopPropagation(); }}
         className="pop"
@@ -596,5 +600,5 @@ function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toa
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
