@@ -42,7 +42,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var [menuState, setMenuState] = useState(null);          // { message, rect }
   var [showSettings, setShowSettings] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  var [showInputEmoji, setShowInputEmoji] = useState(false);
+  // Null when closed; a DOMRect when open. Capturing the rect at click
+  // time (instead of reading through a ref at render time) avoids the
+  // race where a just-mounted ref is still null, which made the picker
+  // fail to open in some conversations.
+  var [showInputEmoji, setShowInputEmoji] = useState(null);
   var [showReactionEmoji, setShowReactionEmoji] = useState(null); // anchor rect or null
 
   var touchTimer = useRef(null);
@@ -107,32 +111,39 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   // ── Long-press / right-click context menu ────────────────────────────────
 
-  // Ref-based flag used to suppress the synthesized `click` that fires
-  // after a touchend on iOS/Android — otherwise a tap would trigger BOTH
-  // the long-press menu AND the follow-up click-to-menu on the same bubble.
-  var suppressClickRef = useRef(false);
+  // Click-suppression for touch devices. iOS/Android fire the sequence
+  // touchstart → touchend → synthesized click; we only want the long-press
+  // menu to open (if threshold met), not a follow-up click-menu on the
+  // same bubble. BUT some Windows touchscreen laptops (Surface et al.)
+  // fire a stray touchstart without a matching touchend — so we can't
+  // use a boolean flag (it would stick forever). Instead we track START
+  // and END timestamps and only suppress when BOTH have fired recently —
+  // i.e. a real completed tap, not a phantom touchstart.
+  var touchRef = useRef({ start: 0, end: 0 });
 
   function handleTouchStart(e, msg) {
     var el = e.currentTarget;
-    suppressClickRef.current = true;
+    touchRef.current = { start: Date.now(), end: 0 };
     touchTimer.current = setTimeout(function () {
       setMenuState({ message: msg, rect: el.getBoundingClientRect() });
       if (navigator && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
     }, 450);
   }
   function handleTouchEnd() {
+    touchRef.current.end = Date.now();
     clearTimeout(touchTimer.current);
-    // Release the click-suppression after the synthesized click has fired.
-    setTimeout(function () { suppressClickRef.current = false; }, 350);
   }
   function handleContextMenu(e, msg) {
     e.preventDefault();
     setMenuState({ message: msg, rect: e.currentTarget.getBoundingClientRect() });
   }
   function handleBubbleClick(e, msg) {
-    // On touch devices, skip — the long-press already handled interaction.
-    if (suppressClickRef.current) return;
-    // Desktop left-click opens the same action menu that right-click does.
+    // Only suppress when a FULL touch interaction (start + end both seen)
+    // happened within the last 800ms. That's the iOS/Android synthesized
+    // click case. A touchstart-only (Windows phantom) leaves end=0 and
+    // falls through, so mouse clicks keep working.
+    var ti = touchRef.current;
+    if (ti.end > 0 && Date.now() - ti.start < 800) return;
     setMenuState({ message: msg, rect: e.currentTarget.getBoundingClientRect() });
   }
   function closeMenu() { setMenuState(null); }
@@ -342,7 +353,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 12, marginBottom: 4, borderBottom: "1px solid " + t.border }}>
-        <button onClick={function () { dms.closeConversation(); setMenuState(null); setShowSettings(false); setShowInputEmoji(false); }}
+        <button onClick={function () { dms.closeConversation(); setMenuState(null); setShowSettings(false); setShowInputEmoji(null); }}
           style={{ background: "transparent", border: "none", color: t.accent, fontSize: 22, lineHeight: 1, padding: "0 6px 0 0", flexShrink: 0, cursor: "pointer" }}
           aria-label="Back">←</button>
         <div
@@ -591,7 +602,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <button
             ref={emojiBtnRef}
             type="button"
-            onClick={function () { setShowInputEmoji(function (v) { return !v; }); }}
+            onClick={function (e) {
+              // Capture the rect synchronously — React's pooled event can
+              // null currentTarget by the time the setState callback runs.
+              var rect = e.currentTarget.getBoundingClientRect();
+              setShowInputEmoji(function (prev) { return prev ? null : rect; });
+            }}
             aria-label="Insert emoji"
             style={{
               width: 38, height: 42, flexShrink: 0,
@@ -633,12 +649,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       )}
 
       {/* Input emoji picker */}
-      {showInputEmoji && emojiBtnRef.current && (
+      {showInputEmoji && (
         <EmojiPicker
           t={t}
-          anchor={emojiBtnRef.current.getBoundingClientRect()}
+          anchor={showInputEmoji}
           onPick={insertEmojiAtCursor}
-          onClose={function () { setShowInputEmoji(false); }}
+          onClose={function () { setShowInputEmoji(null); }}
         />
       )}
     </div>

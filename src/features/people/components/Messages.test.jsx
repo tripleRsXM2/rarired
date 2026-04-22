@@ -178,6 +178,55 @@ describe("Messages — thread view", function () {
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
+  // Helper: dispatch a touch event that's construction-compatible with
+  // both jsdom (lenient) and real Chromium (strict). We use a plain
+  // CustomEvent and bubble it — React's SyntheticEvent system still
+  // fires the onTouchStart/onTouchEnd handlers because the event type
+  // string matches.
+  function dispatchTouch(el, type) {
+    var e = new Event(type, { bubbles: true, cancelable: true });
+    el.dispatchEvent(e);
+  }
+
+  // Regression: some Windows touchscreen browsers fire a stray
+  // `touchstart` on a mouse click without a matching `touchend`. The
+  // bubble's click handler must still fire in that case.
+  it("left-click still opens menu after phantom touchstart (no touchend)", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "me-uid", content: "hello", created_at: new Date().toISOString() },
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    var bubble = screen.getByText("hello");
+
+    dispatchTouch(bubble, "touchstart");
+    // NO touchend — simulates the phantom touch Surface devices fire.
+    fireEvent.click(bubble);
+
+    expect(screen.getByText("Reply")).toBeInTheDocument();
+  });
+
+  // The opposite guard: a REAL touch (start → end → synthesized click)
+  // should NOT double-fire the menu. Long-press handles it.
+  it("real tap (touchstart + touchend + click) does NOT open menu twice", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "me-uid", content: "tap me", created_at: new Date().toISOString() },
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    var bubble = screen.getByText("tap me");
+
+    dispatchTouch(bubble, "touchstart");
+    dispatchTouch(bubble, "touchend");
+    fireEvent.click(bubble);
+
+    expect(screen.queryByText("Reply")).toBeNull();
+  });
+
   // Regression: user reported left-click on own bubble didn't open the
   // action menu. Opens menu via simulated click on the bubble.
   it("left-click on own bubble opens the action menu", function () {
