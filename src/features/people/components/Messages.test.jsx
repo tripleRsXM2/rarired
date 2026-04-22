@@ -177,4 +177,78 @@ describe("Messages — thread view", function () {
     utils.rerender(<Messages t={t} authUser={authUser} dms={dms2} />);
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
+
+  // Regression: user reported left-click on own bubble didn't open the
+  // action menu. Opens menu via simulated click on the bubble.
+  it("left-click on own bubble opens the action menu", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "me-uid", content: "my message", created_at: new Date().toISOString() },
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByText("my message"));
+    // Menu has Reply + Copy + Delete for me + Unsend (it's mine).
+    expect(screen.getByText("Reply")).toBeInTheDocument();
+    expect(screen.getByText("Delete for me")).toBeInTheDocument();
+    expect(screen.getByText("Unsend")).toBeInTheDocument();
+  });
+
+  it("left-click on partner bubble opens menu WITHOUT delete options", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "p1", content: "partner msg", created_at: new Date().toISOString() },
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByText("partner msg"));
+    expect(screen.getByText("Reply")).toBeInTheDocument();
+    expect(screen.getByText("Copy")).toBeInTheDocument();
+    // Delete options must NOT appear on someone else's message.
+    expect(screen.queryByText("Delete for me")).toBeNull();
+    expect(screen.queryByText("Unsend")).toBeNull();
+  });
+
+  // Regression: "+" on the reaction strip didn't open the emoji picker on
+  // desktop. The click opens the picker anchored to the button.
+  it("'+' button on the action menu opens the emoji picker", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "me-uid", content: "m", created_at: new Date().toISOString() },
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByText("m"));
+    fireEvent.click(screen.getByLabelText(/more reactions/i));
+    expect(screen.getByRole("dialog", { name: /pick an emoji/i })).toBeInTheDocument();
+  });
+
+  // Regression: user reported the 😊 button in the input did nothing.
+  it("input emoji (😊) button opens the emoji picker", function () {
+    var dms = makeDms({ activeConv: baseConv, threadMessages: [] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByLabelText(/insert emoji/i));
+    expect(screen.getByRole("dialog", { name: /pick an emoji/i })).toBeInTheDocument();
+  });
+
+  // Regression: picking an emoji from the input picker should insert it
+  // via setMsgDraft — NOT close the picker without effect.
+  it("picking an emoji from the input picker inserts into the draft", function () {
+    var dms = makeDms({ activeConv: baseConv, threadMessages: [], msgDraft: "" });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByLabelText(/insert emoji/i));
+    // Pick a GRID button specifically. The category-tab buttons have an
+    // aria-label ("Smileys", "People"...) which filters them out. Grid
+    // glyph buttons have no aria-label and font-size:22.
+    var picker = screen.getByRole("dialog", { name: /pick an emoji/i });
+    var gridBtn = within(picker).getAllByRole("button").find(function (b) {
+      return !b.hasAttribute("aria-label") && /\p{Extended_Pictographic}/u.test(b.textContent || "");
+    });
+    expect(gridBtn).toBeTruthy();
+    fireEvent.click(gridBtn);
+    expect(dms.setMsgDraft).toHaveBeenCalled();
+  });
 });

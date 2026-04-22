@@ -24,8 +24,11 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local agent / deployment configs
-.claude/
+# Local agent / deployment configs.
+# .claude/skills/ is tracked (team-shared rules); everything else inside
+# .claude/ is per-user state and stays ignored.
+.claude/*
+!.claude/skills/
 .vercel/
 
 # Supabase CLI local state
