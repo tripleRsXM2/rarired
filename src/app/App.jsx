@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { makeTheme } from "../lib/theme.js";
+import { makeTheme, normaliseThemeId, THEME_IDS } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
 import { TABS } from "../lib/constants/ui.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
@@ -49,10 +49,20 @@ import ChallengeModal from "../features/challenges/components/ChallengeModal.jsx
 import { useToasts, ToastStack } from "../components/ui/Toast.jsx";
 
 export default function App(){
-  var VALID_THEMES=['wimbledon','ao','french-open','us-open'];
-  var [theme,setTheme]=useState(function(){var s=localStorage.getItem("theme");return s&&VALID_THEMES.includes(s)?s:'wimbledon';});
+  // Theme bootstrap — migrate any legacy id ("wimbledon" → "grass", etc.)
+  // on load so old localStorage doesn't keep us on a renamed theme forever.
+  var [theme,setTheme]=useState(function(){
+    var s=localStorage.getItem("theme");
+    var next=normaliseThemeId(s);
+    if(s!==next) localStorage.setItem("theme",next);
+    return next;
+  });
   var t=makeTheme(theme);
-  function applyTheme(name){localStorage.setItem("theme",name);setTheme(name);}
+  function applyTheme(name){
+    if(!THEME_IDS.includes(name)) return;
+    localStorage.setItem("theme",name);
+    setTheme(name);
+  }
 
   // Module 6: app-wide toast emitter. Replaces window.alert() everywhere.
   // toast(msg, 'error'|'success'|'info').

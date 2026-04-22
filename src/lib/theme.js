@@ -1,5 +1,12 @@
+// Theme tokens. Four palettes named after court surfaces (not tournaments)
+// so we don't step on Wimbledon / Australian Open / Roland-Garros / USTA
+// trademarks. Legacy ids (`wimbledon`, `ao`, `french-open`, `us-open`) are
+// still accepted by `makeTheme` for users with old values in localStorage
+// — the App-level loader migrates them to the new ids on the next save.
+
 var THEMES = {
-  wimbledon: {
+  // Grass — clean court green + cream. Default.
+  grass: {
     bg:"#F0F2EA", bgCard:"#FFFFFF", bgTertiary:"#E4EAD6", surfaceSolid:"#FFFFFF",
     border:"#D3DCC0", borderStrong:"#B5C29A",
     text:"#1A2A1E", textSecondary:"#4C5C50", textTertiary:"#8A9C8E",
@@ -14,7 +21,8 @@ var THEMES = {
     qualified:"rgba(0,111,74,0.06)",
     r:6, r2:10,
   },
-  ao: {
+  // Hard Court — dark navy hard-court blue.
+  "hard-court": {
     bg:"#0A0E1A", bgCard:"#111827", bgTertiary:"#1A2236", surfaceSolid:"#111827",
     border:"#1E2D4A", borderStrong:"#2C3E5E",
     text:"#EEF2FF", textSecondary:"#94A3B8", textTertiary:"#4B6080",
@@ -29,7 +37,8 @@ var THEMES = {
     qualified:"rgba(34,197,94,0.07)",
     r:6, r2:10,
   },
-  "french-open": {
+  // Clay — terracotta + warm cream.
+  clay: {
     bg:"#EEE0CA", bgCard:"#F7ECD9", bgTertiary:"#E5D4B9", surfaceSolid:"#F7ECD9",
     border:"#D4C4A4", borderStrong:"#B8A580",
     text:"#2C1810", textSecondary:"#6B4A32", textTertiary:"#A88870",
@@ -44,7 +53,8 @@ var THEMES = {
     qualified:"rgba(85,107,58,0.06)",
     r:6, r2:10,
   },
-  "us-open": {
+  // Night Court — deep navy + gold under the lights.
+  "night-court": {
     bg:"#001C4E", bgCard:"#002566", bgTertiary:"#002D7A", surfaceSolid:"#002566",
     border:"#0040A0", borderStrong:"#0055CC",
     text:"#F0F6FF", textSecondary:"#8BB4E8", textTertiary:"#4A7AB5",
@@ -61,9 +71,39 @@ var THEMES = {
   },
 };
 
-export function makeTheme(themeName) {
-  return THEMES[themeName] || THEMES.wimbledon;
+// Legacy id map — keeps users with older localStorage values working.
+var LEGACY_THEME_ALIASES = {
+  wimbledon: "grass",
+  ao: "hard-court",
+  "french-open": "clay",
+  "us-open": "night-court",
+};
+
+export function normaliseThemeId(id) {
+  if (!id) return "grass";
+  if (THEMES[id]) return id;
+  return LEGACY_THEME_ALIASES[id] || "grass";
 }
+
+export function isValidThemeId(id) {
+  return !!THEMES[id] || !!LEGACY_THEME_ALIASES[id];
+}
+
+export function makeTheme(themeName) {
+  return THEMES[normaliseThemeId(themeName)] || THEMES.grass;
+}
+
+// Id list for the picker + App.jsx bootstrap.
+export var THEME_IDS = ["grass", "hard-court", "clay", "night-court"];
+
+// Ordered option list for the picker — id + label + the signature colour
+// that identifies the theme at a glance (for the colour-wheel swatch).
+export var THEME_OPTIONS = [
+  { id: "grass",        label: "Grass",       swatch: "#006F4A", bg: "#F0F2EA" },
+  { id: "hard-court",   label: "Hard Court",  swatch: "#3B82F6", bg: "#0A0E1A" },
+  { id: "clay",         label: "Clay",        swatch: "#E0783B", bg: "#EEE0CA" },
+  { id: "night-court",  label: "Night Court", swatch: "#FFC72C", bg: "#001C4E" },
+];
 
 export function inputStyle(t) {
   return {

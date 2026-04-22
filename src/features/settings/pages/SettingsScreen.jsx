@@ -13,15 +13,10 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
 import { ZONES } from "../../map/data/zones.js";
+import { setHomeZone } from "../../map/services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUpload.js";
-
-var THEME_OPTIONS = [
-  {id:"wimbledon",    label:"Wimbledon",       swatch:"#006F4A", bg:"#F0F2EA"},
-  {id:"ao",          label:"Australian Open",  swatch:"#3B82F6", bg:"#111827"},
-  {id:"french-open", label:"French Open",      swatch:"#E0783B", bg:"#EEE0CA"},
-  {id:"us-open",     label:"US Open",          swatch:"#FFC72C", bg:"#002566"},
-];
+import { THEME_OPTIONS } from "../../../lib/theme.js";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
@@ -222,26 +217,43 @@ export default function SettingsScreen({
               );
             })}
 
-            {/* Home zone — replaces the old freetext Suburb input. */}
+            {/* Home zone — writes LIVE, not through the Save button, so the
+                map + settings dropdown always agree. Reads from `profile`
+                (source of truth), not from the draft. */}
             <div style={{marginBottom:10}}>
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase"}}>Home zone</label>
-              <select
-                value={profileDraft.home_zone||""}
-                onChange={function(e){
-                  var v=e.target.value||null;
-                  setProfileDraft(function(d){return Object.assign({},d,{home_zone:v});});
-                }}
-                style={Object.assign({},iStyle,{appearance:"none",WebkitAppearance:"none",paddingRight:28,
-                  backgroundImage:"linear-gradient(45deg,transparent 50%,"+t.textSecondary+" 50%),linear-gradient(135deg,"+t.textSecondary+" 50%,transparent 50%)",
-                  backgroundPosition:"calc(100% - 14px) 50%, calc(100% - 9px) 50%",
-                  backgroundSize:"5px 5px, 5px 5px",
-                  backgroundRepeat:"no-repeat",
-                })}>
-                <option value="">Select your home zone…</option>
-                {ZONES.map(function(z){
-                  return <option key={z.id} value={z.id}>{z.name}</option>;
-                })}
-              </select>
+              <div style={{position:"relative"}}>
+                <select
+                  value={profile.home_zone||""}
+                  onChange={async function(e){
+                    var nextVal = e.target.value || null;
+                    var prev = profile.home_zone||null;
+                    if(nextVal===prev) return;
+                    setProfile(function(p){return Object.assign({},p,{home_zone:nextVal});});
+                    setProfileDraft(function(d){return Object.assign({},d,{home_zone:nextVal});});
+                    if(authUser){
+                      var r = await setHomeZone(authUser.id, nextVal);
+                      if(r.error){
+                        setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
+                        setProfileDraft(function(d){return Object.assign({},d,{home_zone:prev});});
+                        console.error("Home zone save error:", r.error);
+                      }
+                    }
+                  }}
+                  style={Object.assign({},iStyle,{appearance:"none",WebkitAppearance:"none",MozAppearance:"none",paddingRight:32})}>
+                  <option value="">Select your home zone…</option>
+                  {ZONES.map(function(z){
+                    return <option key={z.id} value={z.id}>{z.name}</option>;
+                  })}
+                </select>
+                {/* SVG chevron — replaces the old CSS-gradient hack that
+                    could render as two giant overlapping triangles mid
+                    theme-swap. */}
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"
+                  style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:t.textSecondary}}>
+                  <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
             </div>
             {[{l:"Skill level",k:"skill",opts:SKILL_LEVELS},{l:"Play style",k:"style",opts:PLAY_STYLES}].map(function(f){
               return (
@@ -268,6 +280,10 @@ export default function SettingsScreen({
                 var nd=Object.assign({},profileDraft,{avatar:init2});
                 setProfile(nd);
                 if(authUser){
+                  // home_zone is written live (see dropdown above), so we
+                  // deliberately leave it out of this upsert — otherwise a
+                  // stale draft would overwrite a zone the user just set
+                  // from the Map side panel.
                   var res=await supabase.from("profiles").upsert({
                     id:authUser.id,
                     name:nd.name||"",
@@ -276,7 +292,6 @@ export default function SettingsScreen({
                     style:nd.style||"All-Court",
                     avatar:nd.avatar||"",
                     avatar_url:nd.avatar_url||null,
-                    home_zone:nd.home_zone||null,
                     availability:nd.availability||{},
                   },{onConflict:"id"});
                   if(res.error)console.error("Profile save error:",res.error);
@@ -428,38 +443,40 @@ export default function SettingsScreen({
         </div>
 
 
-        {/* ── Appearance ─────────────────────────────────────────────────────── */}
-        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
-          <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
-            <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>Appearance</div>
-            <div style={{fontSize:11,color:t.textTertiary}}>Choose your court theme.</div>
-          </div>
-          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:8}}>
-            {THEME_OPTIONS.map(function(opt){
-              var on=theme===opt.id;
-              return (
-                <button key={opt.id}
-                  onClick={function(){setTheme(opt.id);}}
-                  style={{
-                    display:"flex",alignItems:"center",gap:12,padding:"10px 12px",
-                    borderRadius:9,border:"1px solid "+(on?t.accent:t.border),
-                    background:on?t.accentSubtle:"transparent",
-                    cursor:"pointer",textAlign:"left",
-                  }}>
-                  <div style={{
-                    width:28,height:28,borderRadius:7,flexShrink:0,overflow:"hidden",
-                    border:"1px solid "+t.border,display:"flex",
-                  }}>
-                    <div style={{flex:1,background:opt.bg}}/>
-                    <div style={{width:10,background:opt.swatch}}/>
-                  </div>
-                  <span style={{fontSize:13,fontWeight:on?600:400,color:on?t.accent:t.text}}>{opt.label}</span>
-                  {on&&<span style={{marginLeft:"auto",fontSize:13,color:t.accent}}>✓</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* ── Appearance — compact row of colour circles ───────────────────── */}
+        {(function(){
+          var current = THEME_OPTIONS.find(function(o){return o.id===theme;}) || THEME_OPTIONS[0];
+          return (
+            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:12,
+              display:"flex",alignItems:"center",gap:14}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:t.text}}>Appearance</div>
+                <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{current.label}</div>
+              </div>
+              <div style={{display:"flex",gap:10,flexShrink:0}}>
+                {THEME_OPTIONS.map(function(opt){
+                  var on=theme===opt.id;
+                  return (
+                    <button key={opt.id}
+                      type="button"
+                      aria-label={opt.label}
+                      aria-pressed={on}
+                      title={opt.label}
+                      onClick={function(){setTheme(opt.id);}}
+                      style={{
+                        width:30, height:30, borderRadius:"50%",
+                        padding:0, cursor:"pointer",
+                        border:on?("2px solid "+t.text):("1px solid "+t.border),
+                        background:"conic-gradient("+opt.swatch+" 0 50%,"+opt.bg+" 50% 100%)",
+                        boxShadow: on ? ("0 0 0 2px "+t.bgCard+" inset") : "none",
+                        flexShrink:0,
+                      }}/>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Account ────────────────────────────────────────────────────────── */}
         {authUser&&(

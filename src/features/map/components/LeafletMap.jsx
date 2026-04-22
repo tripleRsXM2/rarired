@@ -15,11 +15,11 @@ import { ZONES, ZONE_BY_ID } from "../data/zones.js";
 import { COURTS } from "../data/courts.js";
 
 // Pick a basemap tile set that reads OK against the current theme.
-// Dark themes (ao, us-open) use dark-matter; light themes use positron.
-// Both are "nolabels" — we deliberately don't layer streetnames or suburb
-// labels on top so the zones read as the primary content.
+// Dark themes (hard-court, night-court) use dark-matter; light themes use
+// positron. Both are "nolabels" — we deliberately don't layer streetnames
+// or suburb labels on top so the zones read as the primary content.
 function tileUrlFor(theme){
-  var dark = theme === "ao" || theme === "us-open";
+  var dark = theme === "hard-court" || theme === "night-court";
   return dark
     ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
