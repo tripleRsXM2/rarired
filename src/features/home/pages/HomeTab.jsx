@@ -110,7 +110,7 @@ function IconButton({ t, title, onClick, active, children }) {
 
 // ── FeedCard ──────────────────────────────────────────────────────────────────
 function FeedCard({
-  m, isOwn, pName, pAvatar, pAvatarUrl, demo, onDelete, onRemove, leaguesIndex,
+  m, isOwn, pName, pAvatar, pAvatarUrl, oppAvatarUrl, demo, onDelete, onRemove, leaguesIndex,
   t, authUser, feedLikes, feedLikeCounts, feedComments,
   setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
   setDisputeModal, setDisputeDraft,
@@ -376,20 +376,9 @@ function FeedCard({
         </div>
       </div>
 
-      {/* ── Activity title row (line-art icon + refined heading) ── */}
-      <div style={{ padding: "10px 16px 4px", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ color: t.textSecondary, display: "flex", alignItems: "center", flexShrink: 0 }}>
-          {ICONS.tennisBall(16)}
-        </span>
-        <h3 style={{
-          margin: 0,
-          fontSize: 15, fontWeight: 700, color: t.text,
-          letterSpacing: "-0.25px", lineHeight: 1.15,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          vs {m.oppName || "Unknown"}
-        </h3>
-      </div>
+      {/* Title row ("vs Opponent") removed — the scoreboard rows below now
+          carry both players' avatars + names, so this line was pure repeat.
+          Tennis-ball ICON is kept in the ICONS set in case we want it back. */}
 
       {/* Stats strip removed — every value (Result / Sets / Score) was
           already visible in the scoreboard below via arrow + row bolding +
@@ -446,6 +435,8 @@ function FeedCard({
           return [
             {
               name: pName,
+              avatarInitials: pAvatar,
+              avatarUrl: pAvatarUrl,
               isWinner: posterWins,
               onClick: posterClickable ? goPoster : null,
               scores:    (m.sets || []).map(function(s) { return s.you;  }),
@@ -453,6 +444,8 @@ function FeedCard({
             },
             {
               name: m.oppName,
+              avatarInitials: null,
+              avatarUrl: oppAvatarUrl,
               isWinner: !posterWins,
               onClick: opponentClickable ? goOpponent : null,
               scores:    (m.sets || []).map(function(s) { return s.them; }),
@@ -466,6 +459,14 @@ function FeedCard({
               padding: "7px 16px",
               borderTop: "1px solid " + t.border,
             }}>
+              {/* Tiny avatar next to the name — makes the scoreboard identify
+                  each row visually without needing the old "vs X" title row. */}
+              <div
+                onClick={row.onClick || undefined}
+                style={{ flexShrink: 0, marginRight: 8, cursor: row.onClick ? "pointer" : "default" }}>
+                <PlayerAvatar name={row.name} avatar={row.avatarInitials} avatarUrl={row.avatarUrl} size={22}/>
+              </div>
+
               {/* Player name — clickable when that row is a real user */}
               <div
                 onClick={row.onClick || undefined}
@@ -1153,17 +1154,18 @@ export default function HomeTab({
 
           return filtered.map(function (m) {
             var isOwn = !m.isTagged;
-            // pAvatarUrl: for own matches the viewer IS the poster → use
-            // their profile.avatar_url. For tagged matches the submitter is
-            // the poster → useMatchHistory attaches their avatar_url as
-            // m.posterAvatarUrl via the fetchProfilesByIds enrichment step.
+            // pAvatarUrl: poster row avatar. Own match → viewer. Tagged → submitter.
+            // oppAvatarUrl: opponent row avatar. Own match → m.opponent_id's profile
+            // (fetched in useMatchHistory). Tagged → viewer (we ARE the opponent).
             var posterAvatarUrl = isOwn ? (profile && profile.avatar_url) : (m.posterAvatarUrl || null);
+            var oppAvatarUrl    = isOwn ? (m.oppAvatarUrl || null)       : (profile && profile.avatar_url);
             return (
               <FeedCard
                 key={m.id} m={m} isOwn={isOwn} demo={false}
                 pName={isOwn ? profile.name : (m.friendName || m.oppName)}
                 pAvatar={isOwn ? profile.avatar : ""}
                 pAvatarUrl={posterAvatarUrl}
+                oppAvatarUrl={oppAvatarUrl}
                 onDelete={isOwn ? deleteMatch : null}
                 onRemove={m.isTagged ? removeTaggedMatch : null}
                 {...feedCardProps}

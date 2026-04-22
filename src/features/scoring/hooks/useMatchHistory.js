@@ -70,32 +70,49 @@ export function useMatchHistory(opts){
     var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true);});
     var normalized=ownNorm.concat(oppNorm).sort(function(a,b){return b.date<a.date?-1:1;});
 
-    // ── Enrich tagged matches with submitter names ──────────────────────────
+    // ── Enrich matches with participant profile data (name + avatar) ───────
     // For isTagged=true rows, m.opp_name is the current user's own name
-    // (it's what the submitter typed for their opponent). The real "opponent"
-    // from the tagged user's view is the submitter (m.submitterId / m.user_id).
-    // We also pull avatar_url so the FeedCard can render the poster's real
-    // photo — initials stay as the fallback via PlayerAvatar.
-    var taggedIds=[...new Set(normalized
-      .filter(function(m){return m.isTagged&&m.submitterId;})
-      .map(function(m){return m.submitterId;})
-    )];
-    if(taggedIds.length){
-      var spr=await fetchProfilesByIds(taggedIds,'id,name,avatar,avatar_url');
-      var submitterMap={};
-      (spr.data||[]).forEach(function(p){submitterMap[p.id]=p;});
-      normalized=normalized.map(function(m){
-        if(!m.isTagged||!m.submitterId)return m;
-        var sp=submitterMap[m.submitterId];
-        if(!sp)return m;
-        // Only set friendName — oppName must stay as m.opp_name (the current user's
-        // own name from the submitter's perspective), which is used for the scoreboard
-        // opponent row. Overwriting oppName caused both rows to show the submitter name.
-        // posterAvatarUrl is consumed by FeedCard via the pAvatarUrl prop.
-        return Object.assign({},m,{
-          friendName:sp.name||m.friendName,
-          posterAvatarUrl: sp.avatar_url || null,
-        });
+    // (it's what the submitter typed for their opponent). The real
+    // "opponent" from the tagged user's view is the submitter.
+    // For isTagged=false (own) rows the opponent is m.opponent_id.
+    //
+    // We fetch every referenced participant once and attach BOTH the
+    // poster's avatar (posterAvatarUrl, already used by the feed card
+    // header) AND the opponent's avatar (oppAvatarUrl, consumed by the
+    // scoreboard rows to render an inline avatar beside the name).
+    var participantIds = new Set();
+    normalized.forEach(function (m) {
+      if (m.isTagged && m.submitterId) participantIds.add(m.submitterId);
+      if (!m.isTagged && m.opponent_id) participantIds.add(m.opponent_id);
+    });
+    participantIds.delete(userId); // own profile is loaded separately
+    if (participantIds.size > 0) {
+      var pr = await fetchProfilesByIds(
+        Array.from(participantIds),
+        'id,name,avatar,avatar_url'
+      );
+      var pMap = {};
+      (pr.data || []).forEach(function (p) { pMap[p.id] = p; });
+      normalized = normalized.map(function (m) {
+        var patch = {};
+        if (m.isTagged && m.submitterId) {
+          var sp = pMap[m.submitterId];
+          if (sp) {
+            // friendName — submitter's real name, overrides what's stored
+            // in opp_name (which is the current user's own name as typed by
+            // the submitter). Don't overwrite oppName — scoreboard opponent
+            // row uses it as the tagged user's own label.
+            patch.friendName      = sp.name || m.friendName;
+            patch.posterAvatarUrl = sp.avatar_url || null;
+          }
+        }
+        if (!m.isTagged && m.opponent_id) {
+          var op = pMap[m.opponent_id];
+          if (op) {
+            patch.oppAvatarUrl = op.avatar_url || null;
+          }
+        }
+        return Object.keys(patch).length ? Object.assign({}, m, patch) : m;
       });
     }
 
