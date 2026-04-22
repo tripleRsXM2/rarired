@@ -61,16 +61,22 @@ export function fetchMatchById(matchId){
 export function updateMatch(matchId, payload){
   return supabase.from('match_history').update(payload).eq('id',matchId);
 }
-// Server-side enforcement runs on a pg_cron schedule (see supabase/migrations).
-// Client-side calls are a best-effort fallback: trigger the same RPC whenever a
-// user loads their history. RPC is SECURITY DEFINER so it handles both submitter
-// and opponent sides regardless of which party logged in.
-export function expireStaleMatches(){
-  return supabase.rpc('expire_stale_matches');
-}
-// Legacy fallbacks (kept for offline/RLS compatibility) — now cover both sides
-// of the match via .or() so an opponent logging in can expire matches they're
-// party to, not just matches they submitted.
+// ── Match expiry ────────────────────────────────────────────────────────────
+//
+// The *global* sweep (`expire_stale_matches()` RPC) is owned by the server:
+// pg_cron runs it every 15 minutes as the `postgres` role, and service_role
+// can call it from a backend if one is ever added. Client roles (anon,
+// authenticated) have had EXECUTE REVOKEd — see migration
+// 20260425_restrict_expire_stale_matches.sql. Do NOT add a client wrapper
+// for that RPC.
+//
+// Clients instead run these two *user-scoped* helpers opportunistically
+// when the viewer loads their history. They only touch rows where the
+// viewer is a participant — enforced by both the explicit .or(user_id|
+// opponent_id) filter AND the existing RLS UPDATE policy on match_history.
+// Running them on load is a UX nicety so the user sees accurate status
+// without waiting up to 15 min for the next cron tick; it is not a
+// security boundary.
 export function expireStalePendingMatches(userId){
   return supabase.from('match_history')
     .update({status:'expired'})

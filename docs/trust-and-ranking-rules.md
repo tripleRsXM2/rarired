@@ -98,7 +98,8 @@ A 100% confirmation rate is a strong "this player logs real matches that opponen
 
 - **72 hours** — pending → expired if the opponent never confirms.
 - **48 hours** — disputed / pending_reconfirmation → voided (timeout) if nobody responds.
-- Both are enforced by the `expire_stale_matches()` RPC running every 15 min under `pg_cron`.
+- Both are enforced by the `expire_stale_matches()` RPC running every 15 min under `pg_cron`. The RPC is `SECURITY DEFINER` and **not callable from the client** — EXECUTE was REVOKEd from `anon` and `authenticated` in migration `20260425_restrict_expire_stale_matches.sql` to close a global-mutation-via-anon-key hole. Only the `postgres` role (cron owner) and `service_role` retain EXECUTE.
+- Clients still get near-realtime accuracy via two *user-scoped* helpers invoked on history load — `expireStalePendingMatches(userId)` and `expireDisputedMatches(userId)` — which UPDATE only rows where the viewer is a participant (enforced by both an explicit `.or(user_id|opponent_id = me)` filter and the RLS UPDATE policy on `match_history`).
 
 ### Maximum revisions
 
@@ -123,7 +124,7 @@ A player's **"N confirmed matches"** badge (green tick, shown on own and public 
 
 2. **Both parties must agree to change the record.** The `propose_match_correction` RPC is SECURITY DEFINER so the write bypasses RLS and happens atomically alongside the `match_revisions` audit row — no client can fake a state transition.
 
-3. **RPCs own the state machine.** The client never writes `status`, `result`, `sets`, or `current_proposal` directly. Every state transition goes through a named RPC (`confirm_match_and_update_stats`, `accept_correction_and_update_stats`, `void_match`, `propose_match_correction`, `expire_stale_matches`). This keeps the invariants enforceable in one place.
+3. **RPCs own the state machine.** The client never writes `status`, `result`, `sets`, or `current_proposal` directly. State-transition RPCs (`confirm_match_and_update_stats`, `accept_correction_and_update_stats`, `void_match`, `propose_match_correction`) are SECURITY DEFINER but scoped to a single match the caller participates in, so the `authenticated` role keeps EXECUTE. The *global* sweep RPC (`expire_stale_matches`) is cron/service-role only — see the Dispute Windows section — and clients expire their own rows via the user-scoped helpers.
 
 4. **Time-bounded disputes.** 72h to confirm is long enough that you don't annoy casual opponents but short enough that stale matches don't pollute the feed forever. 48h for dispute rounds keeps fights from dragging.
 

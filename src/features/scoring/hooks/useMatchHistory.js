@@ -51,14 +51,19 @@ export function useMatchHistory(opts){
   var [disputeDraft,setDisputeDraft]=useState({reasonCode:"",reasonDetail:"",sets:[{you:"",them:""}],result:"win",date:"",venue:"",court:""});
 
   async function loadHistory(userId){
-    // Prefer the server-side RPC (single authoritative call, SECURITY DEFINER,
-    // also scheduled via pg_cron). Fall back to client-side sweeps if the RPC
-    // isn't deployed yet — they're idempotent so running both is harmless.
-    var sr=await M.expireStaleMatches();
-    if(sr&&sr.error){
-      await M.expireStalePendingMatches(userId);
-      await M.expireDisputedMatches(userId);
-    }
+    // Expiry sweep. The authoritative global cleanup runs on pg_cron every
+    // 15 min (see 20260419_dispute_system_v2.sql and 20260425_restrict_
+    // expire_stale_matches.sql). Clients can NOT call that RPC — EXECUTE
+    // has been REVOKEd from anon + authenticated to prevent any page load
+    // from triggering a system-wide mutation.
+    //
+    // The two helpers below are user-scoped: RLS + explicit (user_id |
+    // opponent_id = me) filter cap them to the viewer's own rows. They
+    // run opportunistically on history load so the viewer sees accurate
+    // statuses without waiting up to 15 min for the next cron tick; they
+    // are not a security boundary.
+    await M.expireStalePendingMatches(userId);
+    await M.expireDisputedMatches(userId);
     var hr=await M.fetchOwnMatches(userId);
     var or=await M.fetchOpponentMatches(userId);
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});

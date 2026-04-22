@@ -52,8 +52,8 @@ Roles at each state:
 | `acceptCorrectionRpc` | **RPC SECURITY DEFINER** | copies proposal → match, atomic stats bump, clears proposal state | — |
 | `voidMatchRpc` | **RPC SECURITY DEFINER** | status=voided, reason recorded, clears proposal state | — |
 | `proposeCorrection` | **RPC SECURITY DEFINER** | writes match_history + match_revisions atomically, sets `pending_action_by`, increments `revision_count`, refreshes `dispute_expires_at` | — |
-| `expireStaleMatches` | RPC (runs under pg_cron every 15 min) | pending>72h → expired; disputed>48h → voided w/ timeout | — |
-| `expireStalePendingMatches` / `expireDisputedMatches` | client UPDATE fallback | idempotent with the RPC | safe to call on loadHistory |
+| `expire_stale_matches` (SQL) | RPC runs under pg_cron every 15 min; **not callable from client** (EXECUTE REVOKEd from anon + authenticated in `20260425_restrict_expire_stale_matches.sql`). Only `postgres` + `service_role` retain EXECUTE. | pending>72h → expired; disputed>48h → voided w/ timeout | global sweep — server-owned |
+| `expireStalePendingMatches` / `expireDisputedMatches` | client UPDATE, user-scoped via `.or(user_id|opponent_id = me)` + RLS | same two status transitions, capped to the viewer's rows | called on `loadHistory` so the viewer sees accurate status within seconds instead of waiting for cron |
 | `markMatchTagStatus` | client UPDATE | — | legacy tag_status flow |
 
 **Principle:** every state transition is owned by an RPC. The client never writes `status`, `result`, `sets`, or `current_proposal` directly. Client-side `updateMatch` is reserved for non-transitional metadata.
