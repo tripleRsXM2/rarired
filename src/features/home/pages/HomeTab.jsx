@@ -391,40 +391,13 @@ function FeedCard({
         </h3>
       </div>
 
-      {/* ── Stats strip — tight typography, single-line values ── */}
-      {isConfirmed && scoreStr && (
-        <div style={{
-          padding: "4px 16px 12px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 0,
-        }}>
-          {[
-            { label: "Result", value: isWin ? "Won" : "Lost", color: isWin ? t.green : t.red },
-            { label: "Sets",   value: setWinCounts.ys + setWinCounts.ts > 0 ? (isOwn ? setWinCounts.ys : setWinCounts.ts) + "–" + (isOwn ? setWinCounts.ts : setWinCounts.ys) : "–", color: t.text },
-            { label: "Score",  value: scoreStr.replace(/\s+/g, " "), color: t.text },
-          ].map(function (s, i) {
-            return (
-              <div key={s.label} style={{
-                borderLeft: i === 0 ? "none" : "1px solid " + t.border,
-                paddingLeft: i === 0 ? 0 : 12,
-                paddingRight: i === 2 ? 0 : 12,
-              }}>
-                <div style={{ fontSize: 9, color: t.textTertiary, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 2 }}>
-                  {s.label}
-                </div>
-                <div style={{
-                  fontSize: 14, fontWeight: 700, color: s.color,
-                  letterSpacing: "-0.2px", fontVariantNumeric: "tabular-nums", lineHeight: 1.1,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {s.value}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Stats strip removed — every value (Result / Sets / Score) was
+          already visible in the scoreboard below via arrow + row bolding +
+          set-cell values. See docs/superpowers/specs/2026-04-23-feed-card-
+          reduce-redundancy-design.md for the reasoning.
+          isWin + setWinCounts are still computed at the top of FeedCard
+          because the outer border tint, share-sheet text, and scoreboard
+          row derivation all depend on them. */}
 
       {/* ── Scoreboard — compact ATP-style typography ── */}
       <div style={{
