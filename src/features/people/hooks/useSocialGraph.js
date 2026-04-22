@@ -112,9 +112,16 @@ export function useSocialGraph(opts){
   }
 
   function resetSocial(){
+    // Full sign-out reset — clear every graph cache AND the transient UI
+    // state (search box, dropdown, loading flags) so a signed-out user
+    // doesn't see the previous user's search query or spinner on-screen.
     setFriends([]); setSentRequests([]); setReceivedRequests([]);
     setBlockedUsers([]); setSuggestedPlayers([]); setSearchResults([]);
     setPlayedOpponents([]); setSameSkillPlayers([]);
+    setPeopleSearch("");
+    setShowSearchDrop(false);
+    setSearchLoading(false);
+    setSocialLoading({});
   }
 
   function isFriend(uid){return friends.some(function(f){return f.id===uid;});}

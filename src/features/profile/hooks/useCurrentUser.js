@@ -64,8 +64,16 @@ export function useCurrentUser(){
   }
 
   function resetProfile(){
+    // Full sign-out reset — clear profile + every piece of transient edit
+    // state (availability editor, onboarding wizard) so the next session
+    // starts at a clean slate regardless of where the previous user left off.
     setProfile(INITIAL_PROFILE);
     setProfileDraft(INITIAL_PROFILE);
+    setEditingAvail(false);
+    setAvailDraft({});
+    setShowOnboarding(false);
+    setOnboardStep(1);
+    setOnboardDraft({skill:"Intermediate",style:"All-Court",suburb:""});
   }
 
   return {

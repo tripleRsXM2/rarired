@@ -171,7 +171,21 @@ export default function App(){
         if(res.isNew&&isFresh)currentUser.triggerOnboarding();
       },
       reset: function(){
-        // Match prior behavior: clear only auth; data rehydrates on next sign-in.
+        // Sign-out reset: clear every per-user cache in memory so the next
+        // session starts clean (no prior user's profile, match history,
+        // social graph, DMs, notifications, or challenges bleeding through).
+        // Also drop the transient UI state that's tied to a signed-in session
+        // (profile sub-tab, open Settings sheet, open review drawer). Theme
+        // is deliberately preserved — it's a device preference, not per-user.
+        currentUser.resetProfile();
+        matchHistory.resetHistory();
+        social.resetSocial();
+        dms.resetDMs();
+        notifications.resetNotifications();
+        challenges.resetChallenges();
+        setProfileTab("overview");
+        setShowSettings(false);
+        setReviewDrawer(null);
       },
       // Module 4: bridges the useMatchHistory→useChallenges call from inside a
       // coordRef so we don't have to re-order the hook declarations.
