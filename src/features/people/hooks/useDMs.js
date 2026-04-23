@@ -128,26 +128,30 @@ export function useDMs(opts) {
     var pendingIn = all.filter(function (c) { return c.status === "pending" && c.requester_id !== uid; });
 
     var partnerIds = [...new Set(all.map(function (c) { return c.user1_id === uid ? c.user2_id : c.user1_id; }))];
-    var partnerMap = {};
-    if (partnerIds.length) {
-      var pr = await fetchProfilesByIds(partnerIds, PARTNER_FIELDS);
-      (pr.data || []).forEach(function (p) { partnerMap[p.id] = p; });
-    }
-
     var convIds = accepted.map(function (c) { return c.id; });
+
+    // Fire the three supplemental fetches (profiles, my reads, partner
+    // reads) in parallel instead of serially. Mobile was waiting on
+    // three sequential round-trips before painting the list, which felt
+    // slow even on a good connection.
+    var empty = { data: [] };
+    var parallel = await Promise.all([
+      partnerIds.length ? fetchProfilesByIds(partnerIds, PARTNER_FIELDS) : Promise.resolve(empty),
+      convIds.length    ? D.fetchReads(uid, convIds)                    : Promise.resolve(empty),
+      convIds.length    ? D.fetchPartnerReadsForConvs(uid, convIds)      : Promise.resolve(empty),
+    ]);
+
+    var partnerMap = {};
+    (parallel[0].data || []).forEach(function (p) { partnerMap[p.id] = p; });
+
     var readMap = {};
-    var partnerReadMap = {};  // convId → partner's last_read_at (for list "✓ Seen" indicator)
-    if (convIds.length) {
-      var rr = await D.fetchReads(uid, convIds);
-      (rr.data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
-      // Bulk-fetch every other participant's last_read_at in one request
-      // so each list row can show whether my latest sent message has
-      // been seen — WhatsApp-style. One query for the whole inbox.
-      var prp = await D.fetchPartnerReadsForConvs(uid, convIds);
-      (prp.data || []).forEach(function (row) {
-        partnerReadMap[row.conversation_id] = row.last_read_at;
-      });
-    }
+    (parallel[1].data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
+
+    // convId → partner's last_read_at (for list "✓ Seen" indicator).
+    var partnerReadMap = {};
+    (parallel[2].data || []).forEach(function (row) {
+      partnerReadMap[row.conversation_id] = row.last_read_at;
+    });
 
     // Pins — fire-and-forget so the list paints fast; result populates
     // state when it lands and re-renders pick up the ordering.
