@@ -283,55 +283,42 @@ export function useDMs(opts) {
     if (!authUser) return { error: "Not signed in" };
     var uid = authUser.id;
 
-    var r = await D.getOrCreateConversation(partner.id);
-    if (r.error || !r.data) {
-      console.error("[useDMs] getOrCreateConversation failed:", r.error);
-      return { error: (r.error && r.error.message) || "Couldn't open that conversation. Try again." };
-    }
-    var row = r.data;
-
-    if (row.status === "pending" && isFriendId(partner.id)) {
-      var ur = await D.updateConversationStatus(row.id, "accepted");
-      row = (ur && ur.data) ? ur.data : Object.assign({}, row, { status: "accepted" });
+    // If the conversation already exists (in local state), just open it.
+    var existing = [].concat(conversations, requests).find(function (c) {
+      return c.partner && c.partner.id === partner.id;
+    });
+    if (existing) {
+      await openConversation(existing);
+      return { error: null };
     }
 
-    if (row.status === "declined") {
-      if (row.request_cooldown_until && new Date(row.request_cooldown_until) > new Date()) {
-        var until = new Date(row.request_cooldown_until);
-        var days = Math.max(1, Math.ceil((until - new Date()) / (24 * 3600 * 1000)));
-        return { error: "You can't message " + (partner.name || "this player") + " right now. Try again in " + days + " day" + (days === 1 ? "" : "s") + "." };
-      }
-      await D.updateConversationStatus(row.id, "pending");
-      row = Object.assign({}, row, { status: "pending", requester_id: uid });
-    }
-
-    var conv = Object.assign({}, row, { partner: partner, hasUnread: false });
+    // Otherwise — DRAFT mode. Don't touch the DB. The conversation is
+    // local-only until the first message is sent; the partner sees
+    // nothing (no row, no notification). We materialize the row inside
+    // sendMessage() once the user actually commits something.
+    //
+    // Still enforce the decline cooldown client-side as a quick check;
+    // the real enforcement is RLS / RPC when we go to create.
+    var draft = {
+      id: "draft:" + partner.id,
+      isDraft: true,
+      partner: partner,
+      status: "draft",
+      user1_id: uid,
+      user2_id: partner.id,
+      requester_id: uid,
+      last_message_at: null,
+      last_message_preview: null,
+      last_message_sender_id: null,
+      hasUnread: false,
+      lastReadAt: null,
+    };
     _scrubTransient();
-    setActiveConv(conv);
-    activeConvRef.current = conv;
-
-    var isNewPending = row.requester_id === uid && row.status === "pending" && !row.last_message_at;
-
-    if (isNewPending) {
-      setThreadMessages([]);
-      setConversations(function (cs) {
-        if (cs.some(function (c) { return c.id === conv.id; })) return cs;
-        return cs.concat([conv]);
-      });
-      insertNotification({ user_id: partner.id, type: "message_request", from_user_id: uid, entity_id: conv.id });
-    } else {
-      await _loadThread(conv);
-      if (row.status === "accepted") {
-        D.upsertRead(uid, row.id);
-        setRequests(function (rs) { return rs.filter(function (x) { return x.id !== conv.id; }); });
-        setConversations(function (cs) {
-          if (cs.some(function (c) { return c.id === conv.id; })) {
-            return cs.map(function (c) { return c.id === conv.id ? Object.assign({}, c, { hasUnread: false, status: "accepted" }) : c; });
-          }
-          return [conv].concat(cs);
-        });
-      }
-    }
+    setThreadMessages([]);
+    setActiveConv(draft);
+    activeConvRef.current = draft;
+    // Deliberately not added to conversations or requests — draft is
+    // invisible in the list until send.
     return { error: null };
   }
 
@@ -354,6 +341,50 @@ export function useDMs(opts) {
     var replySnapshot = replyTo;
     setSending(true);
     setMsgDraft("");
+
+    // Draft materialization: if this is the user's first message to
+    // someone, the conversation hasn't been created yet (see
+    // openOrStartConversation — draft mode avoids writing a DB row
+    // until the user actually commits something). Create it now.
+    var isDraftFirstSend = conv && conv.isDraft;
+    if (isDraftFirstSend) {
+      var partnerProfile = conv.partner;
+      var gc = await D.getOrCreateConversation(partnerProfile.id);
+      if (gc.error || !gc.data) {
+        setSending(false);
+        setMsgDraft(v.value);
+        if (replySnapshot) setReplyTo(replySnapshot);
+        return { error: (gc.error && gc.error.message) || "Couldn't start that conversation." };
+      }
+      var row = gc.data;
+      if (row.status === "pending" && isFriendId(partnerProfile.id)) {
+        var ur = await D.updateConversationStatus(row.id, "accepted");
+        row = (ur && ur.data) ? ur.data : Object.assign({}, row, { status: "accepted" });
+      }
+      if (row.status === "declined") {
+        if (row.request_cooldown_until && new Date(row.request_cooldown_until) > new Date()) {
+          var until = new Date(row.request_cooldown_until);
+          var days = Math.max(1, Math.ceil((until - new Date()) / (24 * 3600 * 1000)));
+          setSending(false);
+          setMsgDraft(v.value);
+          if (replySnapshot) setReplyTo(replySnapshot);
+          return { error: "You can't message " + (partnerProfile.name || "this player") + " right now. Try again in " + days + " day" + (days === 1 ? "" : "s") + "." };
+        }
+        await D.updateConversationStatus(row.id, "pending");
+        row = Object.assign({}, row, { status: "pending", requester_id: uid });
+      }
+      conv = Object.assign({}, row, { partner: partnerProfile, hasUnread: false });
+      activeConvRef.current = conv;
+      setActiveConv(conv);
+      // First-time DMs from a non-friend generate a message_request
+      // notification for the recipient. Friends-bypass: status=accepted,
+      // no notification (the upcoming upsert_message_notification RPC
+      // below collapses into the single-per-conv unread row for them).
+      if (row.status === "pending") {
+        insertNotification({ user_id: partnerProfile.id, type: "message_request", from_user_id: uid, entity_id: conv.id });
+      }
+    }
+
     var r = await D.sendMessage(conv.id, uid, v.value, replySnapshot ? replySnapshot.id : null);
     if (!r.error && r.data) {
       var msg = r.data;
