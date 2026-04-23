@@ -95,9 +95,14 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* Primary nav */}
+      {/* Primary nav — Admin is only visible to users whose
+          profiles.is_admin = true. The real boundary is RLS on
+          tournaments/audit_log etc, but we hide the nav entry for a
+          cleaner UX (matches Instagram/Discord pattern). */}
       <div style={{ flex: 1, padding: "10px 10px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {NAV_ITEMS.map(function(nav) {
+        {NAV_ITEMS.filter(function(nav){
+          return nav.id !== "admin" || (profile && profile.is_admin);
+        }).map(function(nav) {
           var active = tab === nav.id;
           return (
             <button
