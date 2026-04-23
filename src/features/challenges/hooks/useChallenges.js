@@ -36,7 +36,7 @@ export function useChallenges(opts) {
       return c.challenger_id === userId ? c.challenged_id : c.challenger_id;
     }))].filter(Boolean);
     if (!otherIds.length) { setProfileMap({}); return; }
-    var pr = await fetchProfilesByIds(otherIds, "id,name,avatar,skill,suburb");
+    var pr = await fetchProfilesByIds(otherIds, "id,name,avatar,avatar_url,skill,suburb,last_active,show_online_status,show_last_seen");
     var m = {};
     (pr.data || []).forEach(function (p) { m[p.id] = p; });
     setProfileMap(m);
@@ -58,7 +58,7 @@ export function useChallenges(opts) {
       }, async function (payload) {
         var row = payload.new;
         // Enrich the challenger profile so the UI can render immediately.
-        var pr = await fetchProfilesByIds([row.challenger_id], "id,name,avatar,skill,suburb");
+        var pr = await fetchProfilesByIds([row.challenger_id], "id,name,avatar,avatar_url,skill,suburb,last_active,show_online_status,show_last_seen");
         var p = (pr.data && pr.data[0]) || { id: row.challenger_id, name: "Player" };
         setProfileMap(function (m) { var n = Object.assign({}, m); n[p.id] = p; return n; });
         setChallenges(function (cs) {
@@ -73,6 +73,34 @@ export function useChallenges(opts) {
         var row = payload.new;
         setChallenges(function (cs) {
           return cs.map(function (c) { return c.id === row.id ? row : c; });
+        });
+      })
+      .subscribe();
+    return function () { supabase.removeChannel(channel); };
+  }, [authUser && authUser.id]);
+
+  // ── Realtime: partner profile patches (presence + avatar) ────────────────
+  // Keep the challenge list avatars/dots in sync when a challenger changes
+  // their picture or their presence/privacy flags flip.
+  useEffect(function () {
+    if (!authUser) return;
+    var channel = supabase.channel("challenges-profiles:" + authUser.id)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "profiles",
+      }, function (payload) {
+        var p = payload.new; if (!p || !p.id) return;
+        setProfileMap(function (m) {
+          if (!m[p.id]) return m;
+          var next = Object.assign({}, m);
+          next[p.id] = Object.assign({}, m[p.id], {
+            name:               p.name || m[p.id].name,
+            avatar:             p.avatar != null ? p.avatar : m[p.id].avatar,
+            avatar_url:         p.avatar_url != null ? p.avatar_url : m[p.id].avatar_url,
+            last_active:        p.last_active,
+            show_online_status: p.show_online_status,
+            show_last_seen:     p.show_last_seen,
+          });
+          return next;
         });
       })
       .subscribe();
