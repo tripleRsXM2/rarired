@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import CreateLeagueModal from "./CreateLeagueModal.jsx";
+import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 export default function LeaguesPanel({
   t, authUser,
@@ -113,6 +114,10 @@ export default function LeaguesPanel({
     );
   }
 
+  // Deep-link: when we arrive here from a league_invite / league_joined
+  // notification, scroll to + pulse the matching league row.
+  var leagueDeepLink = useDeepLinkHighlight("highlightLeagueId");
+
   return (
     <div>
       <ListHeader t={t} onNew={function () { setShowCreate(true); }} />
@@ -126,6 +131,7 @@ export default function LeaguesPanel({
             onOpen={function () { setSelectedId(lg.id); }}
             onRespond={respondToInvite}
             toast={toast}
+            rowAnchor={leagueDeepLink.rowProps(lg.id)}
           />
         );
       })}
@@ -163,7 +169,7 @@ function ListHeader({ t, onNew }) {
 }
 
 // ── LeagueRow ─────────────────────────────────────────────────────────────────
-function LeagueRow({ t, league, authUser, onOpen, onRespond, toast }) {
+function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor }) {
   var pending = league.my_status === "invited";
   var [busy, setBusy] = useState(false);
 
@@ -189,6 +195,7 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast }) {
 
   return (
     <div
+      {...(rowAnchor || {})}
       onClick={pending ? undefined : onOpen}
       style={{
         background: t.bgCard,

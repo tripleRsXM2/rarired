@@ -10,6 +10,7 @@
 // challenges.
 
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 function fmtProposedAt(iso) {
   if (!iso) return null;
@@ -21,10 +22,10 @@ function fmtProposedAt(iso) {
   });
 }
 
-function ChallengeRow({ c, t, partner, openProfile, leftActions, rightActions }) {
+function ChallengeRow({ c, t, partner, openProfile, leftActions, rightActions, rowAnchor }) {
   function goPartner() { if (openProfile && partner && partner.id) openProfile(partner.id); }
   return (
-    <div style={{
+    <div {...(rowAnchor || {})} style={{
       background: t.bgCard, border: "1px solid " + t.border, borderRadius: 12,
       padding: "14px 16px", marginBottom: 8,
       display: "flex", flexDirection: "column", gap: 10,
@@ -93,6 +94,11 @@ export default function ChallengesPanel({
 }) {
   function reportErr(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
   if (!authUser) return null;
+
+  // Deep link — if we arrived here from tapping a challenge_received /
+  // accepted / expired / declined notification, scroll to + pulse the
+  // row so the user doesn't have to hunt for it in three sections.
+  var deepLink = useDeepLinkHighlight("highlightChallengeId");
 
   var incoming = challenges.filter(function (c) { return c.status === "pending" && c.challenged_id === authUser.id; });
   var outgoing = challenges.filter(function (c) { return c.status === "pending" && c.challenger_id === authUser.id; });
@@ -182,7 +188,7 @@ export default function ChallengesPanel({
             var p = partnerOf(c);
             return (
               <ChallengeRow
-                key={c.id} c={c} t={t} partner={p} openProfile={openProfile}
+                key={c.id} c={c} t={t} partner={p} openProfile={openProfile} rowAnchor={deepLink.rowProps(c.id)}
                 rightActions={<>
                   <button disabled={busy(c.id)}
                     onClick={async function () { var r = await acceptChallenge(c); if (r && r.error) reportErr(r.error); }}
@@ -210,7 +216,7 @@ export default function ChallengesPanel({
             var p = partnerOf(c);
             return (
               <ChallengeRow
-                key={c.id} c={c} t={t} partner={p} openProfile={openProfile}
+                key={c.id} c={c} t={t} partner={p} openProfile={openProfile} rowAnchor={deepLink.rowProps(c.id)}
                 rightActions={<>
                   {/* Mutually accepted — only action now is to log the result
                       once played. Replaces the old Accept/Decline/Counter
@@ -241,7 +247,7 @@ export default function ChallengesPanel({
             var p = partnerOf(c);
             return (
               <ChallengeRow
-                key={c.id} c={c} t={t} partner={p} openProfile={openProfile}
+                key={c.id} c={c} t={t} partner={p} openProfile={openProfile} rowAnchor={deepLink.rowProps(c.id)}
                 rightActions={<>
                   <span style={{ flex: 1, padding: "10px", textAlign: "center", color: t.textTertiary, fontSize: 12, fontWeight: 500 }}>
                     Awaiting response
