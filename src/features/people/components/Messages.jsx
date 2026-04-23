@@ -7,6 +7,7 @@
 
 import { useRef, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // ── Viewport hook ────────────────────────────────────────────────────────
 // Tracks viewport width and returns {isDesktop, sidebarW, rightPanelW}.
@@ -117,6 +118,62 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var [hiddenIds, setHiddenIds] = useState(function () { return readHiddenMsgs(myId); });
   useEffect(function () { setHiddenIds(readHiddenMsgs(myId)); }, [myId]);
 
+  // ── URL deep linking ────────────────────────────────────────────────────
+  // /people/messages/<convId> opens that conversation directly — survives a
+  // hard refresh and gives every thread a shareable permalink (like
+  // Messenger's /t/<id>). Two-way sync: URL drives which conv is open, and
+  // opening/closing a conv updates the URL.
+  var location = useLocation();
+  var navigate = useNavigate();
+  var urlConvId = (function () {
+    var parts = (location.pathname || "").split("/").filter(Boolean);
+    if (parts[0] === "people" && parts[1] === "messages" && parts[2]) return parts[2];
+    return null;
+  })();
+
+  // URL → activeConv. Waits for conversationsLoaded so a deep link on cold
+  // start doesn't flash the empty state before the thread hydrates.
+  useEffect(function () {
+    if (!dms.conversationsLoaded) return;
+    var want = urlConvId;
+    var current = dms.activeConv && dms.activeConv.id;
+    if (want && want !== current) {
+      var all = [].concat(dms.conversations || [], dms.requests || []);
+      var found = all.find(function (c) { return c.id === want; });
+      if (found) dms.openConversation(found);
+    } else if (!want && current) {
+      dms.closeConversation();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlConvId, dms.conversationsLoaded, (dms.conversations || []).length, (dms.requests || []).length]);
+
+  // activeConv → URL. Pushing the new URL means Back goes to /people/messages,
+  // which is the natural "close the thread" gesture.
+  //
+  // IMPORTANT: wait for conversationsLoaded AND only strip a URL that
+  // already had a convId when we have an earlier non-null state. On a
+  // deep-link reload the sequence is:
+  //   1st render: activeConv=null, urlConvId=<id>  ← URL drives here
+  //   loadConversations resolves
+  //   URL→activeConv effect runs: openConversation(found) → activeConv=<conv>
+  // Without the loaded gate, the activeConv→URL effect would fire
+  // during step 1 and navigate away from <id> before step 3 can act.
+  useEffect(function () {
+    if (!dms.conversationsLoaded) return;
+    var current = dms.activeConv && dms.activeConv.id;
+    if (current && current !== urlConvId) {
+      navigate("/people/messages/" + current);
+    } else if (!current && urlConvId) {
+      // We're loaded + have no conv + URL still points to one. This only
+      // happens if the convId in the URL isn't in my conversations (stale
+      // or different account). Drop it so we don't loop.
+      var all = [].concat(dms.conversations || [], dms.requests || []);
+      var stillResolvable = all.some(function (c) { return c.id === urlConvId; });
+      if (!stillResolvable) navigate("/people/messages", { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dms.activeConv && dms.activeConv.id, dms.conversationsLoaded]);
+
   function hideForMe(msgId) {
     setHiddenIds(function (prev) {
       var next = Object.assign({}, prev, { [msgId]: true });
@@ -163,7 +220,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // in the list view, which crashed the thread view the moment activeConv
   // went from null to a row (hook count changed). Hoisted here.
   var visibleMessages = useMemo(function () {
-    return filterHiddenMessages(dms.threadMessages, hiddenIds);
+    // Two filters: local "Delete for me" hides (localStorage) + server
+    // soft-deletes (Unsend — deleted_at set). User wants Unsend to
+    // vanish entirely rather than leaving a "Message deleted" ghost
+    // shell, so we strip those out here too.
+    var base = filterHiddenMessages(dms.threadMessages, hiddenIds);
+    return base.filter(function (m) { return !m.deleted_at; });
   }, [dms.threadMessages, hiddenIds]);
 
   // Message ids that should render a date-separator row ABOVE them (first
@@ -477,14 +539,16 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var iAmSender = conv && conv.requester_id === myId;
   var presence = conv ? getPresence(conv.partner) : { online: false, hidden: true };
 
-  var unreadStartIdx = conv ? computeUnreadDividerIdx(dms.threadMessages, myId, conv.lastReadAt) : -1;
-  var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(dms.threadMessages, myId, dms.partnerLastReadAt);
-  // Index of my MOST RECENT sent message — we always render a status
-  // (Sent / Seen) next to this one, so the receipt doesn't flicker
-  // off the moment the partner replies or after an unsent resend.
+  var unreadStartIdx = conv ? computeUnreadDividerIdx(visibleMessages, myId, conv.lastReadAt) : -1;
+  var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(visibleMessages, myId, dms.partnerLastReadAt);
+  // Index of my MOST RECENT visible sent message — we always render a
+  // status (Sent / Seen) next to this one so the receipt doesn't flicker
+  // off when the partner replies or I send another message. Indexed
+  // against visibleMessages (post-filter) so idx === lastMineIdx matches
+  // what the render loop below sees.
   var lastMineIdx = -1;
-  (dms.threadMessages || []).forEach(function (m, i) {
-    if (m.sender_id === myId && !m.deleted_at) lastMineIdx = i;
+  visibleMessages.forEach(function (m, i) {
+    if (m.sender_id === myId) lastMineIdx = i;
   });
 
   // Anchor the pane to the viewport so the input bar hugs the bottom of

@@ -1,9 +1,18 @@
 // Messages.jsx — render + interaction smoke tests.
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
-import Messages from "./Messages.jsx";
+import { render as rtlRender, screen, fireEvent, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import MessagesRaw from "./Messages.jsx";
 import { makeTheme } from "../../../lib/theme.js";
+
+// Messages now uses useLocation / useNavigate (URL deep linking for
+// /people/messages/<convId>). Wrap every render in a MemoryRouter so
+// those hooks have a router context.
+function render(ui, opts) {
+  return rtlRender(<MemoryRouter initialEntries={["/people/messages"]}>{ui}</MemoryRouter>, opts);
+}
+var Messages = MessagesRaw;
 
 var t = makeTheme("grass");
 
@@ -205,8 +214,10 @@ describe("Messages — thread view", function () {
         { id: "m1", sender_id: "me-uid", content: "hi", created_at: new Date().toISOString() },
       ],
     });
-    // Re-render the SAME root — this is what triggers the hook-count check.
-    utils.rerender(<Messages t={t} authUser={authUser} dms={dms2} />);
+    // Re-render the SAME root — this is what triggers the hook-count
+    // check. Re-wrap in MemoryRouter (rerender doesn't reapply the
+    // wrapper from the initial render).
+    utils.rerender(<MemoryRouter initialEntries={["/people/messages"]}><Messages t={t} authUser={authUser} dms={dms2} /></MemoryRouter>);
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
