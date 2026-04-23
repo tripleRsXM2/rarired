@@ -63,6 +63,13 @@ export default function LeaguesPanel({
     return (leagues || []).find(function (l) { return l.id === selectedId; });
   }, [leagues, selectedId]);
 
+  // Deep-link: when we arrive here from a league_invite / league_joined
+  // notification, scroll to + pulse the matching league row. MUST be
+  // declared before any conditional early-return, or switching between
+  // list and detail view changes the hook count and React crashes with
+  // error #310 (blank screen).
+  var leagueDeepLink = useDeepLinkHighlight("highlightLeagueId");
+
   // ── DETAIL VIEW ────────────────────────────────────────────────────────────
   if (selectedLeague) {
     return (
@@ -113,10 +120,6 @@ export default function LeaguesPanel({
       </div>
     );
   }
-
-  // Deep-link: when we arrive here from a league_invite / league_joined
-  // notification, scroll to + pulse the matching league row.
-  var leagueDeepLink = useDeepLinkHighlight("highlightLeagueId");
 
   return (
     <div>
