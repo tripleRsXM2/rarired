@@ -191,6 +191,34 @@ async function main() {
     !!selfAdmin.error || !selfAdmin.data || selfAdmin.data.length === 0,
     selfAdmin.error ? selfAdmin.error.message : "updated " + ((selfAdmin.data||[]).length) + " rows");
 
+  // ---------------------------------------------------------------------
+  // C15 — pre-existing SECURITY DEFINER RPCs must reject non-party calls
+  // ---------------------------------------------------------------------
+  console.log("\nC15 — pre-existing RPC auth checks:");
+
+  // upsert_message_notification — attacker forges a message notif to victim
+  // pretending to be from themselves but in a conversation they're not in.
+  var umn = await attacker.client.rpc("upsert_message_notification", {
+    p_user_id: victim.userId,
+    p_from_user_id: attacker.userId,
+    p_entity_id: "00000000-0000-0000-0000-000000000001",
+    p_metadata: { preview: "spoof" },
+  });
+  mark("upsert_message_notification rejects invalid conv / non-participant",
+    !!umn.error, umn.error && umn.error.message);
+
+  // bump_stats_for_match — attacker tries to recompute a random match
+  var bsm = await attacker.client.rpc("bump_stats_for_match", {
+    p_match_id: "00000000-0000-0000-0000-000000000002",
+  });
+  mark("bump_stats_for_match rejects non-party caller",
+    !!bsm.error, bsm.error && bsm.error.message);
+
+  // expire_stale_challenges — should be revoked for authenticated
+  var esc = await attacker.client.rpc("expire_stale_challenges", {});
+  mark("expire_stale_challenges revoked from authenticated",
+    !!esc.error, esc.error && esc.error.message);
+
   console.log("\n---");
   console.log("PASS: " + pass + "  FAIL: " + fail);
   process.exit(fail ? 1 : 0);
