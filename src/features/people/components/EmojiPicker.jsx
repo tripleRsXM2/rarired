@@ -70,12 +70,34 @@ export default function EmojiPicker({ t, onPick, onClose, anchor }) {
     }
     var vw = window.innerWidth, vh = window.innerHeight;
     var w = Math.min(340, vw - 16);
-    var h = Math.min(360, vh - 80);
     var left = Math.max(8, Math.min(anchor.left, vw - w - 8));
-    var spaceBelow = vh - anchor.bottom;
-    var top;
-    if (spaceBelow >= h + 8) top = anchor.bottom + 8;
-    else top = Math.max(8, anchor.top - h - 8);
+    // Compute available vertical space on each side of the anchor and
+    // clamp picker height to whichever fits. Picker NEVER overlaps the
+    // anchor button — that was the "emoji box covers the chat entry"
+    // bug. Prefer opening above on mobile and when below is tight.
+    var gap = 8;
+    var spaceAbove = Math.max(0, anchor.top - gap - 8);
+    var spaceBelow = Math.max(0, vh - anchor.bottom - gap - 8);
+    var preferBelow = spaceBelow >= 240; // enough for ~6 rows
+    var h, top;
+    if (preferBelow) {
+      h = Math.min(360, spaceBelow);
+      top = anchor.bottom + gap;
+    } else {
+      h = Math.min(360, spaceAbove);
+      top = Math.max(8, anchor.top - h - gap);
+    }
+    // Final safety: if the chosen side is too tiny, flip and use the
+    // larger side even if it's the less-preferred one.
+    if (h < 180 && (preferBelow ? spaceAbove : spaceBelow) > h) {
+      if (preferBelow) {
+        h = Math.min(360, spaceAbove);
+        top = Math.max(8, anchor.top - h - gap);
+      } else {
+        h = Math.min(360, spaceBelow);
+        top = anchor.bottom + gap;
+      }
+    }
     return { position: "fixed", left: left, top: top, width: w, height: h };
   }, [anchor]);
 

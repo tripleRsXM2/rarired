@@ -90,21 +90,46 @@ async function main() {
   await page.waitForTimeout(3000);
   await page.screenshot({ path: path.join(OUT, "01-messages.png"), fullPage: true });
 
-  // Find the first conversation row button and open it.
+  // Pre-state: is the notifications panel already open before we touch anything?
+  var preState = await page.evaluate(function () {
+    var p = document.querySelector(".cs-notif-panel");
+    return { panelPresent: !!p };
+  });
+  log("panel present BEFORE conv click: " + JSON.stringify(preState));
+
+  // Find the first conversation row button — must have the date-like
+  // suffix pattern (digits + " " + month / "d ago" / etc) and NOT be
+  // the sidebar Notifications button.
   var convClicked = await page.evaluate(function () {
-    // Any button whose inner text matches a name and a "time-like" suffix.
     var buttons = Array.from(document.querySelectorAll("button"));
     var conv = buttons.find(function (b) {
       var t = (b.innerText || "").trim();
-      // Conv-list rows have "Name\n..." with a time on the right.
-      return b.offsetWidth > 400 && t.length > 2 && t.length < 200 && !t.includes("Log in");
+      if (t.includes("Log in") || t.startsWith("Notifications") || t.includes("Sign in")) return false;
+      // Conv-list rows look like "J\nJohn\n21 Apr" or "J\nJohn\n2d ago".
+      return b.offsetWidth > 300 && /\n/.test(t) && t.length < 200;
     });
     if (!conv) return { ok: false, reason: "no conv row found" };
     conv.click();
     return { ok: true, text: (conv.innerText || "").slice(0, 80) };
   });
   log("conv click: " + JSON.stringify(convClicked));
+  if (!convClicked.ok) {
+    var allBtns = await page.evaluate(function () {
+      return Array.from(document.querySelectorAll("button")).map(function (b) {
+        var t = (b.innerText || "").trim();
+        return { w: b.offsetWidth, h: b.offsetHeight, text: t.slice(0, 60) };
+      }).filter(function (b) { return b.w > 100 && b.h > 20 && b.text.length > 1; });
+    });
+    log("buttons on page:");
+    allBtns.forEach(function (b) { log("  [" + b.w + "x" + b.h + "] " + JSON.stringify(b.text)); });
+  }
   await page.waitForTimeout(1500);
+
+  var postOpenState = await page.evaluate(function () {
+    var p = document.querySelector(".cs-notif-panel");
+    return { panelPresent: !!p };
+  });
+  log("panel present AFTER conv open: " + JSON.stringify(postOpenState));
   await page.screenshot({ path: path.join(OUT, "02-conv-open.png"), fullPage: true });
 
   // Now try the emoji button.
@@ -139,10 +164,51 @@ async function main() {
       return { found: true, rect: { x: r.x, y: r.y, w: r.width, h: r.height }, visible: r.width > 0 && r.height > 0 };
     });
     log("picker after click: " + JSON.stringify(pickerState));
+
+    // Try actually picking an emoji — this is what the user complains
+    // doesn't work. Find the first emoji button in the grid and click it.
+    var pickResult = await page.evaluate(function () {
+      var picker = document.querySelector('[role="dialog"][aria-label="Pick an emoji"]');
+      if (!picker) return { ok: false, reason: "no picker" };
+      var buttons = Array.from(picker.querySelectorAll("button"));
+      // Skip category tabs — they have aria-label. Emoji buttons don't.
+      var emojiBtns = buttons.filter(function (b) { return !b.getAttribute("aria-label"); });
+      if (!emojiBtns.length) return { ok: false, reason: "no emoji buttons", totalButtons: buttons.length };
+      var b = emojiBtns[0];
+      var r = b.getBoundingClientRect();
+      var cx = r.x + r.width/2, cy = r.y + r.height/2;
+      var top = document.elementFromPoint(cx, cy);
+      return {
+        ok: true,
+        emoji: (b.innerText || "").trim(),
+        rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+        topAtPoint: top ? { tag: top.tagName, text: (top.innerText || "").slice(0, 20), isSame: top === b } : null,
+      };
+    });
+    log("first emoji btn info: " + JSON.stringify(pickResult));
+
+    if (pickResult.ok) {
+      var cx = pickResult.rect[0] + pickResult.rect[2]/2;
+      var cy = pickResult.rect[1] + pickResult.rect[3]/2;
+      log("clicking emoji " + pickResult.emoji + " at " + cx + "," + cy);
+      await page.mouse.click(cx, cy);
+      await page.waitForTimeout(400);
+      var afterPick = await page.evaluate(function () {
+        var ta = document.querySelector('textarea, input[type="text"]');
+        var picker = document.querySelector('[role="dialog"][aria-label="Pick an emoji"]');
+        return {
+          draft: ta ? ta.value : null,
+          pickerStillOpen: !!picker,
+        };
+      });
+      log("after pick: " + JSON.stringify(afterPick));
+      await page.screenshot({ path: path.join(OUT, "03b-after-emoji-pick.png"), fullPage: true });
+    }
   }
 
-  // Close emoji picker if it's open (click outside).
-  await page.mouse.click(100, 100);
+  // Close emoji picker if still open — click in the thread middle, NOT
+  // the sidebar (which would hit the Notifications button).
+  await page.mouse.click(700, 400);
   await page.waitForTimeout(300);
 
   // Find chat bubbles via React fiber — a bubble has onTouchStart AND
