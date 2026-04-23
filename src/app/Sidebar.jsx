@@ -4,6 +4,7 @@
 
 import { avColor } from "../lib/utils/avatar.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
+import { PresenceDot } from "../features/people/components/PresenceIndicator.jsx";
 
 // Label overrides — the TABS constant is the canonical nav order/ids/labels;
 // Sidebar can override the label text where it wants (e.g. "Feed" over the
@@ -155,14 +156,19 @@ export default function Sidebar({
             onClick={onOpenSettings}
             style={{ color: t.textSecondary }}
           >
-            {profile.avatar_url
-              ? <img src={profile.avatar_url} alt="" style={{ width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0,background:"#eee" }}/>
-              : <div style={{
-                  width: 28, height: 28, borderRadius: "50%",
-                  background: avColor(profile.name),
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
-                }}>{profile.avatar}</div>}
+            <div style={{ position: "relative", flexShrink: 0, display: "flex" }}>
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} alt="" style={{ width:28,height:28,borderRadius:"50%",objectFit:"cover",background:"#eee" }}/>
+                : <div style={{
+                    width: 28, height: 28, borderRadius: "50%",
+                    background: avColor(profile.name),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, fontWeight: 700, color: "#fff",
+                  }}>{profile.avatar}</div>}
+              {/* Own presence — bypass privacy gate so users see their
+                  own state regardless of show_online_status. */}
+              <PresenceDot profile={profile} t={t} viewerIsSelf={true} size={9} />
+            </div>
             <span className="cs-nav-label" style={{ color: t.text, fontWeight: 500 }}>
               {profile.name || "You"}
             </span>
