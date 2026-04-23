@@ -9,6 +9,8 @@
 // negotiate logistics they can DM. We deliberately don't add comments on
 // challenges.
 
+import { useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
@@ -99,6 +101,28 @@ export default function ChallengesPanel({
   // accepted / expired / declined notification, scroll to + pulse the
   // row so the user doesn't have to hunt for it in three sections.
   var deepLink = useDeepLinkHighlight("highlightChallengeId");
+
+  // Auto-open the score modal when we arrive with `logChallengeId` in
+  // location.state — this is the deep link the challenge_accepted
+  // notification uses, so the "Log result →" CTA in the tray takes the
+  // user straight into the score flow instead of dropping them on the
+  // challenges list and making them find the row + tap again.
+  var location = useLocation();
+  var navigate = useNavigate();
+  var autoLoggedRef = useRef({});
+  useEffect(function () {
+    var logId = location.state && location.state.logChallengeId;
+    if (!logId) return;
+    if (autoLoggedRef.current[logId]) return;
+    var c = challenges.find(function (x) { return x.id === logId && x.status === "accepted"; });
+    if (!c || !onLogConvertedMatch) return;
+    var pid = c.challenger_id === authUser.id ? c.challenged_id : c.challenger_id;
+    var partner = profileMap[pid] || { id: pid, name: "Player" };
+    autoLoggedRef.current[logId] = true;
+    onLogConvertedMatch(c, partner);
+    // Clear the state so a refresh doesn't reopen the modal.
+    navigate(location.pathname, { replace: true, state: { highlightChallengeId: logId } });
+  }, [location.state, challenges, profileMap, authUser && authUser.id]);
 
   var incoming = challenges.filter(function (c) { return c.status === "pending" && c.challenged_id === authUser.id; });
   var outgoing = challenges.filter(function (c) { return c.status === "pending" && c.challenger_id === authUser.id; });

@@ -54,6 +54,13 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
     ? (viewerIsSubmitter ? ys > ts : ts > ys)
     : isWinStored;
   var viewerName = (profile && profile.name) || "You";
+  // For tagged rows, m.oppName is actually the viewer's OWN name (it's
+  // what the submitter typed for their opponent — which is the viewer).
+  // The real opponent from the viewer's POV is the submitter — we pick it
+  // up from the enriched friendName (loadHistory participant fetch).
+  var opponentDisplay = m.isTagged
+    ? (m.friendName || "Opponent")
+    : (opponentDisplay);
   var rows = [
     {
       name: viewerName,
@@ -62,7 +69,7 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
       oppScores: viewerIsSubmitter ? sets.map(function(s){return s.them;}) : sets.map(function(s){return s.you;}),
     },
     {
-      name: m.oppName || "Unknown",
+      name: opponentDisplay,
       isWinner: !viewerWins,
       scores: viewerIsSubmitter ? sets.map(function(s){return s.them;}) : sets.map(function(s){return s.you;}),
       oppScores: viewerIsSubmitter ? sets.map(function(s){return s.you;}) : sets.map(function(s){return s.them;}),
@@ -78,7 +85,7 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
     if (e) e.stopPropagation();
     if (!canRematch) return;
     openChallenge(
-      { id: opponentUserId, name: m.oppName, suburb: m.venue || "", skill: "" },
+      { id: opponentUserId, name: opponentDisplay, suburb: m.venue || "", skill: "" },
       "rematch",
       m
     );
@@ -87,7 +94,7 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
   return (
     <div
       onClick={canRematch ? handleRematch : undefined}
-      title={canRematch ? "Rematch " + (m.oppName || "") : undefined}
+      title={canRematch ? "Rematch " + (opponentDisplay) : undefined}
       style={{
         background: t.bgCard,
         border: "1px solid " + t.border,
@@ -100,7 +107,7 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
       <div style={{ display: "flex", alignItems: "center", padding: "10px 14px", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "-0.1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            vs {m.oppName || "Unknown"}
+            vs {opponentDisplay}
           </div>
           <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {[m.date, m.tournName && m.tournName !== "Casual Match" ? m.tournName : (m.tournName === "Casual Match" ? "Casual" : null), m.venue].filter(Boolean).join(" · ")}
@@ -130,7 +137,7 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
         {canRematch && (
           <span
             onClick={handleRematch}
-            title={"Rematch " + (m.oppName || "")}
+            title={"Rematch " + (opponentDisplay)}
             style={{
               flexShrink: 0, display: "flex", alignItems: "center",
               color: t.textTertiary, padding: 2,

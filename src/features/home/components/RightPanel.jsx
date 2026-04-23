@@ -191,6 +191,10 @@ function PendingActions({ t, authUser, history, onReviewMatch }) {
       {pending.map(function(m) {
         var s = statusLabel[m.status] || { label: "View", color: t.accent };
         var clickable = !!onReviewMatch;
+        // For tagged rows (viewer is opponent), m.oppName is the viewer's
+        // own name — the real opponent is the submitter, which we pick up
+        // from the enriched friendName.
+        var display = m.isTagged ? (m.friendName || "Opponent") : (m.oppName || "?");
         return (
           <div key={m.id}
             onClick={clickable ? function() { onReviewMatch(m); } : undefined}
@@ -206,17 +210,17 @@ function PendingActions({ t, authUser, history, onReviewMatch }) {
             }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
-              background: avColor(m.oppName),
+              background: avColor(display),
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0,
             }}>
-              {(m.oppName || "?").slice(0, 2).toUpperCase()}
+              {display.slice(0, 2).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 12, fontWeight: 600, color: t.text,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>vs {m.oppName}</div>
+              }}>vs {display}</div>
               <div style={{ fontSize: 10, color: t.textTertiary }}>{m.date}</div>
             </div>
             <span style={{

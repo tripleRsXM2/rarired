@@ -298,8 +298,14 @@ function NotifRow({
     track("notification_opened", { type: n.type, deep_link_target: "challenges" });
     // Pass the challenge id so ChallengesPanel can scroll+highlight the row.
     var highlightChallengeId = n.entity_id || null;
-    navigate("/tournaments/challenges",
-      highlightChallengeId ? { state: { highlightChallengeId: highlightChallengeId } } : undefined);
+    // For challenge_accepted, auto-open the score modal for that challenge
+    // so the notification's "Log result →" CTA takes the user straight to
+    // the score flow instead of dropping them on the list.
+    var navState = highlightChallengeId ? { highlightChallengeId: highlightChallengeId } : null;
+    if (n.type === "challenge_accepted" && highlightChallengeId) {
+      navState = Object.assign({}, navState || {}, { logChallengeId: highlightChallengeId });
+    }
+    navigate("/tournaments/challenges", navState ? { state: navState } : undefined);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
