@@ -4,8 +4,7 @@ import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
 import { PresenceDot, PresenceLabel } from "../components/PresenceIndicator.jsx";
 import { track } from "../../../lib/analytics.js";
-import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
-import LeaguesPanel from "../../leagues/components/LeaguesPanel.jsx";
+// ChallengesPanel + LeaguesPanel now live in TournamentsTab (Compete).
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
@@ -125,8 +124,9 @@ export default function PeopleTab({
   var navigate=useNavigate();
 
   // Derive active sub-tab from URL: /people/messages → "messages"
-  // Module 4: 'challenges' is the new coordination inbox.
-  var validPeopleTabs=["messages","friends","requests","challenges","leagues","suggested","blocked"];
+  // Challenges + Leagues moved to the Compete tab (/tournaments/challenges,
+  // /tournaments/leagues) — People is now strictly social.
+  var validPeopleTabs=["messages","friends","requests","suggested","blocked"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var peopleTab=(pathParts[1]&&validPeopleTabs.includes(pathParts[1]))?pathParts[1]:"friends";
 
@@ -253,15 +253,11 @@ export default function PeopleTab({
       <div>
         <div style={{display:"flex",borderBottom:"1px solid "+t.border,padding:"0 20px",overflowX:"auto"}}>
           {(function(){
-            var chCounts = (challenges && challenges.counts) ? challenges.counts() : {incoming:0,outgoing:0,accepted:0};
-            var chBadge = chCounts.incoming + chCounts.accepted; // bold sections
-            var lgBadge = (leagues && leagues.counts) ? leagues.counts().pendingInvites : 0;
+            // Challenges + Leagues relocated to the Compete tab.
             return [
               {id:"messages",label:"Messages",count:dmBadge||null},
               {id:"friends",label:"Friends",count:friends.length},
               {id:"requests",label:"Requests",count:receivedRequests.length+sentRequests.length},
-              {id:"challenges",label:"Challenges",count:chBadge||null},
-              {id:"leagues",label:"Leagues",count:lgBadge||null},
               {id:"suggested",label:"Discover",count:null},
               {id:"blocked",label:"Blocked",count:blockedUsers.length||null},
             ];
@@ -387,43 +383,7 @@ export default function PeopleTab({
               </div>
           )}
 
-          {/* Challenges — coordination inbox (Module 4). */}
-          {peopleTab==="challenges"&&challenges&&(
-            <ChallengesPanel
-              t={t} authUser={authUser}
-              challenges={challenges.challenges}
-              profileMap={challenges.profileMap}
-              loading={challenges.loading}
-              openProfile={openProfile}
-              acceptChallenge={challenges.acceptChallenge}
-              declineChallenge={challenges.declineChallenge}
-              cancelChallenge={challenges.cancelChallenge}
-              onLogConvertedMatch={openConvertToMatch}
-              toast={toast}
-              /* Empty-state friends list → 1-tap Challenge button per row */
-              friends={friends}
-              openChallenge={openChallenge}
-            />
-          )}
-
-          {/* Leagues — private friend seasons (Module 7). */}
-          {peopleTab==="leagues"&&leagues&&(
-            <LeaguesPanel
-              t={t} authUser={authUser}
-              leagues={leagues.leagues}
-              profileMap={leagues.profileMap}
-              detailCache={leagues.detailCache}
-              loadLeagueDetail={leagues.loadLeagueDetail}
-              createLeague={leagues.createLeague}
-              inviteToLeague={leagues.inviteToLeague}
-              respondToInvite={leagues.respondToInvite}
-              removeMember={leagues.removeMember}
-              archiveLeague={leagues.archiveLeague}
-              friends={friends}
-              openProfile={openProfile}
-              toast={toast}
-            />
-          )}
+          {/* Challenges + Leagues moved to the Compete tab. */}
 
           {/* Discover — 3 sections: people you've played, near you, similar
               skill. Empty state only when all three are empty; otherwise show

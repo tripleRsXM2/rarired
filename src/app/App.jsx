@@ -81,9 +81,11 @@ export default function App(){
   // with the signed-in user's id falls back to the own-profile ProfileTab.
   var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
 
-  // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
+  // Navigate to a top-level tab. Switching to "people" lands on /people/friends,
+  // switching to "tournaments" (Compete) lands on /tournaments/list.
   function setTab(x){
     if(x==="people") navigate("/people/friends");
+    else if(x==="tournaments") navigate("/tournaments/list");
     else navigate("/"+x);
   }
 
@@ -591,10 +593,10 @@ export default function App(){
               challengesList={challenges.challenges}
               challengesProfileMap={challenges.profileMap}
               onLogConvertedMatch={openConvertToMatch}
-              goToChallengesTab={function(){navigate("/people/challenges");}}
+              goToChallengesTab={function(){navigate("/tournaments/challenges");}}
               /* Module 7 — simple id→name index for league pills on feed cards */
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
-              onOpenLeague={function(id){ navigate("/people/leagues?id=" + id); }}
+              onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
             />
           )}
           {tab==="map"&&(
@@ -609,7 +611,8 @@ export default function App(){
           )}
           {tab==="tournaments"&&(
           <TournamentsTab
-            t={t} myId={myId} tournaments={tournaments.tournaments}
+            t={t} myId={myId} authUser={auth.authUser}
+            tournaments={tournaments.tournaments}
             selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
             tournDetailTab={tournaments.tournDetailTab} setTournDetailTab={tournaments.setTournDetailTab}
             filterSkill={tournaments.filterSkill} setFilterSkill={tournaments.setFilterSkill}
@@ -618,6 +621,14 @@ export default function App(){
             tournStatus={tournaments.tournStatus}
             setScheduleModal={tournaments.setScheduleModal} setScheduleDraft={tournaments.setScheduleDraft}
             setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
+            /* Sub-tabs — Challenges + Leagues moved out of People. */
+            challenges={challenges}
+            leagues={leagues}
+            friends={social.friends}
+            openProfile={openProfile}
+            openChallenge={openChallenge}
+            openConvertToMatch={openConvertToMatch}
+            toast={toast}
           />
         )}
         {tab==="people"&&(
@@ -664,7 +675,7 @@ export default function App(){
             openProfile={openProfile}
             openChallenge={openChallenge}
             myLeagues={leagues.leagues}
-            onOpenLeagues={function(){navigate("/people/leagues");}}
+            onOpenLeagues={function(){navigate("/tournaments/leagues");}}
           />
         )}
         {tab==="admin"&&(

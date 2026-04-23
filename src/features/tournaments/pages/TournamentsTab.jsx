@@ -1,8 +1,11 @@
+import { useLocation, useNavigate } from "react-router-dom";
 import Pill from "../../../components/ui/Pill.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FormatExplainer from "../components/FormatExplainer.jsx";
 import StandingsTable from "../components/StandingsTable.jsx";
 import BracketView from "../components/BracketView.jsx";
+import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
+import LeaguesPanel from "../../leagues/components/LeaguesPanel.jsx";
 import { PILOT_VENUE, ENTRY_FEES, PRIZES } from "../constants.js";
 import { SKILL_LEVELS } from "../../../lib/constants/domain.js";
 import { daysUntil } from "../../../lib/utils/dates.js";
@@ -527,7 +530,118 @@ function TournamentDetail({
 }
 
 // ── TournamentsTab (router) ───────────────────────────────────────────────────
+//
+// The "Compete" nav entry now owns three sibling sections:
+//   /tournaments/list       — Tournaments list + detail (legacy default)
+//   /tournaments/challenges — Coordination inbox (was /people/challenges)
+//   /tournaments/leagues    — Friend seasons (was /people/leagues)
+//
+// All three live in this page because they share the same competitive
+// intent and removed the People tab's bloat. The URL is the source of
+// truth for the sub-tab so deep links keep working.
+
+var VALID_COMPETE_TABS = ["list", "challenges", "leagues"];
+
 export default function TournamentsTab(props) {
-  if(props.selectedTournId) return <TournamentDetail {...props}/>;
-  return <TournamentList {...props}/>;
+  var location = useLocation();
+  var navigate = useNavigate();
+
+  var pathParts = location.pathname.split("/").filter(Boolean);
+  var sub = pathParts[1] && VALID_COMPETE_TABS.indexOf(pathParts[1]) >= 0 ? pathParts[1] : "list";
+
+  // Tournament detail view: /tournaments/list with a selectedTournId
+  // still renders the detail (unchanged legacy behaviour).
+  if (sub === "list" && props.selectedTournId) return <TournamentDetail {...props}/>;
+
+  var t = props.t;
+
+  function setSub(newSub) {
+    // Clear any drilled-into tournament detail when changing sub-tabs.
+    if (props.setSelectedTournId) props.setSelectedTournId(null);
+    navigate("/tournaments/" + newSub);
+  }
+
+  var challenges = props.challenges;
+  var leagues    = props.leagues;
+  var friends    = props.friends || [];
+
+  var chCounts   = (challenges && challenges.counts) ? challenges.counts() : { incoming: 0, outgoing: 0, accepted: 0 };
+  var chBadge    = chCounts.incoming + chCounts.accepted;
+  var lgBadge    = (leagues && leagues.counts) ? leagues.counts().pendingInvites : 0;
+
+  var tabs = [
+    { id: "list",       label: "Tournaments", count: null },
+    { id: "challenges", label: "Challenges",  count: chBadge || null },
+    { id: "leagues",    label: "Leagues",     count: lgBadge || null },
+  ];
+
+  return (
+    <div>
+      {/* Sub-tab bar — matches the People tab's visual style. */}
+      <div style={{ display: "flex", borderBottom: "1px solid " + t.border, padding: "0 20px", overflowX: "auto" }}>
+        {tabs.map(function (tb) {
+          var on = sub === tb.id;
+          return (
+            <button key={tb.id} onClick={function () { setSub(tb.id); }}
+              style={{
+                padding: "10px 0", marginRight: 20, border: "none", background: "transparent",
+                color: on ? t.accent : t.textTertiary, fontSize: 13, fontWeight: on ? 700 : 400,
+                borderBottom: "2px solid " + (on ? t.accent : "transparent"),
+                marginBottom: "-1px", display: "flex", gap: 5, alignItems: "center", flexShrink: 0,
+                cursor: "pointer",
+              }}>
+              {tb.label}
+              {tb.count > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 800, color: on ? t.accent : t.textTertiary,
+                  background: on ? t.accentSubtle : t.bgTertiary, padding: "1px 6px", borderRadius: 10 }}>
+                  {tb.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {sub === "list"       && <TournamentList {...props}/>}
+
+      {sub === "challenges" && challenges && (
+        <div style={{ padding: "16px 20px 100px" }} className="fade-up">
+          <ChallengesPanel
+            t={t} authUser={props.authUser}
+            challenges={challenges.challenges}
+            profileMap={challenges.profileMap}
+            loading={challenges.loading}
+            openProfile={props.openProfile}
+            acceptChallenge={challenges.acceptChallenge}
+            declineChallenge={challenges.declineChallenge}
+            cancelChallenge={challenges.cancelChallenge}
+            onLogConvertedMatch={props.openConvertToMatch}
+            toast={props.toast}
+            friends={friends}
+            openChallenge={props.openChallenge}
+          />
+        </div>
+      )}
+
+      {sub === "leagues" && leagues && (
+        <div style={{ padding: "16px 20px 100px" }} className="fade-up">
+          <LeaguesPanel
+            t={t} authUser={props.authUser}
+            leagues={leagues.leagues}
+            profileMap={leagues.profileMap}
+            detailCache={leagues.detailCache}
+            loadLeagueDetail={leagues.loadLeagueDetail}
+            createLeague={leagues.createLeague}
+            inviteToLeague={leagues.inviteToLeague}
+            respondToInvite={leagues.respondToInvite}
+            removeMember={leagues.removeMember}
+            archiveLeague={leagues.archiveLeague}
+            friends={friends}
+            openProfile={props.openProfile}
+            toast={props.toast}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
