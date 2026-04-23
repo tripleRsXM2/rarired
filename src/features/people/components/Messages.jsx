@@ -472,8 +472,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // ── Thread view ──────────────────────────────────────────────────────────
 
   var conv = dms.activeConv;
-  var showList = isDesktopDM || !conv;
-  var showThreadPane = isDesktopDM || conv;
+  // Two-pane only applies when we have room to break out of the 680px
+  // reading column. Otherwise fall back to the mobile-style list-OR-
+  // thread stack so the content still fits the column.
+  var twoPane = canBreakOut;
+  var showList = twoPane || !conv;
+  var showThreadPane = twoPane || conv;
 
   // Short-circuit when neither pane applies (shouldn't happen — included
   // so the layout below can assume at least one column renders).
@@ -491,30 +495,24 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // pane and the thread pane are siblings inside this flex row — list
   // fixed 320px, thread fills the rest. On mobile one column shows at a
   // time. Global --cs-nav-h / --cs-tab-h are 0 on desktop.
-  // On desktop the DM surface breaks out of PeopleTab's 680px reading
-  // column so the list + thread can sit side-by-side, but we cap the
-  // whole thing at a comfortable 1020px (280 list + 740 thread) and
-  // center it in the available viewport between the sidebar (64 /
-  // 220px) and the right panel (0 / 292px). Wider than that makes
-  // the thread's bubbles stretch uncomfortably on ultrawide monitors.
-  var DM_MAX = 1020;
-  var sidebarW = viewport.sidebarW;
-  var rightPanelW = viewport.rightPanelW;
-  var availableW = "calc(100vw - " + sidebarW + "px - " + rightPanelW + "px)";
-  // Pull the breakout left by ((availableW - DM_MAX) / 2), then add
-  // back the 680 reading-column centering offset so our left edge
-  // lands at the correct position. Clamp: when the viewport can't
-  // fit 1020px we just fall back to filling available width.
-  var breakoutStyle = isDesktopDM
+  // On desktop the thread pane stays pinned to where the rest of the
+  // app's 680px reading column lives (Friends list, Discover, etc. —
+  // visually consistent across tabs). The conversation list pane pokes
+  // 280px out to the left of that column. Net width = 280 + 680 = 960,
+  // and the pull-left negative margin is exactly the list pane's width.
+  //
+  // Only apply the break-out when the viewport is wide enough to fit
+  // the list without overlapping the sidebar — otherwise we'd horizontal-
+  // scroll or clip. Needs: sidebarW + LIST_W + 680 + (rightPanelW at
+  // that breakpoint) <= 100vw, plus a 16px safety gutter on each side.
+  var LIST_W = 280;
+  var needW = viewport.sidebarW + LIST_W + 680 + viewport.rightPanelW + 32;
+  var canBreakOut = isDesktopDM && typeof window !== "undefined" && window.innerWidth >= needW;
+  var breakoutStyle = canBreakOut
     ? {
         position: "relative",
-        width: "min(" + DM_MAX + "px, " + availableW + ")",
-        // Center the DM surface inside the actual main content area
-        // (viewport − sidebar − right-panel), not the 680px reading
-        // column we live inside. marginLeft = (680 − effectiveW) / 2 so
-        // our center re-aligns with the available-area center. Always
-        // negative because DM_MAX > 680.
-        marginLeft: "calc((680px - min(" + DM_MAX + "px, " + availableW + ")) / 2)",
+        width: (LIST_W + 680) + "px",
+        marginLeft: "-" + LIST_W + "px",
       }
     : {};
   return (
@@ -526,10 +524,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {/* ── List pane ─────────────────────────────────────────────────── */}
       {showList && (
         <div className="cs-dm-list-pane" style={{
-          width: isDesktopDM ? 280 : "100%",
+          width: twoPane ? LIST_W : "100%",
           flexShrink: 0, minWidth: 0,
-          background: isDesktopDM ? t.bgCard : "transparent",
-          borderRight: isDesktopDM ? "1px solid " + t.border : "none",
+          background: twoPane ? t.bgCard : "transparent",
+          borderRight: twoPane ? "1px solid " + t.border : "none",
           overflowY: "auto",
         }}>
           {renderConvList()}
