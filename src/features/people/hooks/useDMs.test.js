@@ -78,6 +78,12 @@ vi.mock("../services/dmService.js", function () {
     fetchPinnedConversationIds: function () { return mockFetchPinned.apply(null, arguments); },
     pinConversationRow: function () { return mockPinRow.apply(null, arguments); },
     unpinConversationRow: function () { return mockUnpinRow.apply(null, arguments); },
+    // Mutes service surface (added 2026-04-24). Tests don't drive the
+    // mute paths yet — stub returns empty + resolves so enrichment on
+    // bootstrap doesn't blow up.
+    fetchMutedConversationIds: function () { return Promise.resolve({ data: [], error: null }); },
+    muteConversationRow:   function () { return Promise.resolve({ data: null, error: null }); },
+    unmuteConversationRow: function () { return Promise.resolve({ data: null, error: null }); },
   };
 });
 

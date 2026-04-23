@@ -49,6 +49,10 @@ export function useDMs(opts) {
   // Ordered list of pinned conversation ids, newest-pin-first. Stored as
   // an array rather than a Set so renders are stable and order is honored.
   var [pinnedConvIds, setPinnedConvIds] = useState([]);
+  // Unordered set of muted conversation ids for the current user. Muting
+  // is self-only — it suppresses the conv from contributing to the
+  // People-tab unread badge. The other party sees no indication.
+  var [mutedConvIds, setMutedConvIds] = useState([]);
   // Typing state: Map of convId → last typing-event timestamp (ms). Set
   // via a broadcast from the sender; expired entries are swept every 1.5s.
   // Shown as "typing…" in the conv list row + under the thread header.
@@ -161,10 +165,13 @@ export function useDMs(opts) {
       partnerReadMap[row.conversation_id] = row.last_read_at;
     });
 
-    // Pins — fire-and-forget so the list paints fast; result populates
-    // state when it lands and re-renders pick up the ordering.
+    // Pins + mutes — fire-and-forget so the list paints fast; result
+    // populates state when it lands and re-renders pick up the state.
     D.fetchPinnedConversationIds(uid).then(function (pr) {
       if (pr && pr.data) setPinnedConvIds(pr.data.map(function (p) { return p.conversation_id; }));
+    });
+    D.fetchMutedConversationIds(uid).then(function (mr) {
+      if (mr && mr.data) setMutedConvIds(mr.data.map(function (m) { return m.conversation_id; }));
     });
 
     function enrich(c) {
@@ -219,6 +226,34 @@ export function useDMs(opts) {
     if (r.error) {
       setPinnedConvIds(prev);
       return { error: (r.error && r.error.message) || "Couldn't unpin that conversation" };
+    }
+    return { error: null };
+  }
+
+  // ── Mute / unmute actions (self-only) ──────────────────────────────────
+
+  async function muteConversation(convId) {
+    if (!authUser) return { error: "Not signed in" };
+    var prev = mutedConvIds;
+    if (prev.indexOf(convId) >= 0) return { error: null };
+    setMutedConvIds(prev.concat([convId]));
+    var r = await D.muteConversationRow(authUser.id, convId);
+    if (r.error) {
+      setMutedConvIds(prev);
+      return { error: (r.error && r.error.message) || "Couldn't mute that conversation" };
+    }
+    return { error: null };
+  }
+
+  async function unmuteConversation(convId) {
+    if (!authUser) return { error: "Not signed in" };
+    var prev = mutedConvIds;
+    if (prev.indexOf(convId) < 0) return { error: null };
+    setMutedConvIds(prev.filter(function (id) { return id !== convId; }));
+    var r = await D.unmuteConversationRow(authUser.id, convId);
+    if (r.error) {
+      setMutedConvIds(prev);
+      return { error: (r.error && r.error.message) || "Couldn't unmute that conversation" };
     }
     return { error: null };
   }
@@ -602,6 +637,7 @@ export function useDMs(opts) {
       setConversations(function (cs) { return cs.filter(function (c) { return c.id !== convId; }); });
       setRequests(function (rs) { return rs.filter(function (r) { return r.id !== convId; }); });
       setPinnedConvIds(function (ps) { return ps.filter(function (id) { return id !== convId; }); });
+      setMutedConvIds(function (ms) { return ms.filter(function (id) { return id !== convId; }); });
       if (activeConvRef.current && activeConvRef.current.id === convId) {
         setActiveConv(null);
         activeConvRef.current = null;
@@ -855,6 +891,34 @@ export function useDMs(opts) {
     return function () { supabase.removeChannel(pinsChannel); };
   }, [authUser && authUser.id]);
 
+  // ── Realtime: mutes (multi-device sync) ──────────────────────────────
+  useEffect(function () {
+    if (!authUser) return;
+    var uid = authUser.id;
+    var mutesChannel = supabase.channel("mutes:" + uid)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversation_mutes", filter: "user_id=eq." + uid },
+        function (payload) {
+          var cid = payload.new && payload.new.conversation_id;
+          if (!cid) return;
+          setMutedConvIds(function (prev) {
+            if (prev.indexOf(cid) >= 0) return prev;
+            return prev.concat([cid]);
+          });
+        }
+      )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "conversation_mutes", filter: "user_id=eq." + uid },
+        function (payload) {
+          var cid = payload.old && payload.old.conversation_id;
+          if (!cid) return;
+          setMutedConvIds(function (prev) { return prev.filter(function (id) { return id !== cid; }); });
+        }
+      )
+      .subscribe();
+    return function () { supabase.removeChannel(mutesChannel); };
+  }, [authUser && authUser.id]);
+
   function resetDMs() {
     setConversations([]); setRequests([]); setActiveConv(null);
     setConversationsLoaded(false);
@@ -862,6 +926,7 @@ export function useDMs(opts) {
     setReplyTo(null); setEditingId(null);
     setPartnerLastReadAt(null);
     setPinnedConvIds([]);
+    setMutedConvIds([]);
     setTypingConvs({});
     // Tear down any sender-side typing channels.
     Object.keys(typingSendersRef.current).forEach(function (k) {
@@ -872,7 +937,17 @@ export function useDMs(opts) {
   }
 
   function totalUnread() {
-    return conversations.reduce(function (s, c) { return s + (c.hasUnread ? 1 : 0); }, 0) + requests.length;
+    // Muted convs don't contribute to the People-tab badge. Requests
+    // always count — muting an incoming request is not a concept; they
+    // need an explicit accept/decline decision.
+    var mutedSet = {};
+    (mutedConvIds || []).forEach(function (id) { mutedSet[id] = true; });
+    var convUnread = conversations.reduce(function (s, c) {
+      if (!c.hasUnread) return s;
+      if (mutedSet[c.id]) return s;
+      return s + 1;
+    }, 0);
+    return convUnread + requests.length;
   }
 
   return {
@@ -885,6 +960,8 @@ export function useDMs(opts) {
     partnerLastReadAt: partnerLastReadAt,
     pinnedConvIds: pinnedConvIds,
     pinConversation: pinConversation, unpinConversation: unpinConversation,
+    mutedConvIds: mutedConvIds,
+    muteConversation: muteConversation, unmuteConversation: unmuteConversation,
     loadConversations: loadConversations, openConversation: openConversation,
     openOrStartConversation: openOrStartConversation, closeConversation: closeConversation,
     sendMessage: sendMessage, acceptRequest: acceptRequest, declineRequest: declineRequest,

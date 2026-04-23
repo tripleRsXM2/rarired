@@ -162,6 +162,27 @@ export function unpinConversationRow(userId, convId){
     .eq("conversation_id", convId);
 }
 
+// ── Mutes (self-only; suppresses unread-badge contribution) ─────────────────
+
+export function fetchMutedConversationIds(userId){
+  return supabase.from("conversation_mutes")
+    .select("conversation_id,muted_at")
+    .eq("user_id", userId);
+}
+
+export function muteConversationRow(userId, convId){
+  return supabase.from("conversation_mutes")
+    .insert({ user_id: userId, conversation_id: convId })
+    .select("*").single();
+}
+
+export function unmuteConversationRow(userId, convId){
+  return supabase.from("conversation_mutes")
+    .delete()
+    .eq("user_id", userId)
+    .eq("conversation_id", convId);
+}
+
 // ── Presence ──────────────────────────────────────────────────────────────────
 
 export function updatePresence(userId){
