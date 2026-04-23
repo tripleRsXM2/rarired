@@ -199,14 +199,16 @@ export function useDMs(opts) {
     }
   }
 
+  // Returns { error: null | string } so callers can surface a toast without
+  // reaching into Supabase. Error strings are user-facing; keep them short.
   async function openOrStartConversation(partner) {
-    if (!authUser) return;
+    if (!authUser) return { error: "Not signed in" };
     var uid = authUser.id;
 
     var r = await D.getOrCreateConversation(partner.id);
     if (r.error || !r.data) {
       console.error("[useDMs] getOrCreateConversation failed:", r.error);
-      return;
+      return { error: (r.error && r.error.message) || "Couldn't open that conversation. Try again." };
     }
     var row = r.data;
 
@@ -217,9 +219,9 @@ export function useDMs(opts) {
 
     if (row.status === "declined") {
       if (row.request_cooldown_until && new Date(row.request_cooldown_until) > new Date()) {
-        // Caller is expected to toast; log and bail.
-        console.warn("[useDMs] cooldown active for", partner.id);
-        return;
+        var until = new Date(row.request_cooldown_until);
+        var days = Math.max(1, Math.ceil((until - new Date()) / (24 * 3600 * 1000)));
+        return { error: "You can't message " + (partner.name || "this player") + " right now. Try again in " + days + " day" + (days === 1 ? "" : "s") + "." };
       }
       await D.updateConversationStatus(row.id, "pending");
       row = Object.assign({}, row, { status: "pending", requester_id: uid });
@@ -252,6 +254,7 @@ export function useDMs(opts) {
         });
       }
     }
+    return { error: null };
   }
 
   function closeConversation() {
@@ -554,7 +557,15 @@ export function useDMs(opts) {
   }, [authUser && authUser.id, activeConv && activeConv.id]);
 
   // ── Realtime: reactions for messages in the active conversation ────────
-
+  //
+  // We subscribe to ALL message_reactions globally and filter client-side
+  // via `threadIdsRef`. This looks wasteful, but an `in.(id1,id2,…)` server
+  // filter would capture ids at subscribe-time only — a reaction on a
+  // message the user sends AFTER opening the conv would never arrive.
+  // `message_reactions` has no `conversation_id` column to filter on, so
+  // the global approach is the correct one until that's denormalised.
+  // Scoped per-`activeConv` via the effect dep, so inactive convs don't
+  // hold a subscription.
   useEffect(function () {
     if (!authUser || !activeConv) return;
 

@@ -238,6 +238,49 @@ describe("useDMs — optimistic reactions", function () {
   });
 });
 
+describe("useDMs — openOrStartConversation error surface", function () {
+  beforeEach(resetMocks);
+
+  it("returns { error:null } on happy path", async function () {
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    mockGetOrCreate.mockResolvedValueOnce({
+      data: { id: "c-new", user1_id: "me-uid", user2_id: "p-new", status: "accepted", requester_id: "me-uid", last_message_at: null },
+      error: null,
+    });
+    mockFetchThread.mockResolvedValueOnce({ data: [] });
+    var result;
+    await act(async function () {
+      result = await hook.result.current.openOrStartConversation({ id: "p-new", name: "New" });
+    });
+    expect(result).toBeTruthy();
+    expect(result.error).toBeNull();
+  });
+
+  it("returns a human-readable error on RPC failure", async function () {
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    mockGetOrCreate.mockResolvedValueOnce({ data: null, error: { message: "network blew up" } });
+    var result;
+    await act(async function () {
+      result = await hook.result.current.openOrStartConversation({ id: "p-new", name: "New" });
+    });
+    expect(result.error).toBe("network blew up");
+  });
+
+  it("returns a cooldown error when declined cooldown is active", async function () {
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    var inOneDay = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    mockGetOrCreate.mockResolvedValueOnce({
+      data: { id: "c-dec", user1_id: "me-uid", user2_id: "p-dec", status: "declined", requester_id: "me-uid", request_cooldown_until: inOneDay },
+      error: null,
+    });
+    var result;
+    await act(async function () {
+      result = await hook.result.current.openOrStartConversation({ id: "p-dec", name: "Block" });
+    });
+    expect(result.error).toMatch(/can't message Block right now/);
+  });
+});
+
 describe("useDMs — delete", function () {
   beforeEach(resetMocks);
 
