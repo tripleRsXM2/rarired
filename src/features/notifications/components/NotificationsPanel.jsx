@@ -735,13 +735,11 @@ export default function NotificationsPanel({
   var navigate     = useNavigate();
   var _markAllRead = markAllRead || markNotificationsRead;
 
-  // Group + sort once per render (cheap — O(n) passes).
-  //
-  // Filter out `message` type rows — regular DMs are surfaced by the
-  // People tab's unread-count badge (Instagram-style), so duplicating
-  // them in the tray adds noise. Friend-request-style DM events
-  // (`message_request`, `message_request_accepted`) are kept because
-  // they're one-time decisions, not ongoing chat.
+  // Group + sort once per render (cheap — O(n) passes). Regular DM
+  // notifications (`message` type) aren't generated anymore — the
+  // People tab badge surfaces DM unread state directly. Legacy rows
+  // with that type are still filtered out below so old inboxes don't
+  // display them after the product rule change.
   var displayItems = useMemo(function () {
     var filtered = notifications.filter(function (n) { return n.type !== "message"; });
     return groupNotifications(filtered);

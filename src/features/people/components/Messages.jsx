@@ -164,15 +164,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   // URL → activeConv. Waits for conversationsLoaded so a deep link on cold
   // start doesn't flash the empty state before the thread hydrates.
+  //
+  // Drafts (local-only convs created when starting a new DM) don't live
+  // in the URL at all — they're ephemeral. Never close a draft from this
+  // effect, even if the URL is bare.
   useEffect(function () {
     if (!dms.conversationsLoaded) return;
     var want = urlConvId;
     var current = dms.activeConv && dms.activeConv.id;
+    var isDraft = !!(dms.activeConv && dms.activeConv.isDraft);
     if (want && want !== current) {
       var all = [].concat(dms.conversations || [], dms.requests || []);
       var found = all.find(function (c) { return c.id === want; });
       if (found) dms.openConversation(found);
-    } else if (!want && current) {
+    } else if (!want && current && !isDraft) {
       dms.closeConversation();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,17 +186,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // activeConv → URL. Pushing the new URL means Back goes to /people/messages,
   // which is the natural "close the thread" gesture.
   //
-  // IMPORTANT: wait for conversationsLoaded AND only strip a URL that
-  // already had a convId when we have an earlier non-null state. On a
-  // deep-link reload the sequence is:
-  //   1st render: activeConv=null, urlConvId=<id>  ← URL drives here
-  //   loadConversations resolves
-  //   URL→activeConv effect runs: openConversation(found) → activeConv=<conv>
-  // Without the loaded gate, the activeConv→URL effect would fire
-  // during step 1 and navigate away from <id> before step 3 can act.
+  // Drafts don't participate in deep linking (their id isn't a real uuid),
+  // so we leave the URL at /people/messages while one is open.
   useEffect(function () {
     if (!dms.conversationsLoaded) return;
     var current = dms.activeConv && dms.activeConv.id;
+    var isDraft = !!(dms.activeConv && dms.activeConv.isDraft);
+    if (isDraft) return;
     if (current && current !== urlConvId) {
       navigate("/people/messages/" + current);
     } else if (!current && urlConvId) {

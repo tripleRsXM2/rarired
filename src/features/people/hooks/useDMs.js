@@ -391,16 +391,11 @@ export function useDMs(opts) {
       setThreadMessages(function (ms) { return appendMessageIfNew(ms, msg); });
       var preview = previewify(v.value, 80);
       D.updateConversationLastMessage(conv.id, preview, uid);
-      var partnerId = conv.user1_id === uid ? conv.user2_id : conv.user1_id;
-      if (conv.status === "accepted" && partnerId) {
-        upsertMessageNotification({
-          user_id: partnerId,
-          type: "message",
-          from_user_id: uid,
-          entity_id: conv.id,
-          metadata: { preview: previewify(v.value, 60) },
-        }).catch(function (e) { console.error("[sendMessage] notification threw:", e); });
-      }
+      // Regular DMs no longer emit a notification row — unread DMs are
+      // surfaced by the People tab badge instead, driven directly off
+      // conversations.hasUnread. message_request (first DM from a
+      // non-friend) still fires above because it requires an explicit
+      // accept/decline decision in the notification tray.
       setConversations(function (cs) {
         var updated = Object.assign({}, conv, {
           last_message_preview: preview,
