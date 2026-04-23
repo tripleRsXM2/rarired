@@ -13,7 +13,7 @@ export function fetchSuggestedPlayers(userId, suburb, excludeIds){
   // missed "Bondi" vs "bondi " variants. ilike with the suburb literal still
   // works as exact-text in the absence of % wildcards but ignores case.
   var s=(suburb||"Sydney").trim();
-  return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
+  return supabase.from('profiles').select('id,name,avatar,avatar_url,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
     .neq('id',userId).ilike('suburb',s)
     .not('id','in','('+excludeIds.join(',')+')')
     .limit(6);
@@ -23,13 +23,13 @@ export function fetchSuggestedPlayers(userId, suburb, excludeIds){
 // suggestions. Used by the Discover surface.
 export function fetchSameSkillPlayers(userId, skill, excludeIds, limit){
   if(!skill) return Promise.resolve({data:[]});
-  var q=supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
+  var q=supabase.from('profiles').select('id,name,avatar,avatar_url,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
     .neq('id',userId).eq('skill',skill);
   if(excludeIds&&excludeIds.length) q=q.not('id','in','('+excludeIds.join(',')+')');
   return q.limit(limit||6);
 }
 export function searchProfilesByName(userId, query){
-  return supabase.from('profiles').select('id,name,avatar,skill,suburb,ranking_points,matches_played,wins,privacy,last_active,show_online_status,show_last_seen')
+  return supabase.from('profiles').select('id,name,avatar,avatar_url,skill,suburb,ranking_points,matches_played,wins,privacy,last_active,show_online_status,show_last_seen')
     .ilike('name','%'+query+'%').neq('id',userId).limit(10);
 }
 export function insertFriendRequest(senderId, receiverId){

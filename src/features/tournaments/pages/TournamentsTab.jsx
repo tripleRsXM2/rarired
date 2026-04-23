@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import Pill from "../../../components/ui/Pill.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
@@ -6,6 +8,7 @@ import StandingsTable from "../components/StandingsTable.jsx";
 import BracketView from "../components/BracketView.jsx";
 import ChallengesPanel from "../../challenges/components/ChallengesPanel.jsx";
 import LeaguesPanel from "../../leagues/components/LeaguesPanel.jsx";
+import PlayerProfileView from "../../profile/pages/PlayerProfileView.jsx";
 import { PILOT_VENUE, ENTRY_FEES, PRIZES } from "../constants.js";
 import { SKILL_LEVELS } from "../../../lib/constants/domain.js";
 import { daysUntil } from "../../../lib/utils/dates.js";
@@ -546,6 +549,21 @@ export default function TournamentsTab(props) {
   var location = useLocation();
   var navigate = useNavigate();
 
+  // Player-profile overlay — opened when a user taps a challenger/league
+  // partner/etc. inside the Compete tab. Avoids navigating to /profile/<id>
+  // which would flip the sidebar to the "Profile" item (user reported
+  // that's misleading because Profile is meant to be *their* card).
+  var [profilePreviewId, setProfilePreviewId] = useState(null);
+  function openProfilePreview(userId) {
+    if (!userId) return;
+    if (props.authUser && userId === props.authUser.id) {
+      // Our own — take them to their actual Profile tab.
+      navigate("/profile");
+      return;
+    }
+    setProfilePreviewId(userId);
+  }
+
   var pathParts = location.pathname.split("/").filter(Boolean);
   var sub = pathParts[1] && VALID_COMPETE_TABS.indexOf(pathParts[1]) >= 0 ? pathParts[1] : "list";
 
@@ -611,7 +629,7 @@ export default function TournamentsTab(props) {
             challenges={challenges.challenges}
             profileMap={challenges.profileMap}
             loading={challenges.loading}
-            openProfile={props.openProfile}
+            openProfile={openProfilePreview}
             acceptChallenge={challenges.acceptChallenge}
             declineChallenge={challenges.declineChallenge}
             cancelChallenge={challenges.cancelChallenge}
@@ -622,6 +640,31 @@ export default function TournamentsTab(props) {
           />
         </div>
       )}
+
+      {profilePreviewId && createPortal((
+        <div onClick={function(){ setProfilePreviewId(null); }}
+          style={{
+            position:"fixed", inset:0, zIndex:500,
+            background:"rgba(0,0,0,0.72)",
+            display:"flex", alignItems:"flex-start", justifyContent:"center",
+            padding:"5vh 16px", overflowY:"auto"
+          }}>
+          <div onClick={function(e){ e.stopPropagation(); }}
+            style={{
+              background:t.bgCard, borderRadius:16, width:"100%",
+              maxWidth:680, overflow:"hidden",
+              boxShadow:"0 20px 80px rgba(0,0,0,0.4)"
+            }}>
+            <PlayerProfileView
+              t={t}
+              authUser={props.authUser}
+              userId={profilePreviewId}
+              onBack={function(){ setProfilePreviewId(null); }}
+              openChallenge={props.openChallenge}
+            />
+          </div>
+        </div>
+      ), document.body)}
 
       {sub === "leagues" && leagues && (
         <div style={{ padding: "16px 20px 100px" }} className="fade-up">
@@ -637,7 +680,7 @@ export default function TournamentsTab(props) {
             removeMember={leagues.removeMember}
             archiveLeague={leagues.archiveLeague}
             friends={friends}
-            openProfile={props.openProfile}
+            openProfile={openProfilePreview}
             toast={props.toast}
           />
         </div>

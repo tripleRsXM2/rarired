@@ -277,7 +277,24 @@ export default function SettingsScreen({
             <button
               onClick={async function(){
                 var init2=initials(profileDraft.name||"YN");
-                var nd=Object.assign({},profileDraft,{avatar:init2});
+                // Merge order matters. Start from the CURRENT profile
+                // (which holds the live presence toggles + home_zone +
+                // server-owned stat columns) and overlay only the form
+                // fields the draft actually owns. Previously we did
+                // Object.assign({}, profileDraft, ...) which stomped
+                // show_online_status / show_last_seen back to whatever
+                // they were when the modal opened, masking the toggle
+                // the user just flipped. DB was correct; the UI was
+                // drifting until the next page reload.
+                var nd=Object.assign({},profile,{
+                  name:         profileDraft.name,
+                  bio:          profileDraft.bio,
+                  skill:        profileDraft.skill,
+                  style:        profileDraft.style,
+                  avatar_url:   profileDraft.avatar_url,
+                  availability: profileDraft.availability,
+                  avatar:       init2,
+                });
                 setProfile(nd);
                 if(authUser){
                   // home_zone is written live (see dropdown above), so we

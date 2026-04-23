@@ -919,6 +919,55 @@ export function useDMs(opts) {
     return function () { supabase.removeChannel(mutesChannel); };
   }, [authUser && authUser.id]);
 
+  // ── Realtime: partner profiles (presence + privacy) ─────────────────────
+  // Patches every cached `partner` embed (conversations list, active thread
+  // header, incoming-request rows) so a partner toggling show_online_status
+  // OFF, or their last_active heartbeat firing, flips dot/label live.
+  useEffect(function () {
+    if (!authUser) return;
+    var channel = supabase.channel("dm-partner-profiles:" + authUser.id)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "profiles",
+      }, function (payload) {
+        var p = payload.new; if (!p || !p.id) return;
+        function patchOne(partner) {
+          if (!partner || partner.id !== p.id) return partner;
+          return Object.assign({}, partner, {
+            last_active:        p.last_active,
+            show_online_status: p.show_online_status,
+            show_last_seen:     p.show_last_seen,
+            name:               p.name || partner.name,
+            avatar:             p.avatar != null ? p.avatar : partner.avatar,
+            avatar_url:         p.avatar_url != null ? p.avatar_url : partner.avatar_url,
+          });
+        }
+        setConversations(function (cs) {
+          return cs.map(function (c) {
+            if (c && c.partner && c.partner.id === p.id) {
+              return Object.assign({}, c, { partner: patchOne(c.partner) });
+            }
+            return c;
+          });
+        });
+        setRequests(function (rs) {
+          return rs.map(function (r) {
+            if (r && r.partner && r.partner.id === p.id) {
+              return Object.assign({}, r, { partner: patchOne(r.partner) });
+            }
+            return r;
+          });
+        });
+        setActiveConv(function (ac) {
+          if (ac && ac.partner && ac.partner.id === p.id) {
+            return Object.assign({}, ac, { partner: patchOne(ac.partner) });
+          }
+          return ac;
+        });
+      })
+      .subscribe();
+    return function () { supabase.removeChannel(channel); };
+  }, [authUser && authUser.id]);
+
   function resetDMs() {
     setConversations([]); setRequests([]); setActiveConv(null);
     setConversationsLoaded(false);
