@@ -74,8 +74,15 @@ export function useNotifications(opts) {
 
   // ── Badge count ──────────────────────────────────────────────────────────────
   // Shows items that are unread AND not yet seen in this session.
+  //
+  // Excludes `message` notifications — unread DMs surface via the People
+  // nav badge instead (Instagram-style), so showing them here too would
+  // double-count. The `message_request` + `message_request_accepted`
+  // types DO count here because they're friend-request-style events, not
+  // ongoing chat activity.
   function unreadCount() {
     return notifications.filter(function (n) {
+      if (n.type === "message") return false;
       return !n.read && !seenIds.has(n.id);
     }).length;
   }

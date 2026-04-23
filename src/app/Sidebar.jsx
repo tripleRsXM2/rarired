@@ -21,6 +21,7 @@ export default function Sidebar({
   t, tab, setTab,
   profile, authUser,
   unreadCount,
+  dmUnreadCount,         // count of unread DMs + pending message-requests
   showNotifications, setShowNotifications, markSeen,
   onOpenSettings, openLogin,
 }) {
@@ -104,6 +105,10 @@ export default function Sidebar({
           return nav.id !== "admin" || (profile && profile.is_admin);
         }).map(function(nav) {
           var active = tab === nav.id;
+          // Instagram-style red dot on the People nav when we have
+          // unread DMs or pending DM requests. Cleared when the user
+          // opens Messages and the realtime read-receipt fires.
+          var showDmBadge = nav.id === "people" && (dmUnreadCount || 0) > 0;
           return (
             <button
               key={nav.id}
@@ -115,8 +120,18 @@ export default function Sidebar({
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <span style={{ color: active ? t.accent : t.textSecondary, flexShrink: 0, display: "flex" }}>
+              <span style={{ color: active ? t.accent : t.textSecondary, flexShrink: 0, display: "flex", position: "relative" }}>
                 {nav.icon()}
+                {showDmBadge && (
+                  <span style={{
+                    position: "absolute", top: -4, right: -6,
+                    minWidth: 14, height: 14, borderRadius: 7,
+                    background: t.red || "#ef4444", color: "#fff",
+                    fontSize: 9, fontWeight: 800,
+                    padding: "0 4px", lineHeight: "14px", textAlign: "center",
+                    border: "2px solid " + t.bgCard,
+                  }}>{dmUnreadCount > 9 ? "9+" : dmUnreadCount}</span>
+                )}
               </span>
               <span className="cs-nav-label" style={{ color: active ? t.accent : t.text, fontWeight: active ? 600 : 400 }}>
                 {nav.label}

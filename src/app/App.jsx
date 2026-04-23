@@ -462,6 +462,7 @@ export default function App(){
             t={t} tab={tab} setTab={setTab}
             profile={currentUser.profile} authUser={auth.authUser}
             unreadCount={notifications.unreadCount()}
+            dmUnreadCount={dms.totalUnread()}
             showNotifications={notifications.showNotifications}
             setShowNotifications={notifications.setShowNotifications}
             markSeen={notifications.markSeen}
@@ -552,13 +553,29 @@ export default function App(){
               {TABS.map(function(tb){
                 var on=tab===tb.id;
                 var Icon=NAV_ICONS[tb.id];
+                // Instagram-style red badge on the People tab for unread
+                // DMs + pending message requests.
+                var showDmBadge = tb.id === "people" && dms && dms.totalUnread() > 0;
+                var dmCount = showDmBadge ? dms.totalUnread() : 0;
                 return (
                   <button key={tb.id}
                     onClick={function(){setTab(tb.id);if(tb.id!=="tournaments")tournaments.setSelectedTournId(null);}}
                     aria-label={tb.label}
                     style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary,cursor:"pointer"}}>
                     <div style={{width:18,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
-                    {Icon ? Icon(22) : null}
+                    <span style={{position:"relative",display:"flex"}}>
+                      {Icon ? Icon(22) : null}
+                      {showDmBadge && (
+                        <span style={{
+                          position:"absolute", top:-4, right:-8,
+                          minWidth:14, height:14, borderRadius:7,
+                          background: t.red || "#ef4444", color:"#fff",
+                          fontSize:9, fontWeight:800,
+                          padding:"0 4px", lineHeight:"14px", textAlign:"center",
+                          border:"2px solid " + t.tabBar,
+                        }}>{dmCount > 9 ? "9+" : dmCount}</span>
+                      )}
+                    </span>
                   </button>
                 );
               })}

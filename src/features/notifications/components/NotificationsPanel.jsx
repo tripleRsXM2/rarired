@@ -735,9 +735,16 @@ export default function NotificationsPanel({
   var navigate     = useNavigate();
   var _markAllRead = markAllRead || markNotificationsRead;
 
-  // Group + sort once per render (cheap — O(n) passes)
+  // Group + sort once per render (cheap — O(n) passes).
+  //
+  // Filter out `message` type rows — regular DMs are surfaced by the
+  // People tab's unread-count badge (Instagram-style), so duplicating
+  // them in the tray adds noise. Friend-request-style DM events
+  // (`message_request`, `message_request_accepted`) are kept because
+  // they're one-time decisions, not ongoing chat.
   var displayItems = useMemo(function () {
-    return groupNotifications(notifications);
+    var filtered = notifications.filter(function (n) { return n.type !== "message"; });
+    return groupNotifications(filtered);
   }, [notifications]);
 
   // Split into sections
