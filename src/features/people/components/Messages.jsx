@@ -472,16 +472,6 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // ── Thread view ──────────────────────────────────────────────────────────
 
   var conv = dms.activeConv;
-  // Two-pane only applies when we have room to break out of the 680px
-  // reading column. Otherwise fall back to the mobile-style list-OR-
-  // thread stack so the content still fits the column.
-  var twoPane = twoPaneEligible;
-  var showList = twoPane || !conv;
-  var showThreadPane = twoPane || conv;
-
-  // Short-circuit when neither pane applies (shouldn't happen — included
-  // so the layout below can assume at least one column renders).
-  if (!showList && !showThreadPane) return null;
 
   var isPending = conv && conv.status === "pending";
   var iAmSender = conv && conv.requester_id === myId;
@@ -508,10 +498,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
   var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 8);
   var LIST_W = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, listRoom));
-  // Two-pane on any desktop width. On mobile (<1024) we still fall back
-  // to the single-column list-or-thread stack.
-  var twoPaneEligible = isDesktopDM;
-  var breakoutStyle = twoPaneEligible
+  // Two-pane on any desktop width. On mobile (<1024) we fall back to the
+  // single-column list-OR-thread stack.
+  var twoPane = isDesktopDM;
+  var showList = twoPane || !conv;
+  var showThreadPane = twoPane || conv;
+  var breakoutStyle = twoPane
     ? {
         position: "relative",
         width: (LIST_W + 680) + "px",
