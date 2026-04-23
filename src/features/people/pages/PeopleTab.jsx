@@ -274,11 +274,15 @@ export default function PeopleTab({
         </div>
 
         <div
-          // When a DM thread is active, drop the 100px bottom padding —
-          // the Messages component owns its own fixed-height layout and
-          // doesn't need extra clearance for the mobile tab bar (its
-          // height calc already subtracts var(--cs-tab-h)).
-          style={{padding: "16px 20px " + (peopleTab === "messages" && dms && dms.activeConv ? "0" : "100px")}}
+          // On the Messages tab, the Messages component owns a
+          // fixed-height two-pane layout (list + thread) and doesn't
+          // need extra clearance for the mobile tab bar — its height
+          // calc subtracts var(--cs-tab-h) already. Drop horizontal
+          // padding too so the list pane stretches edge-to-edge on
+          // desktop, which matches Messenger/WhatsApp conventions.
+          style={peopleTab === "messages" && dms
+            ? { padding: 0 }
+            : { padding: "16px 20px 100px" }}
           className="fade-up">
 
           {/* Messages */}

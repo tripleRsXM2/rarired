@@ -30,6 +30,12 @@ export function useDMs(opts) {
 
   var [conversations, setConversations] = useState([]);  // accepted + pending-outgoing
   var [requests, setRequests] = useState([]);             // pending incoming
+  // `false` until the first loadConversations() resolves. The UI distinguishes
+  // "still fetching" from "fetched and empty" using this — otherwise a
+  // freshly-mounted Messages view briefly shows "No messages yet" before the
+  // real list renders, which the user reported as "sometimes messages don't
+  // show" on mobile.
+  var [conversationsLoaded, setConversationsLoaded] = useState(false);
   var [activeConv, setActiveConv] = useState(null);
   var [threadMessages, setThreadMessages] = useState([]);
   var [reactions, setReactions] = useState({});          // {messageId: [{id,emoji,user_id}]}
@@ -152,6 +158,7 @@ export function useDMs(opts) {
 
     setConversations(accepted.concat(pendingOut).map(enrich));
     setRequests(pendingIn.map(enrich));
+    setConversationsLoaded(true);
   }
 
   // ── Pin / unpin actions ────────────────────────────────────────────────
@@ -670,6 +677,7 @@ export function useDMs(opts) {
 
   function resetDMs() {
     setConversations([]); setRequests([]); setActiveConv(null);
+    setConversationsLoaded(false);
     setThreadMessages([]); setReactions({}); setMsgDraft("");
     setReplyTo(null); setEditingId(null);
     setPartnerLastReadAt(null);
@@ -682,7 +690,8 @@ export function useDMs(opts) {
   }
 
   return {
-    conversations: conversations, requests: requests, activeConv: activeConv,
+    conversations: conversations, requests: requests, conversationsLoaded: conversationsLoaded,
+    activeConv: activeConv,
     threadMessages: threadMessages, reactions: reactions,
     threadLoading: threadLoading, msgDraft: msgDraft, setMsgDraft: setMsgDraft, sending: sending,
     replyTo: replyTo, setReplyTo: setReplyTo, clearReplyTo: function () { setReplyTo(null); },
