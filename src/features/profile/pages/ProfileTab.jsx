@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
+import { PresenceDot } from "../../people/components/PresenceIndicator.jsx";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
 import {
   computeRecentForm,
@@ -263,28 +264,33 @@ export default function ProfileTab({
       {/* ── Hero header ──────────────────────────────────────────────────────── */}
       <div style={{padding:"28px 20px 0",background:t.bg}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:16,marginBottom:20}}>
-          {(function(){
-            var url = avatarUrl(profile);
-            if(url){
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            {(function(){
+              var url = avatarUrl(profile);
+              if(url){
+                return (
+                  <img src={url} alt={profile.name}
+                    style={{
+                      width:72,height:72,borderRadius:"50%",objectFit:"cover",
+                      boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
+                      background:"#eee",
+                    }}/>
+                );
+              }
               return (
-                <img src={url} alt={profile.name}
-                  style={{
-                    width:72,height:72,borderRadius:"50%",objectFit:"cover",flexShrink:0,
-                    boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
-                    background:"#eee",
-                  }}/>
+                <div style={{
+                  width:72,height:72,borderRadius:"50%",
+                  background:avColor(profile.name),
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:24,fontWeight:800,color:"#fff",
+                  boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
+                }}>{profile.avatar}</div>
               );
-            }
-            return (
-              <div style={{
-                width:72,height:72,borderRadius:"50%",flexShrink:0,
-                background:avColor(profile.name),
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:24,fontWeight:800,color:"#fff",
-                boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
-              }}>{profile.avatar}</div>
-            );
-          })()}
+            })()}
+            {/* Own presence — bypass privacy so the user always sees
+                their own "online" dot regardless of visibility settings. */}
+            <PresenceDot profile={profile} t={t} viewerIsSelf={true} size={16} />
+          </div>
           <div style={{flex:1,paddingTop:4}}>
             <div style={{fontSize:22,fontWeight:800,color:t.text,letterSpacing:"-0.5px",lineHeight:1.1}}>{profile.name}</div>
             {displayLocation(profile)&&<div style={{fontSize:13,color:t.textSecondary,marginTop:3}}>{displayLocation(profile)}</div>}

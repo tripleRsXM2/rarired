@@ -41,7 +41,7 @@ export function useSocialGraph(opts){
       ])].filter(function(id){return id&&id!==userId;});
       var pMap={};
       if(otherIds.length){
-        var pr=await S.fetchProfilesByIds(otherIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen');
+        var pr=await S.fetchProfilesByIds(otherIds,'id,name,avatar,avatar_url,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen');
         (pr.data||[]).forEach(function(p){pMap[p.id]=p;});
       }
       setFriends(accepted.map(function(r){var oid=r.sender_id===userId?r.receiver_id:r.sender_id;return Object.assign({requestId:r.id},pMap[oid]||{id:oid,name:"Player"});}));
@@ -51,7 +51,7 @@ export function useSocialGraph(opts){
       var bl=await S.fetchBlocks(userId);
       var blockedIds=(bl.data||[]).map(function(b){return b.blocked_id;});
       if(blockedIds.length){
-        var bpr=await S.fetchProfilesByIds(blockedIds,'id,name,avatar,suburb');
+        var bpr=await S.fetchProfilesByIds(blockedIds,'id,name,avatar,avatar_url,suburb');
         setBlockedUsers(bpr.data||[]);
       } else {
         setBlockedUsers([]);
@@ -105,7 +105,7 @@ export function useSocialGraph(opts){
       if(orderedIds.length>=8) break;
     }
     if(!orderedIds.length){setPlayedOpponents([]);return;}
-    var pr=await fetchProfilesByIds(orderedIds,'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,last_active,show_online_status,show_last_seen');
+    var pr=await fetchProfilesByIds(orderedIds,'id,name,avatar,avatar_url,skill,suburb,ranking_points,wins,losses,matches_played,last_active,show_online_status,show_last_seen');
     var pMap={};(pr.data||[]).forEach(function(p){pMap[p.id]=p;});
     // Preserve history order (most recent first)
     setPlayedOpponents(orderedIds.map(function(id){return pMap[id];}).filter(Boolean));
@@ -217,7 +217,7 @@ export function useSocialGraph(opts){
         console.debug('[useSocialGraph] realtime friend_request received:', req);
         var pr=await fetchProfilesByIds(
           [req.sender_id],
-          'id,name,avatar,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen'
+          'id,name,avatar,avatar_url,skill,suburb,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen'
         );
         var sender=(pr.data&&pr.data[0])||{id:req.sender_id,name:'Player'};
         var enriched=Object.assign({requestId:req.id},sender);
@@ -230,6 +230,50 @@ export function useSocialGraph(opts){
         console.debug('[useSocialGraph] friend_requests channel status:', status);
       });
 
+    return function(){ supabase.removeChannel(channel); };
+  },[authUser&&authUser.id]);
+
+  // ── Realtime: partner profiles (presence + privacy) ─────────────────────
+  // When a friend/opponent's last_active, show_online_status, or
+  // show_last_seen flips, we want the dot + label to update in place
+  // without a refresh. Subscribe to public.profiles UPDATE events and
+  // patch whichever slice (friends / suggested / played / sameSkill /
+  // received / sent) the row belongs to.
+  useEffect(function(){
+    if(!authUser) return;
+    var channel=supabase.channel('profiles-presence:'+authUser.id)
+      .on('postgres_changes',{
+        event:'UPDATE',
+        schema:'public',
+        table:'profiles',
+      }, function(payload){
+        var p=payload.new; if(!p||!p.id) return;
+        function patch(list){
+          var hit=false;
+          var next=list.map(function(u){
+            if(u && u.id===p.id){
+              hit=true;
+              return Object.assign({},u,{
+                last_active:         p.last_active,
+                show_online_status:  p.show_online_status,
+                show_last_seen:      p.show_last_seen,
+                avatar:              p.avatar != null ? p.avatar : u.avatar,
+                avatar_url:          p.avatar_url != null ? p.avatar_url : u.avatar_url,
+                name:                p.name || u.name,
+              });
+            }
+            return u;
+          });
+          return hit ? next : list;
+        }
+        setFriends(patch);
+        setSentRequests(patch);
+        setReceivedRequests(patch);
+        setSuggestedPlayers(patch);
+        setPlayedOpponents(patch);
+        setSameSkillPlayers(patch);
+      })
+      .subscribe();
     return function(){ supabase.removeChannel(channel); };
   },[authUser&&authUser.id]);
 
