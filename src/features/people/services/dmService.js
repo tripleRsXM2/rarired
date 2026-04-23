@@ -61,16 +61,29 @@ export function sendMessage(convId,senderId,content,replyToId){
   return supabase.from('direct_messages').insert(payload).select('*').single();
 }
 
-export function editMessage(messageId,content){
-  return supabase.from('direct_messages')
+export async function editMessage(messageId,content){
+  var r = await supabase.from('direct_messages')
     .update({content,edited_at:new Date().toISOString()})
-    .eq('id',messageId).select('*').single();
+    .eq('id',messageId).select('*').maybeSingle();
+  if(!r.error && !r.data){
+    return { data:null, error:new Error("edit affected 0 rows (RLS?)") };
+  }
+  return r;
 }
 
-export function softDeleteMessage(messageId){
-  return supabase.from('direct_messages')
+// Soft-delete own message. Chains .select() so PostgREST returns the
+// updated row — lets us detect the RLS "updated 0 rows, no error" case
+// that previously caused unsends to silently revert on refresh.
+export async function softDeleteMessage(messageId){
+  var r = await supabase.from('direct_messages')
     .update({deleted_at:new Date().toISOString()})
-    .eq('id',messageId);
+    .eq('id',messageId)
+    .select('id,deleted_at')
+    .maybeSingle();
+  if(!r.error && !r.data){
+    return { data:null, error:new Error("soft-delete affected 0 rows (RLS?)") };
+  }
+  return r;
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────────────

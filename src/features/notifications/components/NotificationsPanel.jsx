@@ -203,14 +203,14 @@ function NotifRow({
   function goChallenges(e) {
     if (e) e.stopPropagation();
     track("notification_opened", { type: n.type, deep_link_target: "challenges" });
-    navigate("/people/challenges");
+    navigate("/tournaments/challenges");
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
   function goLeagues(e) {
     if (e) e.stopPropagation();
     track("notification_opened", { type: n.type, deep_link_target: "leagues" });
-    navigate("/people/leagues");
+    navigate("/tournaments/leagues");
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }

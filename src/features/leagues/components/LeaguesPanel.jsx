@@ -39,7 +39,7 @@ export default function LeaguesPanel({
 
   function report(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
 
-  // Deep-link: a feed-card league pill navigates to "/people/leagues?id=<uuid>".
+  // Deep-link: a feed-card league pill navigates to "/tournaments/leagues?id=<uuid>".
   // Auto-select the requested league on mount / URL change, then strip the
   // query param so refreshing doesn't keep reopening it.
   useEffect(function () {
@@ -48,7 +48,7 @@ export default function LeaguesPanel({
     if (urlId && urlId !== selectedId) {
       setSelectedId(urlId);
       // Clean the URL so back/refresh doesn't fight the user
-      navigate("/people/leagues", { replace: true });
+      navigate("/tournaments/leagues", { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
