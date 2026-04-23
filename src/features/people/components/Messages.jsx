@@ -479,6 +479,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   var unreadStartIdx = conv ? computeUnreadDividerIdx(dms.threadMessages, myId, conv.lastReadAt) : -1;
   var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(dms.threadMessages, myId, dms.partnerLastReadAt);
+  // Index of my MOST RECENT sent message — we always render a status
+  // (Sent / Seen) next to this one, so the receipt doesn't flicker
+  // off the moment the partner replies or after an unsent resend.
+  var lastMineIdx = -1;
+  (dms.threadMessages || []).forEach(function (m, i) {
+    if (m.sender_id === myId && !m.deleted_at) lastMineIdx = i;
+  });
 
   // Anchor the pane to the viewport so the input bar hugs the bottom of
   // the visible area regardless of message count. On desktop, the list
@@ -487,46 +494,61 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // time. Global --cs-nav-h / --cs-tab-h are 0 on desktop.
   // On desktop the thread pane stays pinned to where the rest of the
   // app's 680px reading column lives (Friends list, Discover, etc. —
-  // visually consistent across tabs). The conversation list pane pokes
-  // out to the left of that column. The list pane width adapts to the
-  // available space left of the reading column, clamped 160–280px so
-  // it's always a usable list even on narrower desktops. When the
-  // viewport is so cramped that we have <160px of left-space, we let
-  // the list overlap slightly — still better than hiding the thread.
+  // visually consistent across tabs). The conversation list pane is
+  // pinned to the LEFT EDGE of the main content area (flush with the
+  // sidebar) via position:fixed, with empty space between it and the
+  // thread. This matches the pattern the user sketched in feedback
+  // instead of pinning the list immediately next to the thread column.
   var MAX_LIST_W = 280;
-  var MIN_LIST_W = 160;
+  var MIN_LIST_W = 220;
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
-  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 8);
+  // Available space to the left of the reading column, minus an 8px
+  // gutter from the sidebar and a 16px gap before the thread. Clamp
+  // list width 220–280px.
+  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 24);
   var LIST_W = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, listRoom));
-  // Two-pane on any desktop width. On mobile (<1024) we fall back to the
-  // single-column list-OR-thread stack.
   var twoPane = isDesktopDM;
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
-  var breakoutStyle = twoPane
-    ? {
-        position: "relative",
-        width: (LIST_W + 680) + "px",
-        marginLeft: "-" + LIST_W + "px",
-      }
-    : {};
   return (
-    <div className="cs-dm-root" style={Object.assign({
+    <div className="cs-dm-root" style={{
       display: "flex",
       height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 140px)",
       minHeight: 420,
-    }, breakoutStyle)}>
+    }}>
       {/* ── List pane ─────────────────────────────────────────────────── */}
-      {showList && (
-        <div className="cs-dm-list-pane" style={{
-          width: twoPane ? LIST_W : "100%",
-          flexShrink: 0, minWidth: 0,
-          background: twoPane ? t.bgCard : "transparent",
-          borderRight: twoPane ? "1px solid " + t.border : "none",
-          overflowY: "auto",
-        }}>
-          {renderConvList()}
-        </div>
+      {/*    Desktop: fixed to the LEFT EDGE of the main content area
+            (just after the sidebar), independent of the thread column.
+            Mobile: inline, fills the viewport when no conv is active. */}
+      {showList && (twoPane
+        // Portal the desktop list to <body> so position:fixed is
+        // viewport-relative, not trapped inside the `.fade-up` transform
+        // ancestor (same reason EmojiPicker + the settings modal portal).
+        ? createPortal((
+            <div className="cs-dm-list-pane" style={{
+              position: "fixed",
+              top: "calc(var(--cs-nav-h) + 140px)",
+              left: viewport.sidebarW + 8 + "px",
+              width: LIST_W + "px",
+              height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 160px)",
+              background: t.bgCard,
+              border: "1px solid " + t.border,
+              borderRadius: 12,
+              overflowY: "auto",
+              zIndex: 5,
+            }}>
+              {renderConvList()}
+            </div>
+          ), document.body)
+        : (
+          <div className="cs-dm-list-pane" style={{
+            width: "100%",
+            flexShrink: 0, minWidth: 0,
+            overflowY: "auto",
+          }}>
+            {renderConvList()}
+          </div>
+        )
       )}
 
       {/* ── Thread pane (or desktop empty state) ──────────────────────── */}
@@ -823,8 +845,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                     )}
                     <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 3, textAlign: mine ? "right" : "left" }}>
                       {formatMessageTime(msg.created_at)}
-                      {mine && idx === lastSeenByPartnerIdx && (
-                        <span style={{ marginLeft: 6, color: t.accent, fontWeight: 600 }}>· Seen</span>
+                      {mine && idx === lastMineIdx && (
+                        idx === lastSeenByPartnerIdx
+                          ? <span style={{ marginLeft: 6, color: t.accent, fontWeight: 600 }}>· Seen</span>
+                          : <span style={{ marginLeft: 6, color: t.textTertiary }}>· Sent</span>
                       )}
                     </div>
                   </div>
