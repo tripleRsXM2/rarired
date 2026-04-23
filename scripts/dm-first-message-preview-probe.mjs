@@ -119,8 +119,12 @@ async function main() {
     });
     log("john's list state: " + JSON.stringify(johnState, null, 2));
 
-    if (johnState.quotedPreview && johnState.quotedPreview.indexOf("first message from the probe") >= 0) {
-      log("✓ PREVIEW VISIBLE: '" + johnState.quotedPreview + "'");
+    // The preview text renders as either a quoted string (inside the
+    // request-card "wants to message you" layout) OR as plain text
+    // under the partner name (accepted-conv row layout). Accept either.
+    var probe = "hey john — first message from the probe";
+    if (johnState.listPaneText.indexOf(probe) >= 0) {
+      log("✓ PREVIEW VISIBLE in John's conversation pane");
     } else {
       log("❌ preview NOT visible in John's view");
     }
