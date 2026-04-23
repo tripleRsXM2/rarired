@@ -498,20 +498,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // On desktop the thread pane stays pinned to where the rest of the
   // app's 680px reading column lives (Friends list, Discover, etc. —
   // visually consistent across tabs). The conversation list pane pokes
-  // out to the left of that column. The exact list width is clamped to
-  // the available left space (reading-column.left − sidebar − 8px
-  // gutter) so it never overlaps the sidebar at narrower desktops.
+  // out to the left of that column. The list pane width adapts to the
+  // available space left of the reading column, clamped 160–280px so
+  // it's always a usable list even on narrower desktops. When the
+  // viewport is so cramped that we have <160px of left-space, we let
+  // the list overlap slightly — still better than hiding the thread.
   var MAX_LIST_W = 280;
-  // Reading column's left edge, in "main-content" coords: (availW−680)/2.
-  // Clamp the list to that minus an 8px gutter so it sits flush with
-  // the sidebar's right edge without touching it.
+  var MIN_LIST_W = 160;
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
   var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 8);
-  var LIST_W = Math.min(MAX_LIST_W, listRoom);
-  // Two-pane when we have at least enough room for a meaningfully wide
-  // list (180px — below that it reads as junk). Otherwise fall back to
-  // single-column stack (same as mobile).
-  var twoPaneEligible = isDesktopDM && LIST_W >= 180;
+  var LIST_W = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, listRoom));
+  // Two-pane on any desktop width. On mobile (<1024) we still fall back
+  // to the single-column list-or-thread stack.
+  var twoPaneEligible = isDesktopDM;
   var breakoutStyle = twoPaneEligible
     ? {
         position: "relative",
