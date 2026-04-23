@@ -275,7 +275,7 @@ describe("Messages — thread view", function () {
     expect(screen.getByText("Unsend")).toBeInTheDocument();
   });
 
-  it("left-click on partner bubble opens menu WITHOUT delete options", function () {
+  it("left-click on partner bubble shows Delete for me but NOT Unsend", function () {
     var dms = makeDms({
       activeConv: baseConv,
       threadMessages: [
@@ -286,8 +286,10 @@ describe("Messages — thread view", function () {
     fireEvent.click(screen.getByText("partner msg"));
     expect(screen.getByText("Reply")).toBeInTheDocument();
     expect(screen.getByText("Copy")).toBeInTheDocument();
-    // Delete options must NOT appear on someone else's message.
-    expect(screen.queryByText("Delete for me")).toBeNull();
+    // "Delete for me" is local-only (hides from my view via localStorage),
+    // so it's fine on partner messages too.
+    expect(screen.getByText("Delete for me")).toBeInTheDocument();
+    // "Unsend" writes to DB — must stay gated to own messages.
     expect(screen.queryByText("Unsend")).toBeNull();
   });
 
