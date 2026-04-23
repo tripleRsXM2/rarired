@@ -18,9 +18,19 @@ export var AWAY_WINDOW_MS   = 30 * 60 * 1000;      // < 30 min → away (no dot)
 
 export function touchPresence(userId){
   if(!userId) return Promise.resolve({error:null});
+  // IMPORTANT: must call .then() (or await) to actually issue the HTTP
+  // request. Supabase JS v2 PostgrestFilterBuilder is lazy — if no
+  // consumer subscribes, some versions never flush the request. The
+  // heartbeat caller is fire-and-forget, so we terminate the chain
+  // here and surface errors via console.warn so silent RLS / trigger
+  // failures don't just quietly leave last_active null forever.
   return supabase.from("profiles")
     .update({last_active:new Date().toISOString()})
-    .eq("id", userId);
+    .eq("id", userId)
+    .then(function(r){
+      if(r && r.error) console.warn("[touchPresence] error:", r.error.message);
+      return r;
+    });
 }
 
 // Compute a presence view for *another* user's profile.
