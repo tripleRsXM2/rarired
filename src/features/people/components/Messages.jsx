@@ -568,24 +568,21 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // Two-pane stays on only while the gutter left of the 680 reading
   // column actually fits 280 + its 24px gap from the thread. When it
   // can't, we collapse to single-column (same mobile fallback).
+  // List is pinned to the sidebar's right edge and never moves. As
+  // the window shrinks, the thread column slides left toward the list;
+  // once the gap between them drops under ~2cm, we snap to single-
+  // column (user rule: list is anchored to the left, disappears when
+  // it would be too close to the thread).
   var MAX_LIST_W = 280;
-  // The list is now positioned immediately to the LEFT of the thread
-  // column (not flush with the sidebar), separated by a fixed ~2cm
-  // gap. That way it sits close to the thread on wide viewports
-  // instead of hugging the sidebar and stranding 100+px of empty
-  // space between them. When the viewport narrows enough that the
-  // list's ideal left edge would collide with the sidebar, we snap
-  // to single-column.
-  var LIST_GAP = 76; // ~2cm @ 96 DPI
+  var LIST_GAP = 76; // ~2cm @ 96 DPI — minimum allowed gap
+  var LIST_LEFT_INSET = 8; // gutter between sidebar and list
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
-  // Thread's left edge in viewport coords (PeopleTab centers content
-  // in the main area with max-width:680).
   var threadLeft = viewport.sidebarW + Math.max(0, Math.floor((availableW - 680) / 2));
-  var idealListLeft = threadLeft - LIST_GAP - MAX_LIST_W;
-  var minListLeft = viewport.sidebarW + 8; // 8px gutter from sidebar
+  var LIST_LEFT = viewport.sidebarW + LIST_LEFT_INSET;
+  var listRight = LIST_LEFT + MAX_LIST_W;
+  var gap = threadLeft - listRight;
   var LIST_W = MAX_LIST_W;
-  var twoPane = isDesktopDM && idealListLeft >= minListLeft;
-  var LIST_LEFT = idealListLeft;
+  var twoPane = isDesktopDM && gap >= LIST_GAP;
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
   return (
