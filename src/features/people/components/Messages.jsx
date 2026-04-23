@@ -11,6 +11,7 @@ import { PresenceDot } from "./PresenceIndicator.jsx";
 import { getPresence } from "../services/presenceService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import EmojiPicker from "./EmojiPicker.jsx";
+import DetailsDrawer from "./DetailsDrawer.jsx";
 import {
   formatMessageTime,
   previewify,
@@ -22,6 +23,8 @@ import {
   filterHiddenMessages,
   computeContextMenuPos,
   validateDraft,
+  dateSeparatorLabel,
+  computeDateSeparatorIds,
 } from "../utils/messaging.js";
 
 // Quick reactions shown first in the action menu. "+" opens the full picker.
@@ -37,11 +40,30 @@ function IconCopy(p)   { return (<svg width="16" height="16" viewBox="0 0 18 18"
 function IconEdit(p)   { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><path d="M12.5 2.5l3 3L6 15H3v-3l9.5-9.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M11 4l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
 function IconTrash(p)  { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><path d="M3.5 5h11M7 5V3.5A1 1 0 0 1 8 2.5h2a1 1 0 0 1 1 1V5M5 5l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M7.5 8v4M10.5 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
 function IconUnsend(p) { return (<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}><circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5 13L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
+// Tiny filled pin glyph used on the pinned-row indicator. Rotated 45° so
+// it reads "pinned" at 12px.
+function IconPin(p) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true" {...p}>
+      <path d="M9 1.5a1 1 0 0 0-1 1v4.2L5.4 9.3a1 1 0 0 0-.4.8v1a1 1 0 0 0 1 1h2.5v4a.5.5 0 0 0 1 0v-4H12a1 1 0 0 0 1-1v-1a1 1 0 0 0-.4-.8L10 6.7V2.5a1 1 0 0 0-1-1z"/>
+    </svg>
+  );
+}
+// Right-drawer toggle — three small horizontal lines on a panel.
+function IconPanelRight(p) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}>
+      <rect x="2" y="3" width="14" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M11 3v12" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  );
+}
 
 export default function Messages({ t, authUser, dms, openProfile }) {
   var [menuState, setMenuState] = useState(null);          // { message, rect }
   var [showSettings, setShowSettings] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  var [showDetails, setShowDetails] = useState(false);
   // Null when closed; a DOMRect when open. Capturing the rect at click
   // time (instead of reading through a ref at render time) avoids the
   // race where a just-mounted ref is still null, which made the picker
@@ -108,6 +130,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var visibleMessages = useMemo(function () {
     return filterHiddenMessages(dms.threadMessages, hiddenIds);
   }, [dms.threadMessages, hiddenIds]);
+
+  // Message ids that should render a date-separator row ABOVE them (first
+  // message of each calendar day). Kept in sync with visibleMessages so
+  // hidden messages don't create orphan separators.
+  var dateSeparatorIds = useMemo(function () {
+    return computeDateSeparatorIds(visibleMessages);
+  }, [visibleMessages]);
 
   // ── Long-press / right-click context menu ────────────────────────────────
 
@@ -226,24 +255,47 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             <div style={{ fontSize: 13, color: t.textSecondary }}>Go to Friends and tap Message to start a conversation.</div>
           </div>
         ) : (
-          <div>
-            {dms.conversations.length > 0 && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Recent</div>
-            )}
-            {dms.conversations.map(function (conv) {
+          (function () {
+            // Split pinned vs all. Pinned order follows `dms.pinnedConvIds`
+            // (newest-pin-first). Pending-out convs never pin (no canonical
+            // last_message yet — pinning them would be a UX trap).
+            var pinnedSet = {};
+            (dms.pinnedConvIds || []).forEach(function (id) { pinnedSet[id] = true; });
+            var pinned = (dms.pinnedConvIds || [])
+              .map(function (id) { return dms.conversations.find(function (c) { return c.id === id; }); })
+              .filter(Boolean);
+            var others = dms.conversations.filter(function (c) { return !pinnedSet[c.id]; });
+
+            function renderRow(conv) {
               var hasUnread = conv.hasUnread;
               var isPending = conv.status === "pending";
               var isMe = conv.last_message_sender_id === myId;
+              var isPinned = !!pinnedSet[conv.id];
+              // Unread glow: accent ring around the avatar + subtle tinted row.
               return (
                 <button key={conv.id} onClick={function () { dms.openConversation(conv); }}
-                  style={{ width: "100%", background: hasUnread ? t.accentSubtle : t.bgCard, border: "1px solid " + (hasUnread ? t.accent : t.border), borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", gap: 12, alignItems: "center", cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={44} />
+                  style={{
+                    width: "100%",
+                    background: hasUnread ? t.accentSubtle : t.bgCard,
+                    border: "1px solid " + (hasUnread ? t.accent : t.border),
+                    borderRadius: 10,
+                    padding: "9px 12px", marginBottom: 6,
+                    display: "flex", gap: 11, alignItems: "center",
+                    cursor: "pointer", textAlign: "left",
+                  }}>
+                  <div style={{ position: "relative", flexShrink: 0,
+                    padding: hasUnread ? 2 : 0,
+                    borderRadius: "50%",
+                    boxShadow: hasUnread ? ("0 0 0 2px " + t.accent) : "none",
+                  }}>
+                    <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={38} />
                     <PresenceDot profile={conv.partner} t={t} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
-                      <span style={{ fontSize: 14, fontWeight: hasUnread ? 700 : 600, color: t.text }}>{conv.partner.name}</span>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 1 }}>
+                      <span style={{ fontSize: 14, fontWeight: hasUnread ? 700 : 600, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</span>
+                      {isPinned && <span style={{ color: t.textTertiary, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
+                      <span style={{ flex: 1 }}/>
                       <span style={{ fontSize: 10, color: t.textTertiary, flexShrink: 0 }}>{formatMessageTime(conv.last_message_at)}</span>
                     </div>
                     <div style={{ fontSize: 12, color: hasUnread ? t.text : t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: hasUnread ? 600 : 400 }}>
@@ -252,11 +304,26 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                         : (isMe ? "You: " : "") + previewify(conv.last_message_preview, 80)}
                     </div>
                   </div>
-                  {hasUnread && <div style={{ width: 9, height: 9, borderRadius: "50%", background: t.accent, flexShrink: 0 }} />}
+                  {hasUnread && <div style={{ width: 8, height: 8, borderRadius: "50%", background: t.accent, flexShrink: 0 }} />}
                 </button>
               );
-            })}
-          </div>
+            }
+
+            function sectionHeader(label) {
+              return (
+                <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", margin: "12px 2px 6px" }}>{label}</div>
+              );
+            }
+
+            return (
+              <div>
+                {pinned.length > 0 && sectionHeader("Pinned")}
+                {pinned.map(renderRow)}
+                {others.length > 0 && sectionHeader(pinned.length ? "All" : "Recent")}
+                {others.map(renderRow)}
+              </div>
+            );
+          })()
         )}
       </div>
     );
@@ -273,7 +340,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(dms.threadMessages, myId, dms.partnerLastReadAt);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "60vh" }}>
+    <div style={{ display: "flex", minHeight: "60vh" }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
 
       {/* Settings bottom-sheet (gear icon) */}
       {showSettings && (
@@ -368,6 +436,22 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
           {presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>}
         </div>
+        {/* Details drawer toggle — desktop-only (hidden below 1024px via
+            .cs-dm-details-btn; the drawer itself would eat mobile width). */}
+        <button
+          type="button"
+          onClick={function () { setShowDetails(function (v) { return !v; }); }}
+          aria-label={showDetails ? "Hide details" : "Show details"}
+          className="cs-dm-details-btn"
+          style={{
+            background: showDetails ? t.accentSubtle : "transparent",
+            border: "none", color: showDetails ? t.accent : t.textTertiary,
+            width: 32, height: 32, borderRadius: 8,
+            display: "none", alignItems: "center", justifyContent: "center",
+            padding: 0, flexShrink: 0, cursor: "pointer",
+          }}>
+          <IconPanelRight/>
+        </button>
         <button onClick={function () { setShowSettings(true); }}
           aria-label="Conversation settings"
           style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 18, padding: "4px", flexShrink: 0, cursor: "pointer" }}>⚙️</button>
@@ -397,10 +481,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             var reactionGroups = groupReactions(dms.reactions[msg.id]);
             var isEditing = dms.editingId === msg.id;
             var showUnread = idx === unreadStartIdx;
+            var showDateSep = dateSeparatorIds.has(msg.id);
             var replyMsg = msg.reply_to_id ? dms.threadMessages.find(function (m) { return m.id === msg.reply_to_id; }) : null;
 
             return (
               <div key={msg.id}>
+                {showDateSep && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, margin: idx === 0 ? "4px 0 10px" : "18px 0 10px" }}>
+                    <div style={{ flex: 1, height: 1, background: t.border }} />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.08em", flexShrink: 0 }}>
+                      {dateSeparatorLabel(msg.created_at)}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: t.border }} />
+                  </div>
+                )}
                 {showUnread && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 10px" }}>
                     <div style={{ flex: 1, height: 1, background: t.accent, opacity: 0.35 }} />
@@ -655,6 +749,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           anchor={showInputEmoji}
           onPick={insertEmojiAtCursor}
           onClose={function () { setShowInputEmoji(null); }}
+        />
+      )}
+      </div>{/* /thread column */}
+
+      {/* Details drawer (desktop only per .cs-dm-details-btn media query;
+          the toggle button is hidden on mobile so the drawer can't open). */}
+      {showDetails && (
+        <DetailsDrawer
+          t={t} conv={conv}
+          isPinned={(dms.pinnedConvIds || []).indexOf(conv.id) >= 0}
+          onPin={function () { dms.pinConversation && dms.pinConversation(conv.id); }}
+          onUnpin={function () { dms.unpinConversation && dms.unpinConversation(conv.id); }}
+          onOpenProfile={openProfile}
+          onClose={function () { setShowDetails(false); }}
         />
       )}
     </div>

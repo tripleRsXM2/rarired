@@ -101,7 +101,7 @@ export default function App(){
   async function applyHomeZone(zoneId){
     if(!auth.authUser) return;
     var r = await setHomeZone(auth.authUser.id, zoneId);
-    if(r.error){ alert(r.error.message||"Could not set home zone"); return; }
+    if(r.error){ toast((r.error && r.error.message) || "Could not set home zone", "error"); return; }
     currentUser.setProfile(function(p){ return Object.assign({}, p, {home_zone: zoneId}); });
   }
   function clearHomeZone(){ applyHomeZone(null); }
@@ -239,16 +239,23 @@ export default function App(){
     navigate("/people/messages");
   }
 
-  // Auto-dismiss "new message" notifications when the user opens that
-  // conversation. Matches the canonical row (entity_id === conv.id) AND any
-  // legacy rows from the same partner (entity_id null, from before that
-  // column was saved), so old stacked notifications also clear.
+  // Auto-dismiss tray rows related to an opened DM conversation:
+  //   • `message`                  — collapsed-per-conv unread row
+  //   • `message_request_accepted` — "X accepted your request" row
+  //     (the original sender sees this; opening the conv means they've
+  //     clearly seen the acceptance, so the row is now stale)
+  //
+  // We match by entity_id === conv.id (canonical) and, for legacy rows
+  // without entity_id, fall back to from_user_id === partner.
+  // `message_request` rows are deliberately NOT dismissed here — the
+  // recipient still has to accept/decline before they become stale.
   useEffect(function(){
     var conv=dms.activeConv;
     if(!conv||conv.status!=='accepted')return;
     var partnerId=conv.partner&&conv.partner.id;
+    var DISMISSIBLE_TYPES={ message:1, message_request_accepted:1 };
     var matches=notifications.notifications.filter(function(n){
-      if(n.type!=='message')return false;
+      if(!DISMISSIBLE_TYPES[n.type])return false;
       if(n.entity_id===conv.id)return true;
       if(!n.entity_id&&partnerId&&n.from_user_id===partnerId)return true;
       return false;
@@ -259,6 +266,17 @@ export default function App(){
     notifications.setNotifications(function(ns){
       return ns.filter(function(n){return!ids[n.id];});
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[dms.activeConv&&dms.activeConv.id]);
+
+  // Close the NotificationsPanel whenever a conversation thread opens.
+  // The panel is a position:fixed 380px right-side overlay with a
+  // full-viewport click-outside scrim (z:45). On desktop the overlay
+  // sits exactly on top of where the DM thread renders, which swallows
+  // clicks on bubbles / action menus / emoji button. "One drawer at a
+  // time": opening a thread implicitly dismisses the panel.
+  useEffect(function(){
+    if(dms.activeConv) notifications.setShowNotifications(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[dms.activeConv&&dms.activeConv.id]);
 

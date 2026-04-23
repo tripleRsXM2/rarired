@@ -6,6 +6,7 @@ import {
   groupReactions, appendMessageIfNew, patchMessageById,
   computeContextMenuPos, validateDraft, MESSAGE_MAX,
   hiddenMsgsKey, readHiddenMsgs, writeHiddenMsgs, filterHiddenMessages,
+  dateSeparatorLabel, computeDateSeparatorIds,
 } from "./messaging.js";
 
 describe("formatMessageTime", function () {
@@ -166,6 +167,63 @@ describe("validateDraft", function () {
     expect(v.ok).toBe(false);
     expect(v.value.length).toBe(MESSAGE_MAX);
     expect(v.reason).toBe("too_long");
+  });
+});
+
+describe("dateSeparatorLabel", function () {
+  it("returns 'Today' for today", function () {
+    var now = new Date();
+    expect(dateSeparatorLabel(now.toISOString(), now)).toBe("Today");
+  });
+  it("returns 'Yesterday' for yesterday", function () {
+    var now = new Date(2026, 3, 23, 10, 0, 0);     // local
+    var y = new Date(2026, 3, 22, 15, 0, 0);
+    expect(dateSeparatorLabel(y.toISOString(), now)).toBe("Yesterday");
+  });
+  it("returns weekday for 2-6 days back", function () {
+    var now = new Date(2026, 3, 23, 10, 0, 0);
+    var three = new Date(2026, 3, 20, 10, 0, 0);
+    expect(dateSeparatorLabel(three.toISOString(), now)).toMatch(/[A-Za-z]+day/);
+  });
+  it("returns short date for > 6 days back", function () {
+    var now = new Date(2026, 3, 23, 10, 0, 0);
+    var old = new Date(2026, 3, 10, 10, 0, 0);
+    var out = dateSeparatorLabel(old.toISOString(), now);
+    // Locale-dependent; just assert it's not one of the other buckets.
+    expect(out).not.toBe("Today");
+    expect(out).not.toBe("Yesterday");
+  });
+  it("returns '' for garbage input", function () {
+    expect(dateSeparatorLabel(null)).toBe("");
+    expect(dateSeparatorLabel("")).toBe("");
+    expect(dateSeparatorLabel("not-a-date")).toBe("");
+  });
+});
+
+describe("computeDateSeparatorIds", function () {
+  it("marks the first message of each calendar day (timezone-stable)", function () {
+    // Construct Dates in the runner's LOCAL tz so day boundaries are
+    // deterministic regardless of where the test runs.
+    var day1a = new Date(2026, 3, 20, 9, 0, 0);
+    var day1b = new Date(2026, 3, 20, 20, 0, 0);
+    var day2a = new Date(2026, 3, 22, 5, 0, 0);
+    var day2b = new Date(2026, 3, 22, 22, 0, 0);
+    var msgs = [
+      { id: "a", created_at: day1a.toISOString() },
+      { id: "b", created_at: day1b.toISOString() },
+      { id: "c", created_at: day2a.toISOString() },
+      { id: "d", created_at: day2b.toISOString() },
+    ];
+    var set = computeDateSeparatorIds(msgs);
+    expect(set.has("a")).toBe(true);
+    expect(set.has("b")).toBe(false);
+    expect(set.has("c")).toBe(true);
+    expect(set.has("d")).toBe(false);
+  });
+  it("is robust to empty + malformed entries", function () {
+    expect(computeDateSeparatorIds([]).size).toBe(0);
+    expect(computeDateSeparatorIds(null).size).toBe(0);
+    expect(computeDateSeparatorIds([{ id: "x" }]).size).toBe(0);
   });
 });
 

@@ -174,9 +174,11 @@ export default function PeopleTab({
 
   // Works for both friends (bypasses request gate via useDMs friendship
   // override) and non-friends (creates a normal DM request).
-  function handleMessage(u){
+  async function handleMessage(u){
+    if(!dms) return;
     navigate("/people/messages");
-    if(dms)dms.openOrStartConversation(u);
+    var r = await dms.openOrStartConversation(u);
+    if(r && r.error && toast) toast(r.error, "error");
   }
 
   return (

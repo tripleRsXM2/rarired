@@ -40,6 +40,9 @@ export function useDMs(opts) {
   var [editingId, setEditingId] = useState(null);
   var [editDraft, setEditDraft] = useState("");
   var [partnerLastReadAt, setPartnerLastReadAt] = useState(null);
+  // Ordered list of pinned conversation ids, newest-pin-first. Stored as
+  // an array rather than a Set so renders are stable and order is honored.
+  var [pinnedConvIds, setPinnedConvIds] = useState([]);
 
   var activeConvRef = useRef(null);
   // Keep a ref of the current thread's message ids so the reactions realtime
@@ -132,6 +135,12 @@ export function useDMs(opts) {
       (rr.data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
     }
 
+    // Pins — fire-and-forget so the list paints fast; result populates
+    // state when it lands and re-renders pick up the ordering.
+    D.fetchPinnedConversationIds(uid).then(function (pr) {
+      if (pr && pr.data) setPinnedConvIds(pr.data.map(function (p) { return p.conversation_id; }));
+    });
+
     function enrich(c) {
       var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
       var partner = partnerMap[pid] || { id: pid, name: "Player", avatar: "PL" };
@@ -143,6 +152,35 @@ export function useDMs(opts) {
 
     setConversations(accepted.concat(pendingOut).map(enrich));
     setRequests(pendingIn.map(enrich));
+  }
+
+  // ── Pin / unpin actions ────────────────────────────────────────────────
+
+  async function pinConversation(convId) {
+    if (!authUser) return { error: "Not signed in" };
+    var prev = pinnedConvIds;
+    if (prev.indexOf(convId) >= 0) return { error: null };
+    // Optimistic: newest-first ordering matches fetchPinnedConversationIds.
+    setPinnedConvIds([convId].concat(prev));
+    var r = await D.pinConversationRow(authUser.id, convId);
+    if (r.error) {
+      setPinnedConvIds(prev);
+      return { error: (r.error && r.error.message) || "Couldn't pin that conversation" };
+    }
+    return { error: null };
+  }
+
+  async function unpinConversation(convId) {
+    if (!authUser) return { error: "Not signed in" };
+    var prev = pinnedConvIds;
+    if (prev.indexOf(convId) < 0) return { error: null };
+    setPinnedConvIds(prev.filter(function (id) { return id !== convId; }));
+    var r = await D.unpinConversationRow(authUser.id, convId);
+    if (r.error) {
+      setPinnedConvIds(prev);
+      return { error: (r.error && r.error.message) || "Couldn't unpin that conversation" };
+    }
+    return { error: null };
   }
 
   // ── Open / switch / close — always scrub transient chat state ──────────
@@ -199,14 +237,16 @@ export function useDMs(opts) {
     }
   }
 
+  // Returns { error: null | string } so callers can surface a toast without
+  // reaching into Supabase. Error strings are user-facing; keep them short.
   async function openOrStartConversation(partner) {
-    if (!authUser) return;
+    if (!authUser) return { error: "Not signed in" };
     var uid = authUser.id;
 
     var r = await D.getOrCreateConversation(partner.id);
     if (r.error || !r.data) {
       console.error("[useDMs] getOrCreateConversation failed:", r.error);
-      return;
+      return { error: (r.error && r.error.message) || "Couldn't open that conversation. Try again." };
     }
     var row = r.data;
 
@@ -217,9 +257,9 @@ export function useDMs(opts) {
 
     if (row.status === "declined") {
       if (row.request_cooldown_until && new Date(row.request_cooldown_until) > new Date()) {
-        // Caller is expected to toast; log and bail.
-        console.warn("[useDMs] cooldown active for", partner.id);
-        return;
+        var until = new Date(row.request_cooldown_until);
+        var days = Math.max(1, Math.ceil((until - new Date()) / (24 * 3600 * 1000)));
+        return { error: "You can't message " + (partner.name || "this player") + " right now. Try again in " + days + " day" + (days === 1 ? "" : "s") + "." };
       }
       await D.updateConversationStatus(row.id, "pending");
       row = Object.assign({}, row, { status: "pending", requester_id: uid });
@@ -252,6 +292,7 @@ export function useDMs(opts) {
         });
       }
     }
+    return { error: null };
   }
 
   function closeConversation() {
@@ -554,7 +595,15 @@ export function useDMs(opts) {
   }, [authUser && authUser.id, activeConv && activeConv.id]);
 
   // ── Realtime: reactions for messages in the active conversation ────────
-
+  //
+  // We subscribe to ALL message_reactions globally and filter client-side
+  // via `threadIdsRef`. This looks wasteful, but an `in.(id1,id2,…)` server
+  // filter would capture ids at subscribe-time only — a reaction on a
+  // message the user sends AFTER opening the conv would never arrive.
+  // `message_reactions` has no `conversation_id` column to filter on, so
+  // the global approach is the correct one until that's denormalised.
+  // Scoped per-`activeConv` via the effect dep, so inactive convs don't
+  // hold a subscription.
   useEffect(function () {
     if (!authUser || !activeConv) return;
 
@@ -591,11 +640,40 @@ export function useDMs(opts) {
     return function () { supabase.removeChannel(rxChannel); };
   }, [authUser && authUser.id, activeConv && activeConv.id]);
 
+  // ── Realtime: pins (multi-device sync) ───────────────────────────────
+  useEffect(function () {
+    if (!authUser) return;
+    var uid = authUser.id;
+    var pinsChannel = supabase.channel("pins:" + uid)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversation_pins", filter: "user_id=eq." + uid },
+        function (payload) {
+          var cid = payload.new && payload.new.conversation_id;
+          if (!cid) return;
+          setPinnedConvIds(function (prev) {
+            if (prev.indexOf(cid) >= 0) return prev;
+            return [cid].concat(prev);
+          });
+        }
+      )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "conversation_pins", filter: "user_id=eq." + uid },
+        function (payload) {
+          var cid = payload.old && payload.old.conversation_id;
+          if (!cid) return;
+          setPinnedConvIds(function (prev) { return prev.filter(function (id) { return id !== cid; }); });
+        }
+      )
+      .subscribe();
+    return function () { supabase.removeChannel(pinsChannel); };
+  }, [authUser && authUser.id]);
+
   function resetDMs() {
     setConversations([]); setRequests([]); setActiveConv(null);
     setThreadMessages([]); setReactions({}); setMsgDraft("");
     setReplyTo(null); setEditingId(null);
     setPartnerLastReadAt(null);
+    setPinnedConvIds([]);
     activeConvRef.current = null;
   }
 
@@ -610,6 +688,8 @@ export function useDMs(opts) {
     replyTo: replyTo, setReplyTo: setReplyTo, clearReplyTo: function () { setReplyTo(null); },
     editingId: editingId, editDraft: editDraft, setEditDraft: setEditDraft,
     partnerLastReadAt: partnerLastReadAt,
+    pinnedConvIds: pinnedConvIds,
+    pinConversation: pinConversation, unpinConversation: unpinConversation,
     loadConversations: loadConversations, openConversation: openConversation,
     openOrStartConversation: openOrStartConversation, closeConversation: closeConversation,
     sendMessage: sendMessage, acceptRequest: acceptRequest, declineRequest: declineRequest,

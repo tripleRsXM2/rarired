@@ -113,6 +113,30 @@ export function removeReaction(messageId,userId,emoji){
     .delete().eq('message_id',messageId).eq('user_id',userId).eq('emoji',emoji);
 }
 
+// ── Pinned conversations ──────────────────────────────────────────────────────
+
+// Rows in public.conversation_pins — one per (user, conversation) the
+// user has pinned. Sorted newest-pin-first.
+export function fetchPinnedConversationIds(userId){
+  return supabase.from("conversation_pins")
+    .select("conversation_id,pinned_at")
+    .eq("user_id", userId)
+    .order("pinned_at", { ascending: false });
+}
+
+export function pinConversationRow(userId, convId){
+  return supabase.from("conversation_pins")
+    .insert({ user_id: userId, conversation_id: convId })
+    .select("*").single();
+}
+
+export function unpinConversationRow(userId, convId){
+  return supabase.from("conversation_pins")
+    .delete()
+    .eq("user_id", userId)
+    .eq("conversation_id", convId);
+}
+
 // ── Presence ──────────────────────────────────────────────────────────────────
 
 export function updatePresence(userId){
