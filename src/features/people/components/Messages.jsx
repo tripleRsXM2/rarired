@@ -574,7 +574,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // column (user rule: list is anchored to the left, disappears when
   // it would be too close to the thread).
   var MAX_LIST_W = 280;
-  var LIST_GAP = 76; // ~2cm @ 96 DPI — minimum allowed gap
+  var LIST_GAP = 24; // minimum allowed gap between list.right and thread.left
   var LIST_LEFT_INSET = 8; // gutter between sidebar and list
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
   var threadLeft = viewport.sidebarW + Math.max(0, Math.floor((availableW - 680) / 2));
