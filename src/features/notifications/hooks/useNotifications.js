@@ -64,9 +64,24 @@ export function useNotifications(opts) {
       });
     }
 
+    // Realtime: DELETE events let us live-remove rows the moment a
+    // cleanup trigger fires (e.g. conv deleted → message_request notif
+    // gone; match voided → match_tag notif gone; challenge expired →
+    // challenge_received notif gone). notifications is REPLICA IDENTITY
+    // FULL so payload.old carries user_id — we filter by that here.
+    function handleNotifDelete(payload) {
+      var old = payload.old || {};
+      if (!old.id) return;
+      if (old.user_id && old.user_id !== uid) return;
+      setNotifications(function (ns) {
+        return ns.filter(function (n) { return n.id !== old.id; });
+      });
+    }
+
     var channel = supabase.channel("notifications:" + uid)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: "user_id=eq." + uid }, handleNotifChange)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: "user_id=eq." + uid }, handleNotifChange)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "notifications" }, handleNotifDelete)
       .subscribe();
 
     return function () { supabase.removeChannel(channel); };
