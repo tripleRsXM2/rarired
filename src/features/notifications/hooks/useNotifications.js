@@ -5,6 +5,39 @@ import * as N from "../services/notificationService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { getNotifType } from "../utils/notifUtils.js";
 
+// Notification types that should display a mini scorecard (sets + W/L)
+// inline in the tray. Covers every match lifecycle event where the
+// recipient benefits from seeing the actual score without drilling in.
+var MATCH_CARD_TYPES = [
+  "match_tag", "match_confirmed", "match_disputed",
+  "match_corrected", "match_correction_requested",
+  "match_counter_proposed", "match_voided", "match_deleted",
+];
+
+// Fetch sets/result/participants for every match_id we'll render a card
+// for, then stitch the data onto the notification as `match`. Viewer
+// perspective is computed later in the UI (result is stored from the
+// submitter's view, so if the viewer is the opponent we invert it).
+async function enrichWithMatches(notifs, viewerId) {
+  var ids = [...new Set(
+    notifs
+      .filter(function (n) { return MATCH_CARD_TYPES.indexOf(n.type) >= 0; })
+      .map(function (n) { return n.match_id || n.entity_id; })
+      .filter(Boolean)
+  )];
+  if (!ids.length) return notifs;
+  var mr = await supabase.from("match_history")
+    .select("id,user_id,opponent_id,tagged_user_id,opp_name,sets,result,match_date,status,tourn_name")
+    .in("id", ids);
+  var mMap = {};
+  (mr.data || []).forEach(function (m) { mMap[m.id] = m; });
+  return notifs.map(function (n) {
+    var mid = n.match_id || n.entity_id;
+    if (!mid || !mMap[mid]) return n;
+    return Object.assign({}, n, { match: mMap[mid] });
+  });
+}
+
 export function useNotifications(opts) {
   var authUser             = (opts && opts.authUser) || null;
   var onMatchTagAccepted   = opts && opts.onMatchTagAccepted;
@@ -24,14 +57,16 @@ export function useNotifications(opts) {
       var fpr = fromIds.length ? await fetchProfilesByIds(fromIds, "id,name,avatar,avatar_url") : { data: [] };
       var fpMap = {};
       (fpr.data || []).forEach(function (p) { fpMap[p.id] = p; });
-      setNotifications(nr.data.map(function (n) {
+      var base = nr.data.map(function (n) {
         var fp = fpMap[n.from_user_id] || {};
         return Object.assign({}, n, {
           fromName: fp.name || "Someone",
           fromAvatar: fp.avatar || "?",
           fromAvatarUrl: fp.avatar_url || null,
         });
-      }));
+      });
+      var enriched = await enrichWithMatches(base, userId);
+      setNotifications(enriched);
     } else {
       setNotifications([]);
     }
@@ -56,6 +91,17 @@ export function useNotifications(opts) {
         fromAvatar: senderProfile.avatar,
         fromAvatarUrl: senderProfile.avatar_url,
       });
+      // If this is a match-lifecycle notification, fetch the match row so
+      // the tray can render an inline mini-scorecard (sets + W/L).
+      if (MATCH_CARD_TYPES.indexOf(enriched.type) >= 0) {
+        var mid = enriched.match_id || enriched.entity_id;
+        if (mid) {
+          var mr = await supabase.from("match_history")
+            .select("id,user_id,opponent_id,tagged_user_id,opp_name,sets,result,match_date,status,tourn_name")
+            .eq("id", mid).maybeSingle();
+          if (mr.data) enriched.match = mr.data;
+        }
+      }
       setNotifications(function (ns) {
         if (ns.some(function (x) { return x.id === enriched.id; })) {
           return ns.map(function (x) { return x.id === enriched.id ? enriched : x; });
