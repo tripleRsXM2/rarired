@@ -6,6 +6,7 @@
 // in ../utils/emojiData.js.
 
 import { useRef, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
 import { getPresence } from "../services/presenceService.js";
@@ -343,8 +344,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     <div style={{ display: "flex", minHeight: "60vh" }}>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
 
-      {/* Settings bottom-sheet (gear icon) */}
-      {showSettings && (
+      {/* Settings bottom-sheet (gear icon). Portaled — same fade-up
+          transform containing-block issue that bit the other overlays. */}
+      {showSettings && createPortal((
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.55)" }}
           onClick={function () { setShowSettings(false); }}>
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: t.bgCard, borderRadius: "20px 20px 0 0", padding: "20px 20px calc(20px + env(safe-area-inset-bottom))" }}
@@ -362,10 +364,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             </button>
           </div>
         </div>
-      )}
+      ), document.body)}
 
-      {/* Centered delete-conversation confirm (was a native window.confirm) */}
-      {showDeleteConfirm && (
+      {/* Centered delete-conversation confirm (was a native window.confirm).
+          Portaled to document.body so position:fixed centering is relative
+          to the actual viewport, not the .fade-up transformed ancestor. */}
+      {showDeleteConfirm && createPortal((
         <div
           role="dialog" aria-modal="true" aria-label="Delete conversation"
           onClick={function () { setShowDeleteConfirm(false); }}
@@ -417,7 +421,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 12, marginBottom: 4, borderBottom: "1px solid " + t.border }}>
@@ -581,8 +585,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         var isMine = menuState.message.sender_id === myId;
         var canEdit = isMine && !menuState.message.deleted_at &&
           (Date.now() - new Date(menuState.message.created_at)) < EDIT_WINDOW_MS;
-        // Delete options are gated to OWN messages only — you can't remove
-        // someone else's bubble from their device.
+        // "Delete for me" is available on ANY message (own or partner's) —
+        // it's a local hide, stored in localStorage, so it only affects my
+        // view. "Unsend" is own-only (soft-deletes in DB for both parties).
         var items = [
           { label: "Reply", icon: IconReply, show: true,
             action: function () { dms.setReplyTo(menuState.message); closeMenu(); setTimeout(function () { inputRef.current && inputRef.current.focus(); }, 50); } },
@@ -590,12 +595,17 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             action: function () { navigator.clipboard && navigator.clipboard.writeText(menuState.message.content); closeMenu(); } },
           { label: "Edit", icon: IconEdit, show: canEdit,
             action: function () { dms.startEdit(menuState.message); closeMenu(); } },
-          { label: "Delete for me", icon: IconTrash, show: isMine && !menuState.message.deleted_at,
+          { label: "Delete for me", icon: IconTrash, show: !menuState.message.deleted_at,
             action: function () { hideForMe(menuState.message.id); } },
           { label: "Unsend", icon: IconUnsend, show: isMine && !menuState.message.deleted_at, danger: true,
             action: function () { dms.deleteMessage(menuState.message.id); closeMenu(); } },
         ].filter(function (i) { return i.show; });
-        return (
+        // Portal to document.body — the People tab wraps its content in
+        // a .fade-up div with a CSS transform, which creates a containing
+        // block for position:fixed descendants and offsets their
+        // viewport-relative coords. Portaling escapes that ancestor so
+        // the menu sits exactly where computeContextMenuPos says.
+        return createPortal((
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={closeMenu}>
             <div style={{
               position: "fixed",
@@ -646,7 +656,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               })}
             </div>
           </div>
-        );
+        ), document.body);
       })()}
 
       {/* Reaction emoji picker (triggered by + on the context menu strip) */}

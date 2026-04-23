@@ -110,9 +110,9 @@ taps Accept. During that state:
 sender cannot re-request during that window.
 
 ### Delete semantics
-- **Delete for me** — hides the message from my view only. Stored client-side in `localStorage` under `cs_hidden_msgs_<uid>`. Available on own messages only (per Mdawg decision, 2026-04-22).
+- **Delete for me** — hides the message from my view only. Stored client-side in `localStorage` under `cs_hidden_msgs_<uid>`. Available on **any non-deleted message** (own or partner's) — it's local-only so it can't affect the other user (rule updated 2026-04-23 per Mdawg; previously own-only).
 - **Unsend** — soft-deletes in DB (`deleted_at` timestamp). Both parties see "Message deleted" in the thread. Available on own messages only.
-- **Other person's messages** — no delete options in the action menu.
+- **Other person's messages** — only "Delete for me" (hide locally). No "Unsend" — you can't modify the other user's DB state.
 
 ### Edit window
 Own, non-deleted messages are editable for 15 minutes after send.
