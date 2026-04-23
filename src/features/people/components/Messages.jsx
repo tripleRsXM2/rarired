@@ -384,8 +384,18 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var unreadStartIdx = computeUnreadDividerIdx(dms.threadMessages, myId, conv.lastReadAt);
   var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(dms.threadMessages, myId, dms.partnerLastReadAt);
 
+  // Anchor the thread to the viewport so the input bar hugs the bottom
+  // of the visible area regardless of message count. Uses the global
+  // --cs-nav-h / --cs-tab-h tokens (mobile top-nav + bottom tab-bar —
+  // both 0 on desktop) plus a per-page chrome allowance for the
+  // People-tab header + Messages/Friends/... tabs that sit above this
+  // component. Messages list inside scrolls on overflow.
   return (
-    <div style={{ display: "flex", minHeight: "60vh" }}>
+    <div className="cs-dm-thread" style={{
+      display: "flex",
+      height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 140px)",
+      minHeight: 420,
+    }}>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
 
       {/* Conversation settings. Desktop: centered modal with a modest
@@ -541,8 +551,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       )}
 
-      {/* Messages */}
-      <div style={{ flex: 1 }}>
+      {/* Messages — scroll region. flex:1 fills between the fixed-height
+          header (above) and the fixed-height input footer (below). */}
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingRight: 4 }}>
         {dms.threadLoading ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: t.textTertiary, fontSize: 13 }}>Loading…</div>
         ) : visibleMessages.length === 0 ? (
@@ -797,15 +808,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       )}
 
-      {/* Sticky input region — stays pinned to the viewport bottom as the
-          user scrolls through the thread. Contains the reply preview, the
-          pending-request accept banner (when relevant), and the input bar.
-          Background is opaque so scrolling content slides behind it. */}
+      {/* Input footer — non-shrinking row at the bottom of the flex
+          column. The messages area above owns the scroll, so this stays
+          pinned to the viewport bottom naturally without position:sticky. */}
       <div style={{
-        position: "sticky", bottom: 0, zIndex: 10,
-        background: t.bg, marginTop: 8,
-        // Extend the background a bit above so the content doesn't peek
-        // through at the top edge of the sticky region.
+        flexShrink: 0,
+        background: t.bg,
         paddingTop: 8,
       }}>
       {/* Reply preview */}
