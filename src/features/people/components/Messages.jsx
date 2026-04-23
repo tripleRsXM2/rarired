@@ -149,15 +149,30 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   // activeConv → URL. Pushing the new URL means Back goes to /people/messages,
   // which is the natural "close the thread" gesture.
+  //
+  // IMPORTANT: wait for conversationsLoaded AND only strip a URL that
+  // already had a convId when we have an earlier non-null state. On a
+  // deep-link reload the sequence is:
+  //   1st render: activeConv=null, urlConvId=<id>  ← URL drives here
+  //   loadConversations resolves
+  //   URL→activeConv effect runs: openConversation(found) → activeConv=<conv>
+  // Without the loaded gate, the activeConv→URL effect would fire
+  // during step 1 and navigate away from <id> before step 3 can act.
   useEffect(function () {
+    if (!dms.conversationsLoaded) return;
     var current = dms.activeConv && dms.activeConv.id;
     if (current && current !== urlConvId) {
       navigate("/people/messages/" + current);
     } else if (!current && urlConvId) {
-      navigate("/people/messages");
+      // We're loaded + have no conv + URL still points to one. This only
+      // happens if the convId in the URL isn't in my conversations (stale
+      // or different account). Drop it so we don't loop.
+      var all = [].concat(dms.conversations || [], dms.requests || []);
+      var stillResolvable = all.some(function (c) { return c.id === urlConvId; });
+      if (!stillResolvable) navigate("/people/messages", { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dms.activeConv && dms.activeConv.id]);
+  }, [dms.activeConv && dms.activeConv.id, dms.conversationsLoaded]);
 
   function hideForMe(msgId) {
     setHiddenIds(function (prev) {
