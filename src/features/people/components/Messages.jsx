@@ -26,7 +26,7 @@ function useDMViewport() {
   var isDesktop   = w >= 1024;
   var sidebarW    = !isDesktop ? 0 : (w >= 1200 ? 220 : 64);
   var rightPanelW = w >= 1440 ? 292 : 0;
-  return { isDesktop: isDesktop, sidebarW: sidebarW, rightPanelW: rightPanelW };
+  return { isDesktop: isDesktop, sidebarW: sidebarW, rightPanelW: rightPanelW, width: w };
 }
 import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
@@ -475,7 +475,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // Two-pane only applies when we have room to break out of the 680px
   // reading column. Otherwise fall back to the mobile-style list-OR-
   // thread stack so the content still fits the column.
-  var twoPane = canBreakOut;
+  var twoPane = twoPaneEligible;
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
 
@@ -498,17 +498,21 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // On desktop the thread pane stays pinned to where the rest of the
   // app's 680px reading column lives (Friends list, Discover, etc. —
   // visually consistent across tabs). The conversation list pane pokes
-  // 280px out to the left of that column. Net width = 280 + 680 = 960,
-  // and the pull-left negative margin is exactly the list pane's width.
-  //
-  // Only apply the break-out when the viewport is wide enough to fit
-  // the list without overlapping the sidebar — otherwise we'd horizontal-
-  // scroll or clip. Needs: sidebarW + LIST_W + 680 + (rightPanelW at
-  // that breakpoint) <= 100vw, plus a 16px safety gutter on each side.
-  var LIST_W = 280;
-  var needW = viewport.sidebarW + LIST_W + 680 + viewport.rightPanelW + 32;
-  var canBreakOut = isDesktopDM && typeof window !== "undefined" && window.innerWidth >= needW;
-  var breakoutStyle = canBreakOut
+  // out to the left of that column. The exact list width is clamped to
+  // the available left space (reading-column.left − sidebar − 8px
+  // gutter) so it never overlaps the sidebar at narrower desktops.
+  var MAX_LIST_W = 280;
+  // Reading column's left edge, in "main-content" coords: (availW−680)/2.
+  // Clamp the list to that minus an 8px gutter so it sits flush with
+  // the sidebar's right edge without touching it.
+  var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
+  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 8);
+  var LIST_W = Math.min(MAX_LIST_W, listRoom);
+  // Two-pane when we have at least enough room for a meaningfully wide
+  // list (180px — below that it reads as junk). Otherwise fall back to
+  // single-column stack (same as mobile).
+  var twoPaneEligible = isDesktopDM && LIST_W >= 180;
+  var breakoutStyle = twoPaneEligible
     ? {
         position: "relative",
         width: (LIST_W + 680) + "px",
