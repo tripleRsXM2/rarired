@@ -616,6 +616,24 @@ export function useDMs(opts) {
               });
             });
           });
+          // Pending-incoming rows live in `requests`, not `conversations`.
+          // When the requester sends their first DM, the DB trigger bumps
+          // last_message_preview on the pending conv row. Mirror that
+          // change into requests so the preview renders under the name.
+          // (Previously only conversations was touched, so the recipient
+          // saw "Alex wants to message you" with no message body.)
+          if (conv.status === "pending") {
+            setRequests(function (rs) {
+              return rs.map(function (r) {
+                if (r.id !== conv.id) return r;
+                return Object.assign({}, r, {
+                  last_message_preview: conv.last_message_preview,
+                  last_message_at: conv.last_message_at,
+                  last_message_sender_id: conv.last_message_sender_id,
+                });
+              });
+            });
+          }
         }
       )
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "conversations" }, handleDelete)
