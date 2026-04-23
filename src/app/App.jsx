@@ -146,8 +146,15 @@ export default function App(){
     authUser:auth.authUser,
     updateMatchTagStatus:markMatchTagStatus,
     onMatchTagAccepted:function(matchRow){
-      var friendResult=matchHistory.applyAcceptedTagMatch(matchRow);
-      if(auth.authUser)currentUser.bumpMatchStats(auth.authUser.id, friendResult);
+      // Server RPC (confirm_match_and_update_stats) already ran
+      // apply_match_outcome — real ELO + stats applied atomically.
+      // Client only needs to (a) splice the confirmed row into local history
+      // and (b) re-read our profile to pick up the server-updated stats.
+      // The old client-side bumpMatchStats path is dead — the
+      // profiles_locked_columns_guard trigger rejects any user write to
+      // ranking_points / wins / losses / matches_played.
+      matchHistory.applyAcceptedTagMatch(matchRow);
+      if(auth.authUser)currentUser.refreshProfileUI(auth.authUser.id);
       setTab("home");
     },
   });

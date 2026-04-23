@@ -150,13 +150,28 @@ export function useNotifications(opts) {
   }
 
   // ── acceptMatchTag / declineMatchTag ─────────────────────────────────────────
+  // Accept uses the SECURITY DEFINER RPC (confirm_match_and_update_stats)
+  // because profile stats columns (ranking_points / wins / losses /
+  // matches_played / streak_*) are locked from user writes by a trigger
+  // (profiles_locked_columns_guard). Only the server can update them, and
+  // the RPC calls apply_match_outcome internally to run the real ELO.
+  //
+  // The old path did a direct UPDATE on match_history + a client-side
+  // bump on profiles, which fails with "profiles.ranking_points is not
+  // user-writable" the moment the locked-columns guard is in place.
   async function acceptMatchTag(n) {
-    if (!updateMatchTagStatus) return;
-    var mr = await updateMatchTagStatus(n.match_id, "accepted", true);
+    var rpc = await supabase.rpc('confirm_match_and_update_stats', { p_match_id: n.match_id });
+    if (rpc.error) {
+      console.error('[acceptMatchTag] confirm RPC failed:', rpc.error);
+      return { error: rpc.error };
+    }
+    // Fetch the now-confirmed row so the caller can wire it into local state
+    var mr = await supabase.from('match_history').select('*').eq('id', n.match_id).maybeSingle();
     await N.deleteNotification(n.id);
     setNotifications(function (ns) { return ns.filter(function (x) { return x.id !== n.id; }); });
     setShowNotifications(false);
     if (mr.data && onMatchTagAccepted) onMatchTagAccepted(mr.data);
+    return { error: null };
   }
 
   async function declineMatchTag(n) {
