@@ -52,6 +52,9 @@ var mockSoftDelete = vi.fn();
 var mockDeleteConv = vi.fn();
 var mockDecline = vi.fn();
 var mockUpdatePresence = vi.fn();
+var mockFetchPinned = vi.fn();
+var mockPinRow = vi.fn();
+var mockUnpinRow = vi.fn();
 
 vi.mock("../services/dmService.js", function () {
   return {
@@ -72,6 +75,9 @@ vi.mock("../services/dmService.js", function () {
     deleteConversation: function () { return mockDeleteConv.apply(null, arguments); },
     declineConversation: function () { return mockDecline.apply(null, arguments); },
     updatePresence: function () { return mockUpdatePresence.apply(null, arguments); },
+    fetchPinnedConversationIds: function () { return mockFetchPinned.apply(null, arguments); },
+    pinConversationRow: function () { return mockPinRow.apply(null, arguments); },
+    unpinConversationRow: function () { return mockUnpinRow.apply(null, arguments); },
   };
 });
 
@@ -93,7 +99,8 @@ function resetMocks() {
   [mockFetchConversations, mockGetOrCreate, mockFetchThread, mockFetchReactions,
    mockFetchReads, mockSendMessage, mockUpdateConvLastMsg, mockUpsertRead,
    mockFetchPartnerRead, mockUpdateStatus, mockAddReaction, mockRemoveReaction,
-   mockEditMessage, mockSoftDelete, mockDeleteConv, mockDecline, mockUpdatePresence]
+   mockEditMessage, mockSoftDelete, mockDeleteConv, mockDecline, mockUpdatePresence,
+   mockFetchPinned, mockPinRow, mockUnpinRow]
     .forEach(function (m) { m.mockReset(); });
   mockFetchConversations.mockResolvedValue({ data: [] });
   mockFetchThread.mockResolvedValue({ data: [] });
@@ -103,6 +110,9 @@ function resetMocks() {
   mockFetchPartnerRead.mockResolvedValue({ data: null });
   mockUpdateConvLastMsg.mockResolvedValue({ error: null });
   mockUpdatePresence.mockResolvedValue({ error: null });
+  mockFetchPinned.mockResolvedValue({ data: [] });
+  mockPinRow.mockResolvedValue({ data: {}, error: null });
+  mockUnpinRow.mockResolvedValue({ error: null });
 }
 
 function fireRealtime(table, event, payload) {
@@ -278,6 +288,53 @@ describe("useDMs — openOrStartConversation error surface", function () {
       result = await hook.result.current.openOrStartConversation({ id: "p-dec", name: "Block" });
     });
     expect(result.error).toMatch(/can't message Block right now/);
+  });
+});
+
+describe("useDMs — pinned conversations", function () {
+  beforeEach(resetMocks);
+
+  it("loads pinned ids from the service on bootstrap", async function () {
+    mockFetchPinned.mockResolvedValueOnce({ data: [{ conversation_id: "c-a", pinned_at: "t1" }, { conversation_id: "c-b", pinned_at: "t0" }] });
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+    // fetchPinnedConversationIds is fire-and-forget — wait a microtask.
+    await act(async function () { await Promise.resolve(); });
+    expect(hook.result.current.pinnedConvIds).toEqual(["c-a", "c-b"]);
+  });
+
+  it("pinConversation adds optimistically and commits", async function () {
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () {
+      var r = await hook.result.current.pinConversation("c-new");
+      expect(r.error).toBeNull();
+    });
+    expect(hook.result.current.pinnedConvIds).toEqual(["c-new"]);
+    expect(mockPinRow).toHaveBeenCalledWith("me-uid", "c-new");
+  });
+
+  it("pinConversation rolls back on server error", async function () {
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    mockPinRow.mockResolvedValueOnce({ data: null, error: { message: "nope" } });
+    await act(async function () {
+      var r = await hook.result.current.pinConversation("c-fail");
+      expect(r.error).toBe("nope");
+    });
+    expect(hook.result.current.pinnedConvIds).toEqual([]);
+  });
+
+  it("unpinConversation removes + commits", async function () {
+    mockFetchPinned.mockResolvedValueOnce({ data: [{ conversation_id: "c-a" }] });
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+    await act(async function () { await Promise.resolve(); });
+
+    await act(async function () {
+      var r = await hook.result.current.unpinConversation("c-a");
+      expect(r.error).toBeNull();
+    });
+    expect(hook.result.current.pinnedConvIds).toEqual([]);
+    expect(mockUnpinRow).toHaveBeenCalledWith("me-uid", "c-a");
   });
 });
 

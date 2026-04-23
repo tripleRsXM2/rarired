@@ -19,6 +19,7 @@ trade a quick note. Everything here is scoped to 1-to-1.
 | `direct_messages` | Every message. Columns: `id, conversation_id, sender_id, content, reply_to_id (nullable), edited_at, deleted_at, created_at` | Inserted by client (RLS-scoped to `sender_id = auth.uid()`). |
 | `message_reads` | Per-user-per-conv `last_read_at`. Written via `mark_conversation_read` RPC. | Security-definer RPC; client cannot write directly. |
 | `message_reactions` | `{id, message_id, user_id, emoji}`. Unique (message_id, user_id, emoji). | Client inserts/deletes with RLS. |
+| `conversation_pins` | `{user_id, conversation_id, pinned_at}` (compound PK). Per-user pin. | Client inserts/deletes with RLS (`user_id = auth.uid()`). |
 
 ### Migrations (the important ones)
 
@@ -26,6 +27,7 @@ trade a quick note. Everything here is scoped to 1-to-1.
 - `dm_friendship_override.sql` — schema support for friends-bypass-request-gate rule.
 - `message_reads_participant_select.sql` — RLS: partner can `SELECT` read rows for "Seen" receipts.
 - `notification_upsert_rpc.sql` — `upsert_message_notification` RPC + partial unique index on `notifications (user_id, entity_id) where type='message'`. Collapses N new messages in a conv to one tray row.
+- `20260423_conversation_pins.sql` — `conversation_pins` table (per-user pins), RLS (owner-only), realtime publication, `REPLICA IDENTITY FULL` so DELETE events carry the conversation_id back to the client.
 
 ### RPCs called by the client
 
@@ -45,6 +47,7 @@ Defined in `useDMs.js`. All four subscribe on mount, unsubscribe on unmount.
 | `msgs:<convId>` | `direct_messages` INSERT/UPDATE `conversation_id=convId` | Live thread render; dedupe by id via `appendMessageIfNew`; call `mark_conversation_read` when message is from partner. |
 | `reads:<convId>` | `message_reads` INSERT/UPDATE `conversation_id=convId` | Partner's `last_read_at` for the "Seen" receipt on my sent messages. |
 | `rx:<convId>` | `message_reactions` INSERT/DELETE (filtered client-side to current thread's message ids) | Live reaction add/remove; dedupes optimistic placeholders by (user_id, emoji) pair. |
+| `pins:<uid>` | `conversation_pins` INSERT/DELETE `user_id=uid` | Multi-device pin sync — pinning on tab A immediately moves the conv on tab B. |
 
 ### Notification types that touch messaging
 
@@ -116,7 +119,6 @@ Own, non-deleted messages are editable for 15 minutes after send.
 
 ## Open questions / tracked follow-ups
 
-- **Pinned conversations** — Relay design has a Pinned section. Requires a `conversations.pinned_by_user1 bool` + `pinned_by_user2 bool` migration. Product decision pending.
 - **Out-of-order realtime delivery** — current list uses append-order, not re-sort-by-created_at. Hasn't caused a visible bug in practice. Tracked for a later fix.
 - **Multi-device own-reads sync** — if I read in tab A, tab B's list row doesn't clear until a realtime event from the partner fires. Nice-to-have.
 - **Message search** — not built. Punt.
@@ -124,3 +126,4 @@ Own, non-deleted messages are editable for 15 minutes after send.
 
 ## Last Updated By Module
 - v0 — 2026-04-23, Phase 1 of the messaging integration plan. Inventory of shipped state.
+- v1 — 2026-04-23, Phase 5 UI polish: pinned conversations (new `conversation_pins` table + realtime + UI section), tighter conversation rows, unread accent ring, in-thread date separators, optional desktop-only details drawer (pin toggle + "View profile" shortcut).

@@ -25,6 +25,9 @@ function makeDms(overrides) {
     editDraft: "",
     setEditDraft: vi.fn(),
     partnerLastReadAt: null,
+    pinnedConvIds: [],
+    pinConversation: vi.fn().mockResolvedValue({ error: null }),
+    unpinConversation: vi.fn().mockResolvedValue({ error: null }),
     openConversation: vi.fn(),
     closeConversation: vi.fn(),
     sendMessage: vi.fn(),
@@ -61,6 +64,34 @@ describe("Messages — conversation list", function () {
     expect(screen.getByText("Alex")).toBeInTheDocument();
     expect(screen.getByText(/wants to message you/i)).toBeInTheDocument();
     expect(screen.getByText(/"hey!"/)).toBeInTheDocument();
+  });
+
+  it("splits the list into Pinned + All when a conv is pinned", function () {
+    var common = { status: "accepted", last_message_preview: "hi", last_message_at: new Date().toISOString(), last_message_sender_id: "p1", hasUnread: false };
+    var dms = makeDms({
+      pinnedConvIds: ["c-pin"],
+      conversations: [
+        Object.assign({ id: "c-pin", partner: { id: "p1", name: "Pinned Pal", avatar: "PP" } }, common),
+        Object.assign({ id: "c-all", partner: { id: "p2", name: "Other",      avatar: "OT" } }, common),
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    expect(screen.getByText(/^Pinned$/)).toBeInTheDocument();
+    expect(screen.getByText(/^All$/)).toBeInTheDocument();
+    expect(screen.getByText("Pinned Pal")).toBeInTheDocument();
+    expect(screen.getByText("Other")).toBeInTheDocument();
+  });
+
+  it("shows 'Recent' section when no pins", function () {
+    var dms = makeDms({
+      conversations: [{
+        id: "c1", partner: { id: "p1", name: "Alex", avatar: "AL" },
+        status: "accepted", last_message_preview: "hi", last_message_at: new Date().toISOString(),
+        last_message_sender_id: "p1", hasUnread: false,
+      }],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    expect(screen.getByText(/^Recent$/)).toBeInTheDocument();
   });
 
   it("opens a conversation on tap", function () {
@@ -281,6 +312,48 @@ describe("Messages — thread view", function () {
     render(<Messages t={t} authUser={authUser} dms={dms} />);
     fireEvent.click(screen.getByLabelText(/insert emoji/i));
     expect(screen.getByRole("dialog", { name: /pick an emoji/i })).toBeInTheDocument();
+  });
+
+  it("renders a date separator for the first message of each day", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [
+        { id: "m1", sender_id: "me-uid", content: "early",  created_at: "2026-04-20T09:00:00Z" },
+        { id: "m2", sender_id: "p1",     content: "later",  created_at: "2026-04-20T20:00:00Z" },
+        { id: "m3", sender_id: "me-uid", content: "nextday",created_at: "2026-04-22T05:00:00Z" },
+      ],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    // Two separators expected (one per distinct day).
+    expect(screen.getByText("early")).toBeInTheDocument();
+    expect(screen.getByText("later")).toBeInTheDocument();
+    expect(screen.getByText("nextday")).toBeInTheDocument();
+  });
+
+  it("toggles the Details drawer from the thread header", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [{ id: "m1", sender_id: "me-uid", content: "hi", created_at: new Date().toISOString() }],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    // Details is closed initially — no "Details" header.
+    expect(screen.queryByRole("complementary")).toBeNull();
+    // Toggle button has aria-label "Show details" when closed.
+    fireEvent.click(screen.getByLabelText(/show details/i));
+    // Aside has aria-label "Conversation details".
+    expect(screen.getByLabelText(/conversation details/i)).toBeInTheDocument();
+  });
+
+  it("Pin button in the drawer calls dms.pinConversation", function () {
+    var dms = makeDms({
+      activeConv: baseConv,
+      threadMessages: [{ id: "m1", sender_id: "me-uid", content: "hi", created_at: new Date().toISOString() }],
+    });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByLabelText(/show details/i));
+    var drawer = screen.getByLabelText(/conversation details/i);
+    fireEvent.click(within(drawer).getByText(/^Pin conversation$/));
+    expect(dms.pinConversation).toHaveBeenCalledWith("c1");
   });
 
   // Regression: picking an emoji from the input picker should insert it
