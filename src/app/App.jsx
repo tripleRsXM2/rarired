@@ -269,6 +269,17 @@ export default function App(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[dms.activeConv&&dms.activeConv.id]);
 
+  // Close the NotificationsPanel whenever a conversation thread opens.
+  // The panel is a position:fixed 380px right-side overlay with a
+  // full-viewport click-outside scrim (z:45). On desktop the overlay
+  // sits exactly on top of where the DM thread renders, which swallows
+  // clicks on bubbles / action menus / emoji button. "One drawer at a
+  // time": opening a thread implicitly dismisses the panel.
+  useEffect(function(){
+    if(dms.activeConv) notifications.setShowNotifications(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[dms.activeConv&&dms.activeConv.id]);
+
   // Auto-dismiss any "friend_request" notifications from senders who are
   // already friends — happens once the request is accepted (from requests tab,
   // settings, or notifications panel), making the notification stale.
