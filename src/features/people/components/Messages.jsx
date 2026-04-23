@@ -569,15 +569,23 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // column actually fits 280 + its 24px gap from the thread. When it
   // can't, we collapse to single-column (same mobile fallback).
   var MAX_LIST_W = 280;
-  // Minimum gap between the list's right edge and the thread's left
-  // edge. Set to ~2cm (76px @ 96 DPI) per user feedback — 8px felt
-  // too cramped; they want a clear breathing gap, and when the window
-  // can no longer maintain that gap the list collapses.
-  var LIST_GAP = 76;
+  // The list is now positioned immediately to the LEFT of the thread
+  // column (not flush with the sidebar), separated by a fixed ~2cm
+  // gap. That way it sits close to the thread on wide viewports
+  // instead of hugging the sidebar and stranding 100+px of empty
+  // space between them. When the viewport narrows enough that the
+  // list's ideal left edge would collide with the sidebar, we snap
+  // to single-column.
+  var LIST_GAP = 76; // ~2cm @ 96 DPI
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
-  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - LIST_GAP);
+  // Thread's left edge in viewport coords (PeopleTab centers content
+  // in the main area with max-width:680).
+  var threadLeft = viewport.sidebarW + Math.max(0, Math.floor((availableW - 680) / 2));
+  var idealListLeft = threadLeft - LIST_GAP - MAX_LIST_W;
+  var minListLeft = viewport.sidebarW + 8; // 8px gutter from sidebar
   var LIST_W = MAX_LIST_W;
-  var twoPane = isDesktopDM && listRoom >= MAX_LIST_W;
+  var twoPane = isDesktopDM && idealListLeft >= minListLeft;
+  var LIST_LEFT = idealListLeft;
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
   return (
@@ -598,7 +606,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             <div className="cs-dm-list-pane" style={{
               position: "fixed",
               top: "var(--cs-nav-h)",
-              left: viewport.sidebarW + "px",
+              left: LIST_LEFT + "px",
               width: LIST_W + "px",
               height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
               background: t.bg,
