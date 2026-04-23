@@ -569,8 +569,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // column actually fits 280 + its 24px gap from the thread. When it
   // can't, we collapse to single-column (same mobile fallback).
   var MAX_LIST_W = 280;
+  // Gap between the list's right edge and the thread's left edge.
+  // Small on purpose — user wants the list to stick around until
+  // there's literally no more room before it collapses. 8px is enough
+  // breathing room visually without eating into the threshold.
+  var LIST_GAP = 8;
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
-  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 24);
+  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - LIST_GAP);
   var LIST_W = MAX_LIST_W;
   var twoPane = isDesktopDM && listRoom >= MAX_LIST_W;
   var showList = twoPane || !conv;
