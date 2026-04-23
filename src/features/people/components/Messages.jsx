@@ -563,15 +563,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // sidebar) via position:fixed, with empty space between it and the
   // thread. This matches the pattern the user sketched in feedback
   // instead of pinning the list immediately next to the thread column.
+  // List width is ADAPTIVE to whatever fits in the gutter left of the
+  // 680 reading column. No MIN clamp — forcing it wider than the
+  // available gutter was making the list overlap the thread at
+  // specific viewport widths as the user resized the window
+  // (user-reported: "recent takes over messages during specific
+  // moments"). When the gutter gets too narrow to host a usable list
+  // (<140px) we collapse to single-column (list OR thread, like mobile).
   var MAX_LIST_W = 280;
-  var MIN_LIST_W = 220;
+  var MIN_VIABLE_LIST_W = 140;
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
-  // Available space to the left of the reading column, minus an 8px
-  // gutter from the sidebar and a 16px gap before the thread. Clamp
-  // list width 220–280px.
   var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 24);
-  var LIST_W = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, listRoom));
-  var twoPane = isDesktopDM;
+  var LIST_W = Math.min(MAX_LIST_W, listRoom);
+  var twoPane = isDesktopDM && LIST_W >= MIN_VIABLE_LIST_W;
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
   return (
