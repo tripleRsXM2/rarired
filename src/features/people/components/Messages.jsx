@@ -527,13 +527,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         ? createPortal((
             <div className="cs-dm-list-pane" style={{
               position: "fixed",
-              top: "calc(var(--cs-nav-h) + 140px)",
-              left: viewport.sidebarW + 8 + "px",
+              top: "var(--cs-nav-h)",
+              left: viewport.sidebarW + "px",
               width: LIST_W + "px",
-              height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 160px)",
-              background: t.bgCard,
-              border: "1px solid " + t.border,
-              borderRadius: 12,
+              height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
+              background: t.bg,
+              borderRight: "1px solid " + t.border,
               overflowY: "auto",
               zIndex: 5,
             }}>
