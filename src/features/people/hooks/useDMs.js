@@ -550,9 +550,31 @@ export function useDMs(opts) {
       var pr = await fetchProfilesByIds([partnerId], PARTNER_FIELDS);
       var partner = (pr.data && pr.data[0]) || { id: partnerId, name: "Player", avatar: "PL" };
 
+      // Race: the DB emits three events in order when a draft materializes
+      // with its first DM:
+      //   (1) INSERT conversations  (preview = null)
+      //   (2) INSERT direct_messages
+      //   (3) UPDATE conversations  (preview populated by trigger)
+      // The UPDATE realtime can arrive WHILE the INSERT handler is
+      // awaiting fetchProfilesByIds above — at that moment the
+      // conversations / requests state hasn't been populated yet, so the
+      // UPDATE's state.map is a no-op. When we then add the row below
+      // with payload.new we'd end up with an empty preview forever
+      // (until the next message).
+      //
+      // Fix: re-fetch the conversation row from the DB here so we pick
+      // up whatever the trigger has already written, regardless of event
+      // ordering.
+      var fresh = await supabase.from("conversations").select("*")
+        .eq("id", conv.id).maybeSingle();
+      if (fresh && fresh.data) conv = fresh.data;
+
       if (conv.status === "pending" && isFriendId(partnerId)) {
         await D.updateConversationStatus(conv.id, "accepted");
-        var acceptedConv = Object.assign({}, conv, { status: "accepted", partner: partner, hasUnread: !!conv.last_message_at });
+        var acceptedConv = Object.assign({}, conv, {
+          status: "accepted", partner: partner,
+          hasUnread: conv.last_message_sender_id && conv.last_message_sender_id !== uid,
+        });
         setConversations(function (cs) {
           if (cs.some(function (c) { return c.id === conv.id; })) return cs;
           return [acceptedConv].concat(cs);
