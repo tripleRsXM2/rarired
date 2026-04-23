@@ -11,6 +11,7 @@ function makeDms(overrides) {
   var base = {
     conversations: [],
     requests: [],
+    conversationsLoaded: true,
     activeConv: null,
     threadMessages: [],
     reactions: {},
@@ -77,7 +78,7 @@ describe("Messages — conversation list", function () {
     });
     render(<Messages t={t} authUser={authUser} dms={dms} />);
     expect(screen.getByText(/^Pinned$/)).toBeInTheDocument();
-    expect(screen.getByText(/^All$/)).toBeInTheDocument();
+    expect(screen.getByText(/^All messages$/)).toBeInTheDocument();
     expect(screen.getByText("Pinned Pal")).toBeInTheDocument();
     expect(screen.getByText("Other")).toBeInTheDocument();
   });

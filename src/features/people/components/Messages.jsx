@@ -7,6 +7,27 @@
 
 import { useRef, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+
+// ── Viewport hook ────────────────────────────────────────────────────────
+// Tracks viewport width and returns {isDesktop, sidebarW, rightPanelW}.
+// Breakpoints mirror the `.cs-sidebar-col` / `.cs-right-col` media queries
+// in providers.jsx so the Messages two-pane layout can sit flush against
+// both chrome edges without overlapping them.
+function useDMViewport() {
+  var [w, setW] = useState(function () {
+    return typeof window !== "undefined" ? window.innerWidth : 1024;
+  });
+  useEffect(function () {
+    if (typeof window === "undefined") return;
+    function onResize() { setW(window.innerWidth); }
+    window.addEventListener("resize", onResize);
+    return function () { window.removeEventListener("resize", onResize); };
+  }, []);
+  var isDesktop   = w >= 1024;
+  var sidebarW    = !isDesktop ? 0 : (w >= 1200 ? 220 : 64);
+  var rightPanelW = w >= 1440 ? 292 : 0;
+  return { isDesktop: isDesktop, sidebarW: sidebarW, rightPanelW: rightPanelW, width: w };
+}
 import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
 import { getPresence } from "../services/presenceService.js";
@@ -251,125 +272,199 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     });
   }
 
-  // ── Conversation list (no active conv) ───────────────────────────────────
+  // ── Conversation list pane ────────────────────────────────────────────────
+  //
+  // Relay-inspired flat rows: no per-row card borders, just a hover/active
+  // background and a left accent strip on the selected conversation. Each
+  // row shows partner name, last message preview (with "You: " prefix for
+  // own messages), time on the right, and either an unread count pill or a
+  // tiny "✓ Seen" hint when my last message has been read by the partner.
 
-  if (!dms.activeConv) {
+  var viewport = useDMViewport();
+  var isDesktopDM = viewport.isDesktop;
+
+  function renderConvRow(conv, isPinnedFlag) {
+    var hasUnread = conv.hasUnread;
+    var isPending = conv.status === "pending";
+    var isMeLast = conv.last_message_sender_id === myId;
+    var isActive = dms.activeConv && dms.activeConv.id === conv.id;
+    var seenByPartner = conv.lastMsgSeenByPartner;
+    var preview = isPending
+      ? "Request pending…"
+      : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
+    return (
+      <button key={conv.id} onClick={function () { dms.openConversation(conv); }}
+        style={{
+          width: "100%",
+          background: isActive ? t.accentSubtle : "transparent",
+          border: "none",
+          borderLeft: "3px solid " + (isActive ? t.accent : "transparent"),
+          padding: "10px 14px",
+          display: "flex", gap: 12, alignItems: "center",
+          cursor: "pointer", textAlign: "left",
+          transition: "background 0.12s ease",
+        }}
+        onMouseEnter={function (e) { if (!isActive) e.currentTarget.style.background = t.bgTertiary; }}
+        onMouseLeave={function (e) { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={42} />
+          <PresenceDot profile={conv.partner} t={t} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{
+              fontSize: 14, fontWeight: hasUnread ? 700 : 600,
+              color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{conv.partner.name}</span>
+            {isPinnedFlag && <span style={{ color: t.textTertiary, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
+            <span style={{ flex: 1 }}/>
+            <span style={{
+              fontSize: 11, flexShrink: 0,
+              color: hasUnread ? t.accent : t.textTertiary,
+              fontWeight: hasUnread ? 600 : 400,
+            }}>{formatMessageTime(conv.last_message_at)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+            <span style={{
+              flex: 1, minWidth: 0,
+              fontSize: 13, color: hasUnread ? t.text : t.textSecondary,
+              fontWeight: hasUnread ? 500 : 400,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{preview}</span>
+            {/* Seen / sent indicator — only on rows where MY last message is
+                newest. Single tick = sent, double tick = seen. Matches
+                WhatsApp's convention so users read it instantly. */}
+            {isMeLast && !hasUnread && !isPending && (
+              <span
+                title={seenByPartner ? "Seen" : "Sent"}
+                style={{
+                  flexShrink: 0, display: "inline-flex", alignItems: "center",
+                  color: seenByPartner ? t.accent : t.textTertiary,
+                  fontSize: 11, lineHeight: 1,
+                }}>
+                {seenByPartner ? "✓✓" : "✓"}
+              </span>
+            )}
+            {hasUnread && (
+              <span style={{
+                background: t.accent, color: "#fff",
+                fontSize: 10, fontWeight: 700,
+                minWidth: 18, height: 18, borderRadius: 9,
+                padding: "0 6px", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}>{conv.unread_count || ""}</span>
+            )}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  function renderConvList() {
     var allEmpty = dms.conversations.length === 0 && dms.requests.length === 0;
+
+    // Distinguish "still fetching" from "fetched and empty" so a fresh
+    // mount doesn't flash the empty-state card before the real list
+    // lands (user-reported: "sometimes messages don't show on mobile").
+    if (!dms.conversationsLoaded && allEmpty) {
+      return (
+        <div style={{ padding: "48px 20px", textAlign: "center", color: t.textTertiary, fontSize: 13 }}>
+          Loading messages…
+        </div>
+      );
+    }
+
+    // Split pinned vs all. Pending-out convs never pin.
+    var pinnedSet = {};
+    (dms.pinnedConvIds || []).forEach(function (id) { pinnedSet[id] = true; });
+    var pinned = (dms.pinnedConvIds || [])
+      .map(function (id) { return dms.conversations.find(function (c) { return c.id === id; }); })
+      .filter(Boolean);
+    var others = dms.conversations.filter(function (c) { return !pinnedSet[c.id]; });
+
+    function sectionHeader(label) {
+      return (
+        <div style={{ padding: "12px 14px 4px", fontSize: 11, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+      );
+    }
+
     return (
       <div>
         {dms.requests.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ padding: "12px 14px 6px", fontSize: 11, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Message Requests · {dms.requests.length}
             </div>
-            {dms.requests.map(function (conv) {
-              return (
-                <div key={conv.id} style={{ background: t.accentSubtle, border: "1px solid " + t.accent, borderRadius: 14, padding: "14px", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                    <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={42} />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>{conv.partner.name}</div>
-                      <div style={{ fontSize: 12, color: t.textSecondary }}>wants to message you</div>
+            <div style={{ padding: "0 10px" }}>
+              {dms.requests.map(function (conv) {
+                return (
+                  <div key={conv.id} style={{ background: t.accentSubtle, border: "1px solid " + t.accent, borderRadius: 12, padding: 12, marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={38} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>{conv.partner.name}</div>
+                        <div style={{ fontSize: 12, color: t.textSecondary }}>wants to message you</div>
+                      </div>
+                    </div>
+                    {conv.last_message_preview && (
+                      <div style={{ fontSize: 12, color: t.textSecondary, background: t.bg, padding: "8px 10px", borderRadius: 8, marginBottom: 10, fontStyle: "italic", lineHeight: 1.4 }}>
+                        "{conv.last_message_preview}"
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={function () { dms.acceptRequest(conv.id); dms.openConversation(conv); }}
+                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: t.accent, color: t.accentText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        Accept
+                      </button>
+                      <button onClick={function () { dms.declineRequest(conv.id); }}
+                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                        Decline
+                      </button>
                     </div>
                   </div>
-                  {conv.last_message_preview && (
-                    <div style={{ fontSize: 13, color: t.textSecondary, background: t.bg, padding: "10px 12px", borderRadius: 8, marginBottom: 10, fontStyle: "italic", lineHeight: 1.4 }}>
-                      "{conv.last_message_preview}"
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={function () { dms.acceptRequest(conv.id); dms.openConversation(conv); }}
-                      style={{ flex: 1, padding: "10px", borderRadius: 9, border: "none", background: t.accent, color: t.accentText, fontSize: 13, fontWeight: 700 }}>
-                      Accept
-                    </button>
-                    <button onClick={function () { dms.declineRequest(conv.id); }}
-                      style={{ flex: 1, padding: "10px", borderRadius: 9, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500 }}>
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {allEmpty ? (
+        {allEmpty && dms.conversationsLoaded ? (
           <div style={{ textAlign: "center", padding: "48px 20px" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>💬</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No messages yet</div>
             <div style={{ fontSize: 13, color: t.textSecondary }}>Go to Friends and tap Message to start a conversation.</div>
           </div>
         ) : (
-          (function () {
-            // Split pinned vs all. Pinned order follows `dms.pinnedConvIds`
-            // (newest-pin-first). Pending-out convs never pin (no canonical
-            // last_message yet — pinning them would be a UX trap).
-            var pinnedSet = {};
-            (dms.pinnedConvIds || []).forEach(function (id) { pinnedSet[id] = true; });
-            var pinned = (dms.pinnedConvIds || [])
-              .map(function (id) { return dms.conversations.find(function (c) { return c.id === id; }); })
-              .filter(Boolean);
-            var others = dms.conversations.filter(function (c) { return !pinnedSet[c.id]; });
-
-            function renderRow(conv) {
-              var hasUnread = conv.hasUnread;
-              var isPending = conv.status === "pending";
-              var isMe = conv.last_message_sender_id === myId;
-              var isPinned = !!pinnedSet[conv.id];
-              // Unread glow: accent ring around the avatar + subtle tinted row.
-              return (
-                <button key={conv.id} onClick={function () { dms.openConversation(conv); }}
-                  style={{
-                    width: "100%",
-                    background: hasUnread ? t.accentSubtle : t.bgCard,
-                    border: "1px solid " + (hasUnread ? t.accent : t.border),
-                    borderRadius: 10,
-                    padding: "9px 12px", marginBottom: 6,
-                    display: "flex", gap: 11, alignItems: "center",
-                    cursor: "pointer", textAlign: "left",
-                  }}>
-                  <div style={{ position: "relative", flexShrink: 0,
-                    padding: hasUnread ? 2 : 0,
-                    borderRadius: "50%",
-                    boxShadow: hasUnread ? ("0 0 0 2px " + t.accent) : "none",
-                  }}>
-                    <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={38} />
-                    <PresenceDot profile={conv.partner} t={t} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 1 }}>
-                      <span style={{ fontSize: 14, fontWeight: hasUnread ? 700 : 600, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</span>
-                      {isPinned && <span style={{ color: t.textTertiary, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
-                      <span style={{ flex: 1 }}/>
-                      <span style={{ fontSize: 10, color: t.textTertiary, flexShrink: 0 }}>{formatMessageTime(conv.last_message_at)}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: hasUnread ? t.text : t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: hasUnread ? 600 : 400 }}>
-                      {isPending
-                        ? <span style={{ color: t.orange }}>Request pending…</span>
-                        : (isMe ? "You: " : "") + previewify(conv.last_message_preview, 80)}
-                    </div>
-                  </div>
-                  {hasUnread && <div style={{ width: 8, height: 8, borderRadius: "50%", background: t.accent, flexShrink: 0 }} />}
-                </button>
-              );
-            }
-
-            function sectionHeader(label) {
-              return (
-                <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", margin: "12px 2px 6px" }}>{label}</div>
-              );
-            }
-
-            return (
-              <div>
-                {pinned.length > 0 && sectionHeader("Pinned")}
-                {pinned.map(renderRow)}
-                {others.length > 0 && sectionHeader(pinned.length ? "All" : "Recent")}
-                {others.map(renderRow)}
-              </div>
-            );
-          })()
+          <div>
+            {pinned.length > 0 && sectionHeader("Pinned")}
+            {pinned.map(function (c) { return renderConvRow(c, true); })}
+            {others.length > 0 && sectionHeader(pinned.length ? "All messages" : "Recent")}
+            {others.map(function (c) { return renderConvRow(c, false); })}
+          </div>
         )}
+      </div>
+    );
+  }
+
+  // ── Desktop empty state (shown in thread pane when no conv is open) ─────
+
+  function renderDesktopEmptyState() {
+    return (
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        background: t.bg, padding: 40, textAlign: "center",
+      }}>
+        <div style={{
+          width: 88, height: 88, borderRadius: 22,
+          background: t.accentSubtle,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 40, marginBottom: 18,
+        }}>💬</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: t.text }}>Your messages</div>
+        <div style={{ fontSize: 13, color: t.textSecondary, marginTop: 6, maxWidth: 320 }}>
+          Pick a conversation on the left to open the thread, or start a new one from the Friends tab.
+        </div>
       </div>
     );
   }
@@ -377,25 +472,87 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // ── Thread view ──────────────────────────────────────────────────────────
 
   var conv = dms.activeConv;
-  var isPending = conv.status === "pending";
-  var iAmSender = conv.requester_id === myId;
-  var presence = getPresence(conv.partner);
 
-  var unreadStartIdx = computeUnreadDividerIdx(dms.threadMessages, myId, conv.lastReadAt);
+  var isPending = conv && conv.status === "pending";
+  var iAmSender = conv && conv.requester_id === myId;
+  var presence = conv ? getPresence(conv.partner) : { online: false, hidden: true };
+
+  var unreadStartIdx = conv ? computeUnreadDividerIdx(dms.threadMessages, myId, conv.lastReadAt) : -1;
   var lastSeenByPartnerIdx = computeLastSeenByPartnerIdx(dms.threadMessages, myId, dms.partnerLastReadAt);
+  // Index of my MOST RECENT sent message — we always render a status
+  // (Sent / Seen) next to this one, so the receipt doesn't flicker
+  // off the moment the partner replies or after an unsent resend.
+  var lastMineIdx = -1;
+  (dms.threadMessages || []).forEach(function (m, i) {
+    if (m.sender_id === myId && !m.deleted_at) lastMineIdx = i;
+  });
 
-  // Anchor the thread to the viewport so the input bar hugs the bottom
-  // of the visible area regardless of message count. Uses the global
-  // --cs-nav-h / --cs-tab-h tokens (mobile top-nav + bottom tab-bar —
-  // both 0 on desktop) plus a per-page chrome allowance for the
-  // People-tab header + Messages/Friends/... tabs that sit above this
-  // component. Messages list inside scrolls on overflow.
+  // Anchor the pane to the viewport so the input bar hugs the bottom of
+  // the visible area regardless of message count. On desktop, the list
+  // pane and the thread pane are siblings inside this flex row — list
+  // fixed 320px, thread fills the rest. On mobile one column shows at a
+  // time. Global --cs-nav-h / --cs-tab-h are 0 on desktop.
+  // On desktop the thread pane stays pinned to where the rest of the
+  // app's 680px reading column lives (Friends list, Discover, etc. —
+  // visually consistent across tabs). The conversation list pane is
+  // pinned to the LEFT EDGE of the main content area (flush with the
+  // sidebar) via position:fixed, with empty space between it and the
+  // thread. This matches the pattern the user sketched in feedback
+  // instead of pinning the list immediately next to the thread column.
+  var MAX_LIST_W = 280;
+  var MIN_LIST_W = 220;
+  var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
+  // Available space to the left of the reading column, minus an 8px
+  // gutter from the sidebar and a 16px gap before the thread. Clamp
+  // list width 220–280px.
+  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 24);
+  var LIST_W = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, listRoom));
+  var twoPane = isDesktopDM;
+  var showList = twoPane || !conv;
+  var showThreadPane = twoPane || conv;
   return (
-    <div className="cs-dm-thread" style={{
+    <div className="cs-dm-root" style={{
       display: "flex",
       height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 140px)",
       minHeight: 420,
     }}>
+      {/* ── List pane ─────────────────────────────────────────────────── */}
+      {/*    Desktop: fixed to the LEFT EDGE of the main content area
+            (just after the sidebar), independent of the thread column.
+            Mobile: inline, fills the viewport when no conv is active. */}
+      {showList && (twoPane
+        // Portal the desktop list to <body> so position:fixed is
+        // viewport-relative, not trapped inside the `.fade-up` transform
+        // ancestor (same reason EmojiPicker + the settings modal portal).
+        ? createPortal((
+            <div className="cs-dm-list-pane" style={{
+              position: "fixed",
+              top: "var(--cs-nav-h)",
+              left: viewport.sidebarW + "px",
+              width: LIST_W + "px",
+              height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
+              background: t.bg,
+              borderRight: "1px solid " + t.border,
+              overflowY: "auto",
+              zIndex: 5,
+            }}>
+              {renderConvList()}
+            </div>
+          ), document.body)
+        : (
+          <div className="cs-dm-list-pane" style={{
+            width: "100%",
+            flexShrink: 0, minWidth: 0,
+            overflowY: "auto",
+          }}>
+            {renderConvList()}
+          </div>
+        )
+      )}
+
+      {/* ── Thread pane (or desktop empty state) ──────────────────────── */}
+      {showThreadPane && !conv && renderDesktopEmptyState()}
+      {showThreadPane && conv && (<>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
 
       {/* Conversation settings. Desktop: centered modal with a modest
@@ -571,6 +728,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             var showUnread = idx === unreadStartIdx;
             var showDateSep = dateSeparatorIds.has(msg.id);
             var replyMsg = msg.reply_to_id ? dms.threadMessages.find(function (m) { return m.id === msg.reply_to_id; }) : null;
+            // Breathing room between bubbles. 2px when this message is
+            // from the same sender as the previous one (tight group),
+            // 10px when the speaker changes. First-of-day separators and
+            // the unread divider above already add their own margin.
+            var prev = visibleMessages[idx - 1];
+            var sameSender = prev && prev.sender_id === msg.sender_id && !showDateSep && !showUnread;
+            var rowMargin = sameSender ? 2 : 10;
 
             return (
               <div key={msg.id}>
@@ -590,7 +754,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                     <div style={{ flex: 1, height: 1, background: t.accent, opacity: 0.35 }} />
                   </div>
                 )}
-                <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 4 }}>
+                <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: rowMargin }}>
                   <div style={{ maxWidth: "75%" }}>
                     {replyMsg && (
                       <div style={{ background: t.bgTertiary, borderLeft: "3px solid " + t.accent, padding: "5px 10px", borderRadius: "6px 6px 0 0", fontSize: 11, color: t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -680,8 +844,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                     )}
                     <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 3, textAlign: mine ? "right" : "left" }}>
                       {formatMessageTime(msg.created_at)}
-                      {mine && idx === lastSeenByPartnerIdx && (
-                        <span style={{ marginLeft: 6, color: t.accent, fontWeight: 600 }}>· Seen</span>
+                      {mine && idx === lastMineIdx && (
+                        idx === lastSeenByPartnerIdx
+                          ? <span style={{ marginLeft: 6, color: t.accent, fontWeight: 600 }}>· Seen</span>
+                          : <span style={{ marginLeft: 6, color: t.textTertiary }}>· Sent</span>
                       )}
                     </div>
                   </div>
@@ -956,6 +1122,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           />
         </div>
       ), document.body)}
+      </>)}{/* /showThreadPane && conv */}
     </div>
   );
 }
