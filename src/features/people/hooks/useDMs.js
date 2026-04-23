@@ -533,6 +533,27 @@ export function useDMs(opts) {
       });
     }
 
+    // Live-remove a conversation the moment the OTHER side deletes it.
+    // conversations is REPLICA IDENTITY FULL (see 20260423_conversations_replica_full.sql)
+    // so payload.old has user1_id + user2_id, letting us double-check
+    // the deleted row involved this user before touching state.
+    function handleDelete(payload) {
+      var old = payload.old || {};
+      var convId = old.id;
+      if (!convId) return;
+      if (old.user1_id && old.user2_id &&
+          old.user1_id !== uid && old.user2_id !== uid) return;
+      setConversations(function (cs) { return cs.filter(function (c) { return c.id !== convId; }); });
+      setRequests(function (rs) { return rs.filter(function (r) { return r.id !== convId; }); });
+      setPinnedConvIds(function (ps) { return ps.filter(function (id) { return id !== convId; }); });
+      if (activeConvRef.current && activeConvRef.current.id === convId) {
+        setActiveConv(null);
+        activeConvRef.current = null;
+        setThreadMessages([]);
+        setReactions({});
+      }
+    }
+
     var convChannel = supabase.channel("convs:" + uid)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations", filter: "user1_id=eq." + uid }, handleInsert)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations", filter: "user2_id=eq." + uid }, handleInsert)
@@ -563,6 +584,7 @@ export function useDMs(opts) {
           });
         }
       )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "conversations" }, handleDelete)
       .subscribe();
 
     return function () { supabase.removeChannel(convChannel); };
