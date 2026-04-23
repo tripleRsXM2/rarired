@@ -10,6 +10,7 @@
 // (e.g. for reactions) — the caller closes when appropriate.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   EMOJI_CATEGORIES,
   EMOJI_BY_CATEGORY,
@@ -101,7 +102,11 @@ export default function EmojiPicker({ t, onPick, onClose, anchor }) {
     return { position: "fixed", left: left, top: top, width: w, height: h };
   }, [anchor]);
 
-  return (
+  // Portal to document.body — the People tab wraps its content in a
+  // `.fade-up` div whose identity `transform` creates a CSS containing
+  // block for position:fixed descendants, pushing the picker down by
+  // the fade-up div's top offset. Same fix as CreateLeagueModal.
+  return createPortal((
     <div
       ref={rootRef}
       className="pop"
@@ -188,5 +193,5 @@ export default function EmojiPicker({ t, onPick, onClose, anchor }) {
         />
       </div>
     </div>
-  );
+  ), document.body);
 }
