@@ -138,6 +138,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var messagesEndRef = useRef(null);
   var emojiBtnRef = useRef(null);
   var fileInputRef = useRef(null);
+  // Throttle anchor for dms.notifyTyping — send at most every 2s.
+  var typingSentRef = useRef(0);
   var myId = authUser && authUser.id;
   var [uploading, setUploading] = useState(false);
   var [uploadError, setUploadError] = useState(null);
@@ -380,9 +382,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     var isMeLast = conv.last_message_sender_id === myId;
     var isActive = dms.activeConv && dms.activeConv.id === conv.id;
     var seenByPartner = conv.lastMsgSeenByPartner;
-    var preview = isPending
-      ? "Request pending…"
-      : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
+    // Live typing indicator (broadcast via dm-typing inbox channel).
+    var isTyping = !!(dms.typingConvs && dms.typingConvs[conv.id]);
+    var preview = isTyping
+      ? "typing…"
+      : isPending
+        ? "Request pending…"
+        : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
     return (
       <button key={conv.id} onClick={function () { dms.openConversation(conv); }}
         style={{
@@ -418,8 +424,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
             <span style={{
               flex: 1, minWidth: 0,
-              fontSize: 13, color: hasUnread ? t.text : t.textSecondary,
-              fontWeight: hasUnread ? 500 : 400,
+              fontSize: 13,
+              color: isTyping ? t.accent : (hasUnread ? t.text : t.textSecondary),
+              fontWeight: hasUnread || isTyping ? 500 : 400,
+              fontStyle: isTyping ? "italic" : "normal",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{preview}</span>
             {/* Seen / sent indicator — only on rows where MY last message is
@@ -782,7 +790,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
           style={{ flex: 1, minWidth: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
-          {presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>}
+          {dms.typingConvs && dms.typingConvs[conv.id]
+            ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
+            : (presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>)
+          }
         </div>
         {/* Details drawer toggle — desktop-only (hidden below 1024px via
             .cs-dm-details-btn; the drawer itself would eat mobile width). */}
@@ -1150,7 +1161,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             rows={1}
             value={dms.msgDraft}
             placeholder={"Message " + conv.partner.name + "…"}
-            onChange={function (e) { dms.setMsgDraft(e.target.value); autoGrow(e.target); }}
+            onChange={function (e) {
+              dms.setMsgDraft(e.target.value);
+              autoGrow(e.target);
+              // Broadcast a typing event to the partner — throttled to
+              // one every 2s so fast typists don't flood realtime.
+              var now = Date.now();
+              if (!typingSentRef.current || now - typingSentRef.current > 2000) {
+                typingSentRef.current = now;
+                if (dms.notifyTyping && dms.activeConv && dms.activeConv.partner) {
+                  dms.notifyTyping(dms.activeConv.partner.id, dms.activeConv.id);
+                }
+              }
+            }}
             onKeyDown={function (e) {
               // Desktop: Enter sends, Shift+Enter newlines. Mobile enters a newline
               // (the Send button is the action).

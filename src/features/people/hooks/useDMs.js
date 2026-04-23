@@ -49,6 +49,14 @@ export function useDMs(opts) {
   // Ordered list of pinned conversation ids, newest-pin-first. Stored as
   // an array rather than a Set so renders are stable and order is honored.
   var [pinnedConvIds, setPinnedConvIds] = useState([]);
+  // Typing state: Map of convId → last typing-event timestamp (ms). Set
+  // via a broadcast from the sender; expired entries are swept every 1.5s.
+  // Shown as "typing…" in the conv list row + under the thread header.
+  var [typingConvs, setTypingConvs] = useState({});
+  // Cache of long-lived channels we've subscribed to purely to SEND
+  // typing events on (keyed by the partner's uid). Kept alive for the
+  // session so we don't pay a subscribe round-trip on every keystroke.
+  var typingSendersRef = useRef({});
 
   var activeConvRef = useRef(null);
   // Keep a ref of the current thread's message ids so the reactions realtime
@@ -590,6 +598,65 @@ export function useDMs(opts) {
     return function () { supabase.removeChannel(convChannel); };
   }, [authUser && authUser.id]);
 
+  // ── Realtime: typing inbox ─────────────────────────────────────────────
+  // Each user subscribes to their own broadcast inbox. Senders open a
+  // lightweight channel pointed at the recipient's inbox (cached in
+  // typingSendersRef) and call .send({ event:'typing', payload:{convId} })
+  // as they type — throttled by the caller to every ~2s. We mark
+  // typingConvs[convId] = now() and sweep stale entries on a 1.5s interval
+  // so the indicator auto-clears 5s after the last keystroke.
+  useEffect(function () {
+    if (!authUser) return;
+    var uid = authUser.id;
+    var ch = supabase.channel("typing-inbox:" + uid);
+    ch.on("broadcast", { event: "typing" }, function (msg) {
+      var p = (msg && msg.payload) || {};
+      if (!p.convId || p.fromUid === uid) return;
+      setTypingConvs(function (prev) {
+        var next = Object.assign({}, prev);
+        next[p.convId] = Date.now();
+        return next;
+      });
+    }).subscribe();
+    return function () { supabase.removeChannel(ch); };
+  }, [authUser && authUser.id]);
+
+  useEffect(function () {
+    var id = setInterval(function () {
+      setTypingConvs(function (prev) {
+        var now = Date.now();
+        var next = {};
+        var keep = true;
+        for (var k in prev) {
+          if (now - prev[k] < 5000) next[k] = prev[k];
+          else keep = false;
+        }
+        return keep ? prev : next;
+      });
+    }, 1500);
+    return function () { clearInterval(id); };
+  }, []);
+
+  // Sender: broadcast a typing event to the partner's inbox. Lazily
+  // creates + caches a channel per partnerUid so repeated keystrokes
+  // don't each pay a subscribe round-trip.
+  function notifyTyping(partnerUid, convId) {
+    if (!partnerUid || !convId || !authUser) return;
+    var ch = typingSendersRef.current[partnerUid];
+    if (!ch) {
+      ch = supabase.channel("typing-inbox:" + partnerUid);
+      typingSendersRef.current[partnerUid] = ch;
+      ch.subscribe();
+    }
+    // Fire-and-forget — if the channel isn't subscribed yet, the send
+    // will queue until it is (Realtime client buffers).
+    ch.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { convId: convId, fromUid: authUser.id },
+    });
+  }
+
   // ── Realtime: messages in active conversation ──────────────────────────
 
   useEffect(function () {
@@ -729,6 +796,12 @@ export function useDMs(opts) {
     setReplyTo(null); setEditingId(null);
     setPartnerLastReadAt(null);
     setPinnedConvIds([]);
+    setTypingConvs({});
+    // Tear down any sender-side typing channels.
+    Object.keys(typingSendersRef.current).forEach(function (k) {
+      try { supabase.removeChannel(typingSendersRef.current[k]); } catch (e) {}
+    });
+    typingSendersRef.current = {};
     activeConvRef.current = null;
   }
 
@@ -752,5 +825,7 @@ export function useDMs(opts) {
     toggleReaction: toggleReaction, startEdit: startEdit, cancelEdit: cancelEdit,
     submitEdit: submitEdit, deleteMessage: deleteMessage,
     deleteConversation: deleteConversation, resetDMs: resetDMs, totalUnread: totalUnread,
+    // Typing indicator surface
+    typingConvs: typingConvs, notifyTyping: notifyTyping,
   };
 }

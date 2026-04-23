@@ -120,7 +120,17 @@ export default function Sidebar({
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <span style={{ color: active ? t.accent : t.textSecondary, flexShrink: 0, display: "flex", position: "relative" }}>
+              <span style={{
+                color: active ? t.accent : t.textSecondary,
+                flexShrink: 0, display: "flex", position: "relative",
+                // Instagram-story-style ring around the People icon
+                // when there are unread DMs, so the notification is
+                // visible even before your eyes land on the red pill.
+                borderRadius: "50%",
+                padding: showDmBadge ? 2 : 0,
+                boxShadow: showDmBadge ? ("0 0 0 2px " + (t.accent || t.red)) : "none",
+                transition: "box-shadow 0.2s",
+              }}>
                 {nav.icon()}
                 {showDmBadge && (
                   <span style={{

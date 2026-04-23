@@ -563,7 +563,13 @@ export default function App(){
                     aria-label={tb.label}
                     style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary,cursor:"pointer"}}>
                     <div style={{width:18,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
-                    <span style={{position:"relative",display:"flex"}}>
+                    <span style={{
+                      position:"relative", display:"flex",
+                      borderRadius:"50%",
+                      padding: showDmBadge ? 2 : 0,
+                      boxShadow: showDmBadge ? ("0 0 0 2px " + (t.accent || t.red)) : "none",
+                      transition: "box-shadow 0.2s",
+                    }}>
                       {Icon ? Icon(22) : null}
                       {showDmBadge && (
                         <span style={{
