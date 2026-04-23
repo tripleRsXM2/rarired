@@ -165,6 +165,60 @@ async function main() {
     });
     log("picker after click: " + JSON.stringify(pickerState));
 
+    var pickerInlineStyle = await page.evaluate(function () {
+      var p = document.querySelector('[role="dialog"][aria-label="Pick an emoji"]');
+      if (!p) return null;
+      var s = p.style;
+      return { top: s.top, left: s.left, width: s.width, height: s.height, position: s.position };
+    });
+    log("picker inline style: " + JSON.stringify(pickerInlineStyle));
+
+    // Also re-measure the emoji button AFTER picker opened so we know
+    // the anchor's current position.
+    var anchorNow = await page.evaluate(function () {
+      var btn = document.querySelector('button[aria-label="Insert emoji"]');
+      if (!btn) return null;
+      var r = btn.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, height: r.height };
+    });
+    log("emoji button rect AFTER picker open: " + JSON.stringify(anchorNow));
+
+    // Find any ancestor that creates a containing block for fixed-pos
+    // children (transform, filter, perspective, contain, will-change).
+    var fixedContainerTrail = await page.evaluate(function () {
+      var p = document.querySelector('[role="dialog"][aria-label="Pick an emoji"]');
+      if (!p) return null;
+      var trail = [];
+      var el = p.parentElement;
+      while (el && el !== document.documentElement) {
+        var cs = getComputedStyle(el);
+        var containingProps = {
+          transform: cs.transform,
+          filter: cs.filter,
+          perspective: cs.perspective,
+          contain: cs.contain,
+          willChange: cs.willChange,
+          backdropFilter: cs.backdropFilter,
+          WebkitBackdropFilter: cs.webkitBackdropFilter,
+        };
+        var creates = Object.keys(containingProps).some(function (k) {
+          var v = containingProps[k];
+          return v && v !== "none" && v !== "auto" && v !== "normal" && v !== "";
+        });
+        if (creates) {
+          var r = el.getBoundingClientRect();
+          trail.push({
+            tag: el.tagName, cls: (el.className || "").slice(0, 80),
+            y: Math.round(r.y),
+            props: containingProps,
+          });
+        }
+        el = el.parentElement;
+      }
+      return trail;
+    });
+    log("fixed-containing ancestors: " + JSON.stringify(fixedContainerTrail, null, 2));
+
     // Try actually picking an emoji — this is what the user complains
     // doesn't work. Find the first emoji button in the grid and click it.
     var pickResult = await page.evaluate(function () {
@@ -206,10 +260,16 @@ async function main() {
     }
   }
 
-  // Close emoji picker if still open — click in the thread middle, NOT
-  // the sidebar (which would hit the Notifications button).
-  await page.mouse.click(700, 400);
+  // Close emoji picker if still open. We dispatch Escape on document —
+  // safer than a stray click which might land on the sidebar (opens
+  // the notifications panel) or on the picker itself (which occupies
+  // a variable area depending on the viewport).
+  await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
+  var pickerClosed = await page.evaluate(function () {
+    return !document.querySelector('[role="dialog"][aria-label="Pick an emoji"]');
+  });
+  log("picker closed after Escape: " + pickerClosed);
 
   // Find chat bubbles via React fiber — a bubble has onTouchStart AND
   // onContextMenu props (unique combo in this codebase). Much more
