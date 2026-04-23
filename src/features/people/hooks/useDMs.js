@@ -49,6 +49,18 @@ export function useDMs(opts) {
   // Ordered list of pinned conversation ids, newest-pin-first. Stored as
   // an array rather than a Set so renders are stable and order is honored.
   var [pinnedConvIds, setPinnedConvIds] = useState([]);
+  // Unordered set of muted conversation ids for the current user. Muting
+  // is self-only — it suppresses the conv from contributing to the
+  // People-tab unread badge. The other party sees no indication.
+  var [mutedConvIds, setMutedConvIds] = useState([]);
+  // Typing state: Map of convId → last typing-event timestamp (ms). Set
+  // via a broadcast from the sender; expired entries are swept every 1.5s.
+  // Shown as "typing…" in the conv list row + under the thread header.
+  var [typingConvs, setTypingConvs] = useState({});
+  // Cache of long-lived channels we've subscribed to purely to SEND
+  // typing events on (keyed by the partner's uid). Kept alive for the
+  // session so we don't pay a subscribe round-trip on every keystroke.
+  var typingSendersRef = useRef({});
 
   var activeConvRef = useRef(null);
   // Keep a ref of the current thread's message ids so the reactions realtime
@@ -153,10 +165,13 @@ export function useDMs(opts) {
       partnerReadMap[row.conversation_id] = row.last_read_at;
     });
 
-    // Pins — fire-and-forget so the list paints fast; result populates
-    // state when it lands and re-renders pick up the ordering.
+    // Pins + mutes — fire-and-forget so the list paints fast; result
+    // populates state when it lands and re-renders pick up the state.
     D.fetchPinnedConversationIds(uid).then(function (pr) {
       if (pr && pr.data) setPinnedConvIds(pr.data.map(function (p) { return p.conversation_id; }));
+    });
+    D.fetchMutedConversationIds(uid).then(function (mr) {
+      if (mr && mr.data) setMutedConvIds(mr.data.map(function (m) { return m.conversation_id; }));
     });
 
     function enrich(c) {
@@ -211,6 +226,34 @@ export function useDMs(opts) {
     if (r.error) {
       setPinnedConvIds(prev);
       return { error: (r.error && r.error.message) || "Couldn't unpin that conversation" };
+    }
+    return { error: null };
+  }
+
+  // ── Mute / unmute actions (self-only) ──────────────────────────────────
+
+  async function muteConversation(convId) {
+    if (!authUser) return { error: "Not signed in" };
+    var prev = mutedConvIds;
+    if (prev.indexOf(convId) >= 0) return { error: null };
+    setMutedConvIds(prev.concat([convId]));
+    var r = await D.muteConversationRow(authUser.id, convId);
+    if (r.error) {
+      setMutedConvIds(prev);
+      return { error: (r.error && r.error.message) || "Couldn't mute that conversation" };
+    }
+    return { error: null };
+  }
+
+  async function unmuteConversation(convId) {
+    if (!authUser) return { error: "Not signed in" };
+    var prev = mutedConvIds;
+    if (prev.indexOf(convId) < 0) return { error: null };
+    setMutedConvIds(prev.filter(function (id) { return id !== convId; }));
+    var r = await D.unmuteConversationRow(authUser.id, convId);
+    if (r.error) {
+      setMutedConvIds(prev);
+      return { error: (r.error && r.error.message) || "Couldn't unmute that conversation" };
     }
     return { error: null };
   }
@@ -275,55 +318,42 @@ export function useDMs(opts) {
     if (!authUser) return { error: "Not signed in" };
     var uid = authUser.id;
 
-    var r = await D.getOrCreateConversation(partner.id);
-    if (r.error || !r.data) {
-      console.error("[useDMs] getOrCreateConversation failed:", r.error);
-      return { error: (r.error && r.error.message) || "Couldn't open that conversation. Try again." };
-    }
-    var row = r.data;
-
-    if (row.status === "pending" && isFriendId(partner.id)) {
-      var ur = await D.updateConversationStatus(row.id, "accepted");
-      row = (ur && ur.data) ? ur.data : Object.assign({}, row, { status: "accepted" });
+    // If the conversation already exists (in local state), just open it.
+    var existing = [].concat(conversations, requests).find(function (c) {
+      return c.partner && c.partner.id === partner.id;
+    });
+    if (existing) {
+      await openConversation(existing);
+      return { error: null };
     }
 
-    if (row.status === "declined") {
-      if (row.request_cooldown_until && new Date(row.request_cooldown_until) > new Date()) {
-        var until = new Date(row.request_cooldown_until);
-        var days = Math.max(1, Math.ceil((until - new Date()) / (24 * 3600 * 1000)));
-        return { error: "You can't message " + (partner.name || "this player") + " right now. Try again in " + days + " day" + (days === 1 ? "" : "s") + "." };
-      }
-      await D.updateConversationStatus(row.id, "pending");
-      row = Object.assign({}, row, { status: "pending", requester_id: uid });
-    }
-
-    var conv = Object.assign({}, row, { partner: partner, hasUnread: false });
+    // Otherwise — DRAFT mode. Don't touch the DB. The conversation is
+    // local-only until the first message is sent; the partner sees
+    // nothing (no row, no notification). We materialize the row inside
+    // sendMessage() once the user actually commits something.
+    //
+    // Still enforce the decline cooldown client-side as a quick check;
+    // the real enforcement is RLS / RPC when we go to create.
+    var draft = {
+      id: "draft:" + partner.id,
+      isDraft: true,
+      partner: partner,
+      status: "draft",
+      user1_id: uid,
+      user2_id: partner.id,
+      requester_id: uid,
+      last_message_at: null,
+      last_message_preview: null,
+      last_message_sender_id: null,
+      hasUnread: false,
+      lastReadAt: null,
+    };
     _scrubTransient();
-    setActiveConv(conv);
-    activeConvRef.current = conv;
-
-    var isNewPending = row.requester_id === uid && row.status === "pending" && !row.last_message_at;
-
-    if (isNewPending) {
-      setThreadMessages([]);
-      setConversations(function (cs) {
-        if (cs.some(function (c) { return c.id === conv.id; })) return cs;
-        return cs.concat([conv]);
-      });
-      insertNotification({ user_id: partner.id, type: "message_request", from_user_id: uid, entity_id: conv.id });
-    } else {
-      await _loadThread(conv);
-      if (row.status === "accepted") {
-        D.upsertRead(uid, row.id);
-        setRequests(function (rs) { return rs.filter(function (x) { return x.id !== conv.id; }); });
-        setConversations(function (cs) {
-          if (cs.some(function (c) { return c.id === conv.id; })) {
-            return cs.map(function (c) { return c.id === conv.id ? Object.assign({}, c, { hasUnread: false, status: "accepted" }) : c; });
-          }
-          return [conv].concat(cs);
-        });
-      }
-    }
+    setThreadMessages([]);
+    setActiveConv(draft);
+    activeConvRef.current = draft;
+    // Deliberately not added to conversations or requests — draft is
+    // invisible in the list until send.
     return { error: null };
   }
 
@@ -346,22 +376,61 @@ export function useDMs(opts) {
     var replySnapshot = replyTo;
     setSending(true);
     setMsgDraft("");
+
+    // Draft materialization: if this is the user's first message to
+    // someone, the conversation hasn't been created yet (see
+    // openOrStartConversation — draft mode avoids writing a DB row
+    // until the user actually commits something). Create it now.
+    var isDraftFirstSend = conv && conv.isDraft;
+    if (isDraftFirstSend) {
+      var partnerProfile = conv.partner;
+      var gc = await D.getOrCreateConversation(partnerProfile.id);
+      if (gc.error || !gc.data) {
+        setSending(false);
+        setMsgDraft(v.value);
+        if (replySnapshot) setReplyTo(replySnapshot);
+        return { error: (gc.error && gc.error.message) || "Couldn't start that conversation." };
+      }
+      var row = gc.data;
+      if (row.status === "pending" && isFriendId(partnerProfile.id)) {
+        var ur = await D.updateConversationStatus(row.id, "accepted");
+        row = (ur && ur.data) ? ur.data : Object.assign({}, row, { status: "accepted" });
+      }
+      if (row.status === "declined") {
+        if (row.request_cooldown_until && new Date(row.request_cooldown_until) > new Date()) {
+          var until = new Date(row.request_cooldown_until);
+          var days = Math.max(1, Math.ceil((until - new Date()) / (24 * 3600 * 1000)));
+          setSending(false);
+          setMsgDraft(v.value);
+          if (replySnapshot) setReplyTo(replySnapshot);
+          return { error: "You can't message " + (partnerProfile.name || "this player") + " right now. Try again in " + days + " day" + (days === 1 ? "" : "s") + "." };
+        }
+        await D.updateConversationStatus(row.id, "pending");
+        row = Object.assign({}, row, { status: "pending", requester_id: uid });
+      }
+      conv = Object.assign({}, row, { partner: partnerProfile, hasUnread: false });
+      activeConvRef.current = conv;
+      setActiveConv(conv);
+      // First-time DMs from a non-friend generate a message_request
+      // notification for the recipient. Friends-bypass: status=accepted,
+      // no notification (the upcoming upsert_message_notification RPC
+      // below collapses into the single-per-conv unread row for them).
+      if (row.status === "pending") {
+        insertNotification({ user_id: partnerProfile.id, type: "message_request", from_user_id: uid, entity_id: conv.id });
+      }
+    }
+
     var r = await D.sendMessage(conv.id, uid, v.value, replySnapshot ? replySnapshot.id : null);
     if (!r.error && r.data) {
       var msg = r.data;
       setThreadMessages(function (ms) { return appendMessageIfNew(ms, msg); });
       var preview = previewify(v.value, 80);
       D.updateConversationLastMessage(conv.id, preview, uid);
-      var partnerId = conv.user1_id === uid ? conv.user2_id : conv.user1_id;
-      if (conv.status === "accepted" && partnerId) {
-        upsertMessageNotification({
-          user_id: partnerId,
-          type: "message",
-          from_user_id: uid,
-          entity_id: conv.id,
-          metadata: { preview: previewify(v.value, 60) },
-        }).catch(function (e) { console.error("[sendMessage] notification threw:", e); });
-      }
+      // Regular DMs no longer emit a notification row — unread DMs are
+      // surfaced by the People tab badge instead, driven directly off
+      // conversations.hasUnread. message_request (first DM from a
+      // non-friend) still fires above because it requires an explicit
+      // accept/decline decision in the notification tray.
       setConversations(function (cs) {
         var updated = Object.assign({}, conv, {
           last_message_preview: preview,
@@ -516,9 +585,31 @@ export function useDMs(opts) {
       var pr = await fetchProfilesByIds([partnerId], PARTNER_FIELDS);
       var partner = (pr.data && pr.data[0]) || { id: partnerId, name: "Player", avatar: "PL" };
 
+      // Race: the DB emits three events in order when a draft materializes
+      // with its first DM:
+      //   (1) INSERT conversations  (preview = null)
+      //   (2) INSERT direct_messages
+      //   (3) UPDATE conversations  (preview populated by trigger)
+      // The UPDATE realtime can arrive WHILE the INSERT handler is
+      // awaiting fetchProfilesByIds above — at that moment the
+      // conversations / requests state hasn't been populated yet, so the
+      // UPDATE's state.map is a no-op. When we then add the row below
+      // with payload.new we'd end up with an empty preview forever
+      // (until the next message).
+      //
+      // Fix: re-fetch the conversation row from the DB here so we pick
+      // up whatever the trigger has already written, regardless of event
+      // ordering.
+      var fresh = await supabase.from("conversations").select("*")
+        .eq("id", conv.id).maybeSingle();
+      if (fresh && fresh.data) conv = fresh.data;
+
       if (conv.status === "pending" && isFriendId(partnerId)) {
         await D.updateConversationStatus(conv.id, "accepted");
-        var acceptedConv = Object.assign({}, conv, { status: "accepted", partner: partner, hasUnread: !!conv.last_message_at });
+        var acceptedConv = Object.assign({}, conv, {
+          status: "accepted", partner: partner,
+          hasUnread: conv.last_message_sender_id && conv.last_message_sender_id !== uid,
+        });
         setConversations(function (cs) {
           if (cs.some(function (c) { return c.id === conv.id; })) return cs;
           return [acceptedConv].concat(cs);
@@ -531,6 +622,28 @@ export function useDMs(opts) {
         if (rs.some(function (r) { return r.id === conv.id; })) return rs;
         return [enriched].concat(rs);
       });
+    }
+
+    // Live-remove a conversation the moment the OTHER side deletes it.
+    // conversations is REPLICA IDENTITY FULL (see 20260423_conversations_replica_full.sql)
+    // so payload.old has user1_id + user2_id, letting us double-check
+    // the deleted row involved this user before touching state.
+    function handleDelete(payload) {
+      var old = payload.old || {};
+      var convId = old.id;
+      if (!convId) return;
+      if (old.user1_id && old.user2_id &&
+          old.user1_id !== uid && old.user2_id !== uid) return;
+      setConversations(function (cs) { return cs.filter(function (c) { return c.id !== convId; }); });
+      setRequests(function (rs) { return rs.filter(function (r) { return r.id !== convId; }); });
+      setPinnedConvIds(function (ps) { return ps.filter(function (id) { return id !== convId; }); });
+      setMutedConvIds(function (ms) { return ms.filter(function (id) { return id !== convId; }); });
+      if (activeConvRef.current && activeConvRef.current.id === convId) {
+        setActiveConv(null);
+        activeConvRef.current = null;
+        setThreadMessages([]);
+        setReactions({});
+      }
     }
 
     var convChannel = supabase.channel("convs:" + uid)
@@ -561,12 +674,90 @@ export function useDMs(opts) {
               });
             });
           });
+          // Pending-incoming rows live in `requests`, not `conversations`.
+          // When the requester sends their first DM, the DB trigger bumps
+          // last_message_preview on the pending conv row. Mirror that
+          // change into requests so the preview renders under the name.
+          // (Previously only conversations was touched, so the recipient
+          // saw "Alex wants to message you" with no message body.)
+          if (conv.status === "pending") {
+            setRequests(function (rs) {
+              return rs.map(function (r) {
+                if (r.id !== conv.id) return r;
+                return Object.assign({}, r, {
+                  last_message_preview: conv.last_message_preview,
+                  last_message_at: conv.last_message_at,
+                  last_message_sender_id: conv.last_message_sender_id,
+                });
+              });
+            });
+          }
         }
       )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "conversations" }, handleDelete)
       .subscribe();
 
     return function () { supabase.removeChannel(convChannel); };
   }, [authUser && authUser.id]);
+
+  // ── Realtime: typing inbox ─────────────────────────────────────────────
+  // Each user subscribes to their own broadcast inbox. Senders open a
+  // lightweight channel pointed at the recipient's inbox (cached in
+  // typingSendersRef) and call .send({ event:'typing', payload:{convId} })
+  // as they type — throttled by the caller to every ~2s. We mark
+  // typingConvs[convId] = now() and sweep stale entries on a 1.5s interval
+  // so the indicator auto-clears 5s after the last keystroke.
+  useEffect(function () {
+    if (!authUser) return;
+    var uid = authUser.id;
+    var ch = supabase.channel("typing-inbox:" + uid);
+    ch.on("broadcast", { event: "typing" }, function (msg) {
+      var p = (msg && msg.payload) || {};
+      if (!p.convId || p.fromUid === uid) return;
+      setTypingConvs(function (prev) {
+        var next = Object.assign({}, prev);
+        next[p.convId] = Date.now();
+        return next;
+      });
+    }).subscribe();
+    return function () { supabase.removeChannel(ch); };
+  }, [authUser && authUser.id]);
+
+  useEffect(function () {
+    var id = setInterval(function () {
+      setTypingConvs(function (prev) {
+        var now = Date.now();
+        var next = {};
+        var keep = true;
+        for (var k in prev) {
+          if (now - prev[k] < 5000) next[k] = prev[k];
+          else keep = false;
+        }
+        return keep ? prev : next;
+      });
+    }, 1500);
+    return function () { clearInterval(id); };
+  }, []);
+
+  // Sender: broadcast a typing event to the partner's inbox. Lazily
+  // creates + caches a channel per partnerUid so repeated keystrokes
+  // don't each pay a subscribe round-trip.
+  function notifyTyping(partnerUid, convId) {
+    if (!partnerUid || !convId || !authUser) return;
+    var ch = typingSendersRef.current[partnerUid];
+    if (!ch) {
+      ch = supabase.channel("typing-inbox:" + partnerUid);
+      typingSendersRef.current[partnerUid] = ch;
+      ch.subscribe();
+    }
+    // Fire-and-forget — if the channel isn't subscribed yet, the send
+    // will queue until it is (Realtime client buffers).
+    ch.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { convId: convId, fromUid: authUser.id },
+    });
+  }
 
   // ── Realtime: messages in active conversation ──────────────────────────
 
@@ -700,6 +891,34 @@ export function useDMs(opts) {
     return function () { supabase.removeChannel(pinsChannel); };
   }, [authUser && authUser.id]);
 
+  // ── Realtime: mutes (multi-device sync) ──────────────────────────────
+  useEffect(function () {
+    if (!authUser) return;
+    var uid = authUser.id;
+    var mutesChannel = supabase.channel("mutes:" + uid)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversation_mutes", filter: "user_id=eq." + uid },
+        function (payload) {
+          var cid = payload.new && payload.new.conversation_id;
+          if (!cid) return;
+          setMutedConvIds(function (prev) {
+            if (prev.indexOf(cid) >= 0) return prev;
+            return prev.concat([cid]);
+          });
+        }
+      )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "conversation_mutes", filter: "user_id=eq." + uid },
+        function (payload) {
+          var cid = payload.old && payload.old.conversation_id;
+          if (!cid) return;
+          setMutedConvIds(function (prev) { return prev.filter(function (id) { return id !== cid; }); });
+        }
+      )
+      .subscribe();
+    return function () { supabase.removeChannel(mutesChannel); };
+  }, [authUser && authUser.id]);
+
   function resetDMs() {
     setConversations([]); setRequests([]); setActiveConv(null);
     setConversationsLoaded(false);
@@ -707,11 +926,28 @@ export function useDMs(opts) {
     setReplyTo(null); setEditingId(null);
     setPartnerLastReadAt(null);
     setPinnedConvIds([]);
+    setMutedConvIds([]);
+    setTypingConvs({});
+    // Tear down any sender-side typing channels.
+    Object.keys(typingSendersRef.current).forEach(function (k) {
+      try { supabase.removeChannel(typingSendersRef.current[k]); } catch (e) {}
+    });
+    typingSendersRef.current = {};
     activeConvRef.current = null;
   }
 
   function totalUnread() {
-    return conversations.reduce(function (s, c) { return s + (c.hasUnread ? 1 : 0); }, 0) + requests.length;
+    // Muted convs don't contribute to the People-tab badge. Requests
+    // always count — muting an incoming request is not a concept; they
+    // need an explicit accept/decline decision.
+    var mutedSet = {};
+    (mutedConvIds || []).forEach(function (id) { mutedSet[id] = true; });
+    var convUnread = conversations.reduce(function (s, c) {
+      if (!c.hasUnread) return s;
+      if (mutedSet[c.id]) return s;
+      return s + 1;
+    }, 0);
+    return convUnread + requests.length;
   }
 
   return {
@@ -724,11 +960,15 @@ export function useDMs(opts) {
     partnerLastReadAt: partnerLastReadAt,
     pinnedConvIds: pinnedConvIds,
     pinConversation: pinConversation, unpinConversation: unpinConversation,
+    mutedConvIds: mutedConvIds,
+    muteConversation: muteConversation, unmuteConversation: unmuteConversation,
     loadConversations: loadConversations, openConversation: openConversation,
     openOrStartConversation: openOrStartConversation, closeConversation: closeConversation,
     sendMessage: sendMessage, acceptRequest: acceptRequest, declineRequest: declineRequest,
     toggleReaction: toggleReaction, startEdit: startEdit, cancelEdit: cancelEdit,
     submitEdit: submitEdit, deleteMessage: deleteMessage,
     deleteConversation: deleteConversation, resetDMs: resetDMs, totalUnread: totalUnread,
+    // Typing indicator surface
+    typingConvs: typingConvs, notifyTyping: notifyTyping,
   };
 }

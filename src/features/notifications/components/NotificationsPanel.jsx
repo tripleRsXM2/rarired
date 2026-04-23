@@ -735,9 +735,14 @@ export default function NotificationsPanel({
   var navigate     = useNavigate();
   var _markAllRead = markAllRead || markNotificationsRead;
 
-  // Group + sort once per render (cheap — O(n) passes)
+  // Group + sort once per render (cheap — O(n) passes). Regular DM
+  // notifications (`message` type) aren't generated anymore — the
+  // People tab badge surfaces DM unread state directly. Legacy rows
+  // with that type are still filtered out below so old inboxes don't
+  // display them after the product rule change.
   var displayItems = useMemo(function () {
-    return groupNotifications(notifications);
+    var filtered = notifications.filter(function (n) { return n.type !== "message"; });
+    return groupNotifications(filtered);
   }, [notifications]);
 
   // Split into sections

@@ -13,8 +13,7 @@ import { getPresence } from "../services/presenceService.js";
 import { displayLocation } from "../../../lib/utils/avatar.js";
 
 export default function DetailsDrawer({
-  t, conv, isPinned,
-  onPin, onUnpin, onOpenProfile, onClose,
+  t, conv, onOpenProfile, onClose,
 }) {
   if (!conv) return null;
   var partner = conv.partner || {};
@@ -64,17 +63,14 @@ export default function DetailsDrawer({
         )}
       </div>
 
-      {/* Quick actions */}
+      {/* Quick actions — Pin / Mute / Delete all live on the conv-list
+          row's right-click menu now (Messenger/Discord pattern). */}
       <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
         {onOpenProfile && partner.id && (
           <button type="button"
             onClick={function () { onOpenProfile(partner.id); }}
             style={actionBtn(t)}>View profile</button>
         )}
-        {isPinned
-          ? <button type="button" onClick={onUnpin} style={actionBtn(t)}>Unpin conversation</button>
-          : <button type="button" onClick={onPin}   style={actionBtn(t)}>Pin conversation</button>
-        }
       </div>
 
       {/* Partner chips — skill + style if present */}

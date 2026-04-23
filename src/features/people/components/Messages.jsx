@@ -122,6 +122,9 @@ function IconPaperclip(p) {
 
 export default function Messages({ t, authUser, dms, openProfile }) {
   var [menuState, setMenuState] = useState(null);          // { message, rect }
+  // Right-click menu on a conv-list row: { convId, x, y } or null.
+  // Gives Mute / Pin / Delete without opening the thread first.
+  var [convContextMenu, setConvContextMenu] = useState(null);
   var [showSettings, setShowSettings] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   var [showDetails, setShowDetails] = useState(false);
@@ -138,6 +141,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var messagesEndRef = useRef(null);
   var emojiBtnRef = useRef(null);
   var fileInputRef = useRef(null);
+  // Throttle anchor for dms.notifyTyping — send at most every 2s.
+  var typingSentRef = useRef(0);
   var myId = authUser && authUser.id;
   var [uploading, setUploading] = useState(false);
   var [uploadError, setUploadError] = useState(null);
@@ -162,15 +167,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   // URL → activeConv. Waits for conversationsLoaded so a deep link on cold
   // start doesn't flash the empty state before the thread hydrates.
+  //
+  // Drafts (local-only convs created when starting a new DM) don't live
+  // in the URL at all — they're ephemeral. Never close a draft from this
+  // effect, even if the URL is bare.
   useEffect(function () {
     if (!dms.conversationsLoaded) return;
     var want = urlConvId;
     var current = dms.activeConv && dms.activeConv.id;
+    var isDraft = !!(dms.activeConv && dms.activeConv.isDraft);
     if (want && want !== current) {
       var all = [].concat(dms.conversations || [], dms.requests || []);
       var found = all.find(function (c) { return c.id === want; });
       if (found) dms.openConversation(found);
-    } else if (!want && current) {
+    } else if (!want && current && !isDraft) {
       dms.closeConversation();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,17 +189,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // activeConv → URL. Pushing the new URL means Back goes to /people/messages,
   // which is the natural "close the thread" gesture.
   //
-  // IMPORTANT: wait for conversationsLoaded AND only strip a URL that
-  // already had a convId when we have an earlier non-null state. On a
-  // deep-link reload the sequence is:
-  //   1st render: activeConv=null, urlConvId=<id>  ← URL drives here
-  //   loadConversations resolves
-  //   URL→activeConv effect runs: openConversation(found) → activeConv=<conv>
-  // Without the loaded gate, the activeConv→URL effect would fire
-  // during step 1 and navigate away from <id> before step 3 can act.
+  // Drafts don't participate in deep linking (their id isn't a real uuid),
+  // so we leave the URL at /people/messages while one is open.
   useEffect(function () {
     if (!dms.conversationsLoaded) return;
     var current = dms.activeConv && dms.activeConv.id;
+    var isDraft = !!(dms.activeConv && dms.activeConv.isDraft);
+    if (isDraft) return;
     if (current && current !== urlConvId) {
       navigate("/people/messages/" + current);
     } else if (!current && urlConvId) {
@@ -380,11 +386,24 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     var isMeLast = conv.last_message_sender_id === myId;
     var isActive = dms.activeConv && dms.activeConv.id === conv.id;
     var seenByPartner = conv.lastMsgSeenByPartner;
-    var preview = isPending
-      ? "Request pending…"
-      : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
+    var isMuted = (dms.mutedConvIds || []).indexOf(conv.id) >= 0;
+    // Live typing indicator (broadcast via dm-typing inbox channel).
+    var isTyping = !!(dms.typingConvs && dms.typingConvs[conv.id]);
+    var preview = isTyping
+      ? "typing…"
+      : isPending
+        ? "Request pending…"
+        : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
     return (
       <button key={conv.id} onClick={function () { dms.openConversation(conv); }}
+        onContextMenu={function (e) {
+          // Right-click → per-row action menu (Mute / Pin / Delete).
+          // Not available on mobile (no right-click) but the web UX
+          // matches Messenger/WhatsApp convention. Long-press could
+          // bind here later if wanted.
+          e.preventDefault();
+          setConvContextMenu({ convId: conv.id, x: e.clientX, y: e.clientY });
+        }}
         style={{
           width: "100%",
           background: isActive ? t.accentSubtle : "transparent",
@@ -408,6 +427,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{conv.partner.name}</span>
             {isPinnedFlag && <span style={{ color: t.textTertiary, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
+            {isMuted && <span title="Muted" style={{ color: t.textTertiary, fontSize: 12, flexShrink: 0, lineHeight: 1 }}>🔕</span>}
             <span style={{ flex: 1 }}/>
             <span style={{
               fontSize: 11, flexShrink: 0,
@@ -418,8 +438,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
             <span style={{
               flex: 1, minWidth: 0,
-              fontSize: 13, color: hasUnread ? t.text : t.textSecondary,
-              fontWeight: hasUnread ? 500 : 400,
+              fontSize: 13,
+              color: isTyping ? t.accent : (hasUnread ? t.text : t.textSecondary),
+              fontWeight: hasUnread || isTyping ? 500 : 400,
+              fontStyle: isTyping ? "italic" : "normal",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{preview}</span>
             {/* Seen / sent indicator — only on rows where MY last message is
@@ -654,6 +676,85 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         )
       )}
 
+      {/* ── Conv-list right-click menu (Mute / Pin / Delete) ──────────── */}
+      {convContextMenu && createPortal((
+        (function () {
+          var cid = convContextMenu.convId;
+          var allConvs = [].concat(dms.conversations || [], dms.requests || []);
+          var targetConv = allConvs.find(function (c) { return c.id === cid; });
+          if (!targetConv) return null;
+          var partnerName = (targetConv.partner && targetConv.partner.name) || "this conversation";
+          var isPinned = (dms.pinnedConvIds || []).indexOf(cid) >= 0;
+          var isMuted  = (dms.mutedConvIds  || []).indexOf(cid) >= 0;
+          // Clamp to viewport so the menu never spills off the right edge.
+          var menuW = 200, menuH = 170;
+          var vw = typeof window !== "undefined" ? window.innerWidth : 1400;
+          var vh = typeof window !== "undefined" ? window.innerHeight : 900;
+          var left = Math.max(8, Math.min(convContextMenu.x, vw - menuW - 8));
+          var top  = Math.max(8, Math.min(convContextMenu.y, vh - menuH - 8));
+          function close() { setConvContextMenu(null); }
+          function onMute() {
+            if (isMuted) dms.unmuteConversation(cid);
+            else          dms.muteConversation(cid);
+            close();
+          }
+          function onPin() {
+            if (isPinned) dms.unpinConversation(cid);
+            else          dms.pinConversation(cid);
+            close();
+          }
+          function onDelete() {
+            // Same confirmation copy as the old in-thread flow. Native
+            // confirm is fine here — the right-click menu is desktop-only
+            // and matches the Messenger / Discord pattern.
+            if (!window.confirm("Delete conversation with " + partnerName + "? This removes the thread for both of you.")) return;
+            dms.deleteConversation(cid);
+            close();
+          }
+          var itemStyle = {
+            display: "flex", alignItems: "center", gap: 10, width: "100%",
+            padding: "11px 14px", border: "none", background: "transparent",
+            color: t.text, fontSize: 14, textAlign: "left", cursor: "pointer",
+          };
+          return (
+            <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={close} onContextMenu={function(e){e.preventDefault();close();}}>
+              <div
+                onClick={function (e) { e.stopPropagation(); }}
+                style={{
+                  position: "fixed", top: top, left: left,
+                  width: menuW,
+                  background: t.bgCard, border: "1px solid " + t.border,
+                  borderRadius: 12, overflow: "hidden",
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.32)",
+                  zIndex: 201,
+                }}>
+                <button onClick={onMute} style={itemStyle}
+                  onMouseEnter={function (e) { e.currentTarget.style.background = t.bgTertiary; }}
+                  onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
+                  <span>{isMuted ? "🔔" : "🔕"}</span>
+                  <span>{isMuted ? "Unmute" : "Mute"} conversation</span>
+                </button>
+                <button onClick={onPin} style={Object.assign({}, itemStyle, { borderTop: "1px solid " + t.border })}
+                  onMouseEnter={function (e) { e.currentTarget.style.background = t.bgTertiary; }}
+                  onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
+                  <span style={{ display: "inline-flex" }}><IconPin/></span>
+                  <span>{isPinned ? "Unpin" : "Pin"} conversation</span>
+                </button>
+                <button onClick={onDelete} style={Object.assign({}, itemStyle, {
+                  borderTop: "1px solid " + t.border,
+                  color: t.red, fontWeight: 600,
+                })}
+                  onMouseEnter={function (e) { e.currentTarget.style.background = (t.redSubtle || "rgba(220,38,38,0.08)"); }}
+                  onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
+                  <span style={{ display: "inline-flex" }}><IconTrash/></span>
+                  <span>Delete conversation</span>
+                </button>
+              </div>
+            </div>
+          );
+        })()
+      ), document.body)}
+
       {/* ── Thread pane (or desktop empty state) ──────────────────────── */}
       {showThreadPane && !conv && renderDesktopEmptyState()}
       {showThreadPane && conv && (<>
@@ -782,7 +883,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
           style={{ flex: 1, minWidth: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
-          {presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>}
+          {dms.typingConvs && dms.typingConvs[conv.id]
+            ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
+            : (presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>)
+          }
         </div>
         {/* Details drawer toggle — desktop-only (hidden below 1024px via
             .cs-dm-details-btn; the drawer itself would eat mobile width). */}
@@ -800,9 +904,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           }}>
           <IconPanelRight/>
         </button>
-        <button onClick={function () { setShowSettings(true); }}
-          aria-label="Conversation settings"
-          style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 18, padding: "4px", flexShrink: 0, cursor: "pointer" }}>⚙️</button>
+        {/* Settings/Delete/Pin moved out of the thread — those actions
+            now live in the right-click context menu on the conv-list
+            row. Mobile long-press to trigger the same menu is a
+            follow-up. */}
       </div>
 
       {/* Pending banner — sender-side */}
@@ -1150,7 +1255,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             rows={1}
             value={dms.msgDraft}
             placeholder={"Message " + conv.partner.name + "…"}
-            onChange={function (e) { dms.setMsgDraft(e.target.value); autoGrow(e.target); }}
+            onChange={function (e) {
+              dms.setMsgDraft(e.target.value);
+              autoGrow(e.target);
+              // Broadcast a typing event to the partner — throttled to
+              // one every 2s so fast typists don't flood realtime.
+              var now = Date.now();
+              if (!typingSentRef.current || now - typingSentRef.current > 2000) {
+                typingSentRef.current = now;
+                if (dms.notifyTyping && dms.activeConv && dms.activeConv.partner) {
+                  dms.notifyTyping(dms.activeConv.partner.id, dms.activeConv.id);
+                }
+              }
+            }}
             onKeyDown={function (e) {
               // Desktop: Enter sends, Shift+Enter newlines. Mobile enters a newline
               // (the Send button is the action).
@@ -1195,9 +1312,6 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {showDetails && (
         <DetailsDrawer
           t={t} conv={conv}
-          isPinned={(dms.pinnedConvIds || []).indexOf(conv.id) >= 0}
-          onPin={function () { dms.pinConversation && dms.pinConversation(conv.id); }}
-          onUnpin={function () { dms.unpinConversation && dms.unpinConversation(conv.id); }}
           onOpenProfile={openProfile}
           onClose={function () { setShowDetails(false); }}
         />

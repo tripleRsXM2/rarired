@@ -78,6 +78,12 @@ vi.mock("../services/dmService.js", function () {
     fetchPinnedConversationIds: function () { return mockFetchPinned.apply(null, arguments); },
     pinConversationRow: function () { return mockPinRow.apply(null, arguments); },
     unpinConversationRow: function () { return mockUnpinRow.apply(null, arguments); },
+    // Mutes service surface (added 2026-04-24). Tests don't drive the
+    // mute paths yet — stub returns empty + resolves so enrichment on
+    // bootstrap doesn't blow up.
+    fetchMutedConversationIds: function () { return Promise.resolve({ data: [], error: null }); },
+    muteConversationRow:   function () { return Promise.resolve({ data: null, error: null }); },
+    unmuteConversationRow: function () { return Promise.resolve({ data: null, error: null }); },
   };
 });
 
@@ -266,28 +272,41 @@ describe("useDMs — openOrStartConversation error surface", function () {
     expect(result.error).toBeNull();
   });
 
-  it("returns a human-readable error on RPC failure", async function () {
+  // openOrStartConversation no longer talks to the DB — it just creates a
+  // local draft. The RPC + cooldown error paths now surface at send time
+  // (because the first DB write is deferred until first send), so these
+  // previously-at-open tests live against sendMessage instead.
+
+  it("sendMessage materializes a draft and surfaces RPC errors", async function () {
     var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
-    mockGetOrCreate.mockResolvedValueOnce({ data: null, error: { message: "network blew up" } });
-    var result;
     await act(async function () {
-      result = await hook.result.current.openOrStartConversation({ id: "p-new", name: "New" });
+      await hook.result.current.openOrStartConversation({ id: "p-new", name: "New" });
     });
-    expect(result.error).toBe("network blew up");
+    expect(hook.result.current.activeConv && hook.result.current.activeConv.isDraft).toBe(true);
+
+    mockGetOrCreate.mockResolvedValueOnce({ data: null, error: { message: "network blew up" } });
+    var sendResult;
+    await act(async function () {
+      sendResult = await hook.result.current.sendMessage("hi");
+    });
+    expect(sendResult && sendResult.error).toBe("network blew up");
   });
 
-  it("returns a cooldown error when declined cooldown is active", async function () {
+  it("sendMessage on a declined-cooldown partner returns a human-readable error", async function () {
     var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () {
+      await hook.result.current.openOrStartConversation({ id: "p-dec", name: "Block" });
+    });
     var inOneDay = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
     mockGetOrCreate.mockResolvedValueOnce({
       data: { id: "c-dec", user1_id: "me-uid", user2_id: "p-dec", status: "declined", requester_id: "me-uid", request_cooldown_until: inOneDay },
       error: null,
     });
-    var result;
+    var sendResult;
     await act(async function () {
-      result = await hook.result.current.openOrStartConversation({ id: "p-dec", name: "Block" });
+      sendResult = await hook.result.current.sendMessage("hi");
     });
-    expect(result.error).toMatch(/can't message Block right now/);
+    expect(sendResult && sendResult.error).toMatch(/can't message Block right now/);
   });
 });
 

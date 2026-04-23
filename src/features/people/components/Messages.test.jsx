@@ -38,6 +38,11 @@ function makeDms(overrides) {
     pinnedConvIds: [],
     pinConversation: vi.fn().mockResolvedValue({ error: null }),
     unpinConversation: vi.fn().mockResolvedValue({ error: null }),
+    mutedConvIds: [],
+    muteConversation: vi.fn().mockResolvedValue({ error: null }),
+    unmuteConversation: vi.fn().mockResolvedValue({ error: null }),
+    typingConvs: {},
+    notifyTyping: vi.fn(),
     openConversation: vi.fn(),
     closeConversation: vi.fn(),
     sendMessage: vi.fn(),
@@ -162,33 +167,10 @@ describe("Messages — thread view", function () {
     expect(dms.sendMessage).toHaveBeenCalled();
   });
 
-  it("opens centered delete-confirmation when Delete Conversation tapped", function () {
-    var dms = makeDms({ activeConv: baseConv });
-    render(<Messages t={t} authUser={authUser} dms={dms} />);
-    // Open settings sheet
-    fireEvent.click(screen.getByLabelText(/conversation settings/i));
-    fireEvent.click(screen.getByText(/Delete Conversation/i));
-    var dialog = screen.getByRole("dialog", { name: /delete conversation/i });
-    expect(dialog).toBeInTheDocument();
-    // Check modal has centering flex layout
-    expect(dialog).toHaveStyle({
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    });
-    // Confirm button wires through
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Delete$/ }));
-    expect(dms.deleteConversation).toHaveBeenCalledWith("c1");
-  });
-
-  it("Cancel in delete-confirmation does NOT call deleteConversation", function () {
-    var dms = makeDms({ activeConv: baseConv });
-    render(<Messages t={t} authUser={authUser} dms={dms} />);
-    fireEvent.click(screen.getByLabelText(/conversation settings/i));
-    fireEvent.click(screen.getByText(/Delete Conversation/i));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }));
-    expect(dms.deleteConversation).not.toHaveBeenCalled();
-  });
+  // NOTE: the in-thread "Conversation settings" gear-sheet + centered
+  // delete-confirm flow was retired on 2026-04-24. Delete now lives in
+  // the conv-list row's right-click context menu. Tests for that live
+  // in the conv-list describe block below.
 
   it("emoji picker button opens picker", function () {
     var dms = makeDms({ activeConv: baseConv });
@@ -358,17 +340,9 @@ describe("Messages — thread view", function () {
     expect(screen.getByLabelText(/conversation details/i)).toBeInTheDocument();
   });
 
-  it("Pin button in the drawer calls dms.pinConversation", function () {
-    var dms = makeDms({
-      activeConv: baseConv,
-      threadMessages: [{ id: "m1", sender_id: "me-uid", content: "hi", created_at: new Date().toISOString() }],
-    });
-    render(<Messages t={t} authUser={authUser} dms={dms} />);
-    fireEvent.click(screen.getByLabelText(/show details/i));
-    var drawer = screen.getByLabelText(/conversation details/i);
-    fireEvent.click(within(drawer).getByText(/^Pin conversation$/));
-    expect(dms.pinConversation).toHaveBeenCalledWith("c1");
-  });
+  // Pin/Mute/Delete moved out of the drawer on 2026-04-24 — now a
+  // right-click context menu on the conv-list row. See the separate
+  // "conv list — right-click menu" suite below.
 
   // Regression: picking an emoji from the input picker should insert it
   // via setMsgDraft — NOT close the picker without effect.
@@ -386,5 +360,80 @@ describe("Messages — thread view", function () {
     expect(gridBtn).toBeTruthy();
     fireEvent.click(gridBtn);
     expect(dms.setMsgDraft).toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Right-click menu on a conversation-list row: Mute / Pin / Delete.
+// This replaces the old in-thread surfaces (gear sheet + drawer buttons).
+// ─────────────────────────────────────────────────────────────────────────
+describe("Messages — conv-list right-click menu", function () {
+  beforeEach(function () { localStorage.clear(); });
+
+  var baseConv = {
+    id: "c-x", partner: { id: "p1", name: "John", avatar: "J" },
+    status: "accepted", last_message_sender_id: "p1",
+    last_message_preview: "hey", last_message_at: new Date().toISOString(),
+    hasUnread: false,
+  };
+
+  function openContextMenu() {
+    var row = screen.getByText(/^John$/).closest("button");
+    fireEvent.contextMenu(row);
+  }
+
+  it("right-clicking a conv row opens Mute / Pin / Delete", function () {
+    var dms = makeDms({ conversations: [baseConv] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    openContextMenu();
+    expect(screen.getByText(/Mute conversation/)).toBeInTheDocument();
+    expect(screen.getByText(/Pin conversation/)).toBeInTheDocument();
+    expect(screen.getByText(/Delete conversation/)).toBeInTheDocument();
+  });
+
+  it("Mute calls dms.muteConversation with the conv id", function () {
+    var dms = makeDms({ conversations: [baseConv] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    openContextMenu();
+    fireEvent.click(screen.getByText(/Mute conversation/));
+    expect(dms.muteConversation).toHaveBeenCalledWith("c-x");
+  });
+
+  it("Unmute shows when already muted", function () {
+    var dms = makeDms({ conversations: [baseConv], mutedConvIds: ["c-x"] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    openContextMenu();
+    expect(screen.getByText(/Unmute conversation/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Unmute conversation/));
+    expect(dms.unmuteConversation).toHaveBeenCalledWith("c-x");
+  });
+
+  it("Pin calls dms.pinConversation", function () {
+    var dms = makeDms({ conversations: [baseConv] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    openContextMenu();
+    fireEvent.click(screen.getByText(/^Pin conversation$/));
+    expect(dms.pinConversation).toHaveBeenCalledWith("c-x");
+  });
+
+  it("Delete prompts + calls dms.deleteConversation on confirm", function () {
+    var dms = makeDms({ conversations: [baseConv] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    var confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    openContextMenu();
+    fireEvent.click(screen.getByText(/Delete conversation/));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(dms.deleteConversation).toHaveBeenCalledWith("c-x");
+    confirmSpy.mockRestore();
+  });
+
+  it("Delete does NOT fire when confirm is cancelled", function () {
+    var dms = makeDms({ conversations: [baseConv] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    var confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    openContextMenu();
+    fireEvent.click(screen.getByText(/Delete conversation/));
+    expect(dms.deleteConversation).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });
