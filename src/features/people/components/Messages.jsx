@@ -491,22 +491,30 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // pane and the thread pane are siblings inside this flex row — list
   // fixed 320px, thread fills the rest. On mobile one column shows at a
   // time. Global --cs-nav-h / --cs-tab-h are 0 on desktop.
-  // On desktop the page content sits inside a 680px reading column
-  // (PeopleTab wraps everything in max-width:680). For the messages UI
-  // that's way too tight for a two-pane list + thread — we need the full
-  // viewport minus the sidebar (and the right panel at 1440+). Break out
-  // with the classic 100vw + negative-margin trick.
+  // On desktop the DM surface breaks out of PeopleTab's 680px reading
+  // column so the list + thread can sit side-by-side, but we cap the
+  // whole thing at a comfortable 1020px (280 list + 740 thread) and
+  // center it in the available viewport between the sidebar (64 /
+  // 220px) and the right panel (0 / 292px). Wider than that makes
+  // the thread's bubbles stretch uncomfortably on ultrawide monitors.
+  var DM_MAX = 1020;
   var sidebarW = viewport.sidebarW;
   var rightPanelW = viewport.rightPanelW;
   var availableW = "calc(100vw - " + sidebarW + "px - " + rightPanelW + "px)";
+  // Pull the breakout left by ((availableW - DM_MAX) / 2), then add
+  // back the 680 reading-column centering offset so our left edge
+  // lands at the correct position. Clamp: when the viewport can't
+  // fit 1020px we just fall back to filling available width.
   var breakoutStyle = isDesktopDM
     ? {
         position: "relative",
-        width: availableW,
-        // 680 = max-width of the centered reading column in PeopleTab.
-        // We're inside that column; pull left by half the overshoot so
-        // our left edge sits flush with the sidebar's right edge.
-        marginLeft: "calc(-1 * ((" + availableW + " - 680px) / 2))",
+        width: "min(" + DM_MAX + "px, " + availableW + ")",
+        // Center the DM surface inside the actual main content area
+        // (viewport − sidebar − right-panel), not the 680px reading
+        // column we live inside. marginLeft = (680 − effectiveW) / 2 so
+        // our center re-aligns with the available-area center. Always
+        // negative because DM_MAX > 680.
+        marginLeft: "calc((680px - min(" + DM_MAX + "px, " + availableW + ")) / 2)",
       }
     : {};
   return (
@@ -518,7 +526,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {/* ── List pane ─────────────────────────────────────────────────── */}
       {showList && (
         <div className="cs-dm-list-pane" style={{
-          width: isDesktopDM ? 320 : "100%",
+          width: isDesktopDM ? 280 : "100%",
           flexShrink: 0, minWidth: 0,
           background: isDesktopDM ? t.bgCard : "transparent",
           borderRight: isDesktopDM ? "1px solid " + t.border : "none",
@@ -706,6 +714,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             var showUnread = idx === unreadStartIdx;
             var showDateSep = dateSeparatorIds.has(msg.id);
             var replyMsg = msg.reply_to_id ? dms.threadMessages.find(function (m) { return m.id === msg.reply_to_id; }) : null;
+            // Breathing room between bubbles. 2px when this message is
+            // from the same sender as the previous one (tight group),
+            // 10px when the speaker changes. First-of-day separators and
+            // the unread divider above already add their own margin.
+            var prev = visibleMessages[idx - 1];
+            var sameSender = prev && prev.sender_id === msg.sender_id && !showDateSep && !showUnread;
+            var rowMargin = sameSender ? 2 : 10;
 
             return (
               <div key={msg.id}>
@@ -725,7 +740,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                     <div style={{ flex: 1, height: 1, background: t.accent, opacity: 0.35 }} />
                   </div>
                 )}
-                <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 4 }}>
+                <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: rowMargin }}>
                   <div style={{ maxWidth: "75%" }}>
                     {replyMsg && (
                       <div style={{ background: t.bgTertiary, borderLeft: "3px solid " + t.accent, padding: "5px 10px", borderRadius: "6px 6px 0 0", fontSize: 11, color: t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
