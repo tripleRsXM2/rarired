@@ -111,25 +111,37 @@ async function main() {
     await mdawg.page.goto(SITE + "/people/messages", { waitUntil: "domcontentloaded" });
     await mdawg.page.waitForTimeout(4000);
 
+    // Click into the John thread so both the list-row dot AND the
+    // thread-header "Active now" label are visible.
+    await mdawg.page.evaluate(function () {
+      var row = Array.from(document.querySelectorAll("button")).find(function (b) {
+        return /John/.test(b.innerText || "") && /\n/.test(b.innerText || "");
+      });
+      if (row) row.click();
+    });
+    await mdawg.page.waitForTimeout(2500);
+
     var presenceInUI = await mdawg.page.evaluate(function () {
-      // Look for elements with green-ish background inside .cs-dm-list-pane
-      // that suggest a presence dot, and grab any text that mentions
-      // "Active" / "Last seen".
       var pane = document.querySelector(".cs-dm-list-pane");
-      var paneText = pane ? pane.innerText : "(no pane)";
-      // Find any element whose computed backgroundColor contains "34" (greenish
-      // hex 22c55e ~ rgb(34,197,94)) — rough heuristic for presence dots.
-      var allEls = Array.from(document.querySelectorAll("div,span"));
-      var greenDots = allEls.filter(function (el) {
-        var bg = getComputedStyle(el).backgroundColor;
-        var w = el.getBoundingClientRect().width;
-        var h = el.getBoundingClientRect().height;
-        return w > 4 && w < 20 && h > 4 && h < 20 && /^rgb\(\s*34\s*,/.test(bg);
+      var body = document.body.innerText;
+      // PresenceDot is a small absolutely-positioned div with border
+      // and a non-transparent background. Match by shape + position.
+      var allEls = Array.from(document.querySelectorAll("div"));
+      var presenceDots = allEls.filter(function (el) {
+        var cs = getComputedStyle(el);
+        if (cs.position !== "absolute") return false;
+        if (cs.borderRadius !== "50%") return false;
+        var r = el.getBoundingClientRect();
+        if (r.width < 8 || r.width > 14) return false;
+        if (cs.backgroundColor === "transparent" || cs.backgroundColor === "rgba(0, 0, 0, 0)") return false;
+        return true;
       });
       return {
-        paneText: paneText,
-        greenDotCount: greenDots.length,
-        pageHasActiveText: /Active now|Last seen/.test(document.body.innerText),
+        paneText: pane ? pane.innerText.slice(0, 300) : "(no pane)",
+        dotCount: presenceDots.length,
+        dotColors: presenceDots.map(function (d) { return getComputedStyle(d).backgroundColor; }),
+        hasActiveNow: /Active now/.test(body),
+        hasLastSeen: /Last seen/.test(body),
       };
     });
     log("ui presence check:");
