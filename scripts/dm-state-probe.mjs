@@ -54,7 +54,7 @@ async function main() {
 
   // Step 1: land on /people/messages, open first conv, check URL.
   await page.goto(SITE + "/people/messages", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(4500);
+  await page.waitForTimeout(6500);
   log("landed on /people/messages, url = " + await page.url());
 
   var firstConvClick = await page.evaluate(function () {
