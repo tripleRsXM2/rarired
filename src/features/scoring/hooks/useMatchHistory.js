@@ -365,10 +365,25 @@ export function useMatchHistory(opts){
       });
     });
     var notifyId=isOpponentView?match.submitterId:match.opponent_id;
+    var notifType=isOpponentView?'match_disputed':'match_counter_proposed';
     if(sendNotification && notifyId){
-      await sendNotification({user_id:notifyId,type:isOpponentView?'match_disputed':'match_counter_proposed',from_user_id:authUser.id,match_id:match.id});
+      // Surface any notification-emit error to the console. Historically
+      // this call swallowed RPC errors silently, so when the recipient
+      // didn't see a match_disputed / match_counter_proposed notification
+      // we had no signal why. Now we at least log it — the proposal itself
+      // already succeeded at this point, so we don't want to fail the
+      // whole action, but the dev console will show the failure mode.
+      var notifRes = await sendNotification({
+        user_id: notifyId,
+        type: notifType,
+        from_user_id: authUser.id,
+        match_id: match.id,
+      });
+      if (notifRes && notifRes.error) {
+        console.error('[_submitProposal] notification emit failed:', notifType, notifRes.error);
+      }
     }
-    track(isOpponentView?"match_disputed":"match_counter_proposed",{match_id:match.id,reason:reasonCode,round:newRevisionCount});
+    track(notifType,{match_id:match.id,reason:reasonCode,round:newRevisionCount});
     return {error:null};
   }
 
