@@ -136,9 +136,17 @@ export function useDMs(opts) {
 
     var convIds = accepted.map(function (c) { return c.id; });
     var readMap = {};
+    var partnerReadMap = {};  // convId → partner's last_read_at (for list "✓ Seen" indicator)
     if (convIds.length) {
       var rr = await D.fetchReads(uid, convIds);
       (rr.data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
+      // Bulk-fetch every other participant's last_read_at in one request
+      // so each list row can show whether my latest sent message has
+      // been seen — WhatsApp-style. One query for the whole inbox.
+      var prp = await D.fetchPartnerReadsForConvs(uid, convIds);
+      (prp.data || []).forEach(function (row) {
+        partnerReadMap[row.conversation_id] = row.last_read_at;
+      });
     }
 
     // Pins — fire-and-forget so the list paints fast; result populates
@@ -151,9 +159,22 @@ export function useDMs(opts) {
       var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
       var partner = partnerMap[pid] || { id: pid, name: "Player", avatar: "PL" };
       var lastRead = readMap[c.id];
+      var partnerRead = partnerReadMap[c.id];
       var hasUnread = c.status === "accepted" && c.last_message_sender_id !== uid &&
         (!lastRead || new Date(c.last_message_at) > new Date(lastRead));
-      return Object.assign({}, c, { partner: partner, hasUnread: hasUnread, lastReadAt: lastRead });
+      // "Seen" indicator in the list: my last message is shown as seen
+      // when I sent it AND the partner's last_read_at is >= the message's
+      // timestamp. Otherwise we show "sent" (single check).
+      var lastMsgSeenByPartner = c.last_message_sender_id === uid &&
+        partnerRead && c.last_message_at &&
+        new Date(partnerRead) >= new Date(c.last_message_at);
+      return Object.assign({}, c, {
+        partner: partner,
+        hasUnread: hasUnread,
+        lastReadAt: lastRead,
+        partnerLastReadAt: partnerRead || null,
+        lastMsgSeenByPartner: !!lastMsgSeenByPartner,
+      });
     }
 
     setConversations(accepted.concat(pendingOut).map(enrich));

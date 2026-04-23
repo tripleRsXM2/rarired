@@ -9,21 +9,24 @@ import { useRef, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 // ── Viewport hook ────────────────────────────────────────────────────────
-// Returns true when the viewport is desktop-width (≥1024px, matching the
-// app's `.cs-sidebar-col` breakpoint). Drives the DM two-pane layout on
-// web — list fixed 320px on the left, thread on the right. On mobile we
-// keep the list-OR-thread stack that the rest of the app uses.
-function useIsDesktopDM() {
-  var [isDesktop, setIsDesktop] = useState(function () {
-    return typeof window !== "undefined" ? window.innerWidth >= 1024 : false;
+// Tracks viewport width and returns {isDesktop, sidebarW, rightPanelW}.
+// Breakpoints mirror the `.cs-sidebar-col` / `.cs-right-col` media queries
+// in providers.jsx so the Messages two-pane layout can sit flush against
+// both chrome edges without overlapping them.
+function useDMViewport() {
+  var [w, setW] = useState(function () {
+    return typeof window !== "undefined" ? window.innerWidth : 1024;
   });
   useEffect(function () {
     if (typeof window === "undefined") return;
-    function onResize() { setIsDesktop(window.innerWidth >= 1024); }
+    function onResize() { setW(window.innerWidth); }
     window.addEventListener("resize", onResize);
     return function () { window.removeEventListener("resize", onResize); };
   }, []);
-  return isDesktop;
+  var isDesktop   = w >= 1024;
+  var sidebarW    = !isDesktop ? 0 : (w >= 1200 ? 220 : 64);
+  var rightPanelW = w >= 1440 ? 292 : 0;
+  return { isDesktop: isDesktop, sidebarW: sidebarW, rightPanelW: rightPanelW };
 }
 import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
@@ -277,13 +280,15 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // own messages), time on the right, and either an unread count pill or a
   // tiny "✓ Seen" hint when my last message has been read by the partner.
 
-  var isDesktopDM = useIsDesktopDM();
+  var viewport = useDMViewport();
+  var isDesktopDM = viewport.isDesktop;
 
   function renderConvRow(conv, isPinnedFlag) {
     var hasUnread = conv.hasUnread;
     var isPending = conv.status === "pending";
     var isMeLast = conv.last_message_sender_id === myId;
     var isActive = dms.activeConv && dms.activeConv.id === conv.id;
+    var seenByPartner = conv.lastMsgSeenByPartner;
     var preview = isPending
       ? "Request pending…"
       : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
@@ -326,6 +331,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               fontWeight: hasUnread ? 500 : 400,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{preview}</span>
+            {/* Seen / sent indicator — only on rows where MY last message is
+                newest. Single tick = sent, double tick = seen. Matches
+                WhatsApp's convention so users read it instantly. */}
+            {isMeLast && !hasUnread && !isPending && (
+              <span
+                title={seenByPartner ? "Seen" : "Sent"}
+                style={{
+                  flexShrink: 0, display: "inline-flex", alignItems: "center",
+                  color: seenByPartner ? t.accent : t.textTertiary,
+                  fontSize: 11, lineHeight: 1,
+                }}>
+                {seenByPartner ? "✓✓" : "✓"}
+              </span>
+            )}
             {hasUnread && (
               <span style={{
                 background: t.accent, color: "#fff",
@@ -472,12 +491,30 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // pane and the thread pane are siblings inside this flex row — list
   // fixed 320px, thread fills the rest. On mobile one column shows at a
   // time. Global --cs-nav-h / --cs-tab-h are 0 on desktop.
+  // On desktop the page content sits inside a 680px reading column
+  // (PeopleTab wraps everything in max-width:680). For the messages UI
+  // that's way too tight for a two-pane list + thread — we need the full
+  // viewport minus the sidebar (and the right panel at 1440+). Break out
+  // with the classic 100vw + negative-margin trick.
+  var sidebarW = viewport.sidebarW;
+  var rightPanelW = viewport.rightPanelW;
+  var availableW = "calc(100vw - " + sidebarW + "px - " + rightPanelW + "px)";
+  var breakoutStyle = isDesktopDM
+    ? {
+        position: "relative",
+        width: availableW,
+        // 680 = max-width of the centered reading column in PeopleTab.
+        // We're inside that column; pull left by half the overshoot so
+        // our left edge sits flush with the sidebar's right edge.
+        marginLeft: "calc(-1 * ((" + availableW + " - 680px) / 2))",
+      }
+    : {};
   return (
-    <div className="cs-dm-root" style={{
+    <div className="cs-dm-root" style={Object.assign({
       display: "flex",
       height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 140px)",
       minHeight: 420,
-    }}>
+    }, breakoutStyle)}>
       {/* ── List pane ─────────────────────────────────────────────────── */}
       {showList && (
         <div className="cs-dm-list-pane" style={{

@@ -110,6 +110,18 @@ export function fetchPartnerRead(partnerId,convId){
     .maybeSingle();
 }
 
+// Bulk version: fetch every message_reads row for my conversation ids where
+// the reader ISN'T me. Used to render the per-row "✓ Seen" indicator in the
+// conversation list so the user can tell at a glance whether their last
+// message has been read, WhatsApp-style. One query for the whole inbox.
+export function fetchPartnerReadsForConvs(myUserId,convIds){
+  if(!convIds||!convIds.length) return Promise.resolve({ data: [], error: null });
+  return supabase.from('message_reads')
+    .select('conversation_id,user_id,last_read_at')
+    .in('conversation_id',convIds)
+    .neq('user_id',myUserId);
+}
+
 // ── Reactions ─────────────────────────────────────────────────────────────────
 
 export function fetchReactions(messageIds){
