@@ -54,20 +54,20 @@ async function main() {
 
   // Step 1: land on /people/messages, open first conv, check URL.
   await page.goto(SITE + "/people/messages", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(4500);
   log("landed on /people/messages, url = " + await page.url());
 
   var firstConvClick = await page.evaluate(function () {
-    // Conv rows are buttons with inner text matching "<Name>\n..." and a
-    // date/time snippet. Click the first one.
-    var buttons = Array.from(document.querySelectorAll("button"));
+    // Conv list is portaled to document.body under .cs-dm-list-pane. Only
+    // look inside it — avoids matching sidebar avatars / settings rows.
+    var pane = document.querySelector(".cs-dm-list-pane");
+    if (!pane) return { ok: false, reason: "no .cs-dm-list-pane" };
+    var buttons = Array.from(pane.querySelectorAll("button"));
     var row = buttons.find(function (b) {
       var txt = (b.innerText || "").trim();
-      if (!txt || txt.length > 200) return false;
-      return /\n/.test(txt) && !/Notifications|Log in|Message John|Message Mdawg|Send/i.test(txt)
-          && b.offsetWidth > 150;
+      return txt && txt.length < 200 && /\n/.test(txt);
     });
-    if (!row) return { ok: false, total: buttons.length };
+    if (!row) return { ok: false, reason: "no conv row inside pane", total: buttons.length };
     row.click();
     return { ok: true, text: (row.innerText || "").slice(0, 80) };
   });
