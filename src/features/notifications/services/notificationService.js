@@ -24,10 +24,16 @@ export function insertNotification(payload){
       from_user_id: null,
     }));
   }
+  // emit_notification takes entity_id (the id of the underlying row: match,
+  // challenge, conversation, etc.). A lot of match-flow call sites pass it
+  // as `match_id` because that's the legacy column on the notifications
+  // table — fall back to match_id so the RPC still validates standing and
+  // the notification actually lands.
+  var entityId = payload.entity_id || payload.match_id || null;
   return supabase.rpc('emit_notification', {
     p_user_id:   payload.user_id,
     p_type:      payload.type,
-    p_entity_id: payload.entity_id || null,
+    p_entity_id: entityId,
     p_metadata:  payload.metadata  || null,
   });
 }

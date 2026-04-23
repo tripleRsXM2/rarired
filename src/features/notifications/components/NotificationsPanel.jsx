@@ -47,6 +47,96 @@ function Avatar({ name, size, overlap, avatarUrl }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Match mini scorecard — inline summary of the match a notification refers
+// to. Preserves the actual result (sets + viewer-relative W/L) inside the
+// tray so the feed reads like an activity log, not just a status change.
+// ─────────────────────────────────────────────────────────────────────────────
+function MatchScoreCard({ t, n, viewerId }) {
+  var m = n.match;
+  if (!m || !m.sets) return null;
+  // Stored result is from the submitter's (m.user_id) perspective. The
+  // viewer of the notification is n.user_id — invert if they're the
+  // opponent / tagged side, so "Won" / "Lost" reads correctly.
+  var vid = viewerId || n.user_id;
+  var viewerIsSubmitter = m.user_id === vid;
+  var rawResult = m.result || "win";
+  var viewerResult = viewerIsSubmitter ? rawResult : (rawResult === "win" ? "loss" : "win");
+  var won = viewerResult === "win";
+
+  // Strip empty sets (editing leftovers) so the card never shows blank cells.
+  var sets = (m.sets || []).filter(function (s) {
+    return s && (s.you !== "" && s.you != null) && (s.them !== "" && s.them != null);
+  });
+
+  // Sets are stored from the submitter's perspective too. When the viewer
+  // is the opponent, flip you/them so the left column is always "me".
+  var viewerSets = viewerIsSubmitter
+    ? sets
+    : sets.map(function (s) { return { you: s.them, them: s.you }; });
+
+  // Status-aware accent so a disputed / voided match doesn't misleadingly
+  // display green-for-win.
+  var neutral = m.status === "disputed" || m.status === "pending_reconfirmation"
+             || m.status === "voided"   || m.status === "expired";
+  var pillColor = neutral ? t.textTertiary : (won ? t.green : t.red);
+  var pillLabel = neutral
+    ? (m.status === "voided"   ? "Voided"
+      : m.status === "expired" ? "Expired"
+      : "In review")
+    : (won ? "Won" : "Lost");
+
+  return (
+    <div style={{
+      marginTop: 8, padding: "8px 10px",
+      background: t.bgTertiary,
+      border: "1px solid " + t.border,
+      borderLeft: "3px solid " + pillColor,
+      borderRadius: 6,
+      display: "flex", alignItems: "center", gap: 10,
+    }}>
+      <span style={{
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+        textTransform: "uppercase", color: pillColor,
+        background: pillColor + "18",
+        padding: "2px 7px", borderRadius: 20, flexShrink: 0,
+      }}>{pillLabel}</span>
+
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6,
+        fontVariantNumeric: "tabular-nums",
+        fontSize: 13, fontWeight: 700, color: t.text,
+        flex: 1, minWidth: 0, overflow: "hidden",
+      }}>
+        {viewerSets.length === 0 ? (
+          <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 500 }}>
+            No score recorded
+          </span>
+        ) : viewerSets.map(function (s, i) {
+          var youN = Number(s.you), themN = Number(s.them);
+          var wonSet = !isNaN(youN) && !isNaN(themN) && youN > themN;
+          return (
+            <span key={i} style={{
+              color: wonSet ? t.text : t.textTertiary,
+              fontWeight: wonSet ? 700 : 500,
+            }}>
+              {s.you}-{s.them}{i < viewerSets.length - 1 ? "," : ""}
+            </span>
+          );
+        })}
+      </div>
+
+      {m.tourn_name && m.tourn_name !== "Casual Match" && (
+        <span style={{
+          fontSize: 10, color: t.textTertiary, flexShrink: 0,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          maxWidth: 80,
+        }}>{m.tourn_name}</span>
+      )}
+    </div>
+  );
+}
+
 function ctaButton(t, color, subtle, label, onClick) {
   return (
     <button
@@ -208,8 +298,14 @@ function NotifRow({
     track("notification_opened", { type: n.type, deep_link_target: "challenges" });
     // Pass the challenge id so ChallengesPanel can scroll+highlight the row.
     var highlightChallengeId = n.entity_id || null;
-    navigate("/tournaments/challenges",
-      highlightChallengeId ? { state: { highlightChallengeId: highlightChallengeId } } : undefined);
+    // For challenge_accepted, auto-open the score modal for that challenge
+    // so the notification's "Log result →" CTA takes the user straight to
+    // the score flow instead of dropping them on the list.
+    var navState = highlightChallengeId ? { highlightChallengeId: highlightChallengeId } : null;
+    if (n.type === "challenge_accepted" && highlightChallengeId) {
+      navState = Object.assign({}, navState || {}, { logChallengeId: highlightChallengeId });
+    }
+    navigate("/tournaments/challenges", navState ? { state: navState } : undefined);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
@@ -290,6 +386,15 @@ function NotifRow({
           }}>
             {getNotifLabel(n)}
           </div>
+
+          {/* Match mini-scorecard — rendered for any notification whose
+              underlying match row was enriched into n.match (match_tag,
+              match_confirmed, match_disputed, match_voided, corrections,
+              etc). Preserves the match result / sets so the tray reads
+              like an activity log, not just a text update. */}
+          {n.match && (
+            <MatchScoreCard t={t} n={n} authUser={null} viewerId={n.user_id}/>
+          )}
 
           {/* Message preview */}
           {n.type === "message" && n.metadata && n.metadata.preview && (
@@ -581,6 +686,11 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
             <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 4, marginBottom: 10 }}>
               {notifTimeLabel(primary.created_at)}
             </div>
+            {primary.match && (
+              <div style={{ marginBottom: 10 }}>
+                <MatchScoreCard t={t} n={primary} viewerId={primary.user_id}/>
+              </div>
+            )}
             {/* CTAs for primary action — opens review drawer directly.
                 Thread primaries may be match_tag too (e.g. match_tag + later
                 match_confirmed grouped by match_id), and match_tag still needs
