@@ -148,8 +148,11 @@ export default function App(){
     authUser:auth.authUser,
     updateMatchTagStatus:markMatchTagStatus,
     onMatchTagAccepted:function(matchRow){
-      var friendResult=matchHistory.applyAcceptedTagMatch(matchRow);
-      if(auth.authUser)currentUser.bumpMatchStats(auth.authUser.id, friendResult);
+      matchHistory.applyAcceptedTagMatch(matchRow);
+      // Pass the match id so bumpMatchStats can call the security-definer
+      // bump_stats_for_match RPC — stat columns are locked against direct
+      // client writes by the profiles_locked_columns_guard trigger.
+      if(auth.authUser)currentUser.bumpMatchStats(auth.authUser.id, matchRow && matchRow.id);
       setTab("home");
     },
   });
@@ -679,16 +682,26 @@ export default function App(){
           />
         )}
         {tab==="admin"&&(
-          <AdminTab
-            t={t} tournaments={tournaments.tournaments} setTournaments={tournaments.setTournaments}
-            adminTab={tournaments.adminTab} setAdminTab={tournaments.setAdminTab}
-            newTourn={tournaments.newTourn} setNewTourn={tournaments.setNewTourn}
-            myId={myId} profile={currentUser.profile}
-            seedTournament={tournaments.seedTournament} generateDraw={tournaments.generateDraw}
-            recordResult={tournaments.recordResult}
-            setSelectedTournId={tournaments.setSelectedTournId} setTab={setTab}
-            setTournDetailTab={tournaments.setTournDetailTab}
-          />
+          // Admin tab is gated on profiles.is_admin. Non-admins get
+          // bounced to /home — this is cosmetic; DB RLS on tournaments
+          // is the real boundary (tournaments_admin_write policy).
+          currentUser.profile && currentUser.profile.is_admin ? (
+            <AdminTab
+              t={t} tournaments={tournaments.tournaments} setTournaments={tournaments.setTournaments}
+              adminTab={tournaments.adminTab} setAdminTab={tournaments.setAdminTab}
+              newTourn={tournaments.newTourn} setNewTourn={tournaments.setNewTourn}
+              myId={myId} profile={currentUser.profile}
+              seedTournament={tournaments.seedTournament} generateDraw={tournaments.generateDraw}
+              recordResult={tournaments.recordResult}
+              setSelectedTournId={tournaments.setSelectedTournId} setTab={setTab}
+              setTournDetailTab={tournaments.setTournDetailTab}
+            />
+          ) : (
+            <div style={{maxWidth:680,margin:"60px auto",padding:"40px 20px",textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:8}}>Not found</div>
+              <div style={{fontSize:13,color:t.textSecondary}}>This page is admin-only.</div>
+            </div>
+          )
         )}
 
         </div>{/* end .cs-center-col */}

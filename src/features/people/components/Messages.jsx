@@ -9,6 +9,35 @@ import { useRef, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 
+// ── DM image bubble (signed URL) ─────────────────────────────────────────
+// The dm-attachments storage bucket is PRIVATE; public URLs no longer
+// resolve. This component accepts the stored path (or a legacy public
+// URL — we handle both) and fetches a short-lived signed URL via
+// createSignedDMUrl() on mount. Cached per-src so repeated renders
+// don't re-sign.
+var _dmSignedUrlCache = new Map(); // src → { url, exp }
+function DMAttachmentImage(props) {
+  var src = props.src;
+  var onClick = props.onClick;
+  var style = props.style;
+  var [url, setUrl] = useState(function () {
+    var hit = _dmSignedUrlCache.get(src);
+    return (hit && hit.exp > Date.now()) ? hit.url : null;
+  });
+  useEffect(function () {
+    if (url) return;
+    var cancelled = false;
+    createSignedDMUrl(src, 3600).then(function (r) {
+      if (cancelled || !r || !r.url) return;
+      _dmSignedUrlCache.set(src, { url: r.url, exp: Date.now() + 55 * 60 * 1000 });
+      setUrl(r.url);
+    });
+    return function () { cancelled = true; };
+  }, [src]);
+  if (!url) return (<div style={Object.assign({ width: 260, height: 180, background: "#1a1b1e", borderRadius: 12 }, style || {})} />);
+  return (<img src={url} alt="" loading="lazy" onClick={onClick} style={style} />);
+}
+
 // ── Viewport hook ────────────────────────────────────────────────────────
 // Tracks viewport width and returns {isDesktop, sidebarW, rightPanelW}.
 // Breakpoints mirror the `.cs-sidebar-col` / `.cs-right-col` media queries
@@ -35,7 +64,7 @@ import { getPresence } from "../services/presenceService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import EmojiPicker from "./EmojiPicker.jsx";
 import DetailsDrawer from "./DetailsDrawer.jsx";
-import { uploadDMAttachment, IMG_PREFIX, isImageMessageContent, extractImageUrl, MAX_ATTACHMENT_BYTES } from "../services/dmAttachmentUpload.js";
+import { uploadDMAttachment, IMG_PREFIX, isImageMessageContent, extractImageUrl, MAX_ATTACHMENT_BYTES, createSignedDMUrl } from "../services/dmAttachmentUpload.js";
 import {
   formatMessageTime,
   previewify,
@@ -891,10 +920,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                           {msg.deleted_at
                             ? "Message deleted"
                             : isImg
-                              ? <img
+                              ? <DMAttachmentImage
                                   src={imgUrl}
-                                  alt=""
-                                  loading="lazy"
                                   style={{ display: "block", maxWidth: "100%", maxHeight: 320, objectFit: "cover" }}
                                 />
                               : msg.content}
@@ -1189,11 +1216,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: 16, cursor: "zoom-out",
           }}>
-          <img
+          <DMAttachmentImage
             src={lightboxUrl}
-            alt=""
-            style={{ maxWidth: "100%", maxHeight: "100%", display: "block", objectFit: "contain" }}
             onClick={function (e) { e.stopPropagation(); }}
+            style={{ maxWidth: "100%", maxHeight: "100%", display: "block", objectFit: "contain" }}
           />
         </div>
       ), document.body)}

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { initials } from "../../../lib/utils/avatar.js";
 import { fetchProfile, upsertProfile, defaultProfile } from "../services/profileService.js";
+import { supabase } from "../../../lib/supabase.js";
 
 var INITIAL_PROFILE={name:"Your Name",suburb:"Sydney",skill:"Intermediate",style:"All-Court",bio:"",avatar:"YN",availability:{}};
 
@@ -37,22 +38,29 @@ export function useCurrentUser(){
     setShowOnboarding(true);
   }
 
-  async function bumpMatchStats(authUserId, friendResult){
-    // Fetch ground truth from DB so multi-device state doesn't drift
-    var r=await fetchProfile(authUserId);
-    var p=r.data||{};
-    var newWins=(p.wins||0)+(friendResult==="win"?1:0);
-    var newLosses=(p.losses||0)+(friendResult==="loss"?1:0);
-    var newPlayed=(p.matches_played||0)+1;
-    var newPts=Math.max(0,1000+newWins*15-newLosses*10);
-    await upsertProfile({id:authUserId,wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
-    // Only update the displayed profile for the current logged-in user.
-    // If called for a remote user (e.g. bumping submitter stats on confirmation),
-    // the DB is updated but the UI is left untouched.
-    setProfile(function(prev){
-      if(!prev.id||prev.id!==authUserId) return prev;
-      return Object.assign({},prev,{wins:newWins,losses:newLosses,matches_played:newPlayed,ranking_points:newPts});
-    });
+  // Stat columns (wins/losses/ranking_points/matches_played/streak_*) are
+  // DB-owned — the profiles_locked_columns_guard trigger rejects any
+  // client-side UPDATE that touches them. Legit updates flow through
+  // bump_stats_for_match(p_match_id), a security-definer RPC that reads
+  // the authoritative match row and rewrites both participants' stats.
+  //
+  // We used to do wins+1 arithmetic in the client, which is a trivial
+  // exploit (just upsert ranking_points:999999). Removed.
+  async function bumpMatchStats(authUserId, matchId){
+    if (!matchId) return;
+    var r = await supabase.rpc('bump_stats_for_match', { p_match_id: matchId });
+    if (r.error) {
+      console.warn("[bumpMatchStats] RPC error:", r.error.message);
+      return;
+    }
+    // Refetch to pull the new stats into the UI (only for the signed-in user).
+    var fresh = await fetchProfile(authUserId);
+    if (fresh.data) {
+      setProfile(function (prev) {
+        if (!prev.id || prev.id !== authUserId) return prev;
+        return fresh.data;
+      });
+    }
   }
 
   async function refreshProfileUI(userId){

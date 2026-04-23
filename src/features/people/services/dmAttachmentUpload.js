@@ -38,11 +38,33 @@ export async function uploadDMAttachment(userId, file) {
   });
   if (up.error) return { url: null, error: up.error };
 
-  var pub = supabase.storage.from(BUCKET).getPublicUrl(path);
-  var url = pub && pub.data && pub.data.publicUrl;
-  if (!url) return { url: null, error: new Error("could not derive public URL") };
+  // Return the bucket-relative path (the "key"). The bucket is private;
+  // the message stores "[img]<path>" and the renderer asks for a signed
+  // URL at display time via createSignedDMUrl() below.
+  return { url: path, error: null };
+}
 
-  return { url: url, error: null };
+// Turn a stored "[img]..." content into a renderable URL.
+// Accepts either a bare path ("<uid>/<ts>-name.jpg") OR a legacy public URL
+// ("https://<proj>.supabase.co/storage/v1/object/public/dm-attachments/<path>")
+// and resolves to a short-lived signed URL. Returns { url, error }.
+var PATH_MARKER = "/dm-attachments/";
+export function extractDMAttachmentPath(raw) {
+  if (!raw) return null;
+  var s = String(raw).trim();
+  // Legacy full URL → pull out the path after /dm-attachments/.
+  var ix = s.indexOf(PATH_MARKER);
+  if (ix >= 0) return s.slice(ix + PATH_MARKER.length).split("?")[0];
+  // Bare path.
+  return s.split("?")[0];
+}
+
+export async function createSignedDMUrl(rawPathOrUrl, expirySeconds) {
+  var path = extractDMAttachmentPath(rawPathOrUrl);
+  if (!path) return { url: null, error: new Error("no path") };
+  var r = await supabase.storage.from(BUCKET).createSignedUrl(path, expirySeconds || 3600);
+  if (r.error) return { url: null, error: r.error };
+  return { url: r.data && r.data.signedUrl, error: null };
 }
 
 // Sentinel parsing helpers — used by the Messages renderer.
