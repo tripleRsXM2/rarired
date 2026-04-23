@@ -61,16 +61,29 @@ export function sendMessage(convId,senderId,content,replyToId){
   return supabase.from('direct_messages').insert(payload).select('*').single();
 }
 
-export function editMessage(messageId,content){
-  return supabase.from('direct_messages')
+export async function editMessage(messageId,content){
+  var r = await supabase.from('direct_messages')
     .update({content,edited_at:new Date().toISOString()})
-    .eq('id',messageId).select('*').single();
+    .eq('id',messageId).select('*').maybeSingle();
+  if(!r.error && !r.data){
+    return { data:null, error:new Error("edit affected 0 rows (RLS?)") };
+  }
+  return r;
 }
 
-export function softDeleteMessage(messageId){
-  return supabase.from('direct_messages')
+// Soft-delete own message. Chains .select() so PostgREST returns the
+// updated row — lets us detect the RLS "updated 0 rows, no error" case
+// that previously caused unsends to silently revert on refresh.
+export async function softDeleteMessage(messageId){
+  var r = await supabase.from('direct_messages')
     .update({deleted_at:new Date().toISOString()})
-    .eq('id',messageId);
+    .eq('id',messageId)
+    .select('id,deleted_at')
+    .maybeSingle();
+  if(!r.error && !r.data){
+    return { data:null, error:new Error("soft-delete affected 0 rows (RLS?)") };
+  }
+  return r;
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────────────
@@ -97,6 +110,18 @@ export function fetchPartnerRead(partnerId,convId){
     .maybeSingle();
 }
 
+// Bulk version: fetch every message_reads row for my conversation ids where
+// the reader ISN'T me. Used to render the per-row "✓ Seen" indicator in the
+// conversation list so the user can tell at a glance whether their last
+// message has been read, WhatsApp-style. One query for the whole inbox.
+export function fetchPartnerReadsForConvs(myUserId,convIds){
+  if(!convIds||!convIds.length) return Promise.resolve({ data: [], error: null });
+  return supabase.from('message_reads')
+    .select('conversation_id,user_id,last_read_at')
+    .in('conversation_id',convIds)
+    .neq('user_id',myUserId);
+}
+
 // ── Reactions ─────────────────────────────────────────────────────────────────
 
 export function fetchReactions(messageIds){
@@ -111,6 +136,30 @@ export function addReaction(messageId,userId,emoji){
 export function removeReaction(messageId,userId,emoji){
   return supabase.from('message_reactions')
     .delete().eq('message_id',messageId).eq('user_id',userId).eq('emoji',emoji);
+}
+
+// ── Pinned conversations ──────────────────────────────────────────────────────
+
+// Rows in public.conversation_pins — one per (user, conversation) the
+// user has pinned. Sorted newest-pin-first.
+export function fetchPinnedConversationIds(userId){
+  return supabase.from("conversation_pins")
+    .select("conversation_id,pinned_at")
+    .eq("user_id", userId)
+    .order("pinned_at", { ascending: false });
+}
+
+export function pinConversationRow(userId, convId){
+  return supabase.from("conversation_pins")
+    .insert({ user_id: userId, conversation_id: convId })
+    .select("*").single();
+}
+
+export function unpinConversationRow(userId, convId){
+  return supabase.from("conversation_pins")
+    .delete()
+    .eq("user_id", userId)
+    .eq("conversation_id", convId);
 }
 
 // ── Presence ──────────────────────────────────────────────────────────────────

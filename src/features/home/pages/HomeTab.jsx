@@ -791,9 +791,15 @@ function FeedCard({
                       .eq("from_user_id", authUser.id).gte("created_at", oneHourAgoIso).limit(1)
                       .then(function (r) {
                         if (r.error || (r.data && r.data.length)) return;
+                        // Cross-user notifications go through the
+                        // emit_notification security-definer RPC (RLS
+                        // blocks direct inserts with from_user_id set).
                         toNotify.forEach(function (uid) {
-                          supabase.from("notifications").insert({
-                            user_id: uid, type: "like", from_user_id: authUser.id, match_id: m.id,
+                          supabase.rpc("emit_notification", {
+                            p_user_id: uid,
+                            p_type: "like",
+                            p_entity_id: m.id,
+                            p_metadata: null,
                           });
                         });
                       });

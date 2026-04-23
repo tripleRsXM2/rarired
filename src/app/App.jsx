@@ -81,9 +81,11 @@ export default function App(){
   // with the signed-in user's id falls back to the own-profile ProfileTab.
   var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
 
-  // Navigate to a top-level tab. Switching to "people" lands on /people/friends.
+  // Navigate to a top-level tab. Switching to "people" lands on /people/friends,
+  // switching to "tournaments" (Compete) lands on /tournaments/list.
   function setTab(x){
     if(x==="people") navigate("/people/friends");
+    else if(x==="tournaments") navigate("/tournaments/list");
     else navigate("/"+x);
   }
 
@@ -101,7 +103,7 @@ export default function App(){
   async function applyHomeZone(zoneId){
     if(!auth.authUser) return;
     var r = await setHomeZone(auth.authUser.id, zoneId);
-    if(r.error){ alert(r.error.message||"Could not set home zone"); return; }
+    if(r.error){ toast((r.error && r.error.message) || "Could not set home zone", "error"); return; }
     currentUser.setProfile(function(p){ return Object.assign({}, p, {home_zone: zoneId}); });
   }
   function clearHomeZone(){ applyHomeZone(null); }
@@ -146,13 +148,17 @@ export default function App(){
     authUser:auth.authUser,
     updateMatchTagStatus:markMatchTagStatus,
     onMatchTagAccepted:function(matchRow){
-      // Server RPC (confirm_match_and_update_stats) already ran
-      // apply_match_outcome — real ELO + stats applied atomically.
-      // Client only needs to (a) splice the confirmed row into local history
-      // and (b) re-read our profile to pick up the server-updated stats.
-      // The old client-side bumpMatchStats path is dead — the
-      // profiles_locked_columns_guard trigger rejects any user write to
-      // ranking_points / wins / losses / matches_played.
+      // useNotifications.acceptMatchTag now routes through the SECURITY
+      // DEFINER RPC confirm_match_and_update_stats, which:
+      //   • transitions match_history.status → 'confirmed'
+      //   • runs apply_match_outcome (real ELO + stats) atomically
+      // so the stats are already correct server-side by the time we get
+      // here. Client only needs to (a) splice the confirmed row into
+      // local history, (b) re-read the profile to pick up new values.
+      //
+      // The old bumpMatchStats path is superseded — keeping the function
+      // around in useCurrentUser is harmless but its callers should now
+      // route through the canonical confirmation RPC instead.
       matchHistory.applyAcceptedTagMatch(matchRow);
       if(auth.authUser)currentUser.refreshProfileUI(auth.authUser.id);
       setTab("home");
@@ -246,16 +252,23 @@ export default function App(){
     navigate("/people/messages");
   }
 
-  // Auto-dismiss "new message" notifications when the user opens that
-  // conversation. Matches the canonical row (entity_id === conv.id) AND any
-  // legacy rows from the same partner (entity_id null, from before that
-  // column was saved), so old stacked notifications also clear.
+  // Auto-dismiss tray rows related to an opened DM conversation:
+  //   • `message`                  — collapsed-per-conv unread row
+  //   • `message_request_accepted` — "X accepted your request" row
+  //     (the original sender sees this; opening the conv means they've
+  //     clearly seen the acceptance, so the row is now stale)
+  //
+  // We match by entity_id === conv.id (canonical) and, for legacy rows
+  // without entity_id, fall back to from_user_id === partner.
+  // `message_request` rows are deliberately NOT dismissed here — the
+  // recipient still has to accept/decline before they become stale.
   useEffect(function(){
     var conv=dms.activeConv;
     if(!conv||conv.status!=='accepted')return;
     var partnerId=conv.partner&&conv.partner.id;
+    var DISMISSIBLE_TYPES={ message:1, message_request_accepted:1 };
     var matches=notifications.notifications.filter(function(n){
-      if(n.type!=='message')return false;
+      if(!DISMISSIBLE_TYPES[n.type])return false;
       if(n.entity_id===conv.id)return true;
       if(!n.entity_id&&partnerId&&n.from_user_id===partnerId)return true;
       return false;
@@ -266,6 +279,17 @@ export default function App(){
     notifications.setNotifications(function(ns){
       return ns.filter(function(n){return!ids[n.id];});
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[dms.activeConv&&dms.activeConv.id]);
+
+  // Close the NotificationsPanel whenever a conversation thread opens.
+  // The panel is a position:fixed 380px right-side overlay with a
+  // full-viewport click-outside scrim (z:45). On desktop the overlay
+  // sits exactly on top of where the DM thread renders, which swallows
+  // clicks on bubbles / action menus / emoji button. "One drawer at a
+  // time": opening a thread implicitly dismisses the panel.
+  useEffect(function(){
+    if(dms.activeConv) notifications.setShowNotifications(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[dms.activeConv&&dms.activeConv.id]);
 
@@ -580,10 +604,10 @@ export default function App(){
               challengesList={challenges.challenges}
               challengesProfileMap={challenges.profileMap}
               onLogConvertedMatch={openConvertToMatch}
-              goToChallengesTab={function(){navigate("/people/challenges");}}
+              goToChallengesTab={function(){navigate("/tournaments/challenges");}}
               /* Module 7 — simple id→name index for league pills on feed cards */
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
-              onOpenLeague={function(id){ navigate("/people/leagues?id=" + id); }}
+              onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
             />
           )}
           {tab==="map"&&(
@@ -598,7 +622,8 @@ export default function App(){
           )}
           {tab==="tournaments"&&(
           <TournamentsTab
-            t={t} myId={myId} tournaments={tournaments.tournaments}
+            t={t} myId={myId} authUser={auth.authUser}
+            tournaments={tournaments.tournaments}
             selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
             tournDetailTab={tournaments.tournDetailTab} setTournDetailTab={tournaments.setTournDetailTab}
             filterSkill={tournaments.filterSkill} setFilterSkill={tournaments.setFilterSkill}
@@ -607,6 +632,14 @@ export default function App(){
             tournStatus={tournaments.tournStatus}
             setScheduleModal={tournaments.setScheduleModal} setScheduleDraft={tournaments.setScheduleDraft}
             setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
+            /* Sub-tabs — Challenges + Leagues moved out of People. */
+            challenges={challenges}
+            leagues={leagues}
+            friends={social.friends}
+            openProfile={openProfile}
+            openChallenge={openChallenge}
+            openConvertToMatch={openConvertToMatch}
+            toast={toast}
           />
         )}
         {tab==="people"&&(
@@ -653,20 +686,30 @@ export default function App(){
             openProfile={openProfile}
             openChallenge={openChallenge}
             myLeagues={leagues.leagues}
-            onOpenLeagues={function(){navigate("/people/leagues");}}
+            onOpenLeagues={function(){navigate("/tournaments/leagues");}}
           />
         )}
         {tab==="admin"&&(
-          <AdminTab
-            t={t} tournaments={tournaments.tournaments} setTournaments={tournaments.setTournaments}
-            adminTab={tournaments.adminTab} setAdminTab={tournaments.setAdminTab}
-            newTourn={tournaments.newTourn} setNewTourn={tournaments.setNewTourn}
-            myId={myId} profile={currentUser.profile}
-            seedTournament={tournaments.seedTournament} generateDraw={tournaments.generateDraw}
-            recordResult={tournaments.recordResult}
-            setSelectedTournId={tournaments.setSelectedTournId} setTab={setTab}
-            setTournDetailTab={tournaments.setTournDetailTab}
-          />
+          // Admin tab is gated on profiles.is_admin. Non-admins get
+          // bounced to /home — this is cosmetic; DB RLS on tournaments
+          // is the real boundary (tournaments_admin_write policy).
+          currentUser.profile && currentUser.profile.is_admin ? (
+            <AdminTab
+              t={t} tournaments={tournaments.tournaments} setTournaments={tournaments.setTournaments}
+              adminTab={tournaments.adminTab} setAdminTab={tournaments.setAdminTab}
+              newTourn={tournaments.newTourn} setNewTourn={tournaments.setNewTourn}
+              myId={myId} profile={currentUser.profile}
+              seedTournament={tournaments.seedTournament} generateDraw={tournaments.generateDraw}
+              recordResult={tournaments.recordResult}
+              setSelectedTournId={tournaments.setSelectedTournId} setTab={setTab}
+              setTournDetailTab={tournaments.setTournDetailTab}
+            />
+          ) : (
+            <div style={{maxWidth:680,margin:"60px auto",padding:"40px 20px",textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:8}}>Not found</div>
+              <div style={{fontSize:13,color:t.textSecondary}}>This page is admin-only.</div>
+            </div>
+          )
         )}
 
         </div>{/* end .cs-center-col */}

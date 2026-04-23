@@ -23,11 +23,15 @@ export function formatMessageTime(iso, now) {
 // ── Conversation preview helpers ───────────────────────────────────────────
 
 // Unified truncation for message previews in the conversation list + reply bar.
-// Collapses runs of whitespace and hard-caps length.
+// Collapses runs of whitespace and hard-caps length. Image-attachment messages
+// (content starts with the "[img]" sentinel) render as "📷 Photo" instead of
+// the raw Supabase URL.
 export function previewify(text, max) {
   if (!text) return "";
+  var s = String(text).trim();
+  if (s.indexOf("[img]") === 0) return "📷 Photo";
   var m = max || 80;
-  var s = String(text).replace(/\s+/g, " ").trim();
+  s = s.replace(/\s+/g, " ");
   return s.length > m ? s.slice(0, m - 1) + "…" : s;
 }
 
@@ -155,4 +159,40 @@ export function validateDraft(draft) {
     return { ok: false, value: v.slice(0, MESSAGE_MAX), reason: "too_long" };
   }
   return { ok: true, value: v, reason: null };
+}
+
+// ── Date separators in a thread ───────────────────────────────────────────
+// Returns a label like "Today", "Yesterday", "Sunday", or "17 Apr" for the
+// given ISO date, compared against `now`. Stable in any timezone.
+export function dateSeparatorLabel(iso, now) {
+  if (!iso) return "";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  var nowD = now ? new Date(now) : new Date();
+  // Compare by LOCAL calendar day.
+  function startOfDay(x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); }
+  var diffDays = Math.round((startOfDay(nowD) - startOfDay(d)) / (24 * 3600 * 1000));
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return d.toLocaleDateString([], { weekday: "long" });
+  return d.toLocaleDateString([], { day: "numeric", month: "short" });
+}
+
+// Given a sorted-ascending messages array, return a Set of message ids
+// that should display a date-separator row ABOVE them (the first message
+// of each calendar day). Pure — O(n).
+export function computeDateSeparatorIds(messages) {
+  var out = new Set();
+  var lastDayKey = null;
+  (messages || []).forEach(function (m) {
+    if (!m || !m.created_at) return;
+    var d = new Date(m.created_at);
+    if (isNaN(d.getTime())) return;
+    var key = d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate();
+    if (key !== lastDayKey) {
+      out.add(m.id);
+      lastDayKey = key;
+    }
+  });
+  return out;
 }

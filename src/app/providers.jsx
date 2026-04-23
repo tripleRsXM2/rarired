@@ -109,6 +109,12 @@ export default function Providers({ t, theme, children }){
         ".cs-notif-panel{top:0;right:0;left:auto;width:380px;height:100vh;max-height:100vh;",
           "border-radius:0;border-left:1px solid "+t.border+";animation:slideInRight .26s cubic-bezier(.32,.72,0,1) both}",
       "}",
+
+      // ── DM conversation details drawer — desktop-only reveal ─────────────
+      // The button is display:none in inline style (mobile default); this
+      // rule flips it to inline-flex at ≥1024px. Keeping the drawer off
+      // mobile avoids cramming a 300px pane beside a 390px thread.
+      "@media(min-width:1024px){.cs-dm-details-btn{display:inline-flex!important}}",
     ].join("");
     document.head.appendChild(el);
     document.body.style.background=t.bg;
