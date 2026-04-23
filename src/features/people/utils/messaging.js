@@ -23,11 +23,15 @@ export function formatMessageTime(iso, now) {
 // ── Conversation preview helpers ───────────────────────────────────────────
 
 // Unified truncation for message previews in the conversation list + reply bar.
-// Collapses runs of whitespace and hard-caps length.
+// Collapses runs of whitespace and hard-caps length. Image-attachment messages
+// (content starts with the "[img]" sentinel) render as "📷 Photo" instead of
+// the raw Supabase URL.
 export function previewify(text, max) {
   if (!text) return "";
+  var s = String(text).trim();
+  if (s.indexOf("[img]") === 0) return "📷 Photo";
   var m = max || 80;
-  var s = String(text).replace(/\s+/g, " ").trim();
+  s = s.replace(/\s+/g, " ");
   return s.length > m ? s.slice(0, m - 1) + "…" : s;
 }
 

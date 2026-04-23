@@ -386,14 +386,27 @@ async function main() {
         return { ok: true, text: (b.innerText || "").slice(0, 30) };
       });
       log("fiber el.click(): " + JSON.stringify(evalClickResult));
-      await page.waitForTimeout(500);
-      await page.screenshot({ path: path.join(OUT, "05-after-direct-click.png"), fullPage: true });
-      var menuState2 = await page.evaluate(function () {
-        var replyBtn = Array.from(document.querySelectorAll("button")).find(function (b) { return (b.innerText || "").trim() === "Reply"; });
-        return { menuOpen: !!replyBtn };
-      });
-      log("action menu after direct click: " + JSON.stringify(menuState2));
     }
+
+    // Whether menu opened via mouse or dispatch, capture its actual rect
+    // vs the bubble to confirm it sits beside the bubble (portal fix).
+    var menuPosCheck = await page.evaluate(function () {
+      var replyBtn = Array.from(document.querySelectorAll("button")).find(function (b) { return (b.innerText || "").trim() === "Reply"; });
+      if (!replyBtn) return { menuOpen: false };
+      // Walk up to the popup container with inline top/left.
+      var el = replyBtn;
+      while (el && !(el.style && el.style.top)) el = el.parentElement;
+      if (!el) return { menuOpen: true, reason: "no positioned ancestor" };
+      var r = el.getBoundingClientRect();
+      return {
+        menuOpen: true,
+        inlineTop: el.style.top, inlineLeft: el.style.left,
+        renderedTop: Math.round(r.top), renderedLeft: Math.round(r.left),
+        offsetY: Math.round(r.top - parseFloat(el.style.top || 0)),
+        offsetX: Math.round(r.left - parseFloat(el.style.left || 0)),
+      };
+    });
+    log("action menu position check: " + JSON.stringify(menuPosCheck));
   }
 
   fs.writeFileSync(path.join(OUT, "console.json"), JSON.stringify(consoleMessages, null, 2));

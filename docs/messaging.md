@@ -20,6 +20,7 @@ trade a quick note. Everything here is scoped to 1-to-1.
 | `message_reads` | Per-user-per-conv `last_read_at`. Written via `mark_conversation_read` RPC. | Security-definer RPC; client cannot write directly. |
 | `message_reactions` | `{id, message_id, user_id, emoji}`. Unique (message_id, user_id, emoji). | Client inserts/deletes with RLS. |
 | `conversation_pins` | `{user_id, conversation_id, pinned_at}` (compound PK). Per-user pin. | Client inserts/deletes with RLS (`user_id = auth.uid()`). |
+| Storage bucket `dm-attachments` | Public read, per-user-folder write. 5 MB limit, image mimes only. Image DMs store the public URL inside `direct_messages.content` via `[img]` sentinel. | Upload via `uploadDMAttachment(userId, file)`. |
 
 ### Migrations (the important ones)
 
@@ -116,6 +117,14 @@ sender cannot re-request during that window.
 
 ### Edit window
 Own, non-deleted messages are editable for 15 minutes after send.
+
+### Image attachments
+- Users can attach an image via the paperclip icon in the input bar. Accepted types: `image/png,image/jpeg,image/webp,image/gif`. Max size: **5 MB**.
+- Uploaded to the public `dm-attachments` Supabase Storage bucket under `<uid>/<ts>-<safe_name>`. RLS: anyone can read (public bucket); only the uploader can write to their own folder.
+- Image messages store the public URL in `direct_messages.content` with a `[img]` sentinel prefix. The renderer detects the prefix and shows an `<img>` bubble instead of text. Keeps the DB schema unchanged.
+- Tapping an image bubble opens a full-screen lightbox. Long-press / right-click opens the normal action menu (Reply / Delete for me / Unsend).
+- Conversation-list preview renders "📷 Photo" for image messages.
+- **GIFs as animated images are supported** (image/gif). A Giphy-style in-app search is NOT built — punted.
 
 ## Open questions / tracked follow-ups
 

@@ -43,6 +43,13 @@ describe("previewify", function () {
     expect(previewify(undefined)).toBe("");
     expect(previewify("")).toBe("");
   });
+  it("renders image-sentinel messages as '📷 Photo'", function () {
+    expect(previewify("[img]https://x.supabase.co/storage/v1/object/public/dm-attachments/u/1-a.jpg")).toBe("📷 Photo");
+    // Trailing whitespace should be tolerated.
+    expect(previewify("  [img]https://x.co/y.png  ")).toBe("📷 Photo");
+    // A message that merely MENTIONS [img] but doesn't start with it is plain text.
+    expect(previewify("check this [img]thing")).toBe("check this [img]thing");
+  });
 });
 
 describe("computeUnreadDividerIdx", function () {

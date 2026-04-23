@@ -13,6 +13,7 @@ import { getPresence } from "../services/presenceService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import EmojiPicker from "./EmojiPicker.jsx";
 import DetailsDrawer from "./DetailsDrawer.jsx";
+import { uploadDMAttachment, IMG_PREFIX, isImageMessageContent, extractImageUrl, MAX_ATTACHMENT_BYTES } from "../services/dmAttachmentUpload.js";
 import {
   formatMessageTime,
   previewify,
@@ -59,6 +60,14 @@ function IconPanelRight(p) {
     </svg>
   );
 }
+function IconPaperclip(p) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}>
+      <path d="M13.5 8.5L8 14a3 3 0 1 1-4.2-4.3l6.5-6.5a2 2 0 1 1 2.8 2.9L6.8 12.4a1 1 0 1 1-1.4-1.4l5.8-5.8"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
 
 export default function Messages({ t, authUser, dms, openProfile }) {
   var [menuState, setMenuState] = useState(null);          // { message, rect }
@@ -77,7 +86,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var editInputRef = useRef(null);
   var messagesEndRef = useRef(null);
   var emojiBtnRef = useRef(null);
+  var fileInputRef = useRef(null);
   var myId = authUser && authUser.id;
+  var [uploading, setUploading] = useState(false);
+  var [uploadError, setUploadError] = useState(null);
+  var [lightboxUrl, setLightboxUrl] = useState(null);
 
   // Hidden-for-me storage. Re-hydrated when the user changes (logout/login).
   var [hiddenIds, setHiddenIds] = useState(function () { return readHiddenMsgs(myId); });
@@ -187,6 +200,37 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       return;
     }
     dms.sendMessage(v.value);
+  }
+
+  // ── Image attachment ─────────────────────────────────────────────────────
+
+  function pickImageFile() {
+    setUploadError(null);
+    if (fileInputRef.current) fileInputRef.current.click();
+  }
+
+  async function onImageFilePicked(e) {
+    var file = e.target.files && e.target.files[0];
+    // Reset so selecting the same file again re-fires onChange.
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    var res = await uploadDMAttachment(myId, file);
+    setUploading(false);
+    if (res.error) {
+      setUploadError(res.error.message || "Upload failed.");
+      return;
+    }
+    // Send as an image message — content uses the [img] sentinel so the
+    // renderer shows an <img> bubble instead of text. Preserve whatever
+    // the user was typing in the text draft; sendMessage() clears it, so
+    // snapshot + restore on the next microtask.
+    var savedDraft = dms.msgDraft;
+    dms.sendMessage(IMG_PREFIX + res.url);
+    if (savedDraft) {
+      setTimeout(function () { dms.setMsgDraft(savedDraft); }, 0);
+    }
   }
 
   function insertEmojiAtCursor(emoji) {
@@ -344,22 +388,51 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     <div style={{ display: "flex", minHeight: "60vh" }}>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
 
-      {/* Settings bottom-sheet (gear icon). Portaled — same fade-up
-          transform containing-block issue that bit the other overlays. */}
+      {/* Conversation settings. Desktop: centered modal with a modest
+          width. Mobile: bottom-sheet with a grab handle. Decided via a
+          viewport-width check captured once on open — good enough for
+          the two layouts we care about. */}
       {showSettings && createPortal((
-        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.55)" }}
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 300,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            // Desktop: center. Mobile: align to bottom so the sheet sits there.
+            alignItems: (typeof window !== "undefined" && window.innerWidth >= 700) ? "center" : "flex-end",
+            justifyContent: "center",
+            padding: (typeof window !== "undefined" && window.innerWidth >= 700) ? 16 : 0,
+          }}
           onClick={function () { setShowSettings(false); }}>
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: t.bgCard, borderRadius: "20px 20px 0 0", padding: "20px 20px calc(20px + env(safe-area-inset-bottom))" }}
-            onClick={function (e) { e.stopPropagation(); }}>
-            <div style={{ width: 32, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 20px" }} />
+          <div
+            onClick={function (e) { e.stopPropagation(); }}
+            style={(typeof window !== "undefined" && window.innerWidth >= 700)
+              ? {
+                  // Desktop modal
+                  width: "100%", maxWidth: 360,
+                  background: t.bgCard, border: "1px solid " + t.border,
+                  borderRadius: 14, padding: "20px",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+                }
+              : {
+                  // Mobile bottom sheet
+                  width: "100%",
+                  background: t.bgCard,
+                  borderRadius: "20px 20px 0 0",
+                  padding: "20px 20px calc(20px + env(safe-area-inset-bottom))",
+                }
+            }>
+            {!(typeof window !== "undefined" && window.innerWidth >= 700) && (
+              <div style={{ width: 32, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 20px" }} />
+            )}
             <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 4 }}>{conv.partner.name}</div>
             <div style={{ fontSize: 12, color: t.textTertiary, marginBottom: 20 }}>Conversation settings</div>
             <button onClick={function () { setShowSettings(false); setShowDeleteConfirm(true); }}
-              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + t.red, background: "transparent", color: t.red, fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + t.red, background: "transparent", color: t.red, fontSize: 14, fontWeight: 600, marginBottom: 8, cursor: "pointer" }}>
               Delete Conversation
             </button>
             <button onClick={function () { setShowSettings(false); }}
-              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 14 }}>
+              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 14, cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -522,30 +595,65 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                         <button onClick={function () { dms.submitEdit(msg.id); }} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: t.accent, color: t.accentText, fontSize: 12, fontWeight: 700, flexShrink: 0, cursor: "pointer" }}>Save</button>
                         <button onClick={dms.cancelEdit} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 12, flexShrink: 0, cursor: "pointer" }}>✕</button>
                       </div>
-                    ) : (
-                      <div
-                        onTouchStart={function (e) { handleTouchStart(e, msg); }}
-                        onTouchEnd={handleTouchEnd}
-                        onTouchMove={handleTouchEnd}
-                        onClick={function (e) { handleBubbleClick(e, msg); }}
-                        onContextMenu={function (e) { handleContextMenu(e, msg); }}
-                        style={{
-                          background: mine ? t.accent : t.bgCard,
-                          color: mine ? t.accentText : t.text,
-                          border: mine ? "none" : "1px solid " + t.border,
-                          borderRadius: mine ? (replyMsg ? "0 16px 4px 16px" : "16px 16px 4px 16px") : (replyMsg ? "16px 0 16px 4px" : "16px 16px 16px 4px"),
-                          padding: "9px 13px", fontSize: 14, lineHeight: 1.45,
-                          wordBreak: "break-word", whiteSpace: "pre-wrap",
-                          cursor: "pointer", userSelect: "none", WebkitUserSelect: "none",
-                          WebkitTouchCallout: "none",
-                          opacity: msg.deleted_at ? 0.5 : 1, fontStyle: msg.deleted_at ? "italic" : undefined,
-                        }}>
-                        {msg.deleted_at ? "Message deleted" : msg.content}
-                        {msg.edited_at && !msg.deleted_at && (
-                          <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 6 }}>edited</span>
-                        )}
-                      </div>
-                    )}
+                    ) : (() => {
+                      var isImg = !msg.deleted_at && isImageMessageContent(msg.content);
+                      var imgUrl = isImg ? extractImageUrl(msg.content) : null;
+                      var bubbleStyle = isImg ? {
+                        // Image bubble — no background/padding so the image
+                        // reads as the whole surface. Keep rounded corners
+                        // + tail to match text bubbles.
+                        background: "transparent",
+                        padding: 0,
+                        border: mine ? "none" : "1px solid " + t.border,
+                        borderRadius: mine ? (replyMsg ? "0 16px 4px 16px" : "16px 16px 4px 16px") : (replyMsg ? "16px 0 16px 4px" : "16px 16px 16px 4px"),
+                        overflow: "hidden",
+                        cursor: "pointer", userSelect: "none", WebkitUserSelect: "none",
+                        WebkitTouchCallout: "none",
+                        maxWidth: 260,
+                      } : {
+                        background: mine ? t.accent : t.bgCard,
+                        color: mine ? t.accentText : t.text,
+                        border: mine ? "none" : "1px solid " + t.border,
+                        borderRadius: mine ? (replyMsg ? "0 16px 4px 16px" : "16px 16px 4px 16px") : (replyMsg ? "16px 0 16px 4px" : "16px 16px 16px 4px"),
+                        padding: "9px 13px", fontSize: 14, lineHeight: 1.45,
+                        wordBreak: "break-word", whiteSpace: "pre-wrap",
+                        cursor: "pointer", userSelect: "none", WebkitUserSelect: "none",
+                        WebkitTouchCallout: "none",
+                        opacity: msg.deleted_at ? 0.5 : 1, fontStyle: msg.deleted_at ? "italic" : undefined,
+                      };
+                      return (
+                        <div
+                          onTouchStart={function (e) { handleTouchStart(e, msg); }}
+                          onTouchEnd={handleTouchEnd}
+                          onTouchMove={handleTouchEnd}
+                          onClick={function (e) {
+                            if (isImg && imgUrl) {
+                              // On image bubbles, a plain left-click opens
+                              // the lightbox. Long-press / right-click still
+                              // open the action menu via onContextMenu.
+                              setLightboxUrl(imgUrl);
+                              return;
+                            }
+                            handleBubbleClick(e, msg);
+                          }}
+                          onContextMenu={function (e) { handleContextMenu(e, msg); }}
+                          style={bubbleStyle}>
+                          {msg.deleted_at
+                            ? "Message deleted"
+                            : isImg
+                              ? <img
+                                  src={imgUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  style={{ display: "block", maxWidth: "100%", maxHeight: 320, objectFit: "cover" }}
+                                />
+                              : msg.content}
+                          {msg.edited_at && !msg.deleted_at && !isImg && (
+                            <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 6 }}>edited</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {Object.keys(reactionGroups).length > 0 && (
                       <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap", justifyContent: mine ? "flex-end" : "flex-start" }}>
                         {Object.entries(reactionGroups).map(function ([emoji, users]) {
@@ -591,7 +699,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         var items = [
           { label: "Reply", icon: IconReply, show: true,
             action: function () { dms.setReplyTo(menuState.message); closeMenu(); setTimeout(function () { inputRef.current && inputRef.current.focus(); }, 50); } },
-          { label: "Copy", icon: IconCopy, show: !menuState.message.deleted_at,
+          { label: "Copy", icon: IconCopy, show: !menuState.message.deleted_at && !isImageMessageContent(menuState.message.content),
             action: function () { navigator.clipboard && navigator.clipboard.writeText(menuState.message.content); closeMenu(); } },
           { label: "Edit", icon: IconEdit, show: canEdit,
             action: function () { dms.startEdit(menuState.message); closeMenu(); } },
@@ -689,9 +797,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       )}
 
+      {/* Sticky input region — stays pinned to the viewport bottom as the
+          user scrolls through the thread. Contains the reply preview, the
+          pending-request accept banner (when relevant), and the input bar.
+          Background is opaque so scrolling content slides behind it. */}
+      <div style={{
+        position: "sticky", bottom: 0, zIndex: 10,
+        background: t.bg, marginTop: 8,
+        // Extend the background a bit above so the content doesn't peek
+        // through at the top edge of the sticky region.
+        paddingTop: 8,
+      }}>
       {/* Reply preview */}
       {dms.replyTo && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: t.bgTertiary, borderTop: "2px solid " + t.accent, borderRadius: "8px 8px 0 0", marginTop: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: t.bgTertiary, borderTop: "2px solid " + t.accent, borderRadius: "8px 8px 0 0" }}>
           <div style={{ flex: 1, fontSize: 12, color: t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             <span style={{ fontWeight: 700, color: t.accent, marginRight: 4 }}>Replying</span>
             {previewify(dms.replyTo.content, 140)}
@@ -700,9 +819,26 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       )}
 
+      {/* Upload-error toast — small inline strip above input, disappears
+          when the user next successfully picks a file or types. */}
+      {uploadError && (
+        <div style={{ padding: "6px 10px", background: (t.redSubtle || "rgba(220,38,38,0.1)"), color: t.red, fontSize: 12, borderRadius: 8, marginBottom: 6 }}>
+          {uploadError}
+        </div>
+      )}
+
+      {/* Hidden file input driven by the paperclip button. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        style={{ display: "none" }}
+        onChange={onImageFilePicked}
+      />
+
       {/* Input */}
       {(!isPending || iAmSender) && (
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: dms.replyTo ? 0 : 8, paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: dms.replyTo ? 0 : 0, paddingBottom: "env(safe-area-inset-bottom)" }}>
           <button
             ref={emojiBtnRef}
             type="button"
@@ -719,6 +855,20 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               borderRadius: 12, color: t.text, fontSize: 18, cursor: "pointer",
               padding: 0,
             }}>😊</button>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={pickImageFile}
+            aria-label="Attach image"
+            style={{
+              width: 38, height: 42, flexShrink: 0,
+              background: "transparent", border: "1px solid " + t.border,
+              borderRadius: 12, color: uploading ? t.textTertiary : t.text,
+              cursor: uploading ? "wait" : "pointer",
+              padding: 0, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+            {uploading ? <span style={{ fontSize: 11 }}>…</span> : <IconPaperclip/>}
+          </button>
           <textarea
             ref={inputRef}
             rows={1}
@@ -761,6 +911,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           onClose={function () { setShowInputEmoji(null); }}
         />
       )}
+      </div>{/* /sticky input region */}
       </div>{/* /thread column */}
 
       {/* Details drawer (desktop only per .cs-dm-details-btn media query;
@@ -775,6 +926,28 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           onClose={function () { setShowDetails(false); }}
         />
       )}
+
+      {/* Image lightbox — full-viewport dark overlay, click anywhere to
+          dismiss. Portaled for the same containing-block reason as the
+          other overlays. */}
+      {lightboxUrl && createPortal((
+        <div
+          role="dialog" aria-label="Image preview" aria-modal="true"
+          onClick={function () { setLightboxUrl(null); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 500,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16, cursor: "zoom-out",
+          }}>
+          <img
+            src={lightboxUrl}
+            alt=""
+            style={{ maxWidth: "100%", maxHeight: "100%", display: "block", objectFit: "contain" }}
+            onClick={function (e) { e.stopPropagation(); }}
+          />
+        </div>
+      ), document.body)}
     </div>
   );
 }
