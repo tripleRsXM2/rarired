@@ -21,6 +21,13 @@ export default function Providers({ t, theme, children }){
       "@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}",
       "@keyframes reveal{from{clip-path:inset(100% 0 0 0)}to{clip-path:inset(0 0 0 0)}}",
       "@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}",
+      // Brief accent ring pulse — used when deep-linking into a list to
+      // visually guide the eye to the row that was just targeted (e.g.
+      // tapping a challenge_received notification scrolls to + pulses
+      // the matching row on /tournaments/challenges).
+      "@keyframes deeplinkPulse{0%{box-shadow:0 0 0 0 "+t.accent+"00,0 0 0 0 "+t.accent+"00}"+
+        "10%{box-shadow:0 0 0 4px "+t.accent+",0 0 24px 0 "+t.accent+"66}"+
+        "100%{box-shadow:0 0 0 0 "+t.accent+"00,0 0 0 0 "+t.accent+"00}}",
 
       // ── Animation classes ─────────────────────────────────────────────────
       ".slide-in-right{animation:slideInRight .28s cubic-bezier(.32,.72,0,1) both}",
@@ -28,6 +35,7 @@ export default function Providers({ t, theme, children }){
       ".pop{animation:pop .22s cubic-bezier(.34,2.27,.64,1) both}",
       ".slide-up{animation:slideUp .36s cubic-bezier(.32,.72,0,1) both}",
       ".reveal{animation:reveal .4s cubic-bezier(.32,.72,0,1) both}",
+      ".cs-deeplink-pulse{animation:deeplinkPulse 1.8s cubic-bezier(.32,.72,0,1) both;border-radius:inherit}",
 
       // ── Responsive layout shell ───────────────────────────────────────────
       // Mobile default: single column, block layout

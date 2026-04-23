@@ -176,7 +176,10 @@ function NotifRow({
     if (e) e.stopPropagation();
     track("notification_opened", { type: n.type, deep_link_target: "feed" });
     if (refreshHistory) refreshHistory();
-    navigate("/home");
+    // Carry the match id so the destination feed can scroll-to + highlight.
+    // Feed reads this via useLocation().state.highlightMatchId.
+    var highlightMatchId = n.match_id || n.entity_id || null;
+    navigate("/home", highlightMatchId ? { state: { highlightMatchId: highlightMatchId } } : undefined);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
     dismissIfActivity();
@@ -203,14 +206,19 @@ function NotifRow({
   function goChallenges(e) {
     if (e) e.stopPropagation();
     track("notification_opened", { type: n.type, deep_link_target: "challenges" });
-    navigate("/tournaments/challenges");
+    // Pass the challenge id so ChallengesPanel can scroll+highlight the row.
+    var highlightChallengeId = n.entity_id || null;
+    navigate("/tournaments/challenges",
+      highlightChallengeId ? { state: { highlightChallengeId: highlightChallengeId } } : undefined);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }
   function goLeagues(e) {
     if (e) e.stopPropagation();
     track("notification_opened", { type: n.type, deep_link_target: "leagues" });
-    navigate("/tournaments/leagues");
+    var highlightLeagueId = n.entity_id || null;
+    navigate("/tournaments/leagues",
+      highlightLeagueId ? { state: { highlightLeagueId: highlightLeagueId } } : undefined);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
   }

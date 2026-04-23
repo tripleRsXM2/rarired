@@ -7,6 +7,7 @@ import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 import NextChallengeBanner from "../../challenges/components/NextChallengeBanner.jsx";
+import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 var REASON_LABELS = {
   wrong_score:   "Score is wrong",
@@ -118,6 +119,9 @@ function FeedCard({
   openProfile, openChallenge, toast,
   // Module — FeedInteractionsModal trigger.
   onOpenInteractions,
+  // Deep-link anchor: { ref, className } from useDeepLinkHighlight.rowProps.
+  // Spread onto the outer card div so scroll-to + pulse target this row.
+  rowAnchor,
 }) {
   // Identity resolvers — who is the "poster" and who is the "opponent" from
   // the viewer's POV, so the right user IDs get wired into the profile links.
@@ -280,9 +284,13 @@ function FeedCard({
                ? (isDisputed ? t.redSubtle : t.orangeSubtle)
                : t.bgCard;
 
+  // If rowAnchor has a className (deep-link active), merge with cs-card so
+  // the pulse ring renders alongside the regular card hover styling.
+  var mergedClassName = "cs-card" + (rowAnchor && rowAnchor.className ? " " + rowAnchor.className : "");
   return (
     <div
-      className="cs-card"
+      ref={rowAnchor && rowAnchor.ref}
+      className={mergedClassName}
       style={{
         background: cardBg,
         border: cardBorder,
@@ -906,6 +914,10 @@ export default function HomeTab({
   // and a callback to deep-link into a specific league's detail view.
   leaguesIndex, onOpenLeague,
 }) {
+  // Deep-link: when we arrive from a notification that carries a
+  // highlightMatchId in router state, scroll to that FeedCard and pulse it.
+  var matchDeepLink = useDeepLinkHighlight("highlightMatchId");
+
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
   var [feedFilter, setFeedFilter] = useState("everyone");
@@ -1189,6 +1201,7 @@ export default function HomeTab({
                 oppAvatarUrl={oppAvatarUrl}
                 onDelete={isOwn ? deleteMatch : null}
                 onRemove={m.isTagged ? removeTaggedMatch : null}
+                rowAnchor={matchDeepLink.rowProps(m.id)}
                 {...feedCardProps}
               />
             );
