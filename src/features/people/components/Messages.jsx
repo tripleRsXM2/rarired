@@ -563,15 +563,26 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   // sidebar) via position:fixed, with empty space between it and the
   // thread. This matches the pattern the user sketched in feedback
   // instead of pinning the list immediately next to the thread column.
+  // List width is FIXED at 280 so it doesn't visibly shrink as the
+  // window resizes — user reported the continuous shrink was jarring.
+  // Two-pane stays on only while the gutter left of the 680 reading
+  // column actually fits 280 + its 24px gap from the thread. When it
+  // can't, we collapse to single-column (same mobile fallback).
+  // List is pinned to the sidebar's right edge and never moves. As
+  // the window shrinks, the thread column slides left toward the list;
+  // once the gap between them drops under ~2cm, we snap to single-
+  // column (user rule: list is anchored to the left, disappears when
+  // it would be too close to the thread).
   var MAX_LIST_W = 280;
-  var MIN_LIST_W = 220;
+  var LIST_GAP = 76; // ~2cm @ 96 DPI — minimum allowed gap
+  var LIST_LEFT_INSET = 8; // gutter between sidebar and list
   var availableW = viewport.width - viewport.sidebarW - viewport.rightPanelW;
-  // Available space to the left of the reading column, minus an 8px
-  // gutter from the sidebar and a 16px gap before the thread. Clamp
-  // list width 220–280px.
-  var listRoom = Math.max(0, Math.floor((availableW - 680) / 2) - 24);
-  var LIST_W = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, listRoom));
-  var twoPane = isDesktopDM;
+  var threadLeft = viewport.sidebarW + Math.max(0, Math.floor((availableW - 680) / 2));
+  var LIST_LEFT = viewport.sidebarW + LIST_LEFT_INSET;
+  var listRight = LIST_LEFT + MAX_LIST_W;
+  var gap = threadLeft - listRight;
+  var LIST_W = MAX_LIST_W;
+  var twoPane = isDesktopDM && gap >= LIST_GAP;
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
   return (
@@ -592,7 +603,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             <div className="cs-dm-list-pane" style={{
               position: "fixed",
               top: "var(--cs-nav-h)",
-              left: viewport.sidebarW + "px",
+              left: LIST_LEFT + "px",
               width: LIST_W + "px",
               height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
               background: t.bg,
