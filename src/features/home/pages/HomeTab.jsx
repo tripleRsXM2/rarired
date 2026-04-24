@@ -277,19 +277,12 @@ function FeedCard({
   // ranking effect.
   var isRanked       = !!m.tournName && m.tournName !== "Casual Match" && m.tournName !== "Casual";
   var canSubmitterDelete = isOwn && onDelete && !isInDispute && (!isRanked || isVoided);
+  var cardBorder = statusColor
+                   ? (needsAction ? "2px solid " + statusColor : "1px solid " + statusColor + "88")
+                   : "1px solid " + t.border;
   var cardBg = needsAction && statusColor
                ? (isDisputed ? t.redSubtle : t.orangeSubtle)
                : t.bgCard;
-  // Roland Garros brush-stroke border — feTurbulence+feDisplacementMap filter
-  // (defined once in providers.jsx) applied to an SVG overlay rect. Stroke
-  // colour + width derive from the same status-colour logic that used to
-  // drive the CSS `cardBorder` string, so pending/disputed still get their
-  // visual emphasis. See docs/superpowers/specs/2026-04-24-feedcard-
-  // brushstroke-border-design.md for the reasoning.
-  var strokeColor = statusColor
-                    ? (needsAction ? statusColor : statusColor + "88")
-                    : t.border;
-  var strokeWidth = (statusColor && needsAction) ? 2 : 1;
 
   // If rowAnchor has a className (deep-link active), merge with cs-card so
   // the pulse ring renders alongside the regular card hover styling.
@@ -300,41 +293,17 @@ function FeedCard({
       className={mergedClassName}
       style={{
         background: cardBg,
-        // Transparent CSS border reserves the pixel so the SVG overlay below
-        // doesn't push content. The overlay is the visual border.
-        border: strokeWidth + "px solid transparent",
-        borderRadius: 0,
-        position: "relative",
+        border: cardBorder,
+        // Elegant, refined corner softening. 10px is tight enough to read
+        // as intentional rather than playful, generous enough to remove the
+        // hard rectangle without making the card feel like a button. Matches
+        // the radius token pattern used elsewhere in the theme (t.r2).
+        borderRadius: 10,
         overflow: "hidden",
         marginBottom: 14,
         opacity: cardOpacity,
       }}
     >
-      {/* Brush-stroke border overlay. Absolutely positioned over the card
-          footprint, non-interactive, sits above content so the painted line
-          reads as the outer edge. The rect is inset by half the stroke
-          width on every edge so all four sides render equally inside the
-          card (SVG stroke is centred on the path). calc() goes on `style`
-          because SVG length *attributes* don't accept calc() — only CSS
-          length *properties* (SVG2) do. */}
-      <svg
-        aria-hidden="true"
-        width="100%" height="100%"
-        preserveAspectRatio="none"
-        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        <rect
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          filter="url(#cs-brushstroke)"
-          style={{
-            x: (strokeWidth / 2) + "px",
-            y: (strokeWidth / 2) + "px",
-            width: "calc(100% - " + strokeWidth + "px)",
-            height: "calc(100% - " + strokeWidth + "px)",
-          }}/>
-      </svg>
-
       {/* ── Header — tightened sizing to feel refined, not chunky ── */}
       <div style={{ padding: "14px 16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
         {/* Poster avatar — real photo if we have one (uploaded avatar_url),
