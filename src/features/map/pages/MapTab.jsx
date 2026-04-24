@@ -141,7 +141,9 @@ export default function MapTab({
         );
       })()}
 
-      {/* Side panel — slides in when a zone is selected */}
+      {/* Side panel — primary workspace when a zone is selected.
+          Selection-then-action pattern: user highlights a court, then
+          1+ players, then fires a batched Message or a single Challenge. */}
       <ZoneSidePanel
         t={t} zone={selectedZone} onClose={function(){ setSelected(null); }}
         authUser={authUser} profile={profile}
@@ -156,19 +158,18 @@ export default function MapTab({
           });
           if(onOpenProfile) onOpenProfile(uid);
         }}
-        onMessagePlayer={function(partner, slotOpts){
-          if(!partner || !partner.id) return;
-          if(selectedZone) track("profile_opened_from_map", {
-            target_user_id: partner.id, zone_id: selectedZone.id, source: "zone_player_message",
-          });
-          if(onMessagePlayer) onMessagePlayer(partner, slotOpts);
-          setSelected(null); // close the side panel — we're switching tabs
+        onMessageSelected={function(partners, ctx){
+          if(!partners || !partners.length) return;
+          if(onMessagePlayer) onMessagePlayer(partners, ctx);
         }}
-        onCourtSelect={function(c){
-          // User tapped a court inside the zone panel — open the same
-          // CourtInfoCard the map pin would, so they get the ranked
-          // player list + booking + Message CTA from one flow.
-          handleCourtSelect(c);
+        onChallengeSelected={function(partner, ctx){
+          if(!partner || !partner.id) return;
+          if(selectedZone) track("challenge_from_map", {
+            target_user_id: partner.id,
+            zone_id: selectedZone.id,
+            source: "zone_panel",
+          });
+          if(openChallenge) openChallenge(partner, "map", null);
         }}
       />
 

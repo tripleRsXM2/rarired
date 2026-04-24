@@ -24,13 +24,19 @@ import {
 import { track } from "../../../lib/analytics.js";
 
 export default function ComposeMessageModal({
-  t, partner, dms,
+  t, partners, partner, dms,
   initialVenue, initialDate, initialTime,
   onClose, onSent, onViewConv,
   // Analytics context — zone / court so we can attribute sends to
   // their map origin. Optional.
   contextZoneId, contextCourtName,
 }) {
+  // Unify the single-partner and partners[] call paths. Callers can pass
+  // either `partner` (one) or `partners` (array) — we normalise to an
+  // array internally so the Send path can iterate. Keeps legacy call
+  // sites working while the new selection flow sends doubles invites
+  // through as a batch.
+  var recipients = partners && partners.length ? partners : (partner ? [partner] : []);
   var [venue, setVenue]    = useState(initialVenue || "");
   var [date, setDate]      = useState(initialDate || "");
   var [time, setTime]      = useState(initialTime || "");
@@ -54,42 +60,52 @@ export default function ComposeMessageModal({
   var canSend = !!draft.trim() && !sending && validation.ok;
 
   async function handleSend() {
-    if (!canSend || !partner || !partner.id || !dms) return;
+    if (!canSend || !recipients.length || !dms) return;
     setError("");
     setSending(true);
 
-    // Prime the conversation + composer state. openConversationWith
-    // sets activeConvRef.current synchronously, so the subsequent
-    // sendMessage reads the right conv.
-    var opened = await dms.openConversationWith(partner, {
-      slot: (venue || date || time) ? { venue: venue, date: date, time: time } : null,
-      draft: draft,
-    });
-    if (opened && opened.error) {
-      setError(opened.error);
-      setSending(false);
-      return;
+    // Each recipient gets the same interpolated draft, fired as its own
+    // 1-on-1 DM (we don't have group conversations yet). For the caller's
+    // happy path (single partner) this is one round-trip; for a doubles
+    // invite to 3 partners it's three. We iterate serially so a
+    // mid-batch failure leaves partial state the user can see rather
+    // than nuking everything.
+    var failed = [];
+    for (var i = 0; i < recipients.length; i++) {
+      var p = recipients[i];
+      if (!p || !p.id) continue;
+      var opened = await dms.openConversationWith(p, {
+        slot: (venue || date || time) ? { venue: venue, date: date, time: time } : null,
+        draft: draft,
+      });
+      if (opened && opened.error) { failed.push({ p: p, err: opened.error }); continue; }
+      try {
+        await dms.sendMessage(draft);
+      } catch (e) {
+        failed.push({ p: p, err: "send_failed" });
+        continue;
+      }
+      track("dm_sent_from_map", {
+        target_user_id: p.id,
+        court_name: contextCourtName || null,
+        zone_id:    contextZoneId || null,
+        template_id: templateId,
+        has_date: !!date,
+        has_time: !!time,
+        batch_size: recipients.length,
+      });
     }
-
-    try {
-      await dms.sendMessage(draft);
-    } catch (e) {
-      setError("Could not send. Try again.");
-      setSending(false);
-      return;
-    }
-
-    track("dm_sent_from_map", {
-      target_user_id: partner.id,
-      court_name: contextCourtName || null,
-      zone_id:    contextZoneId || null,
-      template_id: templateId,
-      has_date: !!date,
-      has_time: !!time,
-    });
 
     setSending(false);
-    if (onSent) onSent();
+    if (failed.length === recipients.length) {
+      setError("Couldn't send. Try again.");
+      return;
+    }
+    if (failed.length) {
+      setError("Sent to " + (recipients.length - failed.length) + " of " + recipients.length + ". Retry the rest?");
+      return;
+    }
+    if (onSent) onSent(recipients.length);
   }
 
   var inputStyle = {
@@ -114,16 +130,35 @@ export default function ComposeMessageModal({
           borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
           padding: "18px 18px 16px",
         }}>
-        {/* Header — partner identity */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <PlayerAvatar name={partner && partner.name} avatar={partner && partner.avatar} avatarUrl={partner && partner.avatar_url} size={36}/>
+        {/* Header — one recipient or a stack of up to 3 */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
+          {recipients.length === 1 ? (
+            <PlayerAvatar name={recipients[0].name} avatar={recipients[0].avatar} avatarUrl={recipients[0].avatar_url} size={36}/>
+          ) : (
+            <div style={{ display: "flex" }}>
+              {recipients.slice(0, 3).map(function (p, i) {
+                return (
+                  <div key={p.id} style={{ marginLeft: i === 0 ? 0 : -10, zIndex: 10 - i, borderRadius: "50%", boxShadow: "0 0 0 2px " + t.modalBg }}>
+                    <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 10, letterSpacing: "0.1em", color: t.textTertiary, textTransform: "uppercase" }}>
-              New message to
+              {recipients.length > 1 ? ("New message · " + recipients.length + " people") : "New message to"}
             </div>
             <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {(partner && partner.name) || "Player"}
+              {recipients.length
+                ? recipients.map(function (p) { return p.name || "Player"; }).join(", ")
+                : "Player"}
             </div>
+            {recipients.length > 1 && (
+              <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 2 }}>
+                Each gets the same message in their own thread.
+              </div>
+            )}
           </div>
           <button onClick={onClose}
             style={{ background: "none", border: "none", color: t.textTertiary, fontSize: 22, lineHeight: 1, padding: 4, cursor: "pointer" }}>

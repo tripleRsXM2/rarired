@@ -1,64 +1,91 @@
 // src/features/map/components/ZoneSidePanel.jsx
 //
-// Slides in from the right when a zone is selected. Shows:
-//   • zone number + name + blurb
-//   • courts nearby count + list
-//   • "Players here" list (from profiles.home_zone)
-//   • "Set as home area" toggle — writes profile.home_zone
-//   • "Browse players here" — routes to People with the zone filter
+// Primary map-pivot workspace. Slides in when a zone is selected.
+// Selection-then-action pattern (per user feedback):
 //
-// Uses the app theme tokens for chrome; keeps the zone accent color
-// only for the zone dot/number.
+//   1. Courts list: single-select. Tapping Prince Alfred highlights it
+//      as the active court (no modal open — inline state only).
+//   2. Players list re-scopes to the selected court (or home-zone
+//      players when none selected) with the same ranking the
+//      CourtInfoCard uses — plays-here + skill + availability.
+//   3. Player rows are multi-select up to 3 (enough for doubles).
+//   4. Floating action bar at the bottom: [Message] (any count) and
+//      [Challenge] (exactly 1). Opens the ComposeMessageModal or the
+//      challenge composer upstream.
+//
+// Keeps:
+//   • Set-as-home-area toggle (footer secondary affordance)
+//   • Inline "Book ↗" link per court (native right-click works)
+//
+// Drops:
+//   • "click court → open CourtInfoCard modal" (that modal is still
+//     reachable from the map pin if users want the detailed view)
 
 import { useEffect, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
-import { fetchPlayersInZone } from "../services/mapService.js";
+import { fetchPlayersInZone, fetchPlayersAtCourt } from "../services/mapService.js";
+
+var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
 
 export default function ZoneSidePanel({
   t, zone, onClose,
   authUser, profile, homeZone, onSetHome, onClearHome,
   onOpenProfile, activity,
-  // Phase 2 — fires dms.openConversationWith + navigates.
-  // Shape: onMessagePlayer(partner, { venue, date, time, draft })
-  onMessagePlayer,
-  // User feedback: courts listed in the zone panel weren't interactive.
-  // onCourtSelect opens the same CourtInfoCard the map pin would —
-  // user can pick a player from there without hunting for the marker.
-  onCourtSelect,
+  // Action handlers — invoked by the footer CTAs.
+  // onMessageSelected(partners[], slotHints) — array, supports doubles.
+  // onChallengeSelected(partner)            — single, challenges are 1:1 today.
+  onMessageSelected, onChallengeSelected,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
 
-  // Re-fetch when the zone changes OR when the user's home zone changes,
-  // so setting/clearing "home" in this panel refreshes the list without
-  // needing to close + reopen the panel.
-  useEffect(function(){
-    if(!zone) return;
-    setLoading(true);
-    fetchPlayersInZone(zone.id, 20).then(function(r){
-      if(r.error){ console.error("[MapTab] fetchPlayersInZone:",r.error); setPlayers([]); }
-      else setPlayers(r.data||[]);
-      setLoading(false);
-    });
-  },[zone&&zone.id, homeZone]);
+  // Single-selected court (by name) and multi-selected player ids.
+  // Local to the panel — if a user closes it we reset, which matches
+  // the user's mental model of "this is my current workspace".
+  var [selectedCourt, setSelectedCourt] = useState(null);
+  var [selectedIds, setSelectedIds]     = useState([]);
 
-  // If the current user just set this zone as home, optimistically include
-  // them at the top of the list so the UI reflects it instantly even before
-  // the re-fetch resolves.
+  // Clear selection whenever the panel closes / switches zones.
+  useEffect(function () {
+    setSelectedCourt(null);
+    setSelectedIds([]);
+  }, [zone && zone.id]);
+
+  // Fetch the player list. When a court is selected, we use the
+  // CourtInfoCard-style ranking (plays-here + skill + avail). When no
+  // court is selected, we fall back to the lightweight home-zone
+  // roster so the panel still has something to show on open.
+  useEffect(function(){
+    if (!zone) return;
+    setLoading(true);
+    if (selectedCourt) {
+      fetchPlayersAtCourt(selectedCourt, (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id }, 20)
+        .then(function (r) {
+          if (r.error) { console.warn("[ZoneSidePanel] playersAtCourt:", r.error); setPlayers([]); }
+          else setPlayers(r.data || []);
+          setLoading(false);
+        });
+    } else {
+      fetchPlayersInZone(zone.id, 20).then(function(r){
+        if(r.error){ console.error("[MapTab] fetchPlayersInZone:",r.error); setPlayers([]); }
+        else setPlayers(r.data||[]);
+        setLoading(false);
+      });
+    }
+  },[zone && zone.id, selectedCourt, homeZone, authUser && authUser.id]);
+
+  // Same optimistic-you-are-home hack as before — preserves the UX
+  // where setting home immediately lists you in the zone.
   var displayPlayers = players;
-  if(zone && authUser && homeZone === zone.id && profile){
+  if (!selectedCourt && zone && authUser && homeZone === zone.id && profile) {
     var alreadyThere = players.some(function(p){ return p.id === authUser.id; });
-    if(!alreadyThere){
+    if (!alreadyThere) {
       displayPlayers = [{
         id: authUser.id,
-        name: profile.name,
-        avatar: profile.avatar,
-        avatar_url: profile.avatar_url,
-        skill: profile.skill,
-        ranking_points: profile.ranking_points,
-        suburb: profile.suburb,
-        home_zone: zone.id,
+        name: profile.name, avatar: profile.avatar, avatar_url: profile.avatar_url,
+        skill: profile.skill, ranking_points: profile.ranking_points,
+        suburb: profile.suburb, home_zone: zone.id,
       }].concat(players);
     }
   }
@@ -70,9 +97,29 @@ export default function ZoneSidePanel({
   var isHome = homeZone === zone.id;
   var canSetHome = !!authUser;
 
+  function toggleCourt(c) {
+    setSelectedCourt(function (prev) { return prev === c.name ? null : c.name; });
+    setSelectedIds([]); // resetting players when changing court avoids a stale "selected" chip for someone who isn't in the new list
+  }
+
+  function togglePlayer(p) {
+    if (!authUser || p.id === authUser.id) return;
+    setSelectedIds(function (prev) {
+      if (prev.indexOf(p.id) >= 0) return prev.filter(function (x) { return x !== p.id; });
+      if (prev.length >= MAX_SELECT) return prev; // cap — 3 others = doubles
+      return prev.concat([p.id]);
+    });
+  }
+
+  var selectedCount = selectedIds.length;
+  var selectedPartners = selectedIds.map(function (id) {
+    return displayPlayers.find(function (p) { return p.id === id; });
+  }).filter(Boolean);
+  var showActionBar = selectedCount > 0;
+
   return (
     <div className="slide-in-right" style={{
-      position:"absolute", top:0, right:0, bottom:0, width:320,
+      position:"absolute", top:0, right:0, bottom:0, width:360,
       background: t.bgCard, borderLeft: "1px solid "+t.border,
       display:"flex", flexDirection:"column", zIndex:500,
       boxShadow:"-8px 0 32px rgba(0,0,0,0.06)",
@@ -101,7 +148,7 @@ export default function ZoneSidePanel({
         <div style={{ fontSize:12, color:t.textSecondary, marginTop:12, lineHeight:1.45 }}>{zone.blurb}</div>
       </div>
 
-      {/* Stats row — three columns when we have activity, two otherwise. */}
+      {/* Stats row */}
       <div style={{
         display:"grid",
         gridTemplateColumns: activity && activity.matches_7d > 0 ? "1fr 1fr 1fr" : "1fr 1fr",
@@ -112,14 +159,12 @@ export default function ZoneSidePanel({
           <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Courts nearby</div>
         </div>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading?"…":displayPlayers.length}</div>
+          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading ? "…" : displayPlayers.length}</div>
           <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Players here</div>
         </div>
         {activity && activity.matches_7d > 0 && (
           <div>
-            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>
-              🔥 {activity.matches_7d}
-            </div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>🔥 {activity.matches_7d}</div>
             <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>
               Matches · 7d
             </div>
@@ -127,131 +172,168 @@ export default function ZoneSidePanel({
         )}
       </div>
 
-      {/* Scrollable body */}
+      {/* Scrollable body — courts + players */}
       <div style={{ flex:1, overflowY:"auto", padding:"14px 20px 20px" }}>
 
-        {/* Courts list */}
-        <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Courts</div>
-        {courts.length===0
-          ? <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
-          : (
-            <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:18 }}>
-              {courts.map(function(c){
-                // Each court row: clicking the body opens the CourtInfoCard
-                // (same modal as a map-pin tap), giving access to the
-                // ranked player list + Message CTA. A separate Book link
-                // next to the name lets users right-click → open in tab,
-                // or left-click to jump straight to the operator booking.
-                return (
-                  <div key={c.name} style={{
-                    display:"flex", alignItems:"stretch", gap:6,
-                    borderRadius:8, background: t.bgTertiary,
-                  }}>
-                    <button
-                      onClick={function(){ if(onCourtSelect) onCourtSelect(c); }}
-                      disabled={!onCourtSelect}
-                      style={{
-                        flex:1, minWidth:0, textAlign:"left",
-                        padding:"9px 11px", background:"transparent", border:"none",
-                        color:t.text, fontSize:12, fontWeight:500,
-                        cursor: onCourtSelect ? "pointer" : "default",
-                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                      }}
-                      onMouseEnter={function(e){ if(onCourtSelect) e.currentTarget.style.color = t.accent; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.color = t.text; }}>
-                      {c.name}
-                    </button>
-                    {c.bookingUrl && (
-                      <a href={c.bookingUrl}
-                        target="_blank" rel="noopener noreferrer"
-                        onClick={function(e){ e.stopPropagation(); }}
-                        title="Open booking page in a new tab"
-                        style={{
-                          display:"inline-flex", alignItems:"center", justifyContent:"center",
-                          padding:"0 10px", borderLeft:"1px solid "+t.border,
-                          color:t.accent, fontSize:11, fontWeight:700,
-                          textDecoration:"none", flexShrink:0,
-                          letterSpacing:"0.02em",
-                        }}>
-                        Book ↗
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )
-        }
-
-        {/* Players list */}
-        <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Players in this zone</div>
-        {loading
-          ? <div style={{ fontSize:12, color:t.textTertiary }}>Loading…</div>
-          : displayPlayers.length===0
-            ? <div style={{ fontSize:12, color:t.textTertiary, lineHeight:1.45 }}>
-                No one has set this as their home yet.
-                {canSetHome && !isHome && " Be the first."}
-              </div>
-            : (
-              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                {displayPlayers.map(function(p){
-                  var isViewer = p.id === (authUser && authUser.id);
-                  var canMessage = !!authUser && !!onMessagePlayer && !isViewer;
-                  return (
-                    <div key={p.id} style={{
+        {/* Courts */}
+        <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+          {selectedCourt ? "Court · tap another to switch" : "Pick a court"}
+        </div>
+        {courts.length === 0 ? (
+          <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:18 }}>
+            {courts.map(function (c) {
+              var selected = selectedCourt === c.name;
+              return (
+                <div key={c.name} style={{
+                  display:"flex", alignItems:"stretch", gap:0,
+                  borderRadius:8,
+                  border:"1px solid "+(selected ? t.accent : t.border),
+                  background: selected ? t.accentSubtle : t.bgTertiary,
+                  overflow:"hidden",
+                  transition:"background 0.15s, border-color 0.15s",
+                }}>
+                  <button
+                    onClick={function () { toggleCourt(c); }}
+                    style={{
+                      flex:1, minWidth:0, textAlign:"left",
+                      padding:"9px 11px", background:"transparent", border:"none",
+                      color: selected ? t.accent : t.text,
+                      fontSize:12, fontWeight: selected ? 700 : 500,
+                      cursor:"pointer",
                       display:"flex", alignItems:"center", gap:8,
-                      padding:"7px 8px", borderRadius:8,
                     }}>
-                      <button
-                        onClick={function(){ onOpenProfile && onOpenProfile(p.id); }}
-                        style={{
-                          display:"flex", alignItems:"center", gap:10,
-                          padding:0, background:"transparent", border:"none",
-                          textAlign:"left", cursor:"pointer", flex:1, minWidth:0,
-                        }}>
-                        <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
-                        <div style={{ minWidth:0, flex:1 }}>
-                          <div style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {p.name}
-                            {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
-                          </div>
-                          <div style={{ fontSize:11, color:t.textTertiary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {(p.skill||"")} {p.ranking_points?("· "+p.ranking_points+" pts"):""}
-                          </div>
-                        </div>
-                      </button>
-                      {canMessage && (
-                        <button
-                          onClick={function(e){
-                            e.stopPropagation();
-                            // Zone panel has no specific court yet — prefill
-                            // just the zone name as the "venue" hint. User
-                            // can edit the slot before sending.
-                            onMessagePlayer(p, {
-                              venue: (zone && zone.name) || "",
-                              date: "", time: "", draft: "",
-                            });
-                          }}
-                          style={{
-                            padding:"5px 10px", borderRadius:6,
-                            border:"1px solid "+t.border,
-                            background:"transparent", color:t.text,
-                            fontSize:11, fontWeight:700, cursor:"pointer",
-                            flexShrink:0, letterSpacing:"-0.01em",
-                          }}>
-                          Message
-                        </button>
+                    <span style={{
+                      width:14, height:14, borderRadius:"50%",
+                      border:"1.5px solid "+(selected ? t.accent : t.border),
+                      background: selected ? t.accent : "transparent",
+                      flexShrink:0, position:"relative",
+                    }}>
+                      {selected && (
+                        <span style={{
+                          position:"absolute", inset:0, display:"flex",
+                          alignItems:"center", justifyContent:"center",
+                          color:"#fff", fontSize:10, fontWeight:900, lineHeight:1,
+                        }}>✓</span>
                       )}
+                    </span>
+                    <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {c.name}
+                    </span>
+                  </button>
+                  {c.bookingUrl && (
+                    <a href={c.bookingUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      onClick={function (e) { e.stopPropagation(); }}
+                      title="Open booking page in a new tab"
+                      style={{
+                        display:"inline-flex", alignItems:"center", justifyContent:"center",
+                        padding:"0 10px", borderLeft:"1px solid "+t.border,
+                        color:t.accent, fontSize:11, fontWeight:700,
+                        textDecoration:"none", flexShrink:0,
+                        letterSpacing:"0.02em",
+                      }}>
+                      Book ↗
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Players */}
+        <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+          <span>{selectedCourt ? "Players at this court" : "Players in this zone"}</span>
+          {selectedCount > 0 && (
+            <span style={{ fontSize:10, fontWeight:700, color:t.accent, textTransform:"none", letterSpacing:0 }}>
+              {selectedCount} / {MAX_SELECT} selected
+            </span>
+          )}
+        </div>
+        {loading ? (
+          <div style={{ fontSize:12, color:t.textTertiary }}>Loading…</div>
+        ) : displayPlayers.length === 0 ? (
+          <div style={{ fontSize:12, color:t.textTertiary, lineHeight:1.45 }}>
+            {selectedCourt
+              ? "No one has tagged this court yet. Log a match here to change that."
+              : ("No one has set this as their home yet." + (canSetHome && !isHome ? " Be the first." : ""))}
+          </div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            {displayPlayers.map(function (p) {
+              var isViewer = p.id === (authUser && authUser.id);
+              var selected = selectedIds.indexOf(p.id) >= 0;
+              var disabled = !authUser || isViewer || (!selected && selectedCount >= MAX_SELECT);
+              return (
+                <div key={p.id} style={{
+                  display:"flex", alignItems:"center", gap:8,
+                  padding:"7px 8px", borderRadius:8,
+                  background: selected ? t.accentSubtle : "transparent",
+                  border:"1px solid "+(selected ? t.accent : "transparent"),
+                  opacity: disabled && !selected ? 0.55 : 1,
+                }}>
+                  {/* Checkbox affordance — full row toggles selection when clickable. */}
+                  <button
+                    onClick={function () { togglePlayer(p); }}
+                    disabled={disabled}
+                    title={isViewer ? "That's you" : (disabled ? "Max selected" : (selected ? "Unselect" : "Select for doubles"))}
+                    style={{
+                      display:"flex", alignItems:"center", gap:10,
+                      padding:0, background:"transparent", border:"none",
+                      textAlign:"left", cursor: disabled ? "not-allowed" : "pointer",
+                      flex:1, minWidth:0,
+                    }}>
+                    <span style={{
+                      width:18, height:18, borderRadius:4,
+                      border:"1.5px solid "+(selected ? t.accent : t.border),
+                      background: selected ? t.accent : "transparent",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      flexShrink:0,
+                      color:"#fff", fontSize:10, fontWeight:900, lineHeight:1,
+                    }}>
+                      {selected ? "✓" : ""}
+                    </span>
+                    <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        {p.name}
+                        {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
+                      </div>
+                      <div style={{ fontSize:11, color:t.textTertiary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        {[(p.skill||""), (p.ranking_points ? p.ranking_points + " pts" : ""),
+                          (p.playsHere ? "Plays here" : null)]
+                          .filter(Boolean).join(" · ")}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )
-        }
+                  </button>
+                  {/* Profile link — small chevron; separate from the
+                      checkbox toggle so the row's main hit region is
+                      the selection. */}
+                  {!isViewer && onOpenProfile && (
+                    <button
+                      onClick={function (e) { e.stopPropagation(); onOpenProfile(p.id); }}
+                      title="View profile"
+                      style={{
+                        background:"transparent", border:"1px solid "+t.border,
+                        borderRadius:6, padding:"3px 8px",
+                        color:t.textSecondary, fontSize:10, fontWeight:600,
+                        cursor:"pointer", flexShrink:0,
+                      }}>
+                      Profile
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Footer — home-zone toggle is the only action */}
-      <div style={{ padding:"14px 20px", borderTop:"1px solid "+t.border }}>
+      {/* Footer — home toggle always present; action bar layered on top
+          when there's a selection. */}
+      <div style={{ padding:"12px 20px", borderTop:"1px solid "+t.border }}>
         <button
           onClick={function(){
             if(!canSetHome) return;
@@ -260,16 +342,72 @@ export default function ZoneSidePanel({
           }}
           disabled={!canSetHome}
           style={{
-            width:"100%", padding:"12px",
+            width:"100%", padding:"10px",
             background: isHome ? "transparent" : t.accent,
             color: isHome ? t.accent : t.accentText,
             border: isHome ? ("1px solid "+t.accent) : "none",
             borderRadius:8, cursor: canSetHome ? "pointer" : "not-allowed",
-            fontSize:13, fontWeight:700, opacity: canSetHome ? 1 : 0.5,
+            fontSize:12, fontWeight:700, opacity: canSetHome ? 1 : 0.5,
           }}>
           {isHome ? "✓ Your home area · Clear" : "Set as home area"}
         </button>
       </div>
+
+      {/* Sticky action bar — only visible when at least one player is
+          selected. Fires up to the parent which opens the compose modal
+          or challenge composer. */}
+      {showActionBar && (
+        <div style={{
+          padding:"12px 16px",
+          borderTop:"1px solid "+t.border,
+          background: t.modalBg,
+          boxShadow:"0 -4px 16px rgba(0,0,0,0.06)",
+        }}>
+          <div style={{ fontSize:11, color:t.textSecondary, marginBottom:8, lineHeight:1.4 }}>
+            <strong style={{ color:t.text }}>{selectedCount} selected</strong>
+            {selectedCourt ? " · " + selectedCourt : ""}
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button
+              onClick={function () {
+                if (!onMessageSelected || !selectedPartners.length) return;
+                onMessageSelected(selectedPartners, {
+                  venue: selectedCourt || (zone && zone.name) || "",
+                  zoneId: zone && zone.id,
+                  courtName: selectedCourt,
+                });
+              }}
+              style={{
+                flex:1, padding:"10px", borderRadius:8, border:"none",
+                background: t.accent, color: t.accentText,
+                fontSize:12, fontWeight:700, cursor:"pointer",
+              }}>
+              Message{selectedCount > 1 ? " " + selectedCount : ""}
+            </button>
+            <button
+              onClick={function () {
+                if (!onChallengeSelected) return;
+                if (selectedCount !== 1) return;
+                onChallengeSelected(selectedPartners[0], {
+                  courtName: selectedCourt,
+                  zoneId: zone && zone.id,
+                });
+              }}
+              disabled={selectedCount !== 1}
+              title={selectedCount !== 1 ? "Challenges are 1-on-1 — pick a single player" : ""}
+              style={{
+                flex:1, padding:"10px", borderRadius:8,
+                border: "1px solid " + (selectedCount === 1 ? t.accent : t.border),
+                background: "transparent",
+                color: selectedCount === 1 ? t.accent : t.textTertiary,
+                fontSize:12, fontWeight:700,
+                cursor: selectedCount === 1 ? "pointer" : "not-allowed",
+              }}>
+              Challenge
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

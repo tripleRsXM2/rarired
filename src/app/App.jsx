@@ -654,18 +654,21 @@ export default function App(){
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
               openChallenge={openChallenge}
-              onMessagePlayer={function(partner, slotOpts){
-                // Pop the ComposeMessageModal inline instead of yanking
-                // the user to /people/messages. They pick template +
-                // date/time, send, and stay on the map. The modal
-                // handles openConversationWith + sendMessage itself.
-                if(!partner || !partner.id) return;
+              onMessagePlayer={function(partnerOrPartners, slotOpts){
+                // Accepts either a single partner (legacy call path) or
+                // an array of partners (new zone-panel multi-select,
+                // up to 3 for doubles). Normalize to an array and open
+                // the inline ComposeMessageModal.
+                var partners = Array.isArray(partnerOrPartners)
+                  ? partnerOrPartners
+                  : (partnerOrPartners && partnerOrPartners.id ? [partnerOrPartners] : []);
+                if(!partners.length) return;
                 setComposeTarget({
-                  partner:    partner,
+                  partners:   partners,
                   venue:      (slotOpts && slotOpts.venue) || "",
                   date:       (slotOpts && slotOpts.date)  || "",
                   time:       (slotOpts && slotOpts.time)  || "",
-                  courtName:  (slotOpts && slotOpts.venue) || null,
+                  courtName:  (slotOpts && slotOpts.courtName) || (slotOpts && slotOpts.venue) || null,
                   zoneId:     (slotOpts && slotOpts.zoneId) || null,
                 });
               }}
@@ -860,7 +863,7 @@ export default function App(){
         {composeTarget && (
           <ComposeMessageModal
             t={t}
-            partner={composeTarget.partner}
+            partners={composeTarget.partners}
             dms={dms}
             initialVenue={composeTarget.venue}
             initialDate={composeTarget.date}
@@ -868,14 +871,15 @@ export default function App(){
             contextZoneId={composeTarget.zoneId}
             contextCourtName={composeTarget.courtName}
             onClose={function () { setComposeTarget(null); }}
-            onSent={function () {
-              var name = (composeTarget && composeTarget.partner && composeTarget.partner.name) || "player";
+            onSent={function (n) {
+              var partners = (composeTarget && composeTarget.partners) || [];
+              var msg = partners.length === 1
+                ? ("Message sent to " + (partners[0].name || "player"))
+                : ("Sent to " + (n || partners.length) + " players");
               setComposeTarget(null);
-              if (toast) toast("Message sent to " + name, "success");
+              if (toast) toast(msg, "success");
             }}
             onViewConv={function () {
-              // Lets the user jump into the full thread if they want to
-              // follow up right away.
               setComposeTarget(null);
               navigate("/people/messages");
             }}
