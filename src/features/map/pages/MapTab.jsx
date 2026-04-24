@@ -162,15 +162,6 @@ export default function MapTab({
           if(!partners || !partners.length) return;
           if(onMessagePlayer) onMessagePlayer(partners, ctx);
         }}
-        onChallengeSelected={function(partner, ctx){
-          if(!partner || !partner.id) return;
-          if(selectedZone) track("challenge_from_map", {
-            target_user_id: partner.id,
-            zone_id: selectedZone.id,
-            source: "zone_panel",
-          });
-          if(openChallenge) openChallenge(partner, "map", null);
-        }}
       />
 
       {/* Court info modal — opens on court marker tap */}

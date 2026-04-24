@@ -24,7 +24,8 @@
 import { useEffect, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
-import { fetchPlayersInZone, fetchPlayersAtCourt } from "../services/mapService.js";
+import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "../services/mapService.js";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 
 var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
 
@@ -32,10 +33,8 @@ export default function ZoneSidePanel({
   t, zone, onClose,
   authUser, profile, homeZone, onSetHome, onClearHome,
   onOpenProfile, activity,
-  // Action handlers — invoked by the footer CTAs.
   // onMessageSelected(partners[], slotHints) — array, supports doubles.
-  // onChallengeSelected(partner)            — single, challenges are 1:1 today.
-  onMessageSelected, onChallengeSelected,
+  onMessageSelected,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
@@ -52,27 +51,52 @@ export default function ZoneSidePanel({
     setSelectedIds([]);
   }, [zone && zone.id]);
 
-  // Fetch the player list. When a court is selected, we use the
-  // CourtInfoCard-style ranking (plays-here + skill + avail). When no
-  // court is selected, we fall back to the lightweight home-zone
-  // roster so the panel still has something to show on open.
+  // Fetch + rank the player list. Always returns the WHOLE zone roster
+  // (by home_zone) so users can reach anyone in their area — even to
+  // pitch a match at a court the target doesn't usually play. When a
+  // court is also selected we overlay the plays-here set: players who
+  // self-report this court (or have history at it) get flagged and
+  // float to the top via the ranking score.
   useEffect(function(){
     if (!zone) return;
     setLoading(true);
-    if (selectedCourt) {
-      fetchPlayersAtCourt(selectedCourt, (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id }, 20)
-        .then(function (r) {
-          if (r.error) { console.warn("[ZoneSidePanel] playersAtCourt:", r.error); setPlayers([]); }
-          else setPlayers(r.data || []);
-          setLoading(false);
-        });
-    } else {
-      fetchPlayersInZone(zone.id, 20).then(function(r){
-        if(r.error){ console.error("[MapTab] fetchPlayersInZone:",r.error); setPlayers([]); }
-        else setPlayers(r.data||[]);
-        setLoading(false);
+    var viewer = (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id };
+    var zoneReq = fetchPlayersInZone(zone.id, 40);
+    var courtReq = selectedCourt
+      ? fetchPlayersAtCourt(selectedCourt, viewer, 40)
+      : Promise.resolve({ data: [] });
+    Promise.all([zoneReq, courtReq]).then(function (arr) {
+      var zr = arr[0]; var cr = arr[1];
+      if (zr.error) console.warn("[ZoneSidePanel] fetchPlayersInZone:", zr.error);
+      if (cr && cr.error) console.warn("[ZoneSidePanel] fetchPlayersAtCourt:", cr.error);
+      // Build a map of court-players (has richer data: availability,
+      // played_courts) keyed by id — we prefer their record when
+      // someone appears in both sets.
+      var courtMap = {};
+      (cr && cr.data || []).forEach(function (p) { courtMap[p.id] = p; });
+      // Merge: start with zone roster, upgrade to court record where
+      // available, then add any court-only players not in the zone
+      // (people who play here but live elsewhere — still valuable for
+      // this specific court).
+      var byId = {};
+      (zr.data || []).forEach(function (p) {
+        byId[p.id] = courtMap[p.id] ? Object.assign({}, p, courtMap[p.id], { playsHere: true }) : p;
       });
-    }
+      Object.keys(courtMap).forEach(function (id) {
+        if (!byId[id]) byId[id] = Object.assign({}, courtMap[id], { playsHere: true });
+      });
+      // Score + sort — playsHere dominates, then skill, then avail.
+      // scorePlayerForCourt returns 0 playsHere bonus when selectedCourt
+      // is null because no players will have it flagged in that case.
+      var scored = Object.keys(byId).map(function (id) {
+        var p = byId[id];
+        var score = scorePlayerForCourt(viewer, p, !!p.playsHere);
+        return Object.assign({}, p, { score: score });
+      });
+      scored.sort(function (a, b) { return b.score - a.score; });
+      setPlayers(scored);
+      setLoading(false);
+    });
   },[zone && zone.id, selectedCourt, homeZone, authUser && authUser.id]);
 
   // Same optimistic-you-are-home hack as before — preserves the UX
@@ -177,7 +201,7 @@ export default function ZoneSidePanel({
 
         {/* Courts */}
         <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
-          {selectedCourt ? "Court · tap another to switch" : "Pick a court"}
+          {selectedCourt ? "Court · tap again to clear, or pick another" : "Courts · tap one to see who plays there"}
         </div>
         {courts.length === 0 ? (
           <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
@@ -226,15 +250,14 @@ export default function ZoneSidePanel({
                     <a href={c.bookingUrl}
                       target="_blank" rel="noopener noreferrer"
                       onClick={function (e) { e.stopPropagation(); }}
-                      title="Open booking page in a new tab"
+                      aria-label={"Open booking page for " + c.name + " in a new tab"}
+                      title={"Book " + c.name + " (opens in a new tab)"}
                       style={{
                         display:"inline-flex", alignItems:"center", justifyContent:"center",
-                        padding:"0 10px", borderLeft:"1px solid "+t.border,
-                        color:t.accent, fontSize:11, fontWeight:700,
-                        textDecoration:"none", flexShrink:0,
-                        letterSpacing:"0.02em",
+                        padding:"0 12px", borderLeft:"1px solid "+t.border,
+                        color:t.accent, textDecoration:"none", flexShrink:0,
                       }}>
-                      Book ↗
+                      {NAV_ICONS.external(14)}
                     </a>
                   )}
                 </div>
@@ -243,9 +266,12 @@ export default function ZoneSidePanel({
           </div>
         )}
 
-        {/* Players */}
+        {/* Players — always the full zone roster. When a court is
+            selected, home-court players float to the top with a small
+            house icon; everyone else stays below so users can still
+            pitch a match at that court to someone new. */}
         <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-          <span>{selectedCourt ? "Players at this court" : "Players in this zone"}</span>
+          <span>{selectedCourt ? "Players in this zone · home first" : "Players in this zone"}</span>
           {selectedCount > 0 && (
             <span style={{ fontSize:10, fontWeight:700, color:t.accent, textTransform:"none", letterSpacing:0 }}>
               {selectedCount} / {MAX_SELECT} selected
@@ -297,13 +323,24 @@ export default function ZoneSidePanel({
                     </span>
                     <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
                     <div style={{ minWidth:0, flex:1 }}>
-                      <div style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {p.name}
-                        {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
+                      <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
+                        <span style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+                          {p.name}
+                          {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
+                        </span>
+                        {p.playsHere && selectedCourt && (
+                          <span
+                            title={"Plays at " + selectedCourt}
+                            style={{
+                              display:"inline-flex", alignItems:"center", gap:3,
+                              color: t.accent, flexShrink:0,
+                            }}>
+                            {NAV_ICONS.homeCourt(12)}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize:11, color:t.textTertiary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {[(p.skill||""), (p.ranking_points ? p.ranking_points + " pts" : ""),
-                          (p.playsHere ? "Plays here" : null)]
+                        {[(p.skill||""), (p.ranking_points ? p.ranking_points + " pts" : "")]
                           .filter(Boolean).join(" · ")}
                       </div>
                     </div>
@@ -353,9 +390,11 @@ export default function ZoneSidePanel({
         </button>
       </div>
 
-      {/* Sticky action bar — only visible when at least one player is
-          selected. Fires up to the parent which opens the compose modal
-          or challenge composer. */}
+      {/* Sticky action bar — visible once a player is selected. The
+          single Message CTA covers doubles (≥1 recipient) and lets the
+          user open a DM with someone even if they don't play at the
+          selected court. Challenge was redundant — Message works in
+          every case and the composer handles slot/template anyway. */}
       {showActionBar && (
         <div style={{
           padding:"12px 16px",
@@ -367,45 +406,23 @@ export default function ZoneSidePanel({
             <strong style={{ color:t.text }}>{selectedCount} selected</strong>
             {selectedCourt ? " · " + selectedCourt : ""}
           </div>
-          <div style={{ display:"flex", gap:6 }}>
-            <button
-              onClick={function () {
-                if (!onMessageSelected || !selectedPartners.length) return;
-                onMessageSelected(selectedPartners, {
-                  venue: selectedCourt || (zone && zone.name) || "",
-                  zoneId: zone && zone.id,
-                  courtName: selectedCourt,
-                });
-              }}
-              style={{
-                flex:1, padding:"10px", borderRadius:8, border:"none",
-                background: t.accent, color: t.accentText,
-                fontSize:12, fontWeight:700, cursor:"pointer",
-              }}>
-              Message{selectedCount > 1 ? " " + selectedCount : ""}
-            </button>
-            <button
-              onClick={function () {
-                if (!onChallengeSelected) return;
-                if (selectedCount !== 1) return;
-                onChallengeSelected(selectedPartners[0], {
-                  courtName: selectedCourt,
-                  zoneId: zone && zone.id,
-                });
-              }}
-              disabled={selectedCount !== 1}
-              title={selectedCount !== 1 ? "Challenges are 1-on-1 — pick a single player" : ""}
-              style={{
-                flex:1, padding:"10px", borderRadius:8,
-                border: "1px solid " + (selectedCount === 1 ? t.accent : t.border),
-                background: "transparent",
-                color: selectedCount === 1 ? t.accent : t.textTertiary,
-                fontSize:12, fontWeight:700,
-                cursor: selectedCount === 1 ? "pointer" : "not-allowed",
-              }}>
-              Challenge
-            </button>
-          </div>
+          <button
+            onClick={function () {
+              if (!onMessageSelected || !selectedPartners.length) return;
+              onMessageSelected(selectedPartners, {
+                venue: selectedCourt || (zone && zone.name) || "",
+                zoneId: zone && zone.id,
+                courtName: selectedCourt,
+              });
+            }}
+            style={{
+              width:"100%", padding:"11px", borderRadius:8, border:"none",
+              background: t.accent, color: t.accentText,
+              fontSize:13, fontWeight:700, cursor:"pointer",
+              letterSpacing:"-0.01em",
+            }}>
+            Message{selectedCount > 1 ? " " + selectedCount : ""}
+          </button>
         </div>
       )}
     </div>
