@@ -21,10 +21,36 @@ export function fetchSuggestedPlayers(userId, suburb, excludeIds){
 // Same declared skill level, excluding the viewer, current friends, pending
 // requests, blocked users, and whoever's already covered by the suburb-based
 // suggestions. Used by the Discover surface.
+// Matches candidates by *tier*, not exact sub-level. With the 9-rung
+// skill ladder, an "Intermediate 2" looking for hits is still a sensible
+// match for "Intermediate 1" and "Intermediate 3" — the variance inside
+// a tier is the normal range of a casual game. Exact sub-level equality
+// would shrink the pool to near-zero at seed scale.
+//
+// Handles legacy bare values too ("Intermediate" → same as any
+// "Intermediate N"), via SKILL_TIER_MEMBERS built from the authoritative
+// SKILL_LEVELS list.
+var SKILL_TIER_MEMBERS = {
+  "Beginner":     ["Beginner",     "Beginner 1",     "Beginner 2"],
+  "Intermediate": ["Intermediate", "Intermediate 1", "Intermediate 2"],
+  "Advanced":     ["Advanced",     "Advanced 1",     "Advanced 2", "Competitive"],
+};
+
+function tierFor(skill){
+  if(!skill) return null;
+  if(skill.indexOf("Beginner")===0)     return "Beginner";
+  if(skill.indexOf("Intermediate")===0) return "Intermediate";
+  if(skill.indexOf("Advanced")===0)     return "Advanced";
+  if(skill==="Competitive")             return "Advanced";
+  return null;
+}
+
 export function fetchSameSkillPlayers(userId, skill, excludeIds, limit){
   if(!skill) return Promise.resolve({data:[]});
+  var tier=tierFor(skill);
+  var members=(tier&&SKILL_TIER_MEMBERS[tier])||[skill];
   var q=supabase.from('profiles').select('id,name,avatar,avatar_url,skill,suburb,ranking_points,matches_played,last_active,show_online_status,show_last_seen')
-    .neq('id',userId).eq('skill',skill);
+    .neq('id',userId).in('skill',members);
   if(excludeIds&&excludeIds.length) q=q.not('id','in','('+excludeIds.join(',')+')');
   return q.limit(limit||6);
 }
