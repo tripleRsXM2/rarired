@@ -20,10 +20,45 @@ import { ZONES } from "../../features/map/data/zones.js";
 
 var DEFAULT_CAP = 8;
 
+// Map every known name (canonical + every alias) → the canonical court
+// name. Lets a legacy value like "Prince Alfred Park" or "Moore Park
+// Tennis" still resolve to the current "Prince Alfred Park Tennis
+// Courts" / "Centennial Parklands Sports Centre..." entry. Without this,
+// a user whose played_courts already contained an alias would see the
+// old string as a stuck-orphan chip while the current court was visible
+// in the pickable list — the "missing" report the user called out.
+var ALIAS_TO_CANONICAL = (function () {
+  var m = {};
+  COURTS.forEach(function (c) {
+    m[c.name.toLowerCase()] = c.name;
+    (c.aliases || []).forEach(function (a) { m[a.toLowerCase()] = c.name; });
+  });
+  return m;
+})();
+
+function toCanonical(name) {
+  if (!name) return name;
+  return ALIAS_TO_CANONICAL[name.toLowerCase()] || name;
+}
+
 export default function CourtsPicker({ t, value, onChange, cap }) {
   var limit = cap || DEFAULT_CAP;
-  var selected = value || [];
   var [query, setQuery] = useState("");
+
+  // Canonicalise + de-dupe the incoming selection. If the parent stores
+  // an alias ("Prince Alfred Park"), we display + filter against the
+  // canonical ("Prince Alfred Park Tennis Courts") so the user never
+  // sees the same court twice and never sees a stuck orphan chip.
+  var selected = useMemo(function () {
+    var seen = new Set();
+    var out = [];
+    (value || []).forEach(function (n) {
+      var c = toCanonical(n);
+      if (!seen.has(c)) { seen.add(c); out.push(c); }
+    });
+    return out;
+  }, [value]);
+
   var atCap = selected.length >= limit;
 
   var grouped = useMemo(function () {
@@ -34,7 +69,8 @@ export default function CourtsPicker({ t, value, onChange, cap }) {
         if (selected.indexOf(c.name) >= 0) return false;
         if (!query.trim()) return true;
         var q = query.trim().toLowerCase();
-        return (c.name + " " + (c.suburb || "")).toLowerCase().indexOf(q) >= 0;
+        var hay = c.name + " " + (c.suburb || "") + " " + ((c.aliases || []).join(" "));
+        return hay.toLowerCase().indexOf(q) >= 0;
       });
       return { zone: z, courts: inZone };
     }).filter(function (g) { return g.courts.length > 0; });
@@ -42,11 +78,14 @@ export default function CourtsPicker({ t, value, onChange, cap }) {
 
   function addCourt(name) {
     if (atCap) return;
-    if (selected.indexOf(name) >= 0) return;
-    onChange(selected.concat([name]));
+    var c = toCanonical(name);
+    if (selected.indexOf(c) >= 0) return;
+    // Write back the de-duped canonical list so the parent store settles.
+    onChange(selected.concat([c]));
   }
   function removeCourt(name) {
-    onChange(selected.filter(function (n) { return n !== name; }));
+    var c = toCanonical(name);
+    onChange(selected.filter(function (n) { return n !== c; }));
   }
 
   return (

@@ -41,6 +41,13 @@ export function useDMs(opts) {
   var [reactions, setReactions] = useState({});          // {messageId: [{id,emoji,user_id}]}
   var [threadLoading, setThreadLoading] = useState(false);
   var [msgDraft, setMsgDraft] = useState("");
+  // Phase 1b: optional "proposed slot" block above the composer. Shape
+  // { venue, date (YYYY-MM-DD), time (HH:MM) } or null. Populated by
+  // openConversationWith(partner, { slot }) when a user taps a court
+  // or player row from the map; user can edit or clear before send.
+  // Survives inside a single active conversation; cleared on convo
+  // switch and on successful send.
+  var [proposedSlot, setProposedSlot] = useState(null);
   var [sending, setSending] = useState(false);
   var [replyTo, setReplyTo] = useState(null);
   var [editingId, setEditingId] = useState(null);
@@ -265,6 +272,7 @@ export function useDMs(opts) {
     setEditingId(null);
     setEditDraft("");
     setMsgDraft("");
+    setProposedSlot(null);
     setPartnerLastReadAt(null);
   }
 
@@ -365,6 +373,36 @@ export function useDMs(opts) {
     setReactions({});
   }
 
+  // Phase 1b entry point for the map-centric matchmaking flow. Opens
+  // (or starts as a draft) a conversation with `partner` and primes the
+  // composer with an optional proposed slot + a template-interpolated
+  // message. Callers just hand us the partner object and the slot —
+  // the composer UI does the rest (user can edit, swap template, or
+  // clear the slot before send).
+  //
+  // Params:
+  //   partner: { id, name, avatar_url?, ... } — same shape openOrStartConversation already expects
+  //   opts.slot: { venue, date, time } | null
+  //   opts.templateId: one of DM_TEMPLATES[].id (default "casual")
+  //   opts.draft: raw string override (wins over template)
+  //
+  // Behaviour:
+  //   - If conversation already exists OR is a draft, opens it.
+  //   - Proposed slot + interpolated draft are written AFTER _scrubTransient
+  //     (openOrStartConversation calls scrub internally) so they stick.
+  //   - Async — returns { error: null | string } from openOrStartConversation.
+  async function openConversationWith(partner, opts) {
+    if (!partner || !partner.id) return { error: "no_partner" };
+    var o = opts || {};
+    var r = await openOrStartConversation(partner);
+    if (r && r.error) return r;
+    if (o.slot) setProposedSlot(o.slot);
+    if (o.draft != null) {
+      setMsgDraft(o.draft);
+    }
+    return { error: null };
+  }
+
   // ── Send ────────────────────────────────────────────────────────────────
 
   async function sendMessage(content) {
@@ -376,6 +414,9 @@ export function useDMs(opts) {
     var replySnapshot = replyTo;
     setSending(true);
     setMsgDraft("");
+    // Clear the proposed-slot block too — once the message is sent the
+    // slot lives in the message body itself via the template interpolation.
+    setProposedSlot(null);
 
     // Draft materialization: if this is the user's first message to
     // someone, the conversation hasn't been created yet (see
@@ -1012,7 +1053,13 @@ export function useDMs(opts) {
     mutedConvIds: mutedConvIds,
     muteConversation: muteConversation, unmuteConversation: unmuteConversation,
     loadConversations: loadConversations, openConversation: openConversation,
-    openOrStartConversation: openOrStartConversation, closeConversation: closeConversation,
+    openOrStartConversation: openOrStartConversation,
+    openConversationWith: openConversationWith,
+    closeConversation: closeConversation,
+    // Phase 1b — proposed-slot block surfaced in the composer. Callers
+    // can read current slot + clear/update it (e.g. composer UI's
+    // "remove slot" button).
+    proposedSlot: proposedSlot, setProposedSlot: setProposedSlot,
     sendMessage: sendMessage, acceptRequest: acceptRequest, declineRequest: declineRequest,
     toggleReaction: toggleReaction, startEdit: startEdit, cancelEdit: cancelEdit,
     submitEdit: submitEdit, deleteMessage: deleteMessage,
