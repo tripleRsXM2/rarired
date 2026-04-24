@@ -5,6 +5,29 @@
 // them means Sidebar and the mobile nav can't drift out of sync.
 
 export var NAV_ICONS = {
+  // Open-in-new-tab (used for booking links that offload to the
+  // operator site). Kept as a line-art SVG per the icon rule.
+  external: function(size){
+    var s = size || 14;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M10 3h5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 3l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M13 10.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+  // Home-court — little house glyph used to flag a player whose
+  // `played_courts` includes the currently-selected court.
+  homeCourt: function(size){
+    var s = size || 12;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path d="M3 8l6-5 6 5v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M7 15v-4h4v4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
   tindis: function(size){
     // Two-player pact — a handshake-ish glyph. Kept SVG-only per the
     // "no emoji as icons" rule.

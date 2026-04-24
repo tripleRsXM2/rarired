@@ -40,6 +40,7 @@ import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
 import ActionReviewDrawer from "../features/notifications/components/ActionReviewDrawer.jsx";
 import AuthModal from "../features/auth/components/AuthModal.jsx";
+import ComposeMessageModal from "../features/people/components/ComposeMessageModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
@@ -363,6 +364,13 @@ export default function App(){
   // ── In-context notification review drawer ────────────────────────────────
   var [reviewDrawer,setReviewDrawer]=useState(null); // { match, notifId, notifType, fromName }
 
+  // Phase 2 polish — inline compose modal triggered from the map. Keeps
+  // users on the map while they pick a template + date/time and fire off
+  // a first DM. Shape: { partner, venue, date, time, zoneId, courtName }
+  // or null. Set by MapTab's onMessagePlayer; consumed by the
+  // ComposeMessageModal we render below the routes.
+  var [composeTarget,setComposeTarget]=useState(null);
+
   // Notif types that always carry a proposal — stale local match needs a DB refresh.
   var PROPOSAL_NOTIF_TYPES=new Set(['match_disputed','match_correction_requested','match_counter_proposed']);
 
@@ -646,18 +654,23 @@ export default function App(){
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
               openChallenge={openChallenge}
-              onMessagePlayer={async function(partner, slotOpts){
-                // Phase 2 core wiring: open DM with optional prefill,
-                // then switch to the Messages tab. openConversationWith
-                // primes msgDraft + proposedSlot inside useDMs.
-                if(!partner || !partner.id) return;
-                await dms.openConversationWith(partner, {
-                  slot: (slotOpts && (slotOpts.venue || slotOpts.date || slotOpts.time))
-                    ? { venue: slotOpts.venue || "", date: slotOpts.date || "", time: slotOpts.time || "" }
-                    : null,
-                  draft: (slotOpts && slotOpts.draft) || "",
+              onMessagePlayer={function(partnerOrPartners, slotOpts){
+                // Accepts either a single partner (legacy call path) or
+                // an array of partners (new zone-panel multi-select,
+                // up to 3 for doubles). Normalize to an array and open
+                // the inline ComposeMessageModal.
+                var partners = Array.isArray(partnerOrPartners)
+                  ? partnerOrPartners
+                  : (partnerOrPartners && partnerOrPartners.id ? [partnerOrPartners] : []);
+                if(!partners.length) return;
+                setComposeTarget({
+                  partners:   partners,
+                  venue:      (slotOpts && slotOpts.venue) || "",
+                  date:       (slotOpts && slotOpts.date)  || "",
+                  time:       (slotOpts && slotOpts.time)  || "",
+                  courtName:  (slotOpts && slotOpts.courtName) || (slotOpts && slotOpts.venue) || null,
+                  zoneId:     (slotOpts && slotOpts.zoneId) || null,
                 });
-                navigate("/people/messages");
               }}
             />
           )}
@@ -847,6 +860,31 @@ export default function App(){
           }}
           onClose={challenges.closeComposer}
         />
+        {composeTarget && (
+          <ComposeMessageModal
+            t={t}
+            partners={composeTarget.partners}
+            dms={dms}
+            initialVenue={composeTarget.venue}
+            initialDate={composeTarget.date}
+            initialTime={composeTarget.time}
+            contextZoneId={composeTarget.zoneId}
+            contextCourtName={composeTarget.courtName}
+            onClose={function () { setComposeTarget(null); }}
+            onSent={function (n) {
+              var partners = (composeTarget && composeTarget.partners) || [];
+              var msg = partners.length === 1
+                ? ("Message sent to " + (partners[0].name || "player"))
+                : ("Sent to " + (n || partners.length) + " players");
+              setComposeTarget(null);
+              if (toast) toast(msg, "success");
+            }}
+            onViewConv={function () {
+              setComposeTarget(null);
+              navigate("/people/messages");
+            }}
+          />
+        )}
         <AuthModal
           t={t} showAuth={auth.showAuth} setShowAuth={auth.setShowAuth}
           authMode={auth.authMode} setAuthMode={auth.setAuthMode}
