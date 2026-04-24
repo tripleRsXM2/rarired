@@ -19,43 +19,77 @@ import { useEffect, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
 import { googleMapsSearchUrl } from "../data/courts.js";
-import { fetchRecentPlayersAtCourt } from "../services/mapService.js";
+import { fetchPlayersAtCourt } from "../services/mapService.js";
+import { buildDraftFromTemplate } from "../../people/utils/dmTemplates.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function CourtInfoCard({
   t, court, onClose,
-  authUser, onOpenProfile, onChallenge, openChallenge,
+  authUser, viewerProfile,
+  onOpenProfile, onChallenge, openChallenge,
+  // Phase 2: fires dms.openConversationWith + navigates to /people/messages.
+  // Shape: onMessagePlayer(partner, { venue, date, time, draft })
+  onMessagePlayer,
 }){
-  var [recent, setRecent] = useState([]);
+  var [players, setPlayers] = useState([]);
   var [loading, setLoading] = useState(false);
 
-  // Load recent players whenever the court changes. We intentionally
-  // over-fetch a 60-day window because courts are cold — a 7-day window
-  // would almost always be empty for anything outside the busiest few.
+  // Phase 2 — ranked player list for this court. Combines self-reported
+  // played_courts with match-history derivation, then sorts by (plays-
+  // here + skill match + availability overlap). See mapService.
   useEffect(function(){
-    if(!court) { setRecent([]); return; }
+    if(!court) { setPlayers([]); return; }
     setLoading(true);
-    fetchRecentPlayersAtCourt(court.name, 60, 6).then(function(r){
-      if(r.error){ console.warn("[CourtInfoCard] recent players:", r.error); setRecent([]); }
-      else setRecent(r.data || []);
+    fetchPlayersAtCourt(court.name, viewerProfile || { id: authUser && authUser.id }, 12).then(function(r){
+      if(r.error){ console.warn("[CourtInfoCard] players:", r.error); setPlayers([]); }
+      else setPlayers(r.data || []);
       setLoading(false);
     });
-  },[court && court.name]);
+  },[court && court.name, authUser && authUser.id]);
 
   if(!court) return null;
   var zone = ZONE_BY_ID[court.zone];
   var mapsUrl = googleMapsSearchUrl(court);
 
-  // Filter out the viewer themselves — they can't challenge themselves
-  // and seeing yourself in the list is noise.
-  var others = recent.filter(function(p){ return !authUser || p.id !== authUser.id; });
+  // Defensive viewer filter — service already excludes the viewer id,
+  // but a null viewerId in the service call is possible during sign-out
+  // transitions.
+  var others = players.filter(function(p){ return !authUser || p.id !== authUser.id; });
 
   function handleChallenge(p, e){
     if(e) e.stopPropagation();
-    // Delegate to onChallenge (which tracks the event) if provided;
-    // fall back to openChallenge for direct callers.
     if(onChallenge) onChallenge(p);
     else if(openChallenge) openChallenge(p, "map", null);
     if(onClose) onClose();
+  }
+
+  function handleMessage(p, e){
+    if(e) e.stopPropagation();
+    if (!onMessagePlayer) return;
+    var draft = buildDraftFromTemplate("casual", court.name, "", "");
+    onMessagePlayer(p, { venue: court.name, date: "", time: "", draft: draft });
+    track("dm_prefilled_from_map", {
+      target_user_id: p.id,
+      court_name: court.name,
+      zone_id: court.zone,
+      skill_match: !!(viewerProfile && viewerProfile.skill === p.skill),
+      availability_overlap_count: 0, // placeholder — full count lives in service ranking
+      plays_here: !!p.playsHere,
+    });
+    if (onClose) onClose();
+  }
+
+  // Skill-match indicator — small chip shown next to a player whose
+  // skill sub-level matches the viewer's exactly, or whose tier matches.
+  function skillHintFor(p) {
+    if (!viewerProfile || !viewerProfile.skill || !p.skill) return null;
+    if (viewerProfile.skill === p.skill) return "Your level";
+    // same tier heuristic — cheap client-side check, authoritative logic
+    // for ranking lives in scorePlayerForCourt.
+    var va = (viewerProfile.skill.split(" ")[0] || "");
+    var pb = (p.skill.split(" ")[0] || "");
+    if (va && va === pb) return va;
+    return null;
   }
 
   return (
@@ -124,23 +158,28 @@ export default function CourtInfoCard({
           )}
         </div>
 
-        {/* Recent players section — scrollable body so the card grows
-            gracefully when there are many; actions stick to the bottom. */}
+        {/* Players at this court — Phase 2 of the map pivot. Ranked
+            list combining self-reported plays-here (profiles.played_courts)
+            and match-history-derived plays-here, scored by skill match +
+            availability overlap. Each row offers both Message (→ DM prefill)
+            and Challenge. */}
         <div style={{ flex:1, overflowY:"auto", padding:"0 18px 4px" }}>
           <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase",
             letterSpacing:"0.08em", marginBottom:8 }}>
-            Recently played here
+            Players at this court
           </div>
           {loading ? (
             <div style={{ fontSize:12, color:t.textTertiary, marginBottom:14 }}>Loading…</div>
           ) : others.length === 0 ? (
             <div style={{ fontSize:12, color:t.textTertiary, lineHeight:1.5, marginBottom:14 }}>
-              No confirmed matches logged here yet — be the first to log one.
+              No one has tagged this court yet. Be first — add it under Settings → Courts I play at.
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:10 }}>
               {others.map(function(p){
                 var canChallenge = !!authUser && !!(onChallenge || openChallenge);
+                var canMessage   = !!authUser && !!onMessagePlayer;
+                var hint = skillHintFor(p);
                 return (
                   <div key={p.id} style={{
                     display:"flex", alignItems:"center", gap:10,
@@ -155,9 +194,18 @@ export default function CourtInfoCard({
                       }}>
                       <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
                       <div style={{ minWidth:0, flex:1 }}>
-                        <div style={{ fontSize:13, color:t.text, fontWeight:600,
-                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {p.name}
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:13, color:t.text, fontWeight:600,
+                            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {p.name}
+                          </span>
+                          {hint && (
+                            <span style={{ fontSize:9, fontWeight:700, color:t.accent,
+                              background:t.accentSubtle, padding:"1px 6px", borderRadius:10,
+                              letterSpacing:"0.04em", textTransform:"uppercase", flexShrink:0 }}>
+                              {hint}
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize:11, color:t.textTertiary }}>
                           {[(p.skill||""), (p.ranking_points?(p.ranking_points+" pts"):"")]
@@ -165,6 +213,19 @@ export default function CourtInfoCard({
                         </div>
                       </div>
                     </button>
+                    {canMessage && (
+                      <button
+                        onClick={function(e){ handleMessage(p, e); }}
+                        style={{
+                          padding:"5px 10px", borderRadius:6,
+                          border:"1px solid "+t.border,
+                          background:"transparent", color:t.text,
+                          fontSize:11, fontWeight:700, cursor:"pointer",
+                          flexShrink:0, letterSpacing:"-0.01em",
+                        }}>
+                        Message
+                      </button>
+                    )}
                     {canChallenge && (
                       <button
                         onClick={function(e){ handleChallenge(p, e); }}

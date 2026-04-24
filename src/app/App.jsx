@@ -646,6 +646,19 @@ export default function App(){
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
               openChallenge={openChallenge}
+              onMessagePlayer={async function(partner, slotOpts){
+                // Phase 2 core wiring: open DM with optional prefill,
+                // then switch to the Messages tab. openConversationWith
+                // primes msgDraft + proposedSlot inside useDMs.
+                if(!partner || !partner.id) return;
+                await dms.openConversationWith(partner, {
+                  slot: (slotOpts && (slotOpts.venue || slotOpts.date || slotOpts.time))
+                    ? { venue: slotOpts.venue || "", date: slotOpts.date || "", time: slotOpts.time || "" }
+                    : null,
+                  draft: (slotOpts && slotOpts.draft) || "",
+                });
+                navigate("/people/messages");
+              }}
             />
           )}
           {tab==="tournaments"&&(

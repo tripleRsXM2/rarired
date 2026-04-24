@@ -19,6 +19,9 @@ export default function ZoneSidePanel({
   t, zone, onClose,
   authUser, profile, homeZone, onSetHome, onClearHome,
   onOpenProfile, activity,
+  // Phase 2 — fires dms.openConversationWith + navigates.
+  // Shape: onMessagePlayer(partner, { venue, date, time, draft })
+  onMessagePlayer,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
@@ -156,26 +159,54 @@ export default function ZoneSidePanel({
             : (
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                 {displayPlayers.map(function(p){
+                  var isViewer = p.id === (authUser && authUser.id);
+                  var canMessage = !!authUser && !!onMessagePlayer && !isViewer;
                   return (
-                    <button key={p.id}
-                      onClick={function(){ onOpenProfile && onOpenProfile(p.id); }}
-                      style={{
-                        display:"flex", alignItems:"center", gap:10,
-                        padding:"7px 8px", borderRadius:8,
-                        background:"transparent", border:"none",
-                        textAlign:"left", cursor:"pointer", width:"100%",
-                      }}>
-                      <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
-                      <div style={{ minWidth:0, flex:1 }}>
-                        <div style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {p.name}
-                          {p.id===(authUser&&authUser.id) && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
+                    <div key={p.id} style={{
+                      display:"flex", alignItems:"center", gap:8,
+                      padding:"7px 8px", borderRadius:8,
+                    }}>
+                      <button
+                        onClick={function(){ onOpenProfile && onOpenProfile(p.id); }}
+                        style={{
+                          display:"flex", alignItems:"center", gap:10,
+                          padding:0, background:"transparent", border:"none",
+                          textAlign:"left", cursor:"pointer", flex:1, minWidth:0,
+                        }}>
+                        <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {p.name}
+                            {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
+                          </div>
+                          <div style={{ fontSize:11, color:t.textTertiary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {(p.skill||"")} {p.ranking_points?("· "+p.ranking_points+" pts"):""}
+                          </div>
                         </div>
-                        <div style={{ fontSize:11, color:t.textTertiary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {(p.skill||"")} {p.ranking_points?("· "+p.ranking_points+" pts"):""}
-                        </div>
-                      </div>
-                    </button>
+                      </button>
+                      {canMessage && (
+                        <button
+                          onClick={function(e){
+                            e.stopPropagation();
+                            // Zone panel has no specific court yet — prefill
+                            // just the zone name as the "venue" hint. User
+                            // can edit the slot before sending.
+                            onMessagePlayer(p, {
+                              venue: (zone && zone.name) || "",
+                              date: "", time: "", draft: "",
+                            });
+                          }}
+                          style={{
+                            padding:"5px 10px", borderRadius:6,
+                            border:"1px solid "+t.border,
+                            background:"transparent", color:t.text,
+                            fontSize:11, fontWeight:700, cursor:"pointer",
+                            flexShrink:0, letterSpacing:"-0.01em",
+                          }}>
+                          Message
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
