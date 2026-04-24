@@ -50,20 +50,37 @@ var RANDWICK   = "https://www.randwick.nsw.gov.au/community/sport-and-recreation
 var INNER_WEST = "https://www.innerwest.nsw.gov.au/live/recreation-and-sports";
 var NORTH_SYD  = "https://www.northsydney.nsw.gov.au/recreation-facilities";
 
+// Jensens Tennis — runs their own booking engine on the intrac platform.
+// Per-venue deep link by facility id. Public URLs with no auth bypass, no
+// scraping, no embedding — standard hyperlink use (same legal posture as
+// every other operator we link out to).
+var JENSENS_BASE = "https://jensenstennis.intrac.com.au/tennis/book.cfm";
+function jensens(facilityId, courtId){
+  if (courtId) return JENSENS_BASE + "?location=" + facilityId + "&court=" + courtId;
+  return JENSENS_BASE + "?facility=" + facilityId;
+}
+
 export var COURTS = [
   // ── Zone 1 — CBD / Inner City ──────────────────────────────────────────
+  // Jensens Tennis runs the direct booking engine for Prince Alfred Park
+  // (facility=1), Alexandria Park (=2), Beaconsfield / Perry Park (=3),
+  // Wentworth Park / Glebe (=4), and Rosebery (location=6, court=283).
+  // These deep-links go straight to the booking page vs the slower
+  // TennisVenues / CCT aggregator pages.
   { name:"Prince Alfred Park Tennis Courts", zone:"cbd",  courts:6, lat:-33.8898, lng:151.2093,
     suburb:"Surry Hills", address:"Corner Cleveland and Chalmers Street, Surry Hills NSW 2010",
-    bookingUrl: tv("prince-alfred-park-tennis-courts"),
+    bookingUrl: jensens(1),
     aliases: ["Prince Alfred Park"] },
   { name:"Rushcutters Bay Tennis",   zone:"cbd",  courts:4, lat:-33.8744, lng:151.2285,
     suburb:"Rushcutters Bay",  bookingUrl: CCT },
   { name:"Alexandria Park Tennis",   zone:"cbd",  courts:6, lat:-33.9010, lng:151.1970,
-    suburb:"Alexandria",       bookingUrl: CCT },
+    suburb:"Alexandria",       bookingUrl: jensens(2) },
   { name:"Erskineville Oval Tennis", zone:"cbd",  courts:2, lat:-33.9030, lng:151.1860,
     suburb:"Erskineville",     bookingUrl: CCT },
   { name:"Perry Park Tennis",        zone:"cbd",  courts:4, lat:-33.9120, lng:151.1940,
-    suburb:"Alexandria",       bookingUrl: CCT },
+    suburb:"Beaconsfield",     bookingUrl: jensens(3) },
+  { name:"Rosebery Tennis",          zone:"cbd",  courts:4, lat:-33.9195, lng:151.2050,
+    suburb:"Rosebery",         bookingUrl: jensens(6, 283) },
 
   // ── Zone 2 — Eastern Suburbs ───────────────────────────────────────────
   { name:"Centennial Parklands Sports Centre / Moore Park Tennis Courts",
@@ -119,7 +136,7 @@ export var COURTS = [
     suburb:"Canterbury", address:"55 King St, Canterbury NSW 2193",
     bookingUrl: tv("trinity-tennis-centre") },
   { name:"Wentworth Park Tennis",    zone:"inner-west", courts:4, lat:-33.8790, lng:151.1937,
-    suburb:"Glebe",            bookingUrl: CCT },
+    suburb:"Glebe",            bookingUrl: jensens(4) },
   { name:"Jubilee Park Tennis",      zone:"inner-west", courts:2, lat:-33.8803, lng:151.1808,
     suburb:"Glebe",            bookingUrl: CCT },
   { name:"Camperdown Memorial",      zone:"inner-west", courts:3, lat:-33.8904, lng:151.1770,
