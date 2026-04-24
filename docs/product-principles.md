@@ -17,6 +17,13 @@ The product compass. What CourtSync is, who it serves, what we optimise for, and
 2. **Social graph density in a small local area** — so when you open the app there's someone you know on the feed.
 3. **Lightweight coordination** — just enough to line up another match (rematch, challenge). Not a booking platform.
 
+### Match weight has two settings — and only two
+Every logged match carries an explicit `match_type`:
+- **Ranked**: this counts. Affects Elo, leaderboard, ranked W/L. Requires a linked opponent and confirmation. The identity story.
+- **Casual**: this happened. Lives in feed/profile/history but never moves a stat. The bootstrap path.
+
+Casual exists so first-time users don't bounce off the friction of "my opponent isn't on CourtSync yet." Ranked is the primary product loop. The line is hard-coded at the DB layer — `apply_match_outcome` short-circuits for casual matches, so no client path can accidentally bump Elo on a non-ranked match. See `trust-and-ranking-rules.md` → "Match types" for the implementation.
+
 ### What we are explicitly NOT building
 - **A full booking platform.** No court reservations, no timeslot commerce, no payment flows. Two surfaces reinforce this line:
   - The **challenge surface** (Mikey Module 4) is intentionally just a notification + freetext venue / time / message — not a booking product.
@@ -75,3 +82,4 @@ Every meaningful module ships with event tracking so we can learn from real beha
 - v2 — Module 4 (challenge / rematch). Sharpened the "NOT building" section: challenge is the lightweight coordination surface, not a booking product or chat thread.
 - v3 — Module 6 (polish): toast system replaces blocking alerts in the tradeoffs table. Adjusted to reflect shipped state.
 - v4 — Map tab (Mdawg workstream): added as a second reinforcement of the no-booking line — map surfaces public courts but links out to Google Maps / operator sites; CourtSync never processes bookings. CourtInfoCard exemplifies this pattern.
+- v5 — Match-type as a column (2026-04-25): formalised the ranked-vs-casual rule. Added "Match weight has two settings" section under "What we optimise for". Casual = "this happened", Ranked = "this counts". Enforced at the DB layer via `match_history.match_type` + a gated `apply_match_outcome` RPC, so no client path can accidentally affect Elo on a casual match.

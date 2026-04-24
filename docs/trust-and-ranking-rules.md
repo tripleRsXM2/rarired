@@ -3,6 +3,38 @@
 ## Purpose
 Source of truth for what "counts" on CourtSync. A match's validity, its effect on a player's stats, the dispute process, and the anti-abuse guardrails all live here. If any code changes match state, stat behaviour, or the ELO formula, this doc must be updated in the same module.
 
+## Match types — the core rule (2026-04-25)
+
+> **Casual = "this happened". Ranked = "this counts".**
+
+Every match row carries an explicit `match_type` column:
+
+| Type | Affects Elo? | Affects leaderboard? | Affects ranked W/L? | Lives in feed/profile? |
+|---|---|---|---|---|
+| **`ranked`** | ✅ yes | ✅ yes | ✅ yes | ✅ yes |
+| **`casual`** | ❌ no | ❌ no | ❌ no | ✅ yes |
+
+Both types still flow through the full confirmation lifecycle (pending → confirmed / disputed / voided / expired). Both still appear in the feed, the profile, the per-user history, and (for league-tagged ranked matches) the league standings.
+
+The single point of control is the server-side `apply_match_outcome(p_match_id)` SECURITY DEFINER RPC. It checks `match_type` and returns immediately for casual matches — every Elo write goes through this function, so no client path can accidentally bump ranking points on a casual match.
+
+### How match_type is decided
+The client sets `match_type` explicitly on insert based on whether the opponent is a linked CourtSync user:
+
+| Submission path | match_type |
+|---|---|
+| Linked-opponent ranked submission (`opponent_id` set) | `ranked` |
+| Tournament flow (always against linked opponent) | `ranked` |
+| Freetext-opponent submission (`opponent_id` null) | `casual` |
+
+Defaults are layered — DB column default = `'casual'` so a missing tag from any future client never accidentally affects Elo. Explicit > default > safe.
+
+### Leagues are ranked-only
+Any match tagged with a `league_id` must have `match_type = 'ranked'`. Enforced at the DB layer by the `validate_match_league` BEFORE-INSERT trigger. Casual league matches don't make sense — league standings derive from confirmed ranked matches; a casual one would silently fail to count, which is more confusing than rejecting it at insert time.
+
+### Backwards compatibility
+The 2026-04-25 migration backfilled every legacy `match_history` row using the previous heuristic (linked-opponent OR a non-casual `tourn_name` → `ranked`). Existing player records (Elo, W/L, matches_played) are unaffected by the migration; we just made the column explicit. Going forward, `tourn_name` is for **display** ("Sunday Crew"), `match_type` is for **policy**.
+
 ## Current Product Rule
 
 ### What counts as a match
@@ -10,14 +42,15 @@ A match is a row in the `match_history` table with at least:
 - a `submitter` (the user who logged it),
 - at least one set score,
 - a `status` (see state machine below),
-- either a `tourn_name` ("Ranked", "Casual Match", or a specific tournament), or a `tournament_id`.
+- a `match_type` (`'ranked'` or `'casual'`),
+- either a `tourn_name` (display label) or a `tournament_id`.
 
 Two flavours:
 
-| Flavour | Condition | Status on log | Affects stats? |
-|---|---|---|---|
-| **Ranked casual** | Opponent is a real linked user (`opponent_id` set) | `pending_confirmation` | Only after opponent **confirms** |
-| **Casual** | Freetext opponent name only (no `opponent_id`) | `confirmed` immediately | **Never** — stat columns stay untouched |
+| Flavour | Condition | Status on log | match_type | Affects stats? |
+|---|---|---|---|---|
+| **Ranked** | Opponent is a real linked user (`opponent_id` set) | `pending_confirmation` | `ranked` | Only after opponent **confirms** |
+| **Casual** | Freetext opponent name only (no `opponent_id`) | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched |
 | **Tournament match** | `tournament_id` set | Follows the tournament's own flow | Via existing tournament code path, not the casual/ranked split |
 
 The word "Casual" in the UI means "no stat impact, no confirmation loop". "Ranked" means "linked opponent, confirmation required, stats update on accept."
@@ -182,3 +215,4 @@ See `docs/leagues-and-seasons.md` for the full spec.
 - v2 — Module 5 (real ELO). Linear placeholder replaced by ELO with provisional period. Single-source-of-truth `apply_match_outcome` RPC. Provisional + confirmation-rate trust pills surfaced on profile UI.
 - v3 — Scoreboard + ScoreModal sanity: feed card winner-arrow + row-bold are now derived from **set scores**, not the stored `result` field. If the sets unambiguously pick a winner we trust that. This self-heals the classic "user tapped Loss but entered winning sets" data-entry bug without touching the stored row. Stored `result` still drives the outer resultColor border + share text. ScoreModal now warns once at save time when the selected Win/Loss disagrees with the set math, but does not block (retirement / incomplete matches are valid).
 - v4 — Module 7 (leagues V1 schema). Added `match_history.league_id` nullable column + persisted `league_standings` as read-side lens. No change to match truth flow, global ELO, confirmation, dispute, or void rules.
+- v5 — Match-type separation (2026-04-25). Made the ranked-vs-casual distinction explicit via `match_history.match_type` ('ranked' | 'casual') instead of inferring it from `tourn_name` + `opponent_id`. Server `apply_match_outcome` short-circuits for casual matches — single point of control for "what affects Elo". `validate_match_league` now requires `match_type='ranked'` for league matches. Backfilled every legacy row via the prior heuristic so player Elo / W/L numbers are unchanged.

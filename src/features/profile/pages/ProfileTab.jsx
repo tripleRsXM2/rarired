@@ -110,7 +110,13 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
             vs {opponentDisplay}
           </div>
           <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {[m.date, m.tournName && m.tournName !== "Casual Match" ? m.tournName : (m.tournName === "Casual Match" ? "Casual" : null), m.venue].filter(Boolean).join(" · ")}
+            {[
+              m.date,
+              m.match_type === 'casual'
+                ? 'Casual'
+                : (m.tournName && m.tournName !== "Casual Match" ? m.tournName : 'Ranked'),
+              m.venue,
+            ].filter(Boolean).join(" · ")}
           </div>
         </div>
         {m.status === "confirmed" && (

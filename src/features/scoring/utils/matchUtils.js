@@ -53,5 +53,15 @@ export function normalizeMatch(m, isTagged){
     // Module 7 — league tag (nullable). The feed card renders a league pill
     // when present; name resolution happens upstream via a leagues map.
     league_id: m.league_id || null,
+    // Core product rule (2026-04-25): match_type drives Elo/leaderboard
+    // impact. Server backfilled every legacy row, but for any row that
+    // somehow arrives without it (older serializer, edge case) we fall
+    // back to the same heuristic the backfill used: linked-opponent OR
+    // a non-casual tourn_name implies ranked.
+    match_type: m.match_type || (
+      m.opponent_id || (m.tourn_name && m.tourn_name !== 'Casual Match' && m.tourn_name !== 'Casual')
+        ? 'ranked'
+        : 'casual'
+    ),
   };
 }

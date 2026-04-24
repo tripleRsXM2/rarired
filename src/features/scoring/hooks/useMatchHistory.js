@@ -239,6 +239,12 @@ export function useMatchHistory(opts){
     var tournName=scoreModal.casual
       ?(isVerified?'Ranked':'Casual Match')
       :(scoreModal.tournName||'Casual Match');
+    // Core product rule (2026-04-25): match_type drives Elo/leaderboard
+    // impact. Linked-opponent + tournament flows are 'ranked'; freetext-
+    // opponent submissions are 'casual'. Server's apply_match_outcome
+    // gates Elo on this column, and the DB default is 'casual' so a
+    // missing-tag insert is automatically safe.
+    var matchType = isVerified ? 'ranked' : 'casual';
 
     var hash=null;
     if(isVerified) hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
@@ -255,6 +261,10 @@ export function useMatchHistory(opts){
       // loadHistory sweep picks up the DB row). oppAvatarUrl stays null
       // locally; it populates after loadHistory enriches participants.
       league_id: scoreDraft.leagueId || null,
+      // Core product rule — match_type on the optimistic local row so the
+      // feed-card "isRanked" check fires correctly the moment the match
+      // appears (before loadHistory rehydrates from DB).
+      match_type: matchType,
     };
     setHistory(function(h){return [nm].concat(h);});
 
@@ -263,6 +273,7 @@ export function useMatchHistory(opts){
       sets:clean, result:scoreDraft.result, notes:'', match_date:matchDate,
       status:status, submitted_at:new Date().toISOString(),
       venue:scoreDraft.venue||null, court:scoreDraft.court||null,
+      match_type: matchType,
     };
     if(opponentId) payload.opponent_id=opponentId;
     if(hash) payload.match_hash=hash;

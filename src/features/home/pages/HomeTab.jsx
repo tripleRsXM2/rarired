@@ -269,13 +269,13 @@ function FeedCard({
   var statusColor = isDisputed ? t.red
                    : (isPending || isPendingReconf) ? t.orange
                    : null;
-  // Ranked integrity: any match with a non-casual tournName counts toward the
-  // opponent's record and ranking points. Once it's submitted, the submitter
-  // can no longer delete it unilaterally from the feed — the proper paths are
-  // dispute (to correct) or void (to revert ranking impact). Voided ranked
-  // matches CAN be removed from the feed because voiding already reversed any
-  // ranking effect.
-  var isRanked       = !!m.tournName && m.tournName !== "Casual Match" && m.tournName !== "Casual";
+  // Ranked integrity: 'ranked' matches affect Elo + leaderboard. Once
+  // submitted, the submitter can no longer delete one unilaterally from
+  // the feed — the proper paths are dispute (to correct) or void (to
+  // revert the ranking effect). Voided ranked matches CAN be removed
+  // because voiding already reversed any Elo impact.
+  // Core product rule (2026-04-25): authoritative source is match_type.
+  var isRanked       = m.match_type === 'ranked';
   var canSubmitterDelete = isOwn && onDelete && !isInDispute && (!isRanked || isVoided);
   var cardBorder = statusColor
                    ? (needsAction ? "2px solid " + statusColor : "1px solid " + statusColor + "88")
