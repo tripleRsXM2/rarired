@@ -20,6 +20,10 @@ import { track } from "../../../lib/analytics.js";
 export default function MapTab({
   t, theme, authUser, profile,
   onSetHomeZone, onClearHomeZone, onOpenProfile, openChallenge,
+  // Phase 2 — map-centric matchmaking. Called when user taps Message
+  // on a player row. We forward partner + slot to dms.openConversationWith
+  // and then switch them to the messages tab. Parent (App.jsx) provides.
+  onMessagePlayer,
 }){
   var [hovered,setHovered]=useState(null);
   var [selected,setSelected]=useState(null);
@@ -152,11 +156,26 @@ export default function MapTab({
           });
           if(onOpenProfile) onOpenProfile(uid);
         }}
+        onMessagePlayer={function(partner, slotOpts){
+          if(!partner || !partner.id) return;
+          if(selectedZone) track("profile_opened_from_map", {
+            target_user_id: partner.id, zone_id: selectedZone.id, source: "zone_player_message",
+          });
+          if(onMessagePlayer) onMessagePlayer(partner, slotOpts);
+          setSelected(null); // close the side panel — we're switching tabs
+        }}
+        onCourtSelect={function(c){
+          // User tapped a court inside the zone panel — open the same
+          // CourtInfoCard the map pin would, so they get the ranked
+          // player list + booking + Message CTA from one flow.
+          handleCourtSelect(c);
+        }}
       />
 
       {/* Court info modal — opens on court marker tap */}
       <CourtInfoCard t={t} court={selectedCourt}
         authUser={authUser}
+        viewerProfile={profile}
         openChallenge={openChallenge}
         onOpenProfile={function(uid){
           if(!uid) return;
@@ -173,6 +192,11 @@ export default function MapTab({
             source: "court",
           });
           if(openChallenge) openChallenge(partner, "map", null);
+        }}
+        onMessagePlayer={function(partner, slotOpts){
+          if(!partner || !partner.id) return;
+          if(onMessagePlayer) onMessagePlayer(partner, slotOpts);
+          setSelectedCourt(null); // close the modal; we navigate away
         }}
         onClose={function(){ setSelectedCourt(null); }}/>
     </div>
