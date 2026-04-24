@@ -14,6 +14,7 @@ import PactCard from "../components/PactCard.jsx";
 import CreatePactModal from "../components/CreatePactModal.jsx";
 import { ZONE_BY_ID } from "../../map/data/zones.js";
 import { track } from "../../../lib/analytics.js";
+import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 function formatWhen(iso) {
   if (!iso) return "";
@@ -51,6 +52,11 @@ export default function PactsTab(props) {
   function setSub(s) { navigate("/tindis/" + s); }
 
   var [showCreate, setShowCreate] = useState(false);
+
+  // Deep-link from a pact_* notification: location.state.highlightPactId →
+  // scroll to + pulse that card. Declared before any conditional return
+  // (same hook-count rule we hit on LeaguesPanel).
+  var pactDeepLink = useDeepLinkHighlight("highlightPactId");
 
   // Partition pacts by lifecycle bucket.
   var buckets = useMemo(function () {
@@ -151,7 +157,8 @@ export default function PactsTab(props) {
               return (
                 <PactCard key={p.id} t={t} authUser={authUser} pact={p} profileMap={profileMap}
                   onAgree={agreeToPact} onBook={bookPact} onCancel={cancelPact} onSetPaid={setPaid}
-                  onOpenProfile={props.openProfile}/>
+                  onOpenProfile={props.openProfile}
+                  rowAnchor={pactDeepLink.rowProps(p.id)}/>
               );
             })}
           </div>
@@ -180,7 +187,7 @@ export default function PactsTab(props) {
               var author = profileMap[p.proposer_id] || { id: p.proposer_id, name: "Player" };
               var isMine = p.proposer_id === (authUser && authUser.id);
               return (
-                <div key={p.id} className="fade-up" style={{
+                <div key={p.id} {...pactDeepLink.rowProps(p.id)} className="fade-up" style={{
                   background: t.bgCard, border: "1px solid " + t.border, borderRadius: 10,
                   padding: "12px 14px", marginBottom: 10,
                   display: "flex", gap: 10, alignItems: "center",
@@ -236,7 +243,8 @@ export default function PactsTab(props) {
               return (
                 <PactCard key={p.id} t={t} authUser={authUser} pact={p} profileMap={profileMap}
                   onAgree={agreeToPact} onBook={bookPact} onCancel={cancelPact} onSetPaid={setPaid}
-                  onOpenProfile={props.openProfile}/>
+                  onOpenProfile={props.openProfile}
+                  rowAnchor={pactDeepLink.rowProps(p.id)}/>
               );
             })}
           </div>

@@ -222,7 +222,8 @@ function NotifRow({
     var t_ = n.type;
     if (t_ === "like" || t_ === "comment" || t_ === "match_deleted" ||
         t_ === "message" || t_ === "request_accepted" ||
-        t_ === "challenge_declined" || t_ === "challenge_expired") {
+        t_ === "challenge_declined" || t_ === "challenge_expired" ||
+        t_ === "pact_cancelled") {
       onDismiss();
     }
   }
@@ -317,6 +318,21 @@ function NotifRow({
       highlightLeagueId ? { state: { highlightLeagueId: highlightLeagueId } } : undefined);
     setShowNotifications(false);
     if (!n.read) onRead(n.id);
+  }
+
+  function goTindis(e) {
+    if (e) e.stopPropagation();
+    track("notification_opened", { type: n.type, deep_link_target: "tindis" });
+    // Drop the viewer on the active sub-tab with the pact id in state so
+    // TindisTab can scroll-to + pulse the matching PactCard. pact_cancelled
+    // rows go to History because the active row is gone.
+    var pactId = n.entity_id || null;
+    var sub = n.type === "pact_cancelled" ? "history" : "active";
+    navigate("/tindis/" + sub,
+      pactId ? { state: { highlightPactId: pactId } } : undefined);
+    setShowNotifications(false);
+    if (!n.read) onRead(n.id);
+    dismissIfActivity();
   }
 
   // Swipe hint: show a red strip behind the row when swiped
@@ -575,6 +591,36 @@ function NotifRow({
           )}
           {n.type === "league_joined" && (
             ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
+          )}
+
+          {/* Tindis — pact deep-links. pact_proposed is "action" so it gets
+              primary styling; the other pact_* are "important" with more
+              muted CTAs. All of them carry entity_id = pact id in state. */}
+          {n.type === "pact_proposed" && (
+            <button
+              onClick={function (e) { e.stopPropagation(); if (!n.read) onRead(n.id); goTindis(e); }}
+              style={{
+                display: "inline-block", marginTop: 8,
+                padding: "5px 14px", borderRadius: 6,
+                border: "none", background: t.accent, color: "#fff",
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+                transition: "opacity 0.13s", letterSpacing: "0.01em",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >Review pact →</button>
+          )}
+          {n.type === "pact_claimed" && (
+            ctaButton(t, t.accent, true, "Re-affirm →", goTindis)
+          )}
+          {n.type === "pact_confirmed" && (
+            ctaButton(t, t.green, true, "Book it →", goTindis)
+          )}
+          {n.type === "pact_booked" && (
+            ctaButton(t, t.accent, true, "View split →", goTindis)
+          )}
+          {n.type === "pact_cancelled" && (
+            ctaButton(t, t.textSecondary, false, "View →", goTindis)
           )}
         </div>
 
