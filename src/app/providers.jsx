@@ -128,5 +128,24 @@ export default function Providers({ t, theme, children }){
     document.body.style.background=t.bg;
     return function(){var o=document.getElementById("cs-css");if(o)o.remove();};
   },[theme]);
-  return children;
+  return (
+    <>
+      {/* Roland Garros-style brush-stroke filter, defined once at the app
+          root so every FeedCard overlay can reference url(#cs-brushstroke)
+          without each card paying the cost of compiling its own filter.
+          Visually: low-frequency fractal noise fed into a displacement map
+          with scale ~1.2px — enough to break the mechanical perfection of
+          a 1px stroke, not so much that the rectangle looks wobbly.
+          seed=3 is deterministic so the stroke is consistent across renders. */}
+      <svg aria-hidden="true" style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
+        <defs>
+          <filter id="cs-brushstroke" x="-5%" y="-5%" width="110%" height="110%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="3" result="noise"/>
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+        </defs>
+      </svg>
+      {children}
+    </>
+  );
 }
