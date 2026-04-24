@@ -58,8 +58,12 @@ export function usePacts(opts) {
     if (!userId) return;
     setLoading(true);
     try {
-      // Expire stale proposed pacts before we read, so expired rows land
-      // in History immediately rather than on the next sweep.
+      // Sweep stale rows before we read. Server-side RPC covers every
+      // lifecycle stage (proposed-past-expiry, confirmed-past-scheduled,
+      // booked-past-7d, terminal-older-than-30d); the viewer-scoped
+      // expireProposedPacts below is a belt-and-braces path in case the
+      // RPC isn't available (older clients pointing at a fresh DB).
+      try { await P.sweepStalePacts(); } catch (e) { /* RPC missing on old db — fall through */ }
       await P.expireProposedPacts(userId);
       var mine = await P.fetchMyPacts(userId);
       var rows = mine.data || [];
@@ -99,9 +103,12 @@ export function usePacts(opts) {
     if (!authUser) return;
     var timer = setInterval(function () {
       if (document.hidden) return;
-      P.expireProposedPacts(authUser.id).then(function () {
-        // Simple: re-load after a sweep so state reflects DB.
-        loadPacts(authUser.id);
+      // Run the server-side sweep first (covers every lifecycle stage),
+      // then the client fallback, then re-load.
+      P.sweepStalePacts().catch(function(){}).finally(function () {
+        P.expireProposedPacts(authUser.id).then(function () {
+          loadPacts(authUser.id);
+        });
       });
     }, 60 * 1000);
     return function () { clearInterval(timer); };

@@ -133,6 +133,15 @@ export function expireProposedPacts(userId) {
     .lt("expires_at", new Date().toISOString());
 }
 
+// Fire the server-side stale-pact sweep. Idempotent. Wider than the
+// client-scoped expireProposedPacts above — also handles confirmed
+// rows past scheduled_at, booked rows past the 7-day grace period,
+// and hard-deletes terminal rows older than 30 days. See
+// supabase/migrations/20260424_sweep_stale_pacts.sql for the rules.
+export function sweepStalePacts() {
+  return supabase.rpc("sweep_stale_pacts");
+}
+
 // ── Money math helpers (pure — no network) ──────────────────────────
 
 // Compute per-side share in cents given mode + total. Custom requires

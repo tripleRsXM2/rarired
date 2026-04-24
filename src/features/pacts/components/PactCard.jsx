@@ -44,7 +44,7 @@ var STATUS_META = {
 export default function PactCard({
   t, authUser, pact, profileMap,
   onAgree, onBook, onCancel, onSetPaid,
-  onOpenProfile,
+  onOpenProfile, rowAnchor,
 }) {
   var isProposer = pact.proposer_id === authUser.id;
   var meSide = isProposer ? "proposer" : "partner";
@@ -98,7 +98,7 @@ export default function PactCard({
   var isTerminal = pact.status === "cancelled" || pact.status === "expired" || pact.status === "played";
 
   return (
-    <div className="fade-up" style={{
+    <div {...(rowAnchor || {})} className="fade-up" style={{
       background: t.bgCard, border: "1px solid " + t.border,
       borderLeft: "3px solid " + pillColor,
       borderRadius: 10, padding: "14px 16px", marginBottom: 10,

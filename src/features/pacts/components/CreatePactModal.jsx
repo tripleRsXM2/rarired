@@ -15,7 +15,8 @@
 
 import { useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
-import { ZONES } from "../../map/data/zones.js";
+import { ZONES, ZONE_BY_ID } from "../../map/data/zones.js";
+import { COURTS } from "../../map/data/courts.js";
 import { SKILL_LEVELS } from "../../../lib/constants/domain.js";
 
 function toIso(dateStr, timeStr) {
@@ -31,6 +32,10 @@ export default function CreatePactModal({
 }) {
   var [mode, setMode] = useState(defaultPartner ? "direct" : "direct"); // "direct" | "open"
   var [partner, setPartner] = useState(defaultPartner || null);
+  var [friendQuery, setFriendQuery] = useState("");
+  // Venue picker state. `venueSource` is the curated court id (e.g.
+  // court name) or "__custom" for freetext. Empty = nothing chosen yet.
+  var [venueSource, setVenueSource] = useState("");
   var [venue, setVenue] = useState("");
   var [court, setCourtText] = useState("");
   var [date, setDate] = useState(function () {
@@ -130,7 +135,7 @@ export default function CreatePactModal({
           })}
         </div>
 
-        {/* Direct mode — partner pick */}
+        {/* Direct mode — partner pick with search + scrollable list */}
         {mode === "direct" && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Partner</label>
@@ -143,23 +148,64 @@ export default function CreatePactModal({
                 <button onClick={function () { setPartner(null); }}
                   style={{ background: "transparent", border: "none", fontSize: 12, color: t.textTertiary, cursor: "pointer" }}>change</button>
               </div>
-            ) : (
-              <div style={{ marginTop: 6, maxHeight: 180, overflowY: "auto", border: "1px solid " + t.border, borderRadius: 8 }}>
-                {(friends || []).length === 0 && (
-                  <div style={{ padding: "16px", fontSize: 12, color: t.textTertiary }}>No friends yet — try posting an open court instead.</div>
-                )}
-                {(friends || []).map(function (f) {
-                  return (
-                    <button key={f.id}
-                      onClick={function () { setPartner(f); }}
-                      style={{ display: "flex", gap: 10, width: "100%", padding: "8px 10px", border: "none", background: "transparent", cursor: "pointer", alignItems: "center", borderBottom: "1px solid " + t.border }}>
-                      <PlayerAvatar name={f.name} avatar={f.avatar} avatarUrl={f.avatar_url} size={28}/>
-                      <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>{f.name}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            ) : (function () {
+              // Filter friends by the search query. Case-insensitive, matches
+              // anywhere in the name. Passing authUser.id upstream ensures
+              // we never see the viewer themselves in this list.
+              var list = (friends || []).filter(function (f) {
+                if (!f || !f.id) return false;
+                if (authUser && f.id === authUser.id) return false;
+                if (!friendQuery.trim()) return true;
+                return (f.name || "").toLowerCase().indexOf(friendQuery.trim().toLowerCase()) >= 0;
+              });
+              return (
+                <div style={{ marginTop: 6 }}>
+                  <input
+                    value={friendQuery}
+                    onChange={function (e) { setFriendQuery(e.target.value); }}
+                    placeholder={(friends || []).length ? ("Search " + (friends || []).length + " friend" + ((friends || []).length === 1 ? "" : "s") + "…") : "No friends to search"}
+                    style={Object.assign({}, inputStyle, { marginBottom: 8 })}/>
+                  <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid " + t.border, borderRadius: 8 }}>
+                    {(friends || []).length === 0 && (
+                      <div style={{ padding: "16px", fontSize: 12, color: t.textTertiary, lineHeight: 1.5 }}>
+                        You don't have any friends on the app yet.
+                        Post an <strong>open court</strong> instead, or add friends from the People tab.
+                      </div>
+                    )}
+                    {(friends || []).length > 0 && list.length === 0 && (
+                      <div style={{ padding: "16px", fontSize: 12, color: t.textTertiary }}>
+                        No friends match "{friendQuery}".
+                      </div>
+                    )}
+                    {list.map(function (f, idx) {
+                      return (
+                        <button key={f.id}
+                          onClick={function () { setPartner(f); }}
+                          style={{
+                            display: "flex", gap: 10, width: "100%", padding: "9px 10px",
+                            border: "none", background: "transparent", cursor: "pointer",
+                            alignItems: "center",
+                            borderBottom: idx === list.length - 1 ? "none" : "1px solid " + t.border,
+                            textAlign: "left",
+                          }}
+                          onMouseEnter={function (e) { e.currentTarget.style.background = t.accentSubtle; }}
+                          onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
+                          <PlayerAvatar name={f.name} avatar={f.avatar} avatarUrl={f.avatar_url} size={28}/>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, color: t.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                            {f.skill && (
+                              <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 1 }}>
+                                {f.skill}{f.home_zone ? (" · " + ((ZONE_BY_ID[f.home_zone] && ZONE_BY_ID[f.home_zone].name) || "")) : ""}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -184,14 +230,56 @@ export default function CreatePactModal({
           </div>
         )}
 
-        {/* Venue / court */}
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10, marginBottom: 10 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Venue</label>
-            <input value={venue} onChange={function (e) { setVenue(e.target.value); }}
-              placeholder="e.g. Moore Park Tennis"
-              style={Object.assign({}, inputStyle, { marginTop: 6 })}/>
-          </div>
+        {/* Venue picker — curated courts grouped by zone + custom fallback.
+            Picking a curated court auto-sets both the venue string and the
+            zone_id (for open-court postings) so the map and the pact agree
+            on which zone this match belongs to. "Other (type your own)"
+            unlocks the freetext field below for venues we haven't curated. */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Venue</label>
+          <select
+            value={venueSource}
+            onChange={function (e) {
+              var v = e.target.value;
+              setVenueSource(v);
+              if (v === "__custom") {
+                setVenue("");  // clear so the custom input is empty and placeholder shows
+              } else if (v) {
+                var c = COURTS.find(function (x) { return x.name === v; });
+                if (c) {
+                  setVenue(c.name);
+                  if (c.zone) setZoneId(c.zone);
+                }
+              } else {
+                setVenue("");
+              }
+            }}
+            style={Object.assign({}, inputStyle, { marginTop: 6 })}>
+            <option value="">Pick a venue…</option>
+            {ZONES.map(function (z) {
+              var inZone = COURTS.filter(function (c) { return c.zone === z.id; });
+              if (!inZone.length) return null;
+              return (
+                <optgroup key={z.id} label={z.num + " · " + z.name}>
+                  {inZone.map(function (c) {
+                    return <option key={c.name} value={c.name}>{c.name}{c.suburb ? " — " + c.suburb : ""}</option>;
+                  })}
+                </optgroup>
+              );
+            })}
+            <option value="__custom">Other (type your own)</option>
+          </select>
+          {venueSource === "__custom" && (
+            <input
+              value={venue}
+              onChange={function (e) { setVenue(e.target.value); }}
+              placeholder="Venue name"
+              autoFocus
+              style={Object.assign({}, inputStyle, { marginTop: 8 })}/>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Court #</label>
             <input value={court} onChange={function (e) { setCourtText(e.target.value); }}
