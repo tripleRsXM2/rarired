@@ -164,6 +164,12 @@ export default function MapTab({
           if(onMessagePlayer) onMessagePlayer(partner, slotOpts);
           setSelected(null); // close the side panel — we're switching tabs
         }}
+        onCourtSelect={function(c){
+          // User tapped a court inside the zone panel — open the same
+          // CourtInfoCard the map pin would, so they get the ranked
+          // player list + booking + Message CTA from one flow.
+          handleCourtSelect(c);
+        }}
       />
 
       {/* Court info modal — opens on court marker tap */}

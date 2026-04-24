@@ -105,7 +105,12 @@ export default function CourtInfoCard({
         onClick={function(e){ e.stopPropagation(); }}
         className="pop"
         style={{
-          width:"100%", maxWidth:360,
+          // Widened from 360 → 440 once we started rendering per-row
+          // action buttons. At 360 the name got truncated at ~8 chars
+          // before the Message + Challenge pair on the right, so a list
+          // of two-player venues was unreadable. 440 gives comfortable
+          // room for name + skill-match chip + both buttons.
+          width:"100%", maxWidth:440,
           background:t.bgCard, border:"1px solid "+t.border,
           borderRadius:14, overflow:"hidden",
           boxShadow:"0 20px 60px rgba(0,0,0,0.35)",
@@ -175,28 +180,36 @@ export default function CourtInfoCard({
               No one has tagged this court yet. Be first — add it under Settings → Courts I play at.
             </div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:10 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:2, marginBottom:10 }}>
               {others.map(function(p){
                 var canChallenge = !!authUser && !!(onChallenge || openChallenge);
                 var canMessage   = !!authUser && !!onMessagePlayer;
                 var hint = skillHintFor(p);
+                // Two-row layout per player: identity line full-width, action
+                // line below. Stops long names getting squeezed into nothing
+                // when both Message + Challenge buttons are rendered.
                 return (
                   <div key={p.id} style={{
-                    display:"flex", alignItems:"center", gap:10,
-                    padding:"6px 8px", borderRadius:8,
+                    padding:"10px 10px", borderRadius:8,
+                    border:"1px solid "+t.border,
+                    display:"flex", flexDirection:"column", gap:8,
                   }}>
+                    {/* Identity — avatar + name + skill subtitle. Full width,
+                        no squeeze. Clickable area routes to the player's
+                        profile. */}
                     <button
                       onClick={function(){ if(onOpenProfile) onOpenProfile(p.id); }}
                       style={{
                         display:"flex", alignItems:"center", gap:10,
                         padding:0, background:"transparent", border:"none",
-                        cursor:"pointer", flex:1, minWidth:0, textAlign:"left",
+                        cursor:"pointer", width:"100%", textAlign:"left",
                       }}>
-                      <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
+                      <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={34}/>
                       <div style={{ minWidth:0, flex:1 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ fontSize:13, color:t.text, fontWeight:600,
-                            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:14, color:t.text, fontWeight:700,
+                            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                            minWidth:0, maxWidth:"100%" }}>
                             {p.name}
                           </span>
                           {hint && (
@@ -207,37 +220,43 @@ export default function CourtInfoCard({
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize:11, color:t.textTertiary }}>
-                          {[(p.skill||""), (p.ranking_points?(p.ranking_points+" pts"):"")]
+                        <div style={{ fontSize:11, color:t.textTertiary, marginTop:1 }}>
+                          {[(p.skill||""), (p.ranking_points?(p.ranking_points+" pts"):""),
+                            (p.playsHere ? "Plays here" : null)]
                             .filter(Boolean).join(" · ")}
                         </div>
                       </div>
                     </button>
-                    {canMessage && (
-                      <button
-                        onClick={function(e){ handleMessage(p, e); }}
-                        style={{
-                          padding:"5px 10px", borderRadius:6,
-                          border:"1px solid "+t.border,
-                          background:"transparent", color:t.text,
-                          fontSize:11, fontWeight:700, cursor:"pointer",
-                          flexShrink:0, letterSpacing:"-0.01em",
-                        }}>
-                        Message
-                      </button>
-                    )}
-                    {canChallenge && (
-                      <button
-                        onClick={function(e){ handleChallenge(p, e); }}
-                        style={{
-                          padding:"5px 10px", borderRadius:6,
-                          border:"1px solid "+t.accent,
-                          background:t.accent+"18", color:t.accent,
-                          fontSize:11, fontWeight:700, cursor:"pointer",
-                          flexShrink:0, letterSpacing:"-0.01em",
-                        }}>
-                        Challenge
-                      </button>
+                    {/* Actions — full width row so buttons don't eat the name */}
+                    {(canMessage || canChallenge) && (
+                      <div style={{ display:"flex", gap:6 }}>
+                        {canMessage && (
+                          <button
+                            onClick={function(e){ handleMessage(p, e); }}
+                            style={{
+                              flex:1, padding:"7px 10px", borderRadius:6,
+                              border:"none",
+                              background:t.accent, color:t.accentText,
+                              fontSize:12, fontWeight:700, cursor:"pointer",
+                              letterSpacing:"-0.01em",
+                            }}>
+                            Message
+                          </button>
+                        )}
+                        {canChallenge && (
+                          <button
+                            onClick={function(e){ handleChallenge(p, e); }}
+                            style={{
+                              flex:1, padding:"7px 10px", borderRadius:6,
+                              border:"1px solid "+t.accent,
+                              background:"transparent", color:t.accent,
+                              fontSize:12, fontWeight:700, cursor:"pointer",
+                              letterSpacing:"-0.01em",
+                            }}>
+                            Challenge
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

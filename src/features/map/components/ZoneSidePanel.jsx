@@ -22,6 +22,10 @@ export default function ZoneSidePanel({
   // Phase 2 — fires dms.openConversationWith + navigates.
   // Shape: onMessagePlayer(partner, { venue, date, time, draft })
   onMessagePlayer,
+  // User feedback: courts listed in the zone panel weren't interactive.
+  // onCourtSelect opens the same CourtInfoCard the map pin would —
+  // user can pick a player from there without hunting for the marker.
+  onCourtSelect,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
@@ -133,13 +137,45 @@ export default function ZoneSidePanel({
           : (
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:18 }}>
               {courts.map(function(c){
+                // Each court row: clicking the body opens the CourtInfoCard
+                // (same modal as a map-pin tap), giving access to the
+                // ranked player list + Message CTA. A separate Book link
+                // next to the name lets users right-click → open in tab,
+                // or left-click to jump straight to the operator booking.
                 return (
                   <div key={c.name} style={{
-                    padding:"9px 11px", borderRadius:8,
-                    background: t.bgTertiary,
-                    fontSize:12, color:t.text, fontWeight:500,
+                    display:"flex", alignItems:"stretch", gap:6,
+                    borderRadius:8, background: t.bgTertiary,
                   }}>
-                    {c.name}
+                    <button
+                      onClick={function(){ if(onCourtSelect) onCourtSelect(c); }}
+                      disabled={!onCourtSelect}
+                      style={{
+                        flex:1, minWidth:0, textAlign:"left",
+                        padding:"9px 11px", background:"transparent", border:"none",
+                        color:t.text, fontSize:12, fontWeight:500,
+                        cursor: onCourtSelect ? "pointer" : "default",
+                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                      }}
+                      onMouseEnter={function(e){ if(onCourtSelect) e.currentTarget.style.color = t.accent; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.color = t.text; }}>
+                      {c.name}
+                    </button>
+                    {c.bookingUrl && (
+                      <a href={c.bookingUrl}
+                        target="_blank" rel="noopener noreferrer"
+                        onClick={function(e){ e.stopPropagation(); }}
+                        title="Open booking page in a new tab"
+                        style={{
+                          display:"inline-flex", alignItems:"center", justifyContent:"center",
+                          padding:"0 10px", borderLeft:"1px solid "+t.border,
+                          color:t.accent, fontSize:11, fontWeight:700,
+                          textDecoration:"none", flexShrink:0,
+                          letterSpacing:"0.02em",
+                        }}>
+                        Book ↗
+                      </a>
+                    )}
                   </div>
                 );
               })}
