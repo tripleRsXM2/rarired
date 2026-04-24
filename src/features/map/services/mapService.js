@@ -13,11 +13,17 @@ function isoDaysAgo(days) {
 // stored with a free-text venue (e.g. "Prince Alfred Park"); we key off
 // the curated courts list so a match counts toward a zone iff its venue
 // is a known court in that zone. Case-insensitive exact match on the
-// court name — cheap and deterministic enough for module 1. A future
-// iteration with a real court_id column would remove the text match.
+// court name OR any alias — aliases preserve zone attribution when a
+// venue gets renamed to match its official branding (e.g. the old
+// "Moore Park Tennis" → "Centennial Parklands Sports Centre / Moore
+// Park Tennis Courts"). A future iteration with a real court_id column
+// would replace this text match entirely.
 var NAME_TO_ZONE = (function () {
   var m = {};
-  COURTS.forEach(function (c) { m[c.name.toLowerCase()] = c.zone; });
+  COURTS.forEach(function (c) {
+    m[c.name.toLowerCase()] = c.zone;
+    (c.aliases || []).forEach(function (a) { m[a.toLowerCase()] = c.zone; });
+  });
   return m;
 })();
 
@@ -57,15 +63,33 @@ export async function fetchZoneActivity(windowDays) {
 // from confirmed matches at that venue in the last N days, with the
 // most recent match first. Caller should exclude the viewer.
 //
+// Matches are OR'd across the canonical court name AND any aliases so
+// a renamed venue still surfaces its historical matches (e.g. rows
+// logged as "Moore Park Tennis" before the rename roll up under the
+// new "Centennial Parklands Sports Centre / Moore Park Tennis Courts").
+//
 // Returns: { data: [{ id, name, avatar, avatar_url, skill, last_match_date }], error }
 export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
   var days = windowDays || 60;
   var lim  = limit || 6;
+  var court = COURTS.find(function (c) {
+    return c.name === courtName
+      || (c.aliases || []).some(function (a) { return a === courtName; });
+  });
+  var names = court
+    ? [court.name].concat(court.aliases || [])
+    : [courtName];
+  // Build an OR expression across ilike(venue, each_name). Supabase JS's
+  // .or() takes a comma-joined list. Escape commas in names to dodge the
+  // parser (none of our names contain commas but be safe going forward).
+  var orExpr = names.map(function (n) {
+    return "venue.ilike." + n.replace(/,/g, " ");
+  }).join(",");
   var r = await supabase
     .from("match_history")
     .select("id,user_id,opponent_id,tagged_user_id,venue,status,match_date")
     .eq("status", "confirmed")
-    .ilike("venue", courtName)
+    .or(orExpr)
     .gte("match_date", isoDaysAgo(days).slice(0, 10))
     .order("match_date", { ascending: false })
     .limit(50);
