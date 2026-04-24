@@ -79,6 +79,11 @@ import {
   dateSeparatorLabel,
   computeDateSeparatorIds,
 } from "../utils/messaging.js";
+import {
+  DM_TEMPLATES,
+  buildDraftFromTemplate,
+  validateSlotDate,
+} from "../utils/dmTemplates.js";
 
 // Quick reactions shown first in the action menu. "+" opens the full picker.
 var QUICK_REACTIONS = ["👍", "❤️", "😂", "😢", "🔥", "🎾"];
@@ -1198,6 +1203,66 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           </div>
           <button onClick={dms.clearReplyTo} style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
         </div>
+      )}
+
+      {/* Proposed-slot bar — renders when openConversationWith was called
+          with a { slot } (e.g. user tapped a court on the map and chose
+          this partner). Inline date + time editable here; × clears the
+          slot without nuking the text draft. Template chips below cycle
+          the prefilled message so the user can send a different tone
+          in one tap. */}
+      {dms.proposedSlot && (
+        (function () {
+          var slot = dms.proposedSlot;
+          var validation = validateSlotDate(slot.date);
+          // The set-template flow — write a fresh interpolated draft
+          // using whatever venue + slot the user currently has.
+          function applyTemplate(tmplId) {
+            var text = buildDraftFromTemplate(tmplId, slot.venue || "", slot.date, slot.time);
+            dms.setMsgDraft(text);
+          }
+          function updateSlot(patch) {
+            dms.setProposedSlot(Object.assign({}, slot, patch));
+          }
+          return (
+            <div style={{ padding: "10px 12px", background: t.bgTertiary, borderTop: "2px solid " + t.accent, borderRadius: "8px 8px 0 0", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: t.accent, letterSpacing: "0.05em", textTransform: "uppercase" }}>Proposing</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                  {slot.venue || "Venue"}
+                </span>
+                <button onClick={function () { dms.setProposedSlot(null); }}
+                  title="Clear proposed slot"
+                  style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 16, lineHeight: 1, padding: "0 2px", cursor: "pointer", flexShrink: 0 }}>×</button>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input type="date" value={slot.date || ""}
+                  onChange={function (e) { updateSlot({ date: e.target.value }); }}
+                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid " + t.border, background: t.inputBg, color: t.text, fontSize: 12 }}/>
+                <input type="time" value={slot.time || ""}
+                  onChange={function (e) { updateSlot({ time: e.target.value }); }}
+                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid " + t.border, background: t.inputBg, color: t.text, fontSize: 12 }}/>
+              </div>
+              {validation.hint && (
+                <div style={{ fontSize: 10.5, color: validation.ok ? t.textTertiary : t.red, marginBottom: 8, lineHeight: 1.4 }}>
+                  {validation.hint}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {DM_TEMPLATES.map(function (tmpl) {
+                  return (
+                    <button key={tmpl.id} onClick={function () { applyTemplate(tmpl.id); }}
+                      style={{ padding: "4px 10px", borderRadius: 14, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}
+                      onMouseEnter={function (e) { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.color = t.accent; }}
+                      onMouseLeave={function (e) { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.color = t.textSecondary; }}>
+                      {tmpl.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {/* Upload-error toast — small inline strip above input, disappears

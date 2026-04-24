@@ -13,11 +13,17 @@ function isoDaysAgo(days) {
 // stored with a free-text venue (e.g. "Prince Alfred Park"); we key off
 // the curated courts list so a match counts toward a zone iff its venue
 // is a known court in that zone. Case-insensitive exact match on the
-// court name — cheap and deterministic enough for module 1. A future
-// iteration with a real court_id column would remove the text match.
+// court name OR any alias — aliases preserve zone attribution when a
+// venue gets renamed to match its official branding (e.g. the old
+// "Moore Park Tennis" → "Centennial Parklands Sports Centre / Moore
+// Park Tennis Courts"). A future iteration with a real court_id column
+// would replace this text match entirely.
 var NAME_TO_ZONE = (function () {
   var m = {};
-  COURTS.forEach(function (c) { m[c.name.toLowerCase()] = c.zone; });
+  COURTS.forEach(function (c) {
+    m[c.name.toLowerCase()] = c.zone;
+    (c.aliases || []).forEach(function (a) { m[a.toLowerCase()] = c.zone; });
+  });
   return m;
 })();
 
@@ -53,19 +59,171 @@ export async function fetchZoneActivity(windowDays) {
   return { data: out, error: null };
 }
 
+// Compute a matchmaking score for a candidate relative to a viewer.
+// Three signals combine (higher = better match):
+//   1. plays-here     1000 — strong binary signal, overwhelms the others
+//                             when set. Either self-reported (in
+//                             profiles.played_courts) OR derived from
+//                             a confirmed match_history row at this
+//                             venue. Matches map-pivot product frame:
+//                             "the person who actually plays here" is
+//                             the most valuable recommendation.
+//   2. skill distance    0 – 500
+//                             500 = exact sub-level match ("Intermediate 2" = "Intermediate 2")
+//                             300 = same tier, different sub-level
+//                                     ("Intermediate 1" ~ "Intermediate 2")
+//                               0 = different tier (Beginner ~ Advanced)
+//   3. availability overlap  per-slot × 20, capped at 200. A Mon-Mornings
+//                             overlap means they could both show up at
+//                             the same time — the second-most valuable
+//                             signal after plays-here.
+//
+// Returns a scalar; higher = recommend first.
+function tierFromSkill(s) {
+  if (!s) return null;
+  if (s.indexOf("Beginner") === 0) return "Beginner";
+  if (s.indexOf("Intermediate") === 0) return "Intermediate";
+  if (s.indexOf("Advanced") === 0) return "Advanced";
+  if (s === "Competitive") return "Advanced";
+  return null;
+}
+function skillScore(viewerSkill, candSkill) {
+  if (!viewerSkill || !candSkill) return 0;
+  if (viewerSkill === candSkill) return 500;
+  var ta = tierFromSkill(viewerSkill);
+  var tb = tierFromSkill(candSkill);
+  return (ta && ta === tb) ? 300 : 0;
+}
+function availOverlapScore(viewerAvail, candAvail) {
+  if (!viewerAvail || !candAvail) return 0;
+  var n = 0;
+  Object.keys(viewerAvail).forEach(function (day) {
+    var candBlocks = candAvail[day] || [];
+    (viewerAvail[day] || []).forEach(function (block) {
+      if (candBlocks.indexOf(block) >= 0) n++;
+    });
+  });
+  return Math.min(n * 20, 200);
+}
+
+export function scorePlayerForCourt(viewer, candidate, playsHere) {
+  var score = 0;
+  if (playsHere) score += 1000;
+  score += skillScore(viewer && viewer.skill, candidate && candidate.skill);
+  score += availOverlapScore(viewer && viewer.availability, candidate && candidate.availability);
+  return score;
+}
+
+// Phase 2 — the ranked list of players for a given court. Combines:
+//   • profiles where played_courts intersects {court.name ∪ aliases}
+//     (self-reported "I play here")
+//   • distinct participants from confirmed match_history rows at the
+//     venue over the last 90 days (implicit plays-here signal — even
+//     if the user never self-reported)
+// Then scores each candidate against the viewer and sorts best first.
+//
+// Returns { data: [ { ...profile, playsHere: bool, score: number } ], error }
+export async function fetchPlayersAtCourt(courtName, viewer, limit) {
+  var lim = limit || 12;
+  var viewerId = viewer && viewer.id;
+  // Resolve canonical + aliases so legacy venue strings still match.
+  var court = COURTS.find(function (c) {
+    return c.name === courtName
+      || (c.aliases || []).some(function (a) { return a === courtName; });
+  });
+  var names = court ? [court.name].concat(court.aliases || []) : [courtName];
+
+  // (a) Self-reporters — profiles.played_courts overlaps any canonical name.
+  var selfReq = supabase.from("profiles")
+    .select("id,name,avatar,avatar_url,skill,suburb,home_zone,availability,played_courts,ranking_points,last_active,show_online_status,show_last_seen")
+    .overlaps("played_courts", names);
+  if (viewerId) selfReq = selfReq.neq("id", viewerId);
+
+  // (b) Derived — distinct user_id / opponent_id from confirmed matches
+  // at this venue in the last 90 days.
+  var since = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  var hmReq = supabase.from("match_history")
+    .select("user_id,opponent_id,tagged_user_id,venue,status,match_date")
+    .eq("status", "confirmed")
+    .in("venue", names)
+    .gte("match_date", since)
+    .order("match_date", { ascending: false })
+    .limit(80);
+
+  var [selfRes, hmRes] = await Promise.all([selfReq, hmReq]);
+  if (selfRes.error) return { data: [], error: selfRes.error };
+
+  // Build the candidate set. "playsHere" is TRUE for both self-reporters
+  // AND anyone surfaced from match_history — the two signals merge.
+  var byId = {};
+  (selfRes.data || []).forEach(function (p) {
+    byId[p.id] = Object.assign({}, p, { playsHere: true });
+  });
+
+  if (!hmRes.error) {
+    var derivedIds = new Set();
+    (hmRes.data || []).forEach(function (m) {
+      [m.user_id, m.opponent_id, m.tagged_user_id].forEach(function (uid) {
+        if (!uid) return;
+        if (viewerId && uid === viewerId) return;
+        if (byId[uid]) return; // already in set
+        derivedIds.add(uid);
+      });
+    });
+    var idList = Array.from(derivedIds);
+    if (idList.length) {
+      var pRes = await supabase.from("profiles")
+        .select("id,name,avatar,avatar_url,skill,suburb,home_zone,availability,played_courts,ranking_points,last_active,show_online_status,show_last_seen")
+        .in("id", idList);
+      if (!pRes.error) {
+        (pRes.data || []).forEach(function (p) {
+          byId[p.id] = Object.assign({}, p, { playsHere: true });
+        });
+      }
+    }
+  }
+
+  // Score + sort + cap.
+  var ranked = Object.keys(byId).map(function (id) {
+    var c = byId[id];
+    var score = scorePlayerForCourt(viewer, c, c.playsHere);
+    return Object.assign({}, c, { score: score });
+  });
+  ranked.sort(function (a, b) { return b.score - a.score; });
+  return { data: ranked.slice(0, lim), error: null };
+}
+
 // Recent players at a specific court — returns distinct participants
 // from confirmed matches at that venue in the last N days, with the
 // most recent match first. Caller should exclude the viewer.
+//
+// Matches are OR'd across the canonical court name AND any aliases so
+// a renamed venue still surfaces its historical matches (e.g. rows
+// logged as "Moore Park Tennis" before the rename roll up under the
+// new "Centennial Parklands Sports Centre / Moore Park Tennis Courts").
 //
 // Returns: { data: [{ id, name, avatar, avatar_url, skill, last_match_date }], error }
 export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
   var days = windowDays || 60;
   var lim  = limit || 6;
+  var court = COURTS.find(function (c) {
+    return c.name === courtName
+      || (c.aliases || []).some(function (a) { return a === courtName; });
+  });
+  var names = court
+    ? [court.name].concat(court.aliases || [])
+    : [courtName];
+  // Build an OR expression across ilike(venue, each_name). Supabase JS's
+  // .or() takes a comma-joined list. Escape commas in names to dodge the
+  // parser (none of our names contain commas but be safe going forward).
+  var orExpr = names.map(function (n) {
+    return "venue.ilike." + n.replace(/,/g, " ");
+  }).join(",");
   var r = await supabase
     .from("match_history")
     .select("id,user_id,opponent_id,tagged_user_id,venue,status,match_date")
     .eq("status", "confirmed")
-    .ilike("venue", courtName)
+    .or(orExpr)
     .gte("match_date", isoDaysAgo(days).slice(0, 10))
     .order("match_date", { ascending: false })
     .limit(50);

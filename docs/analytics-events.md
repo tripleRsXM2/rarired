@@ -187,3 +187,4 @@ from logged l left join confirmed c using (mid);
 | `pact_cancelled` | Either party cancels the pact | `pact_id`, `status_at_cancel` |
 | `open_court_claimed` | `claim_open_pact` RPC succeeds | `pact_id` |
 | `payment_handle_added` | User saves Settings with a non-empty `payment_handle` | `method` ("payid" \| "venmo" \| "paypal" \| "beem" \| "zelle" \| "other") |
+- v4 — **Phase 2 map matchmaking**: new `dm_prefilled_from_map` event fires on the Message-from-court-card path with `target_user_id, court_name, zone_id, skill_match, availability_overlap_count, plays_here`. Lets us measure the core hypothesis of the pivot — map-viewers message candidates at a rate that exceeds their baseline friend-DM rate, and whether plays-here / skill-match / availability-overlap correlate with actual conversation starts.
