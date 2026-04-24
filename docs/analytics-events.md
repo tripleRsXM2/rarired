@@ -172,3 +172,18 @@ from logged l left join confirmed c using (mid);
 - v1 — Module 4 promoted all 4 reserved events (`challenge_sent`, `challenge_accepted`, `challenge_declined`, `rematch_converted_to_match`) to fired with concrete props. Total registered events: 20 fired, 0 reserved.
 - v2 — Module 5 added 2 new events: `leaderboard_viewed`, `leaderboard_filter_changed`. Total: 22 fired.
 - v3 — Map activity-signal module added 7 events: `map_opened`, `zone_selected`, `court_opened`, `home_zone_set`, `home_zone_cleared`, `profile_opened_from_map`, `challenge_from_map`. Total: 29 fired.
+- v4 — Tindis (match pacts) module added 10 events: `pact_create_opened`, `pact_created`, `pact_confirmed`, `pact_booked`, `pact_paid_self_marked`, `pact_paid_self_unmarked`, `pact_cancelled`, `open_court_claimed`, `payment_handle_added`. Total: 38 fired.
+
+### Module: Tindis (match pacts)
+
+| Event | Triggered by | Props |
+|---|---|---|
+| `pact_create_opened` | User taps "New pact" button on TINDIS tab | `from` ("active" \| "open" \| "history") |
+| `pact_created` | `usePacts.proposePact` insert succeeds | `pact_id`, `kind` ("direct" \| "open"), `has_cost`?, `zone_id`? |
+| `pact_confirmed` | Both parties have agreed; status → 'confirmed' | `pact_id` |
+| `pact_booked` | `usePacts.bookPact` sets booking_by / booking_ref / total_cost | `pact_id`, `has_cost`, `split_mode` |
+| `pact_paid_self_marked` | User flips their own paid flag ON | `pact_id` |
+| `pact_paid_self_unmarked` | User flips their own paid flag OFF | `pact_id` |
+| `pact_cancelled` | Either party cancels the pact | `pact_id`, `status_at_cancel` |
+| `open_court_claimed` | `claim_open_pact` RPC succeeds | `pact_id` |
+| `payment_handle_added` | User saves Settings with a non-empty `payment_handle` | `method` ("payid" \| "venmo" \| "paypal" \| "beem" \| "zelle" \| "other") |

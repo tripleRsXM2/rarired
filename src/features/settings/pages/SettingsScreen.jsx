@@ -259,6 +259,36 @@ export default function SettingsScreen({
                 </svg>
               </div>
             </div>
+            {/* Payment handle — opt-in. Fills the Tindis split deep-links.
+                We never receive or transmit money; the handle is purely a
+                reminder string rendered back to the partner when they owe. */}
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                Payment handle (for Tindis)
+              </label>
+              <div style={{display:"grid",gridTemplateColumns:"1.2fr 2fr",gap:8}}>
+                <select
+                  value={profileDraft.payment_method||""}
+                  onChange={function(e){setProfileDraft(function(d){return Object.assign({},d,{payment_method:e.target.value||null});});}}
+                  style={iStyle}>
+                  <option value="">None</option>
+                  <option value="payid">PayID (AU)</option>
+                  <option value="beem">Beem It (AU)</option>
+                  <option value="paypal">PayPal.me</option>
+                  <option value="venmo">Venmo</option>
+                  <option value="zelle">Zelle</option>
+                  <option value="other">Other</option>
+                </select>
+                <input
+                  value={profileDraft.payment_handle||""}
+                  onChange={function(e){setProfileDraft(function(d){return Object.assign({},d,{payment_handle:e.target.value});});}}
+                  placeholder={profileDraft.payment_method==="payid"?"email or phone":(profileDraft.payment_method==="paypal"?"paypal.me username":"handle")}
+                  style={iStyle}/>
+              </div>
+              <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
+                CourtSync never sees or processes payments. This just opens your wallet app when a partner owes you after a pact.
+              </div>
+            </div>
             {[{l:"Skill level",k:"skill",opts:SKILL_LEVELS},{l:"Play style",k:"style",opts:PLAY_STYLES}].map(function(f){
               return (
                 <div key={f.k} style={{marginBottom:12}}>
@@ -297,6 +327,8 @@ export default function SettingsScreen({
                   style:        profileDraft.style,
                   avatar_url:   profileDraft.avatar_url,
                   availability: profileDraft.availability,
+                  payment_handle: profileDraft.payment_handle || null,
+                  payment_method: profileDraft.payment_method || null,
                   avatar:       init2,
                 });
                 setProfile(nd);
@@ -314,8 +346,11 @@ export default function SettingsScreen({
                     avatar:nd.avatar||"",
                     avatar_url:nd.avatar_url||null,
                     availability:nd.availability||{},
+                    payment_handle: nd.payment_handle,
+                    payment_method: nd.payment_method,
                   },{onConflict:"id"});
                   if(res.error)console.error("Profile save error:",res.error);
+                  else if(nd.payment_handle) track("payment_handle_added", { method: nd.payment_method || "unknown" });
                 }
               }}
               style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,marginTop:4}}>

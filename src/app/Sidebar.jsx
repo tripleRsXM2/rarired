@@ -10,6 +10,7 @@ import { PresenceDot } from "../features/people/components/PresenceIndicator.jsx
 // Sidebar can override the label text where it wants (e.g. "Feed" over the
 // generic label) without diverging from that order.
 var NAV_ITEMS = [
+  { id: "tindis",      label: "Tindis",   icon: NAV_ICONS.tindis },
   { id: "home",        label: "Feed",     icon: NAV_ICONS.home },
   { id: "map",         label: "Map",      icon: NAV_ICONS.map },
   { id: "tournaments", label: "Compete",  icon: NAV_ICONS.tournaments },
