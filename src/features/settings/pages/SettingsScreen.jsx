@@ -11,7 +11,9 @@ import { supabase } from "../../../lib/supabase.js";
 import { initials } from "../../../lib/utils/avatar.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
-import { SKILL_LEVELS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
+import { SKILL_LEVELS, SKILL_HINTS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
+import AvailabilityChips from "../../../components/ui/AvailabilityChips.jsx";
+import CourtsPicker from "../../../components/ui/CourtsPicker.jsx";
 import { ZONES } from "../../map/data/zones.js";
 import { setHomeZone } from "../../map/services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
@@ -289,25 +291,53 @@ export default function SettingsScreen({
                 CourtSync never sees or processes payments. This just opens your wallet app when a partner owes you after a pact.
               </div>
             </div>
-            {[{l:"Skill level",k:"skill",opts:SKILL_LEVELS},{l:"Play style",k:"style",opts:PLAY_STYLES}].map(function(f){
-              return (
-                <div key={f.k} style={{marginBottom:12}}>
-                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>{f.l}</label>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                    {f.opts.map(function(o){
-                      var on=profileDraft[f.k]===o;
-                      return (
-                        <button key={o}
-                          onClick={function(){setProfileDraft(function(d){return Object.assign({},d,{[f.k]:o});});}}
-                          style={{padding:"7px 12px",borderRadius:7,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textSecondary,fontSize:12,fontWeight:on?600:400}}>
-                          {o}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+            {/* Skill level — stacked list so SKILL_HINTS sits below each rung.
+                Chips-only was fine when we had 4 flat options, but the 6-rung
+                Beginner 1/2 · Intermediate 1/2 · Advanced 1/2 ladder needs
+                the hint copy for honest self-assessment. */}
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Skill level</label>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {SKILL_LEVELS.map(function(s){
+                  var on=profileDraft.skill===s;
+                  return (
+                    <button key={s}
+                      onClick={function(){setProfileDraft(function(d){return Object.assign({},d,{skill:s});});}}
+                      style={{textAlign:"left",padding:"8px 12px",borderRadius:8,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.text,cursor:"pointer",display:"flex",flexDirection:"column",gap:2}}>
+                      <span style={{fontSize:12,fontWeight:on?700:600}}>{s}</span>
+                      <span style={{fontSize:10.5,color:on?t.accent:t.textTertiary,fontWeight:400,lineHeight:1.35}}>
+                        {SKILL_HINTS[s]||""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Play style — still chips; these don't need per-option copy. */}
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Play style</label>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {PLAY_STYLES.map(function(o){
+                  var on=profileDraft.style===o;
+                  return (
+                    <button key={o}
+                      onClick={function(){setProfileDraft(function(d){return Object.assign({},d,{style:o});});}}
+                      style={{padding:"7px 12px",borderRadius:7,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textSecondary,fontSize:12,fontWeight:on?600:400}}>
+                      {o}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Courts I play at — drives the sorted player list on
+                CourtInfoCard in Phase 2. Capped at 8 client-side; value
+                rides into the same upsert below. */}
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Courts I play at</label>
+              <CourtsPicker t={t}
+                value={profileDraft.played_courts||[]}
+                onChange={function(next){setProfileDraft(function(d){return Object.assign({},d,{played_courts:next});});}}/>
+            </div>
             <button
               onClick={async function(){
                 var init2=initials(profileDraft.name||"YN");
@@ -327,6 +357,7 @@ export default function SettingsScreen({
                   style:        profileDraft.style,
                   avatar_url:   profileDraft.avatar_url,
                   availability: profileDraft.availability,
+                  played_courts: profileDraft.played_courts || [],
                   payment_handle: profileDraft.payment_handle || null,
                   payment_method: profileDraft.payment_method || null,
                   avatar:       init2,
@@ -341,11 +372,12 @@ export default function SettingsScreen({
                     id:authUser.id,
                     name:nd.name||"",
                     bio:nd.bio||"",
-                    skill:nd.skill||"Intermediate",
+                    skill:nd.skill||"Intermediate 1",
                     style:nd.style||"All-Court",
                     avatar:nd.avatar||"",
                     avatar_url:nd.avatar_url||null,
                     availability:nd.availability||{},
+                    played_courts: nd.played_courts || [],
                     payment_handle: nd.payment_handle,
                     payment_method: nd.payment_method,
                   },{onConflict:"id"});
@@ -371,29 +403,14 @@ export default function SettingsScreen({
           </div>
           {editingAvail?(
             <div style={{padding:"16px"}}>
-              {DAYS_SHORT.map(function(day,di){
-                return (
-                  <div key={day} style={{display:"flex",alignItems:"center",gap:10,paddingTop:di===0?0:12,paddingBottom:12,borderBottom:di<DAYS_SHORT.length-1?"1px solid "+t.border:"none"}}>
-                    <span style={{fontSize:12,fontWeight:700,color:t.textSecondary,width:32,flexShrink:0}}>{day}</span>
-                    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                      {TIME_BLOCKS.map(function(block){
-                        var on=(availDraft[day]||[]).includes(block);
-                        return (
-                          <button key={block}
-                            onClick={function(){
-                              var cur=availDraft[day]||[];
-                              var next=on?cur.filter(function(b){return b!==block;}):cur.concat([block]);
-                              setAvailDraft(function(d){return Object.assign({},d,{[day]:next});});
-                            }}
-                            style={{padding:"6px 11px",borderRadius:7,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textTertiary,fontSize:11,fontWeight:on?600:400}}>
-                            {block}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Presets + optional 7×4 grid — same AvailabilityChips
+                  component the onboarding flow uses, so the two surfaces
+                  read identically. Grid starts expanded here because
+                  users hitting Settings are usually editing precisely. */}
+              <AvailabilityChips t={t}
+                value={availDraft}
+                initiallyExpanded={true}
+                onChange={setAvailDraft}/>
               <button
                 onClick={async function(){
                   setProfile(function(p){return Object.assign({},p,{availability:availDraft});});
@@ -403,7 +420,7 @@ export default function SettingsScreen({
                     if(res.error)console.error("Availability save error:",res.error);
                   }
                 }}
-                style={{width:"100%",marginTop:12,padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
+                style={{width:"100%",marginTop:14,padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
                 Save availability
               </button>
             </div>
