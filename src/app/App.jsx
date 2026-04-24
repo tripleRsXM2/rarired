@@ -589,7 +589,7 @@ export default function App(){
             <PactsTab
               t={t} authUser={auth.authUser} profile={currentUser.profile}
               pacts={pacts}
-              friends={socialGraph.friends}
+              friends={social.friends}
               openProfile={openProfile}
             />
           )}
