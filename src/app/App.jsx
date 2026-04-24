@@ -634,6 +634,7 @@ export default function App(){
               onSetHomeZone={applyHomeZone}
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
+              openChallenge={openChallenge}
             />
           )}
           {tab==="tournaments"&&(

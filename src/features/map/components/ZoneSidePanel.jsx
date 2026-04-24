@@ -18,7 +18,7 @@ import { fetchPlayersInZone } from "../services/mapService.js";
 export default function ZoneSidePanel({
   t, zone, onClose,
   authUser, profile, homeZone, onSetHome, onClearHome,
-  onOpenProfile,
+  onOpenProfile, activity,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
@@ -94,9 +94,10 @@ export default function ZoneSidePanel({
         <div style={{ fontSize:12, color:t.textSecondary, marginTop:12, lineHeight:1.45 }}>{zone.blurb}</div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — three columns when we have activity, two otherwise. */}
       <div style={{
-        display:"grid", gridTemplateColumns:"1fr 1fr",
+        display:"grid",
+        gridTemplateColumns: activity && activity.matches_7d > 0 ? "1fr 1fr 1fr" : "1fr 1fr",
         padding:"14px 20px", borderBottom:"1px solid "+t.border, gap:12,
       }}>
         <div>
@@ -107,6 +108,16 @@ export default function ZoneSidePanel({
           <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading?"…":displayPlayers.length}</div>
           <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Players here</div>
         </div>
+        {activity && activity.matches_7d > 0 && (
+          <div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>
+              🔥 {activity.matches_7d}
+            </div>
+            <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>
+              Matches · 7d
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scrollable body */}

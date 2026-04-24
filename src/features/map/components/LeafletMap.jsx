@@ -29,8 +29,31 @@ var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 
 var HOME_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"/></svg>';
 
+// Build the HTML for a zone label. Broken out so the mount effect and
+// the activity-refresh effect can produce the same markup — keeps the
+// "🔥 N this week" badge in sync with zoneActivity as it streams in.
+function zoneLabelHtml(z, activity) {
+  var flame = activity && activity.matches_7d > 0
+    ? ('<div style="margin-top:3px;font-size:9.5px;font-weight:700;letter-spacing:0.02em;' +
+        'color:#fff;background:rgba(239,68,68,0.95);padding:1px 6px;border-radius:10px;' +
+        'text-shadow:none;box-shadow:0 1px 2px rgba(0,0,0,0.2)">🔥 ' +
+        activity.matches_7d + ' this week</div>')
+    : '';
+  return (
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;pointer-events:none">' +
+      '<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';color:#fff;' +
+        'font-weight:700;font-size:14px;line-height:30px;text-align:center;' +
+        'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.85)">' + z.num + '</div>' +
+      '<div style="font-size:10px;font-weight:700;letter-spacing:0.04em;color:#141211;' +
+        'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:130px;line-height:1.15">' +
+        z.name.toUpperCase() + '</div>' +
+      flame +
+    '</div>'
+  );
+}
+
 export default function LeafletMap({
-  t, theme, hovered, selected, homeZone,
+  t, theme, hovered, selected, homeZone, zoneActivity,
   onHover, onSelect, onCourtSelect,
 }){
   var elRef = useRef(null);
@@ -94,18 +117,10 @@ export default function LeafletMap({
       var labelLatLng = [bbCenter.lat, bbCenter.lng];
       zoneCentersRef.current[z.id] = labelLatLng;
 
-      // Number badge + zone name label
-      var html =
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;pointer-events:none">' +
-          '<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';color:#fff;' +
-            'font-weight:700;font-size:14px;line-height:30px;text-align:center;' +
-            'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.85)">' + z.num + '</div>' +
-          '<div style="font-size:10px;font-weight:700;letter-spacing:0.04em;color:#141211;' +
-            'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:130px;line-height:1.15">' +
-            z.name.toUpperCase() + '</div>' +
-        '</div>';
+      // Number badge + zone name label (+ optional 7-day activity flame)
+      var html = zoneLabelHtml(z, null);
       var label = L.marker(labelLatLng, {
-        icon: L.divIcon({ className: "cs-zone-label", html: html, iconSize: [140, 56], iconAnchor: [70, 28] }),
+        icon: L.divIcon({ className: "cs-zone-label", html: html, iconSize: [140, 72], iconAnchor: [70, 36] }),
         interactive: false,
         zIndexOffset: 500,
       }).addTo(map);
@@ -173,6 +188,23 @@ export default function LeafletMap({
       }
     });
   },[hovered, selected]);
+
+  // Update zone label HTML when activity streams in — the flame badge is
+  // attached to the zone number/name stack so it follows the polygon
+  // centre automatically.
+  useEffect(function(){
+    if(!mapRef.current) return;
+    Object.keys(zoneLabelsRef.current).forEach(function(id){
+      var marker = zoneLabelsRef.current[id];
+      var z = ZONE_BY_ID[id];
+      if(!marker || !z) return;
+      var html = zoneLabelHtml(z, zoneActivity && zoneActivity[id]);
+      marker.setIcon(L.divIcon({
+        className: "cs-zone-label", html: html,
+        iconSize: [140, 72], iconAnchor: [70, 36],
+      }));
+    });
+  },[zoneActivity]);
 
   // Home pin — add/remove/move as homeZone changes.
   useEffect(function(){

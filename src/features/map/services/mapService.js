@@ -1,5 +1,100 @@
 // src/features/map/services/mapService.js
 import { supabase } from "../../../lib/supabase.js";
+import { COURTS } from "../data/courts.js";
+import { ZONES } from "../data/zones.js";
+
+// Compute an ISO timestamp N days ago, used to gate "recent activity"
+// queries at the db so we don't drag unbounded match_history rows.
+function isoDaysAgo(days) {
+  return new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+}
+
+// Map a match_history.venue string to the zone it lives in. Matches are
+// stored with a free-text venue (e.g. "Prince Alfred Park"); we key off
+// the curated courts list so a match counts toward a zone iff its venue
+// is a known court in that zone. Case-insensitive exact match on the
+// court name — cheap and deterministic enough for module 1. A future
+// iteration with a real court_id column would remove the text match.
+var NAME_TO_ZONE = (function () {
+  var m = {};
+  COURTS.forEach(function (c) { m[c.name.toLowerCase()] = c.zone; });
+  return m;
+})();
+
+// Confirmed matches in the last 7 days bucketed by zone. Returns an
+// object { [zoneId]: { matches_7d: N, players_7d: N } } so both signals
+// can render on the map without a second query.
+//
+// Cheap: one query over confirmed matches in the window, aggregated
+// client-side. Caller is expected to memoize.
+export async function fetchZoneActivity(windowDays) {
+  var days = windowDays || 7;
+  var r = await supabase
+    .from("match_history")
+    .select("id,user_id,opponent_id,tagged_user_id,venue,status,match_date")
+    .eq("status", "confirmed")
+    .gte("match_date", isoDaysAgo(days).slice(0, 10));
+  if (r.error) return { data: {}, error: r.error };
+  var byZone = {};
+  ZONES.forEach(function (z) { byZone[z.id] = { matches_7d: 0, players: new Set() }; });
+  (r.data || []).forEach(function (m) {
+    if (!m.venue) return;
+    var z = NAME_TO_ZONE[m.venue.toLowerCase().trim()];
+    if (!z || !byZone[z]) return;
+    byZone[z].matches_7d += 1;
+    if (m.user_id)           byZone[z].players.add(m.user_id);
+    if (m.opponent_id)       byZone[z].players.add(m.opponent_id);
+    if (m.tagged_user_id)    byZone[z].players.add(m.tagged_user_id);
+  });
+  var out = {};
+  Object.keys(byZone).forEach(function (k) {
+    out[k] = { matches_7d: byZone[k].matches_7d, players_7d: byZone[k].players.size };
+  });
+  return { data: out, error: null };
+}
+
+// Recent players at a specific court — returns distinct participants
+// from confirmed matches at that venue in the last N days, with the
+// most recent match first. Caller should exclude the viewer.
+//
+// Returns: { data: [{ id, name, avatar, avatar_url, skill, last_match_date }], error }
+export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
+  var days = windowDays || 60;
+  var lim  = limit || 6;
+  var r = await supabase
+    .from("match_history")
+    .select("id,user_id,opponent_id,tagged_user_id,venue,status,match_date")
+    .eq("status", "confirmed")
+    .ilike("venue", courtName)
+    .gte("match_date", isoDaysAgo(days).slice(0, 10))
+    .order("match_date", { ascending: false })
+    .limit(50);
+  if (r.error) return { data: [], error: r.error };
+  var seen = {};   // userId → latest match_date we've recorded
+  var order = [];  // preserves first-seen order (already most-recent-first from query)
+  (r.data || []).forEach(function (m) {
+    [m.user_id, m.opponent_id, m.tagged_user_id].forEach(function (uid) {
+      if (!uid) return;
+      if (seen[uid]) return;
+      seen[uid] = m.match_date;
+      order.push(uid);
+    });
+  });
+  var ids = order.slice(0, lim);
+  if (!ids.length) return { data: [], error: null };
+  var pr = await supabase.from("profiles")
+    .select("id,name,avatar,avatar_url,skill,ranking_points,suburb,home_zone,last_active")
+    .in("id", ids);
+  if (pr.error) return { data: [], error: pr.error };
+  var pMap = {};
+  (pr.data || []).forEach(function (p) { pMap[p.id] = p; });
+  // Preserve the recency order from the match scan.
+  var players = ids.map(function (id) {
+    var p = pMap[id]; if (!p) return null;
+    return Object.assign({}, p, { last_match_date: seen[id] });
+  }).filter(Boolean);
+  return { data: players, error: null };
+}
 
 // Fetch all players in a given zone — the source for the side-panel
 // "Players here" list. Anyone whose profile.home_zone matches is returned.

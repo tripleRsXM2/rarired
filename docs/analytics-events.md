@@ -51,6 +51,18 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `challenge_declined` | `useChallenges.declineChallenge` | `challenger_user_id` |
 | `rematch_converted_to_match` | `useMatchHistory.submitMatch` when `scoreModal.sourceChallengeId` is set | `challenge_id`, `match_id`, `days_since_accepted` |
 
+### Module: Map activity signal (now fired)
+
+| Event | Triggered by | Props |
+|---|---|---|
+| `map_opened` | `MapTab` mount | `has_home_zone` |
+| `zone_selected` | User taps a zone polygon or label (via `handleSelect` in `MapTab`) | `zone_id`, `is_home`, `matches_last_7d`, `players_last_7d` |
+| `court_opened` | User taps a court marker (opens `CourtInfoCard`) | `court_name`, `zone_id` |
+| `home_zone_set` | Home-zone written from Map side-panel or Settings dropdown | `zone_id`, `from` ("map" \| "settings") |
+| `home_zone_cleared` | Home-zone cleared from Map side-panel or Settings dropdown | `zone_id`, `from` ("map" \| "settings") |
+| `profile_opened_from_map` | User taps a player row in `ZoneSidePanel` or `CourtInfoCard` | `target_user_id`, `zone_id`, `source` ("zone_player" \| "court_recent") |
+| `challenge_from_map` | User taps "Challenge" on a recent-player row inside `CourtInfoCard` | `target_user_id`, `zone_id`, `source` ("court") |
+
 ### Reserved (defined but not fired until later modules)
 
 *(Currently empty — all reserved events have been promoted by Module 4.)*
@@ -159,3 +171,4 @@ from logged l left join confirmed c using (mid);
 - v0 — introduced by Module 3.5 (analytics foundation) with 16 registered events covering the full core loop + 4 reserved for Module 4.
 - v1 — Module 4 promoted all 4 reserved events (`challenge_sent`, `challenge_accepted`, `challenge_declined`, `rematch_converted_to_match`) to fired with concrete props. Total registered events: 20 fired, 0 reserved.
 - v2 — Module 5 added 2 new events: `leaderboard_viewed`, `leaderboard_filter_changed`. Total: 22 fired.
+- v3 — Map activity-signal module added 7 events: `map_opened`, `zone_selected`, `court_opened`, `home_zone_set`, `home_zone_cleared`, `profile_opened_from_map`, `challenge_from_map`. Total: 29 fired.

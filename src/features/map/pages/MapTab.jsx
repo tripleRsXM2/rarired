@@ -5,24 +5,76 @@
 // side panel is the only interactive surface — search/filter pills were
 // dropped in favour of a calmer surface.
 //
-// Sizing: height is calc'd so it fits between the top nav and the mobile
-// tab bar without scrolling the map off the screen.
+// Module: map activity signal — loads confirmed-match counts per zone
+// over the last 7 days so the label shows "🔥 N this week". Emits map
+// analytics events so we can measure whether the map drives challenges.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LeafletMap from "../components/LeafletMap.jsx";
 import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
 import CourtInfoCard from "../components/CourtInfoCard.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
+import { fetchZoneActivity } from "../services/mapService.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function MapTab({
   t, theme, authUser, profile,
-  onSetHomeZone, onClearHomeZone, onOpenProfile,
+  onSetHomeZone, onClearHomeZone, onOpenProfile, openChallenge,
 }){
   var [hovered,setHovered]=useState(null);
   var [selected,setSelected]=useState(null);
   var [selectedCourt,setSelectedCourt]=useState(null);
+  var [zoneActivity,setZoneActivity]=useState({});
   var selectedZone = selected ? ZONE_BY_ID[selected] : null;
   var homeZone = profile && profile.home_zone;
+
+  // Fire-and-forget map_opened once per mount. has_home_zone lets us
+  // see whether users open the map because they haven't picked one yet
+  // vs. returning users who're browsing others' zones.
+  useEffect(function(){
+    track("map_opened", { has_home_zone: !!homeZone });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  // Load 7-day activity per zone. Single cheap query; caller-side aggregation.
+  useEffect(function(){
+    var cancelled = false;
+    fetchZoneActivity(7).then(function(r){
+      if(cancelled) return;
+      if(r.error){ console.warn("[MapTab] fetchZoneActivity:", r.error); return; }
+      setZoneActivity(r.data || {});
+    });
+    return function(){ cancelled = true; };
+  },[]);
+
+  // Wrap setters so we can emit analytics at selection time. Zone props
+  // include the activity snapshot so funnel queries don't need a join.
+  function handleSelect(zoneId){
+    setSelected(zoneId);
+    if(zoneId){
+      var a = zoneActivity[zoneId] || { matches_7d: 0, players_7d: 0 };
+      track("zone_selected", {
+        zone_id: zoneId,
+        is_home: homeZone === zoneId,
+        matches_last_7d: a.matches_7d,
+        players_last_7d: a.players_7d,
+      });
+    }
+  }
+  function handleCourtSelect(court){
+    setSelectedCourt(court);
+    if(court){
+      track("court_opened", { court_name: court.name, zone_id: court.zone });
+    }
+  }
+  function handleSetHome(zoneId){
+    if(onSetHomeZone) onSetHomeZone(zoneId);
+    track("home_zone_set", { zone_id: zoneId, from: "map" });
+  }
+  function handleClearHome(){
+    if(onClearHomeZone) onClearHomeZone();
+    track("home_zone_cleared", { zone_id: homeZone || null, from: "map" });
+  }
 
   return (
     <div className="cs-map-frame" style={{ width:"100%", background: t.bg }}>
@@ -32,9 +84,10 @@ export default function MapTab({
         t={t} theme={theme}
         hovered={hovered} selected={selected}
         homeZone={homeZone}
+        zoneActivity={zoneActivity}
         onHover={setHovered}
-        onSelect={setSelected}
-        onCourtSelect={setSelectedCourt}
+        onSelect={handleSelect}
+        onCourtSelect={handleCourtSelect}
       />
 
       {/* Title pill — sits top-left, shifted right of the Leaflet zoom
@@ -61,6 +114,7 @@ export default function MapTab({
       {hovered && !selected && (function(){
         var h = ZONE_BY_ID[hovered];
         if(!h) return null;
+        var a = zoneActivity[hovered];
         return (
           <div style={{
             position:"absolute", left:12, bottom:12,
@@ -73,6 +127,12 @@ export default function MapTab({
             <span style={{ fontWeight:700 }}>{h.num}. {h.name}</span>
             <span style={{ opacity:0.55 }}>·</span>
             <span style={{ opacity:0.8 }}>{h.blurb.split(",")[0]} area</span>
+            {a && a.matches_7d > 0 && (
+              <>
+                <span style={{ opacity:0.55 }}>·</span>
+                <span style={{ opacity:0.95, fontWeight:600 }}>🔥 {a.matches_7d}</span>
+              </>
+            )}
           </div>
         );
       })()}
@@ -82,13 +142,38 @@ export default function MapTab({
         t={t} zone={selectedZone} onClose={function(){ setSelected(null); }}
         authUser={authUser} profile={profile}
         homeZone={homeZone}
-        onSetHome={onSetHomeZone}
-        onClearHome={onClearHomeZone}
-        onOpenProfile={onOpenProfile}
+        activity={selectedZone ? zoneActivity[selectedZone.id] : null}
+        onSetHome={handleSetHome}
+        onClearHome={handleClearHome}
+        onOpenProfile={function(uid){
+          if(!uid) return;
+          if(selectedZone) track("profile_opened_from_map", {
+            target_user_id: uid, zone_id: selectedZone.id, source: "zone_player",
+          });
+          if(onOpenProfile) onOpenProfile(uid);
+        }}
       />
 
       {/* Court info modal — opens on court marker tap */}
       <CourtInfoCard t={t} court={selectedCourt}
+        authUser={authUser}
+        openChallenge={openChallenge}
+        onOpenProfile={function(uid){
+          if(!uid) return;
+          if(selectedCourt) track("profile_opened_from_map", {
+            target_user_id: uid, zone_id: selectedCourt.zone, source: "court_recent",
+          });
+          if(onOpenProfile) onOpenProfile(uid);
+        }}
+        onChallenge={function(partner){
+          if(!partner || !partner.id || !selectedCourt) return;
+          track("challenge_from_map", {
+            target_user_id: partner.id,
+            zone_id: selectedCourt.zone,
+            source: "court",
+          });
+          if(openChallenge) openChallenge(partner, "map", null);
+        }}
         onClose={function(){ setSelectedCourt(null); }}/>
     </div>
   );

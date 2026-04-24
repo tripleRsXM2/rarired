@@ -17,6 +17,7 @@ import { setHomeZone } from "../../map/services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUpload.js";
 import { THEME_OPTIONS } from "../../../lib/theme.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
@@ -237,6 +238,9 @@ export default function SettingsScreen({
                         setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
                         setProfileDraft(function(d){return Object.assign({},d,{home_zone:prev});});
                         console.error("Home zone save error:", r.error);
+                      } else {
+                        if(nextVal) track("home_zone_set",     { zone_id: nextVal, from: "settings" });
+                        else        track("home_zone_cleared", { zone_id: prev,    from: "settings" });
                       }
                     }
                   }}
