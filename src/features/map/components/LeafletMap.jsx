@@ -252,19 +252,18 @@ export default function LeafletMap({
       maxClusterRadius: 60,
       iconCreateFunction: function (cluster) {
         var n = cluster.getChildCount();
-        // Cluster bubble — recessive WHITE fill with dark text so
-        // the Play Match CTA stays the only dominant dark element on
-        // the map (proper visual hierarchy: CTA = primary action,
-        // clusters = data labels). 1px hairline ring keeps it
-        // readable on light basemaps. box-sizing:border-box so the
-        // rendered footprint matches Leaflet's iconSize exactly.
+        // Cluster bubble — solid dark fill, white tabular-nums.
+        // Restores the contrast user originally liked (dark # vs
+        // white court dots). CTA hierarchy is preserved through
+        // SIZE (88px CTA vs 28px cluster) + POSITION (bottom-centre
+        // vs zone centroid), not colour.
         return L.divIcon({
           className: "cs-court-cluster",
           html:
             '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;' +
-              'background:#fff;color:#14110f;' +
+              'background:#14110f;color:#fff;' +
               'display:flex;align-items:center;justify-content:center;' +
-              'box-shadow:0 2px 8px rgba(0,0,0,0.22),0 0 0 1px rgba(20,18,17,0.18);' +
+              'box-shadow:0 2px 8px rgba(0,0,0,0.22);' +
               'font:700 12px/1 ui-sans-serif,system-ui,sans-serif;' +
               'font-variant-numeric:tabular-nums;letter-spacing:-0.02em">' + n + '</div>',
           iconSize: [28, 28], iconAnchor: [14, 14],
@@ -481,7 +480,12 @@ export default function LeafletMap({
           iconAnchor: [30, 110],
         }),
         interactive: false,
-        zIndexOffset: 500,
+        // 1500 sits ABOVE court markers (zIndexOffset 1000) and
+        // cluster bubbles. Without this, at broad zoom the cluster
+        // landed on the same centroid as the home indicator and
+        // hid it → user reported "home deregisters when zoomed out
+        // so much".
+        zIndexOffset: 1500,
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });
