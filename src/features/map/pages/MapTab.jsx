@@ -199,25 +199,9 @@ export default function MapTab({
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
 
-      {/* Title pill — sits top-left. Leaflet zoom control retired
-          so we sit flush to the left edge. */}
-      <div style={{
-        position:"absolute", top:12, left:12, zIndex:500,
-        background: t.bgCard, border:"1px solid "+t.border,
-        borderRadius:8, padding:"8px 14px",
-        display:"flex", alignItems:"center", gap:10,
-        boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
-      }}>
-        <div style={{
-          width:26, height:26, borderRadius:6, background: t.accent,
-          color: t.accentText, display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:12, fontWeight:800, letterSpacing:"-0.5px",
-        }}>SYD</div>
-        <div>
-          <div style={{ fontSize:9, letterSpacing:"0.12em", color:t.textTertiary, textTransform:"uppercase", lineHeight:1 }}>Tennis zones</div>
-          <div style={{ fontSize:13, fontWeight:700, color:t.text, letterSpacing:"-0.02em", marginTop:2, lineHeight:1 }}>Sydney</div>
-        </div>
-      </div>
+      {/* SYD Tennis Zones title pill retired — redundant chrome.
+          Map tab + Sydney polygons are self-evident; the pill was
+          adding visual noise top-left without affording anything. */}
 
       {/* Map layers control — Nike Run-style. A small layers icon top-
           right opens a card with independent switches for each optional

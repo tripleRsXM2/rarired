@@ -471,21 +471,21 @@ export default function LeafletMap({
           html: html,
           iconSize: [60, 60],
           // iconAnchor y > iconSize.height pushes the badge ABOVE the
-          // lat/lng (courts at the polygon centre are very common in
-          // dense zones — CBD's bbox centre sits right on Prince Alfred,
-          // for instance). 110 means the badge paints ~50px above the
-          // centroid point, with the cluster bubble (14px above centre)
-          // sitting clear ~36px below. Rule (locked): home + flame
-          // badges must never overlap cluster numbers.
-          iconAnchor: [30, 110],
+          // lat/lng. 70 places the home circle ~10-40px above the
+          // centroid (close enough to read as "this zone is yours"
+          // at any zoom level) while still clearing the cluster
+          // bubble's top edge (-14px) by ~24px. Earlier value of 110
+          // pushed home 78-110px above centroid which at broad zoom
+          // looked like it had drifted off the polygon entirely
+          // ("home deregisters when we zoom out so much").
+          iconAnchor: [30, 70],
         }),
         interactive: false,
-        // 1500 sits ABOVE court markers (zIndexOffset 1000) and
-        // cluster bubbles. Without this, at broad zoom the cluster
-        // landed on the same centroid as the home indicator and
-        // hid it → user reported "home deregisters when zoomed out
-        // so much".
-        zIndexOffset: 1500,
+        // 10000 wins against any other marker layer including the
+        // marker-cluster plugin's internal pane shuffling. Earlier
+        // 1500 wasn't enough to consistently beat the cluster's
+        // own zindex management at broad zoom.
+        zIndexOffset: 10000,
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });
