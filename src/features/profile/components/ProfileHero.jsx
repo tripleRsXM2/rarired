@@ -142,30 +142,35 @@ export default function ProfileHero({
       {/* Display rating metric */}
       {ratingInitialised && rankPts != null && (
         <div style={{ marginTop: "clamp(28px, 4vw, 40px)" }}>
+          {/* Number + info icon as superscript at top-right of the
+              numeral. Wrapped in an inline-flex so the icon hugs the
+              rightmost digit instead of drifting to the row width. */}
           <div style={{
-            fontSize: "clamp(56px, 11vw, 96px)",
-            fontWeight: 800,
-            color: t.text,
-            letterSpacing: "-0.04em",
-            lineHeight: 0.95,
-            fontVariantNumeric: "tabular-nums",
+            display: "inline-flex", alignItems: "flex-start", gap: 4,
           }}>
-            {rankPts.toLocaleString()}
+            <div style={{
+              fontSize: "clamp(56px, 11vw, 96px)",
+              fontWeight: 800,
+              color: t.text,
+              letterSpacing: "-0.04em",
+              lineHeight: 0.95,
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {rankPts.toLocaleString()}
+            </div>
+            <span style={{ marginTop: "0.4em", flexShrink: 0 }}>
+              <RatingInfoIcon t={t} size={16} label="profile_hero"/>
+            </span>
           </div>
           <div style={{
             marginTop: 8,
-            display: "flex", alignItems: "center", gap: 6,
+            fontSize: 10,
+            fontWeight: 800,
+            color: t.textTertiary,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
           }}>
-            <span style={{
-              fontSize: 10,
-              fontWeight: 800,
-              color: t.textTertiary,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-            }}>
-              CourtSync Rating
-            </span>
-            <RatingInfoIcon t={t} size={13} label="profile_hero"/>
+            CourtSync Rating
           </div>
           {calibLabel && (
             <div style={{

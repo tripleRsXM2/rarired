@@ -79,15 +79,22 @@ export default function HomeHero({ t, profile, history }) {
           without needing media queries here. */}
       <div className="cs-home-hero-metric" style={{ marginTop: "clamp(20px, 3vw, 32px)" }}>
         {ratingInitialised && rankPts != null ? (
-          <div style={{
-            fontSize: "clamp(56px, 11vw, 96px)",
-            fontWeight: 800,
-            color: t.text,
-            letterSpacing: "-0.04em",
-            lineHeight: 0.95,
-            fontVariantNumeric: "tabular-nums",
-          }}>
-            {rankPts.toLocaleString()}
+          /* Inline-flex so the info icon sits as a superscript at the
+             top-right of the numeral instead of in the caption row. */
+          <div style={{ display: "inline-flex", alignItems: "flex-start", gap: 4 }}>
+            <div style={{
+              fontSize: "clamp(56px, 11vw, 96px)",
+              fontWeight: 800,
+              color: t.text,
+              letterSpacing: "-0.04em",
+              lineHeight: 0.95,
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {rankPts.toLocaleString()}
+            </div>
+            <span style={{ marginTop: "0.4em", flexShrink: 0 }}>
+              <RatingInfoIcon t={t} size={16} label="home_hero"/>
+            </span>
           </div>
         ) : (
           <div style={{
@@ -103,7 +110,9 @@ export default function HomeHero({ t, profile, history }) {
         )}
       </div>
 
-      {/* Caption row — eyebrow + info icon for the rating; nudge for newbies */}
+      {/* Caption row — rating eyebrow + meta. Info icon now sits as a
+          superscript next to the rating number (above), so the row is
+          just text. */}
       <div className="cs-home-hero-caption" style={{
         marginTop: 14,
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
@@ -117,7 +126,6 @@ export default function HomeHero({ t, profile, history }) {
             }}>
               CourtSync Rating
             </span>
-            <RatingInfoIcon t={t} size={13} label="home_hero"/>
             {(location || profile.skill) && (
               <span style={{
                 fontSize: 12, fontWeight: 500,
