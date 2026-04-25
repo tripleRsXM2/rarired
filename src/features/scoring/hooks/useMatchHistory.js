@@ -4,6 +4,7 @@ import { supabase } from "../../../lib/supabase.js";
 import * as M from "../services/matchService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
+import { validateMatchScore } from "../utils/tennisScoreValidation.js";
 import { track } from "../../../lib/analytics.js";
 
 // Translate a Supabase/Postgres error into a user-facing string. We prefer
@@ -272,6 +273,39 @@ export function useMatchHistory(opts){
     // 'ranked' with no opponent can't actually affect Elo, so demote.
     var matchType = scoreDraft.matchType || (isVerified ? 'ranked' : 'casual');
     if (matchType === 'ranked' && !opponentId) matchType = 'casual';
+
+    // ── Defensive score validation (slice C) ─────────────────────────────
+    // ScoreModal already validates before calling here (slice B). This
+    // re-runs the same validator so a forced/programmatic call with a
+    // bad payload is rejected at the service boundary, not just at the
+    // UI gate. Mirrors validate_match_league's "trigger AND client
+    // checks share the same rules" pattern.
+    //
+    // The validator's options include matchType + completionType +
+    // partial-allowance. For service-layer purposes we treat the
+    // submission as 'completed' UNLESS the caller passed explicit
+    // scoreDraft.completionType (slice E will surface this in the UI).
+    // Casual + no completionType + valid completed score → still passes.
+    var league = scoreDraft.leagueId
+      ? null /* league rules best-effort enforced via the DB trigger */
+      : null;
+    var validation = validateMatchScore(clean, {
+      matchType: matchType,
+      completionType: scoreDraft.completionType || 'completed',
+      matchFormat: scoreDraft.matchFormat || 'best_of_3',
+      finalSetFormat: scoreDraft.finalSetFormat || 'normal_set',
+      allowPartialScores: !!scoreDraft.allowPartialScores,
+      requireTiebreakDetails: false,
+      leagueMode: null,
+      leagueAllowPartial: false,
+    });
+    if (!validation.ok) {
+      return {
+        error: 'invalid_score',
+        code: validation.code,
+        message: validation.message,
+      };
+    }
     // Confirmation is only needed for ranked matches (something to verify
     // / dispute). Casual matches go straight to confirmed regardless of
     // opponent linkage — there's no Elo to argue about.
@@ -534,6 +568,22 @@ export function useMatchHistory(opts){
     if(!authUser) return;
     var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
     if(!clean.length) return {error:'no_sets'};
+
+    // Defensive validation (slice C) — resubmit always lands as
+    // pending_confirmation on a ranked match (ranked is the only
+    // status that can be disputed/re-proposed today). So treat as
+    // ranked + completed for validation purposes.
+    var resubVal = validateMatchScore(clean, {
+      matchType: 'ranked',
+      completionType: 'completed',
+      matchFormat: 'best_of_3',
+      finalSetFormat: 'normal_set',
+      allowPartialScores: false,
+    });
+    if (!resubVal.ok) {
+      return { error: 'invalid_score', code: resubVal.code, message: resubVal.message };
+    }
+
     var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
     var newExpiresAt=new Date(Date.now()+72*60*60*1000).toISOString();
     var payload={
