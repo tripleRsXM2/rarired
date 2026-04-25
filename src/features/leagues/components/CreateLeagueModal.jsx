@@ -30,6 +30,11 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
   var [startDate, setStartDate]                             = useState("");
   var [endDate, setEndDate]                                 = useState("");
   var [maxMembers, setMaxMembers]                           = useState("");
+  // Module 7.5: leagues now have a mode — 'ranked' (Elo-bearing matches)
+  // or 'casual' (per-league standings only, no global Elo). The
+  // validate_match_league trigger enforces that league matches must have
+  // a matching match_type, so this choice can't be changed after creation.
+  var [mode, setMode]                                       = useState("ranked");
   var [matchFormat, setMatchFormat]                         = useState("best_of_3");
   var [tiebreakFormat, setTiebreakFormat]                   = useState("standard");
   var [maxMatchesPerOpponent, setMaxMatchesPerOpponent]     = useState(null);
@@ -54,6 +59,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
       start_date: startDate || null,
       end_date:   endDate || null,
       max_members: maxMembers ? parseInt(maxMembers, 10) : null,
+      mode: mode,
       match_format: matchFormat,
       tiebreak_format: tiebreakFormat,
       max_matches_per_opponent: maxMatchesPerOpponent,
@@ -114,6 +120,32 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
             rows={2}
             onChange={function (e) { setDescription(e.target.value); }}
             style={Object.assign({}, iStyle, { fontSize: 13, resize: "none", marginBottom: 0 })}/>
+        </div>
+
+        {/* Mode — Ranked or Casual. Locked at create time because it
+            controls which match_type can be tagged into the league
+            (DB trigger enforces match_type === league.mode). */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Mode</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { id: "ranked", label: "Ranked", hint: "Counts toward Elo + W/L" },
+              { id: "casual", label: "Casual", hint: "League standings only" },
+            ].map(function (o) {
+              var on = mode === o.id;
+              return (
+                <button key={o.id} type="button"
+                  onClick={function () { setMode(o.id); }}
+                  style={{ flex: 1, padding: "11px", borderRadius: 9, border: "1px solid " + (on ? t.accent : t.border), background: on ? t.accentSubtle : "transparent", color: on ? t.accent : t.textSecondary, fontSize: 13, fontWeight: on ? 700 : 500, cursor: "pointer", textAlign: "center" }}>
+                  <div>{o.label}</div>
+                  <div style={{ fontSize: 9.5, color: on ? t.accent : t.textTertiary, marginTop: 2, fontWeight: 500, letterSpacing: "0.01em" }}>{o.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 6, lineHeight: 1.4 }}>
+            Locked at creation. Ranked leagues only accept ranked matches; casual leagues only accept casual matches.
+          </div>
         </div>
 
         {/* Dates + Max members */}

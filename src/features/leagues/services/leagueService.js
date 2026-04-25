@@ -61,6 +61,25 @@ export function fetchLeagueRecentMatches(leagueId, limit) {
     .limit(limit || 10);
 }
 
+// Module 7.5 — given a candidate set of league ids (typically the viewer's
+// own active leagues filtered by mode), return the subset where the
+// `opponentId` is ALSO an active member. Used by ScoreModal to show only
+// leagues both players are eligible for.
+//
+// RLS lets a viewer see league_members rows for any league they themselves
+// are in, so this works without a SECURITY DEFINER RPC.
+export function fetchOpponentActiveLeagueIds(opponentId, candidateLeagueIds) {
+  if (!opponentId || !candidateLeagueIds || !candidateLeagueIds.length) {
+    return Promise.resolve({ data: [], error: null });
+  }
+  return supabase
+    .from("league_members")
+    .select("league_id")
+    .eq("user_id", opponentId)
+    .eq("status", "active")
+    .in("league_id", candidateLeagueIds);
+}
+
 // ── RPCs (SECURITY DEFINER — server enforces auth + ownership) ───────────────
 
 export function rpcCreateLeague(params) {
@@ -76,6 +95,10 @@ export function rpcCreateLeague(params) {
     p_win_points:               params.win_points != null ? params.win_points : 3,
     p_loss_points:              params.loss_points != null ? params.loss_points : 0,
     p_draw_points:              params.draw_points != null ? params.draw_points : 0,
+    // Module 7.5: ranked or casual mode (default 'ranked'). DB CHECK
+    // validates the value; the validate_match_league trigger enforces
+    // that league matches' match_type matches the league mode.
+    p_mode:                     params.mode === "casual" ? "casual" : "ranked",
   });
 }
 

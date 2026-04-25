@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { COURTS } from "../../map/data/courts.js";
+import { fetchOpponentActiveLeagueIds } from "../../leagues/services/leagueService.js";
 
 // Sort COURTS so venues in the viewer's own suburb float to the top, then
 // same-zone (implicit "nearby" bucket from the map), then alphabetical. This
@@ -55,6 +56,26 @@ export default function ScoreModal({
 
   var isResubmit=!!scoreModal.resubmit;
   var isVerified=isResubmit?true:!!casualOppId;
+
+  // Module 7.5: opponent's active league memberships (subset of viewer's
+  // leagues). Refetched whenever the linked opponent changes — used by the
+  // league selector below to show only leagues both players are members of.
+  var [opponentLeagueIds, setOpponentLeagueIds] = useState(new Set());
+  useEffect(function () {
+    if (!isVerified || !casualOppId) { setOpponentLeagueIds(new Set()); return; }
+    var candidateIds = (myLeagues || [])
+      .filter(function (lg) { return lg.status === "active" && lg.my_status === "active"; })
+      .map(function (lg) { return lg.id; });
+    if (!candidateIds.length) { setOpponentLeagueIds(new Set()); return; }
+    var alive = true;
+    fetchOpponentActiveLeagueIds(casualOppId, candidateIds).then(function (r) {
+      if (!alive) return;
+      if (r.error) { setOpponentLeagueIds(new Set()); return; }
+      setOpponentLeagueIds(new Set((r.data || []).map(function (m) { return m.league_id; })));
+    });
+    return function () { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [casualOppId, isVerified, (myLeagues || []).length]);
 
   // Compute who the sets say won, in the submitter's frame:
   // "you" > "them" = submitter win. Returns "win" | "loss" | null (tied/empty).
@@ -205,24 +226,19 @@ export default function ScoreModal({
               })()}
             </div>
 
-            {/* Match-type toggle — explicit user control over ranked vs casual.
-                Default state derives from whether the opponent is linked
-                (linked → ranked, freetext → casual). User can override to
-                Casual at any time. Ranked is disabled when no linked
-                opponent because Elo math needs both sides to be real users. */}
-            {casualOppName.trim() && (function(){
-              var effectiveMatchType = scoreDraft.matchType || (isVerified ? 'ranked' : 'casual');
-              var rankedAllowed = isVerified;
+            {/* Match-type toggle — only shown when opponent is a linked
+                friend (Module 7.5 product rule: friend → choose Ranked or
+                Casual; freetext → casual auto, no toggle). Default Ranked. */}
+            {casualOppName.trim() && isVerified && (function(){
+              var effectiveMatchType = scoreDraft.matchType || 'ranked';
               function pick(mt){
-                if (mt === 'ranked' && !rankedAllowed) return;
                 setScoreDraft(function(d){ return Object.assign({}, d, { matchType: mt }); });
               }
               var btn = function(mt, label, glyph){
                 var on = effectiveMatchType === mt;
-                var disabled = mt === 'ranked' && !rankedAllowed;
                 var color = on
                   ? (mt === 'ranked' ? t.accent : t.textSecondary)
-                  : (disabled ? t.textTertiary : t.textSecondary);
+                  : t.textSecondary;
                 var bg = on
                   ? (mt === 'ranked' ? t.accentSubtle : t.bgTertiary)
                   : 'transparent';
@@ -230,8 +246,8 @@ export default function ScoreModal({
                   ? (mt === 'ranked' ? t.accent : t.border)
                   : t.border;
                 return (
-                  <button key={mt} type="button" onClick={function(){pick(mt);}} disabled={disabled}
-                    style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + borderC, background: bg, color: color, fontSize: 12, fontWeight: on ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.55 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <button key={mt} type="button" onClick={function(){pick(mt);}}
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + borderC, background: bg, color: color, fontSize: 12, fontWeight: on ? 700 : 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     <span>{glyph}</span><span>{label}</span>
                   </button>
                 );
@@ -246,9 +262,7 @@ export default function ScoreModal({
                   <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 6, lineHeight: 1.4 }}>
                     {effectiveMatchType === 'ranked'
                       ? 'Counts toward ELO — opponent will confirm to lock it in.'
-                      : (rankedAllowed
-                          ? 'Logged for records only — no ELO or W/L impact.'
-                          : 'Pick a linked opponent above to log a ranked match. Freetext opponents can only be casual.')}
+                      : 'Logged for records only — no ELO or W/L impact.'}
                   </div>
                 </div>
               );
@@ -257,41 +271,58 @@ export default function ScoreModal({
           :(!isResubmit&&<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>)
         }
 
-        {/* League selector — only shown for linked-opponent ranked matches.
-            Casual/typed-in matches (no opponent_id) can't be league-tagged
-            because the server trigger requires both participants to be
-            active members. If the viewer isn't in any active league, the
-            selector is hidden. */}
+        {/* League selector — Module 7.5 eligibility rule:
+              1. league.status === 'active'
+              2. viewer is an active member (lg.my_status === 'active')
+              3. opponent is an active member (opponentLeagueIds set)
+              4. league.mode === effective match type
+            All four must be true; otherwise the league is hidden. If no
+            league passes, the selector itself is hidden — no empty
+            dropdown clutter. Backend trigger validates the same rules
+            (defence in depth) so a forced payload is still rejected. */}
         {(function(){
           if (isResubmit) return null;
-          if (!isVerified) return null;  // casual / freetext opponent → can't tag
-          var active = (myLeagues || []).filter(function(lg){
-            return lg.status === "active" && lg.my_status === "active";
+          if (!isVerified) return null;  // freetext opponent → can't league-tag
+          var effectiveMatchType = scoreDraft.matchType || 'ranked';
+          var eligible = (myLeagues || []).filter(function(lg){
+            return lg.status === "active"
+              && lg.my_status === "active"
+              && lg.mode === effectiveMatchType
+              && opponentLeagueIds.has(lg.id);
           });
-          if (!active.length) return null;
+          if (!eligible.length) return null;
           var currentId = scoreDraft.leagueId || "";
+          // If the user previously picked a league but then changed match
+          // type so it's no longer eligible, clear the stale pick.
+          var pickIsStale = currentId && !eligible.some(function(lg){return lg.id === currentId;});
+          if (pickIsStale && currentId) {
+            // Clear stale league_id by mutating scoreDraft once on render —
+            // safe because setScoreDraft batches and effective state is the
+            // local value we just computed.
+            setTimeout(function(){
+              setScoreDraft(function(d){ return Object.assign({}, d, { leagueId: null }); });
+            }, 0);
+          }
+          var prompt = effectiveMatchType === 'ranked'
+            ? 'Count toward a ranked league?'
+            : 'Count toward a casual league?';
           return (
             <div style={{marginBottom:16}}>
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-                Count toward a league?
+                {prompt}
               </label>
               <select
-                value={currentId}
+                value={pickIsStale ? "" : currentId}
                 onChange={function(e){
                   var v = e.target.value || null;
                   setScoreDraft(function(d){ return Object.assign({}, d, { leagueId: v }); });
                 }}
                 style={Object.assign({},iStyle,{fontSize:13,marginBottom:0,appearance:"auto"})}>
-                <option value="">No — just a ranked match</option>
-                {active.map(function(lg){
+                <option value="">No — just a {effectiveMatchType} match</option>
+                {eligible.map(function(lg){
                   return <option key={lg.id} value={lg.id}>{lg.name}</option>;
                 })}
               </select>
-              {currentId && (
-                <div style={{fontSize:10,color:t.textTertiary,marginTop:4,letterSpacing:"0.02em"}}>
-                  Your opponent must be an active member of this league, or the log will be rejected.
-                </div>
-              )}
             </div>
           );
         })()}

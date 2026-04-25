@@ -299,11 +299,21 @@ function LeagueDetailView({
               <div style={{ fontSize: 12, color: t.textSecondary, marginTop: 4 }}>{league.description}</div>
             )}
           </div>
-          <span style={{
-            fontSize: 9, fontWeight: 700, color: league.status === "active" ? t.green : t.textTertiary,
-            background: league.status === "active" ? t.greenSubtle : t.bgTertiary,
-            padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0,
-          }}>{league.status}</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: league.status === "active" ? t.green : t.textTertiary,
+              background: league.status === "active" ? t.greenSubtle : t.bgTertiary,
+              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>{league.status}</span>
+            {/* Mode pill — Module 7.5. Locked at creation; affects which
+                match_type can be tagged into this league. */}
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              color: league.mode === "casual" ? t.textSecondary : t.accent,
+              background: league.mode === "casual" ? t.bgTertiary : t.accentSubtle,
+              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>{league.mode || "ranked"}</span>
+          </div>
         </div>
 
         {/* Rules summary — inline under the name */}

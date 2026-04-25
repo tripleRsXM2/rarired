@@ -207,6 +207,13 @@ Leagues are a **read-side lens** on the existing match truth system. A league ad
 
 **What this means for the confirmation flow:** nothing. A league match goes through the exact same `pending_confirmation → confirmed | disputed → ...` state machine as every other match. Standings just observe the outcome.
 
+**Module 7.5 update — leagues now have a mode.** `leagues.mode` is `'ranked'` or `'casual'`, locked at creation. The `validate_match_league` trigger rejects any match whose `match_type` doesn't equal the league's `mode`. So:
+
+- A `mode='ranked'` league only accepts `match_type='ranked'` matches → behaves exactly as before (Elo-bearing).
+- A `mode='casual'` league only accepts `match_type='casual'` matches → no Elo impact (`apply_match_outcome` short-circuits casual matches), but the per-league leaderboard still updates via `recalculate_league_standings`.
+
+The two modes share the entire match-truth + dispute + standings pipeline. They differ only in whether the match feeds global Elo. ScoreModal filters its league selector by `lg.mode === effectiveMatchType` plus viewer- and opponent-active-member checks; the trigger validates the same rules at insert time.
+
 See `docs/leagues-and-seasons.md` for the full spec.
 
 ## Last Updated By Module
@@ -216,3 +223,4 @@ See `docs/leagues-and-seasons.md` for the full spec.
 - v3 — Scoreboard + ScoreModal sanity: feed card winner-arrow + row-bold are now derived from **set scores**, not the stored `result` field. If the sets unambiguously pick a winner we trust that. This self-heals the classic "user tapped Loss but entered winning sets" data-entry bug without touching the stored row. Stored `result` still drives the outer resultColor border + share text. ScoreModal now warns once at save time when the selected Win/Loss disagrees with the set math, but does not block (retirement / incomplete matches are valid).
 - v4 — Module 7 (leagues V1 schema). Added `match_history.league_id` nullable column + persisted `league_standings` as read-side lens. No change to match truth flow, global ELO, confirmation, dispute, or void rules.
 - v5 — Match-type separation (2026-04-25). Made the ranked-vs-casual distinction explicit via `match_history.match_type` ('ranked' | 'casual') instead of inferring it from `tourn_name` + `opponent_id`. Server `apply_match_outcome` short-circuits for casual matches — single point of control for "what affects Elo". `validate_match_league` now requires `match_type='ranked'` for league matches. Backfilled every legacy row via the prior heuristic so player Elo / W/L numbers are unchanged.
+- v6 — League mode (2026-04-25). Replaced the hardcoded `match_type='ranked'` requirement on league matches with a per-league `leagues.mode` column (`'ranked'` | `'casual'`). Trigger now compares `match_type` against `league.mode`, allowing casual leagues to host casual matches with their own per-league standings (no global Elo impact). ScoreModal filters its league selector by mode + viewer + opponent membership; CreateLeagueModal exposes the mode choice (locked at creation).

@@ -13,6 +13,37 @@ Leagues are a first-class CourtSync surface, but they are **additive** — they 
 - Invite-only. Private by default. Public / discoverable leagues are deferred to a later version
 - One league = one season in V1. "Create next season from this league" is out of scope
 - Created by any signed-in user, who becomes the `owner`
+- Has a **mode** — `'ranked'` or `'casual'` — locked at creation. Determines which `match_type` can be tagged into the league (see "League mode" below)
+
+### League mode (Module 7.5)
+
+A league's `mode` column is a hard partition between two flavours:
+
+| Mode | Accepts match_type | Affects global Elo? | Has per-league standings? |
+|---|---|---|---|
+| `ranked` | only `'ranked'` matches | ✅ yes (via the global `apply_match_outcome` RPC, same as any ranked match) | ✅ yes |
+| `casual` | only `'casual'` matches | ❌ no (casual matches short-circuit `apply_match_outcome`) | ✅ yes |
+
+**Why per-league standings exist for casual leagues:** the league's own scoreboard (win_points / set_diff / game_diff) is a separate, scoped computation from global Elo. A casual league still has internal stakes — bragging rights inside the friend group — without touching anyone's global rating. Casual = "this counts within this league, not anywhere else."
+
+**Why a league can't accept both modes:** a league's leaderboard would be incoherent if some matches counted toward Elo and others didn't. The `validate_match_league` BEFORE-INSERT trigger rejects any match whose `match_type` doesn't equal the league's `mode`. UI filters the league selector by the same rule (defence in depth).
+
+**Mode is locked at creation.** Allowing it to flip post-hoc would change the meaning of every match already tagged with that league. If a user wants the other mode, they create a new league.
+
+### How league mode appears in the log-match flow (Module 7.5)
+
+Inside ScoreModal:
+
+1. **Opponent linkage**: linked friend → match-type toggle visible (Ranked / Casual, default Ranked). Freetext (non-friend) opponent → no toggle, match is implicitly casual, no league selector.
+2. **Match type chosen**: the league selector populates from a 4-condition filter:
+   - `league.status === 'active'`
+   - viewer is an `active` member of the league (lg.my_status)
+   - opponent is an `active` member of the league (looked up via `fetchOpponentActiveLeagueIds` against `league_members`)
+   - `league.mode === effectiveMatchType`
+3. **No eligible league**: the selector is hidden entirely (no empty dropdown clutter).
+4. **User flips Ranked ↔ Casual**: any previously selected `leagueId` is cleared on the next render if it's no longer eligible (e.g. picked a Ranked league, then switched to Casual — the league disappears from the dropdown and the pick is silently dropped).
+
+This is enforced server-side too: the `validate_match_league` trigger rejects any insert where `match_type !== league.mode`.
 
 ### What a season is (V1)
 - The lifetime of a single league, from creation to archive
@@ -62,6 +93,7 @@ Per-match contributions:
 > **Deferred to V1.1**: head-to-head among tied players. Correct head-to-head tiebreak requires a recursive pass (if A beats B but B beats C and A beats C, then in a tie between all three, A wins by H2H; but if only A and B are tied, C's results don't matter). SQL-level recursive resolution is fragile and was deferred from slice 1. The `leagues.tie_break_order` jsonb column stores the **intended** final order (`["points","head_to_head","set_difference","game_difference"]`) so the V1.1 implementation has a pre-declared contract.
 
 ### League rules configured per-league
+- `mode`: `'ranked'` | `'casual'` (locked at creation; controls accepted `match_type`)
 - `match_format`: `one_set` | `best_of_3`
 - `tiebreak_format`: `standard` | `super_tiebreak_final`
 - `max_matches_per_opponent`: `null` (unlimited), `1`, `2`, or any positive integer
@@ -133,6 +165,7 @@ None of these RPCs were modified. The league standings simply observe the outcom
 | `created_by` | `uuid` | FK profiles, ON DELETE CASCADE |
 | `visibility` | `text` | check: `'private'` only in V1 |
 | `status` | `text` | check: `active` \| `completed` \| `archived` |
+| `mode` | `text` | check: `'ranked'` \| `'casual'`; default `'ranked'`; locked at creation |
 | `start_date` / `end_date` | `date` | optional; end >= start |
 | `max_members` | `integer` | optional, >= 2 |
 | `match_format` | `text` | `one_set` \| `best_of_3` |
@@ -173,4 +206,5 @@ None of these RPCs were modified. The league standings simply observe the outcom
 
 ## Last Updated By Module
 
-Module 7 — Leagues V1 (schema foundation, 2026-04-26).
+- Module 7 — Leagues V1 (schema foundation, 2026-04-26).
+- Module 7.5 — League mode (2026-04-25). New `leagues.mode` column (`'ranked'` | `'casual'`, locked at creation). `validate_match_league` trigger now compares `match_type` against `league.mode` per league instead of hardcoding `'ranked'`. CreateLeagueModal exposes the choice; ScoreModal filters its league selector by mode + viewer membership + opponent membership. Casual leagues have their own per-league standings (computed by the existing `recalculate_league_standings` function — unchanged) but never affect global Elo (the `match_type='casual'` short-circuit in `apply_match_outcome` still applies).
