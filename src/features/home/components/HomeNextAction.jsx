@@ -195,7 +195,7 @@ export default function HomeNextAction({
 
   // Choose CTA label based on whether the user has any confirmed matches.
   var hasMatches = (profile && profile.matches_played != null && profile.matches_played > 0)
-    || (history || []).some(function (m) { return m.status === "confirmed"; });
+    || (history || []).some(function (m) { return m.status === "confirmed" && !m.isThirdParty; });
   var ctaLabel = hasMatches ? "Log a match" : "Log your first match";
 
   return (

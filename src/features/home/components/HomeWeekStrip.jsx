@@ -17,6 +17,10 @@ function thisWeek(history) {
   var oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   return (history || []).filter(function (m) {
     if (m.status !== "confirmed") return false;
+    // Exclude third-party rows (friend-vs-friend matches surfaced from
+    // fetch_friends_matches). They live in `history` for feed display
+    // but are NOT the viewer's matches and would inflate "your week".
+    if (m.isThirdParty) return false;
     var d = m.rawDate ? new Date(m.rawDate).getTime() : 0;
     return d >= oneWeekAgo;
   });

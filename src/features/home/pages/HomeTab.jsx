@@ -1050,6 +1050,10 @@ export default function HomeTab({
     var counts = {};
     (history || []).forEach(function (m) {
       if (m.status !== "confirmed") return;
+      // Third-party rows aren't the viewer's matches — they shouldn't
+      // count toward the viewer's rivalry threshold even if one of the
+      // friends in the match would otherwise qualify.
+      if (m.isThirdParty) return;
       var oppId = m.isTagged ? m.submitterId : m.opponent_id;
       if (!oppId || oppId === authUser.id) return;
       counts[oppId] = (counts[oppId] || 0) + 1;

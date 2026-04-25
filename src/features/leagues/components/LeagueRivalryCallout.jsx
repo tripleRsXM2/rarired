@@ -25,6 +25,7 @@ function pickRivalry(viewerHistory, leagueId, viewerId) {
   // Filter to confirmed, league-scoped, linked-opponent matches.
   var leagueMatches = viewerHistory.filter(function (m) {
     if (m.status !== "confirmed") return false;
+    if (m.isThirdParty) return false; // friend-vs-friend isn't viewer's H2H
     if (m.league_id !== leagueId) return false;
     var oppId = m.isTagged ? m.submitterId : m.opponent_id;
     return !!oppId && oppId !== viewerId;

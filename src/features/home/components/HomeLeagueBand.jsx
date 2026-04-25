@@ -24,6 +24,7 @@ function pickLastLeagueResult(history, leagueId, authUserId) {
   if (!history || !leagueId || !authUserId) return null;
   var rows = history.filter(function (m) {
     if (m.status !== "confirmed") return false;
+    if (m.isThirdParty) return false; // friend-vs-friend, not viewer's last result
     if (m.league_id !== leagueId) return false;
     return true;
   });

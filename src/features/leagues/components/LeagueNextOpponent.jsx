@@ -31,6 +31,7 @@ function pickSuggestion(viewerHistory, members, leagueId, leagueMaxPerOpponent, 
   // Confirmed-only, league-scoped matches the viewer is in.
   var leagueMatches = (viewerHistory || []).filter(function (m) {
     if (m.status !== "confirmed") return false;
+    if (m.isThirdParty) return false; // friend-vs-friend in this league isn't viewer's history
     if (m.league_id !== leagueId) return false;
     return true;
   });

@@ -24,10 +24,15 @@ import { useState } from "react";
 import { computeConfirmationRate } from "../utils/profileStats.js";
 
 function isConfirmed(m) { return m && m.status === "confirmed"; }
+// Third-party rows (friend-vs-friend matches surfaced via
+// fetch_friends_matches) aren't the viewer's matches — they must not
+// inflate the viewer's stats.
+function isViewerMatch(m) { return m && !m.isThirdParty; }
 
 function statBucket(history, predicate) {
   var rows = (history || []).filter(function (m) {
     if (!isConfirmed(m)) return false;
+    if (!isViewerMatch(m)) return false;
     return predicate(m);
   });
   var wins = rows.filter(function (m) { return m.result === "win"; }).length;
@@ -119,8 +124,8 @@ export default function ProfileStatsAccordion({
 
   var played = profile && profile.matches_played != null
     ? profile.matches_played
-    : (history || []).filter(isConfirmed).length;
-  var wins   = profile && profile.wins   != null ? profile.wins   : (history || []).filter(function (m) { return isConfirmed(m) && m.result === "win"; }).length;
+    : (history || []).filter(function (m) { return isConfirmed(m) && isViewerMatch(m); }).length;
+  var wins   = profile && profile.wins   != null ? profile.wins   : (history || []).filter(function (m) { return isConfirmed(m) && isViewerMatch(m) && m.result === "win"; }).length;
   var losses = profile && profile.losses != null ? profile.losses : Math.max(played - wins, 0);
   var winPct = played ? Math.round(wins / played * 100) : 0;
 
@@ -141,7 +146,7 @@ export default function ProfileStatsAccordion({
   // be paginated. If the local history is shorter than the server count,
   // the breakdown rows would sum to less than the totals — confusing math.
   // Hide the breakdown rows in that case rather than display half a story.
-  var historyConfirmedCount = (history || []).filter(isConfirmed).length;
+  var historyConfirmedCount = (history || []).filter(function (m) { return isConfirmed(m) && isViewerMatch(m); }).length;
   var historyComplete = historyConfirmedCount >= played;
 
   return (

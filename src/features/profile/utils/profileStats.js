@@ -15,13 +15,24 @@ function isConfirmed(m) {
   return m && m.status === "confirmed";
 }
 
+// Third-party rows (matches between two of the viewer's friends, surfaced
+// via fetch_friends_matches) live in the same `history` array as own +
+// tagged rows so the FeedCard list renders uniformly. But the viewer
+// isn't a participant in those — they must NOT contribute to viewer-
+// centric derivations: form, rivalry, win-rate, confirmation rate, etc.
+function isViewerMatch(m) {
+  return m && !m.isThirdParty;
+}
+
 // Last N confirmed matches as a sequence of 'W' | 'L'. The first entry is the
-// most recent match. Returns [] if no confirmed history.
+// most recent match. Returns [] if no confirmed history. Third-party rows
+// (friend-vs-friend) are excluded — the viewer's form is the viewer's
+// own results, not their friend graph's results.
 export function computeRecentForm(history, limit) {
   var cap = typeof limit === "number" ? limit : 5;
   if (!history || !history.length) return [];
   return history
-    .filter(isConfirmed)
+    .filter(function (m) { return isConfirmed(m) && isViewerMatch(m); })
     .slice(0, cap)
     .map(function (m) { return m.result === "win" ? "W" : "L"; });
 }
@@ -31,7 +42,7 @@ export function computeRecentForm(history, limit) {
 // precomputed streak_count (e.g. fresh accounts, or just as a sanity check).
 export function computeStreakFromMatches(history) {
   if (!history || !history.length) return { count: 0, type: null };
-  var confirmed = history.filter(isConfirmed);
+  var confirmed = history.filter(function (m) { return isConfirmed(m) && isViewerMatch(m); });
   if (!confirmed.length) return { count: 0, type: null };
   var type = confirmed[0].result;
   var count = 0;
@@ -50,7 +61,7 @@ export function computeMostPlayed(history, myId, limit) {
   var cap = typeof limit === "number" ? limit : 5;
   if (!history || !history.length) return [];
   var buckets = {};
-  history.filter(isConfirmed).forEach(function (m) {
+  history.filter(function (m) { return isConfirmed(m) && isViewerMatch(m); }).forEach(function (m) {
     // Determine the OTHER side from the viewer's POV. For tagged matches
     // (m.isTagged) the viewer IS m.opponent_id, so the actual opponent is
     // the submitter (m.submitterId) and their display name is m.friendName
@@ -94,6 +105,7 @@ export function computeHeadToHead(viewerHistory, viewerId, subjectId) {
   if (!viewerHistory || !viewerId || !subjectId || viewerId === subjectId) return empty;
   var matches = viewerHistory.filter(function (m) {
     if (!isConfirmed(m)) return false;
+    if (!isViewerMatch(m)) return false; // third-party rows mention friends but aren't viewer's H2H
     return m.opponent_id === subjectId || m.submitterId === subjectId;
   });
   if (!matches.length) return empty;
@@ -157,6 +169,7 @@ export function provisionalLabel(profile) {
 export function computeConfirmationRate(history) {
   if (!history || !history.length) return null;
   var ranked = history.filter(function (m) {
+    if (!isViewerMatch(m)) return false; // third-party rows aren't viewer's confirmation rate
     if (!m.opponent_id) return false; // casual
     return m.status === "confirmed" || m.status === "voided" || m.status === "expired";
   });
