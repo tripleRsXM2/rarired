@@ -133,6 +133,14 @@ export default function ProfileStatsAccordion({
   var hasBothTypes   = byType.ranked.played > 0 && byType.casual.played > 0;
   var hasBothFormats = byFormat.bo3.played > 0 && byFormat.one.played > 0;
 
+  // Totals come from the server-counted profile.matches_played; the type /
+  // format breakdowns derive from the in-memory `history` array which can
+  // be paginated. If the local history is shorter than the server count,
+  // the breakdown rows would sum to less than the totals — confusing math.
+  // Hide the breakdown rows in that case rather than display half a story.
+  var historyConfirmedCount = (history || []).filter(isConfirmed).length;
+  var historyComplete = historyConfirmedCount >= played;
+
   return (
     <div style={{
       background: t.bgCard,
@@ -199,20 +207,35 @@ export default function ProfileStatsAccordion({
             </div>
           )}
 
-          {/* By type — only when there's a mix */}
-          {hasBothTypes && (
+          {/* By type — only when there's a mix and history is complete
+              enough to make the numbers add up to the totals row */}
+          {historyComplete && hasBothTypes && (
             <>
               <PairLine t={t} label="Ranked" won={byType.ranked.wins} lost={byType.ranked.losses} />
               <PairLine t={t} label="Casual" won={byType.casual.wins} lost={byType.casual.losses} />
             </>
           )}
 
-          {/* By format — only when there's a mix */}
-          {hasBothFormats && (
+          {/* By format — only when there's a mix and history is complete */}
+          {historyComplete && hasBothFormats && (
             <>
               <PairLine t={t} label="Best of 3" won={byFormat.bo3.wins} lost={byFormat.bo3.losses} />
               <PairLine t={t} label="One set"   won={byFormat.one.wins} lost={byFormat.one.losses} />
             </>
+          )}
+
+          {/* Honest caption when the local history is paginated and we've
+              had to suppress breakdown rows. Better to surface why those
+              sections aren't there than silently omit them. */}
+          {!historyComplete && played > 0 && (
+            <div style={{
+              borderTop: "1px solid " + t.border,
+              padding: "10px 14px",
+              fontSize: 11, color: t.textTertiary,
+              textAlign: "center", letterSpacing: "0.01em",
+            }}>
+              Type / format breakdown unavailable — only the {historyConfirmedCount} most recent matches are loaded.
+            </div>
           )}
         </div>
       )}
