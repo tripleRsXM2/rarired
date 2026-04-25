@@ -255,19 +255,19 @@ export default function LeafletMap({
       },
     });
     COURTS.forEach(function(c){
-      // Default court marker — minimalist solid white dot. UI council
-      // call: at this scale the racket icon is barely legible, and
-      // the cluster bubble already conveys "these are venues" by
-      // counting them. Replacing the icon with a small dot makes the
-      // map feel quieter and lets the zone polygons stay the primary
-      // visual. Soft shadow gives definition on light basemaps; the
-      // hairline dark ring keeps it readable on dark basemaps too.
+      // Default court marker — minimalist solid white dot. The
+      // visible dot is 14px but the icon (hit) box is 26px so the
+      // tap target is comfortable on mobile (small dots were hard
+      // to hit). Soft shadow + hairline ring keep it readable on
+      // both light + dark basemaps.
       var html =
-        '<div style="box-sizing:border-box;width:12px;height:12px;border-radius:50%;background:#fff;' +
-          'box-shadow:0 1px 3px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
-          'cursor:pointer"></div>';
+        '<div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center">' +
+          '<div style="box-sizing:border-box;width:14px;height:14px;border-radius:50%;background:#fff;' +
+            'box-shadow:0 1px 3px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
+            'cursor:pointer"></div>' +
+        '</div>';
       var m = L.marker([c.lat, c.lng], {
-        icon: L.divIcon({ className: "", html: html, iconSize: [12,12], iconAnchor: [6,6] }),
+        icon: L.divIcon({ className: "", html: html, iconSize: [26,26], iconAnchor: [13,13] }),
         zIndexOffset: 1000,
       });
       m.bindTooltip(
@@ -371,17 +371,20 @@ export default function LeafletMap({
     if(showSolo){
       var c = COURTS.find(function(x){ return x.name === focusedCourtName; });
       if(c){
-        // Focused marker — same dot language as the default but
-        // larger (16 vs 12) and inverted (dark fill instead of white)
-        // with a thin white halo so it pops against any basemap.
-        // No icon — keeps the visual system consistent with the
-        // dot-only default markers.
+        // Focused marker — same white-dot language as the default,
+        // just a touch bigger (18 vs 14) so it has presence. In
+        // focus mode it's the only court visible on the map, so a
+        // colour swap isn't needed — the size + the fact that it
+        // stands alone is enough signal. Keeps the visual system
+        // cohesive (everything is a white dot).
         var html =
-          '<div style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;background:#14110f;' +
-            'box-shadow:0 0 0 3px rgba(255,255,255,0.95),0 3px 10px rgba(0,0,0,0.32);' +
-            'cursor:pointer"></div>';
+          '<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center">' +
+            '<div style="box-sizing:border-box;width:18px;height:18px;border-radius:50%;background:#fff;' +
+              'box-shadow:0 2px 6px rgba(0,0,0,0.32),0 0 0 1px rgba(20,18,17,0.22);' +
+              'cursor:pointer"></div>' +
+          '</div>';
         var m = L.marker([c.lat, c.lng], {
-          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[16,16], iconAnchor:[8,8] }),
+          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[30,30], iconAnchor:[15,15] }),
           zIndexOffset: 2000,
           interactive: true,
         });
