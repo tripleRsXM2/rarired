@@ -128,7 +128,9 @@ export default function PeopleTab({
   // /tournaments/leagues) — People is now strictly social.
   var validPeopleTabs=["messages","friends","requests","suggested","blocked"];
   var pathParts=location.pathname.split("/").filter(Boolean);
-  var peopleTab=(pathParts[1]&&validPeopleTabs.includes(pathParts[1]))?pathParts[1]:"friends";
+  // Default to messages — it's the most-used surface and matches
+  // what users expect ("People" → "ongoing conversations").
+  var peopleTab=(pathParts[1]&&validPeopleTabs.includes(pathParts[1]))?pathParts[1]:"messages";
 
   function setPeopleTab(newTab){
     navigate("/people/"+newTab);

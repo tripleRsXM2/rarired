@@ -143,7 +143,12 @@ export default function ZoneSidePanel({
 
   return (
     <div className="slide-in-right" style={{
-      position:"absolute", top:0, right:0, bottom:0, width:360,
+      // Width caps at 360px on desktop and shrinks to fit narrow phones
+      // (~340–390px) without overflowing — fixed 360 used to bleed off
+      // the right edge on small screens, which is what made the page
+      // feel like it needed manual resizing.
+      position:"absolute", top:0, right:0, bottom:0,
+      width:"100%", maxWidth:360,
       background: t.bgCard, borderLeft: "1px solid "+t.border,
       display:"flex", flexDirection:"column", zIndex:500,
       boxShadow:"-8px 0 32px rgba(0,0,0,0.06)",

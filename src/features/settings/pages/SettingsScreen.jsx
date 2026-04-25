@@ -36,6 +36,9 @@ export default function SettingsScreen({
   availDraft, setAvailDraft,
   receivedRequests,
   onClose,
+  // App-level toast emitter — fires on Save success so the user gets
+  // visible confirmation rather than a silent button press.
+  toast,
 }) {
   var navigate=useNavigate();
 
@@ -136,8 +139,12 @@ export default function SettingsScreen({
       {/* Content */}
       <div style={{padding:"20px 20px 100px", maxWidth:680, margin:"0 auto", width:"100%"}}>
 
-        {/* ── Edit Profile ───────────────────────────────────────────────────── */}
-        {!editingAvail&&(
+        {/* ── Edit Profile ─────────────────────────────────────────────────────
+            User feedback: previously the Edit Profile card collapsed when
+            availability went into edit mode, which felt like the page had
+            reset. Show it always; availability editor expands in place
+            below. */}
+        {(
           <div style={{background:t.bgCard, border:"1px solid "+t.border, borderRadius:12, padding:20, marginBottom:12}}>
             <div style={{fontSize:13, fontWeight:700, color:t.text, marginBottom:16}}>Edit Profile</div>
 
@@ -407,8 +414,14 @@ export default function SettingsScreen({
                     payment_handle: nd.payment_handle,
                     payment_method: nd.payment_method,
                   },{onConflict:"id"});
-                  if(res.error)console.error("Profile save error:",res.error);
-                  else if(nd.payment_handle) track("payment_handle_added", { method: nd.payment_method || "unknown" });
+                  if(res.error){
+                    console.error("Profile save error:",res.error);
+                    if(toast) toast("Couldn't save — try again.", "error");
+                  } else {
+                    setProfileDraft(nd); // keep the draft in sync with the saved row
+                    if(nd.payment_handle) track("payment_handle_added", { method: nd.payment_method || "unknown" });
+                    if(toast) toast("Profile saved", "success");
+                  }
                 }
               }}
               style={{
@@ -448,10 +461,16 @@ export default function SettingsScreen({
                 onClick={async function(){
                   if(!profileLoaded) return;
                   setProfile(function(p){return Object.assign({},p,{availability:availDraft});});
+                  setProfileDraft(function(d){return Object.assign({},d,{availability:availDraft});});
                   setEditingAvail(false);
                   if(authUser){
                     var res=await supabase.from("profiles").upsert({id:authUser.id,availability:availDraft},{onConflict:"id"});
-                    if(res.error)console.error("Availability save error:",res.error);
+                    if(res.error){
+                      console.error("Availability save error:",res.error);
+                      if(toast) toast("Couldn't save — try again.", "error");
+                    } else {
+                      if(toast) toast("Availability saved", "success");
+                    }
                   }
                 }}
                 style={{
@@ -598,14 +617,8 @@ export default function SettingsScreen({
               <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Account</div>
               <div style={{fontSize:14,color:t.text,fontWeight:500}}>{authUser.email}</div>
             </div>
-            <button
-              onClick={function(){onClose();navigate("/people/requests");}}
-              style={{width:"100%",padding:"12px 16px",border:"none",borderBottom:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:13,fontWeight:500,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>Friend requests</span>
-              <span style={{fontSize:12,color:receivedRequests.length>0?t.accent:t.textTertiary}}>
-                {receivedRequests.length>0?receivedRequests.length+" pending":"›"}
-              </span>
-            </button>
+            {/* Friend requests row removed — duplicates the People tab.
+                Direct your inbox to /people/requests if you want it. */}
             <button
               onClick={function(){supabase.auth.signOut();onClose();}}
               style={{width:"100%",padding:"14px 16px",border:"none",background:"transparent",color:t.red,fontSize:13,fontWeight:600,textAlign:"left",cursor:"pointer"}}>

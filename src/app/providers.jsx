@@ -38,8 +38,12 @@ export default function Providers({ t, theme, children }){
       ".cs-deeplink-pulse{animation:deeplinkPulse 1.8s cubic-bezier(.32,.72,0,1) both;border-radius:inherit}",
 
       // ── Responsive layout shell ───────────────────────────────────────────
-      // Mobile default: single column, block layout
-      ".cs-shell{min-height:100vh;display:block;background:"+t.bg+"}",
+      // Mobile default: single column, block layout. Uses 100dvh so iOS
+      // Safari's url-bar collapse / Android keyboard open doesn't leave
+      // a dead strip at the bottom or push content under the chrome.
+      "html,body{margin:0;padding:0;overflow-x:hidden}",
+      "body{min-height:100dvh}",
+      ".cs-shell{min-height:100dvh;display:block;background:"+t.bg+"}",
       ".cs-center-col{flex:1;min-width:0}",
       ".cs-sidebar-col{display:none}",
       ".cs-right-col{display:none}",

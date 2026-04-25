@@ -84,10 +84,10 @@ export default function App(){
   // with the signed-in user's id falls back to the own-profile ProfileTab.
   var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
 
-  // Navigate to a top-level tab. Switching to "people" lands on /people/friends,
+  // Navigate to a top-level tab. Switching to "people" lands on /people/messages,
   // switching to "tournaments" (Compete) lands on /tournaments/list.
   function setTab(x){
-    if(x==="people") navigate("/people/friends");
+    if(x==="people") navigate("/people/messages");
     else if(x==="tournaments") navigate("/tournaments/list");
     else navigate("/"+x);
   }
@@ -795,6 +795,7 @@ export default function App(){
           editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
           availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
           receivedRequests={social.receivedRequests}
+          toast={toast}
           onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
         />
       )}
