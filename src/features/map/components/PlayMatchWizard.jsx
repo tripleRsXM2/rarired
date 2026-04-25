@@ -176,143 +176,234 @@ export default function PlayMatchWizard({
   return (
     <div role="dialog" aria-modal="true" aria-label="Play Match"
       style={{
-        position:"fixed", inset:0, zIndex: 3000,
-        background:"rgba(20,18,17,0.55)",
+        // Absolute (not fixed) so the modal centres on the MAP area,
+        // not the whole viewport — the side nav stays visible to its
+        // left and the wizard reads as part of the map surface.
+        position:"absolute", inset:0, zIndex: 3000,
+        // Backdrop: dark + heavy blur so the map behind softens
+        // out — Nike Run / iOS sheet vibe. The map remains visible
+        // as a hint of where you came from.
+        background:"rgba(20,18,17,0.42)",
+        WebkitBackdropFilter: "blur(10px)",
+        backdropFilter: "blur(10px)",
         display:"flex", alignItems:"center", justifyContent:"center",
         padding: 12,
       }}
       onClick={function(e){ if(e.target === e.currentTarget) cancel(); }}>
       <div style={{
-        background: t.bgCard,
+        // Translucent glass card — the boxy bordered modal is gone.
+        // Content is the design; chrome is invisible.
+        background: "rgba(255,255,255,0.96)",
+        WebkitBackdropFilter: "blur(40px) saturate(140%)",
+        backdropFilter: "blur(40px) saturate(140%)",
         color: t.text,
-        border: "1px solid " + t.border,
-        borderRadius: 16,
-        boxShadow: "0 24px 60px rgba(20,18,17,0.32)",
+        borderRadius: 22,
+        boxShadow:
+          "0 24px 60px rgba(20,18,17,0.28), " +
+          "0 1px 0 rgba(255,255,255,0.6) inset",
         width: "100%",
         maxWidth: 460,
         maxHeight: "calc(100dvh - 24px)",
         display: "flex", flexDirection: "column",
         overflow: "hidden",
+        position: "relative",
       }}>
 
-        {/* Header */}
-        <div style={{
-          display:"flex", alignItems:"center", gap:8,
-          padding:"14px 16px",
-          borderBottom: "1px solid " + t.border,
-        }}>
-          <button type="button" onClick={back} aria-label={step === 0 ? "Cancel" : "Back"}
-            style={{
-              width:32, height:32, borderRadius:8,
-              background:"transparent", border:"none", cursor:"pointer",
-              color: t.text,
-              display:"flex", alignItems:"center", justifyContent:"center",
-            }}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
-                 stroke="currentColor" strokeWidth="1.7"
-                 strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 14L6 9l5-5"/>
-            </svg>
-          </button>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{
-              fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-              textTransform: "uppercase", color: t.textTertiary, lineHeight: 1,
-            }}>
-              Step {step + 1} of {TOTAL_STEPS}
-            </div>
-            <div style={{
-              fontSize: 16, fontWeight: 800, color: t.text,
-              letterSpacing: "-0.01em", marginTop: 4, lineHeight: 1.2,
-            }}>
-              {step === 0 && "Where do you want to play?"}
-              {step === 1 && "Which court?"}
-              {step === 2 && "Who do you want to play with?"}
-              {step === 3 && "Send invite"}
-            </div>
-          </div>
-          <button type="button" onClick={cancel} aria-label="Close"
-            style={{
-              width:32, height:32, borderRadius:8,
-              background:"transparent", border:"none", cursor:"pointer",
-              color: t.textTertiary, fontSize: 18,
-            }}>✕</button>
-        </div>
+        {/* Floating chrome — back + close, no header bar.
+            The buttons sit ON TOP of the content via absolute
+            positioning so the body can extend full-bleed. */}
+        <button type="button" onClick={back} aria-label={step === 0 ? "Cancel" : "Back"}
+          style={{
+            position:"absolute", top: 14, left: 14, zIndex: 2,
+            width:36, height:36, borderRadius: "50%",
+            background:"rgba(255,255,255,0.7)",
+            WebkitBackdropFilter:"blur(20px)", backdropFilter:"blur(20px)",
+            border:"none", cursor:"pointer",
+            color: t.text,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            boxShadow: "0 1px 4px rgba(20,18,17,0.10)",
+          }}>
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
+               stroke="currentColor" strokeWidth="1.8"
+               strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 14L6 9l5-5"/>
+          </svg>
+        </button>
+        <button type="button" onClick={cancel} aria-label="Close"
+          style={{
+            position:"absolute", top: 14, right: 14, zIndex: 2,
+            width:36, height:36, borderRadius: "50%",
+            background:"rgba(255,255,255,0.7)",
+            WebkitBackdropFilter:"blur(20px)", backdropFilter:"blur(20px)",
+            border:"none", cursor:"pointer",
+            color: t.text,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            boxShadow: "0 1px 4px rgba(20,18,17,0.10)",
+          }}>
+          <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+               stroke="currentColor" strokeWidth="2"
+               strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 5l8 8M13 5l-8 8"/>
+          </svg>
+        </button>
 
-        {/* Step progress bar */}
-        <div style={{ display:"flex", gap:4, padding:"10px 16px 0" }}>
+        {/* Step indicator — tiny dots floated above title */}
+        <div style={{
+          padding: "62px 28px 0",
+          display:"flex", gap: 5,
+        }}>
           {[0,1,2,3].map(function(i){
             return (
               <div key={i} style={{
-                flex:1, height:3, borderRadius:2,
-                background: i <= step ? t.accent : t.border,
-                transition: "background 0.18s",
+                width: 22, height: 3, borderRadius: 2,
+                background: i <= step ? "#14110f" : "rgba(20,18,17,0.12)",
+                transition: "background 0.2s",
               }}/>
             );
           })}
         </div>
 
-        {/* Body */}
-        <div style={{ flex:1, overflowY:"auto", padding:"16px" }}>
+        {/* Title — typography-led, no header bar */}
+        <div style={{ padding: "16px 28px 6px" }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "rgba(20,18,17,0.42)", lineHeight: 1,
+          }}>
+            Step {step + 1} of {TOTAL_STEPS}
+          </div>
+          <div style={{
+            fontSize: 22, fontWeight: 900,
+            letterSpacing: "-0.025em", lineHeight: 1.15,
+            color: "#14110f",
+            marginTop: 8,
+          }}>
+            {step === 0 && "Where do you want to play?"}
+            {step === 1 && "Which court?"}
+            {step === 2 && "Who do you want to play with?"}
+            {step === 3 && "Send invite"}
+          </div>
+        </div>
 
-          {/* Step 0 — pick zone */}
+        {/* Body */}
+        <div style={{ flex:1, overflowY:"auto", padding:"14px 22px 22px" }}>
+
+          {/* Step 0 — pick zone — sleek glass cards, no redundant dots */}
           {step === 0 && (
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: 10 }}>
               {ZONES.map(function(z){
+                var venueCount = courtsInZone(z.id).length;
                 return (
                   <button key={z.id} type="button"
                     onClick={function(){ pickZone(z); }}
                     style={{
-                      textAlign:"left", padding:"14px 14px 12px", borderRadius: 12,
-                      border: "1px solid " + t.border,
-                      borderLeft: "4px solid " + z.color,
-                      background: t.bgCard, cursor:"pointer",
-                      display:"flex", flexDirection:"column", gap: 6,
-                      transition: "border-color 0.15s",
+                      textAlign:"left",
+                      padding: "18px 16px",
+                      borderRadius: 16,
+                      border: "none",
+                      // Soft glass card. Zone colour shows as a thin
+                      // top-edge accent rule + name highlight on hover.
+                      // No dot — the map already had the zone colours,
+                      // repeating them as dots in the wizard was noise.
+                      background: "rgba(255,255,255,0.78)",
+                      color: t.text, cursor:"pointer",
+                      display:"flex", flexDirection:"column",
+                      gap: 6, minHeight: 86,
+                      position:"relative", overflow:"hidden",
+                      boxShadow: "0 1px 0 rgba(20,18,17,0.04)",
+                      transition: "transform 0.12s ease, background 0.15s",
                     }}
-                    onMouseEnter={function(e){ e.currentTarget.style.borderColor = z.color; }}
-                    onMouseLeave={function(e){ e.currentTarget.style.borderColor = t.border; e.currentTarget.style.borderLeftColor = z.color; }}>
+                    onMouseEnter={function(e){
+                      e.currentTarget.style.background = "#fff";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={function(e){
+                      e.currentTarget.style.background = "rgba(255,255,255,0.78)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}>
+                    {/* Thin top accent rule in zone colour */}
                     <div style={{
-                      fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                      textTransform: "uppercase", color: z.color,
-                    }}>Zone {z.num}</div>
+                      position:"absolute", top:0, left:0, right:0,
+                      height: 3, background: z.color,
+                    }}/>
                     <div style={{
-                      fontSize: 14, fontWeight: 800, color: t.text,
+                      fontSize: 17, fontWeight: 800,
                       letterSpacing: "-0.02em", lineHeight: 1.15,
+                      color: "#14110f",
+                      marginTop: 4,
                     }}>{z.name}</div>
+                    <div style={{
+                      fontSize: 11, color: "rgba(20,18,17,0.5)",
+                      fontWeight: 600, letterSpacing: "0.01em",
+                    }}>
+                      {venueCount} {venueCount === 1 ? "venue" : "venues"}
+                    </div>
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* Step 1 — pick court */}
+          {/* Step 1 — pick court — soft-fill cards */}
           {step === 1 && zone && (
             <div>
-              <div style={{ fontSize: 11, color: t.textSecondary, marginBottom: 10 }}>
-                {courts.length} {courts.length === 1 ? "venue" : "venues"} in {zone.name}
+              <div style={{
+                fontSize: 11, color: t.textSecondary, marginBottom: 12,
+                display:"flex", alignItems:"center", gap: 6,
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius:"50%", background: zone.color,
+                }}/>
+                <span>{zone.name}</span>
+                <span style={{ color: t.textTertiary }}>·</span>
+                <span>{courts.length} {courts.length === 1 ? "venue" : "venues"}</span>
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap: 2 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap: 8 }}>
                 {courts.map(function(c){
                   return (
                     <button key={c.name} type="button"
                       onClick={function(){ pickCourt(c); }}
                       style={{
-                        textAlign:"left", padding:"10px 12px", borderRadius: 8,
-                        border:"none", background:"transparent",
-                        color: t.text, fontSize: 13, fontWeight: 600,
-                        letterSpacing: "-0.01em", cursor:"pointer",
+                        textAlign:"left",
+                        padding: "14px 16px",
+                        borderRadius: 14,
+                        background: "rgba(255,255,255,0.78)",
+                        border: "none",
+                        color: t.text,
+                        cursor:"pointer",
                         display:"flex", alignItems:"center", justifyContent:"space-between",
-                        gap: 10, transition: "background 0.12s",
+                        gap: 12,
+                        boxShadow: "0 1px 0 rgba(20,18,17,0.04)",
+                        transition: "transform 0.1s ease, background 0.15s",
                       }}
-                      onMouseEnter={function(e){ e.currentTarget.style.background = t.bgTertiary; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
-                      <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {c.name}
-                      </span>
-                      <span style={{ flexShrink:0, color: t.textTertiary, fontSize: 11, fontWeight: 600 }}>
-                        {c.courts} {c.courts === 1 ? "court" : "courts"}
-                      </span>
+                      onMouseEnter={function(e){
+                        e.currentTarget.style.background = "#fff";
+                        e.currentTarget.style.transform = "translateY(-1px)";
+                      }}
+                      onMouseLeave={function(e){
+                        e.currentTarget.style.background = "rgba(255,255,255,0.78)";
+                        e.currentTarget.style.transform = "translateY(0)";
+                      }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{
+                          fontSize: 15, fontWeight: 700,
+                          letterSpacing:"-0.015em", lineHeight: 1.25,
+                          color: "#14110f",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        }}>{c.name}</div>
+                        <div style={{
+                          fontSize: 11, color: "rgba(20,18,17,0.5)",
+                          marginTop: 3, fontWeight: 600, letterSpacing:"0.01em",
+                        }}>
+                          {c.suburb ? c.suburb + " · " : ""}{c.courts} {c.courts === 1 ? "court" : "courts"}
+                        </div>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
+                           stroke="currentColor" strokeWidth="1.7"
+                           strokeLinecap="round" strokeLinejoin="round"
+                           style={{ color: "rgba(20,18,17,0.35)", flexShrink: 0 }}>
+                        <path d="M7 4l5 5-5 5"/>
+                      </svg>
                     </button>
                   );
                 })}
@@ -377,7 +468,7 @@ export default function PlayMatchWizard({
                   )}
                 </div>
               ) : (
-                <div style={{ display:"flex", flexDirection:"column", gap: 2 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap: 6 }}>
                   {players.map(function(p){
                     var isSel = selectedIds.indexOf(p.id) !== -1;
                     var disabled = !isSel && selectedIds.length >= MAX_SELECT;
@@ -387,44 +478,64 @@ export default function PlayMatchWizard({
                         disabled={disabled}
                         style={{
                           textAlign:"left",
-                          padding:"8px 10px", borderRadius: 10,
-                          background: isSel ? t.accentSubtle : "transparent",
-                          border:"none", cursor: disabled ? "not-allowed" : "pointer",
-                          opacity: disabled ? 0.4 : 1,
-                          display:"flex", alignItems:"center", gap: 10,
-                          transition: "background 0.12s",
+                          padding:"10px 14px",
+                          borderRadius: 14,
+                          background: isSel ? t.accentSubtle : t.bgTertiary,
+                          border:"none",
+                          cursor: disabled ? "not-allowed" : "pointer",
+                          opacity: disabled ? 0.45 : 1,
+                          display:"flex", alignItems:"center", gap: 12,
+                          transition: "background 0.15s, transform 0.1s",
                         }}>
-                        <PlayerAvatar size={32} profile={p}/>
+                        {/* Avatar with selection ring (instead of a
+                            separate checkbox — selection transforms
+                            the avatar itself). */}
+                        <div style={{
+                          width: 48, height: 48,
+                          padding: 3,
+                          borderRadius:"50%",
+                          background: isSel ? t.accent : "transparent",
+                          flexShrink: 0,
+                          transition: "background 0.15s",
+                        }}>
+                          <div style={{
+                            width:"100%", height:"100%",
+                            borderRadius:"50%",
+                            overflow:"hidden",
+                            background: t.bgCard,
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                          }}>
+                            <PlayerAvatar size={42} profile={p}/>
+                          </div>
+                        </div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{
-                            fontSize: 13, fontWeight: 700,
-                            color: isSel ? t.accent : t.text,
-                            letterSpacing:"-0.01em",
+                            fontSize: 14, fontWeight: 700,
+                            color: t.text,
+                            letterSpacing:"-0.01em", lineHeight: 1.2,
                             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                          }}>{p.full_name || p.username || "Player"}</div>
+                          }}>{p.name || p.username || p.full_name || "Player"}</div>
                           <div style={{
-                            fontSize: 11, color: t.textTertiary, marginTop: 1,
-                            display:"flex", gap: 6, alignItems:"center",
+                            fontSize: 11, color: t.textSecondary,
+                            marginTop: 4,
+                            display:"flex", gap: 6, alignItems:"center", flexWrap:"wrap",
                           }}>
-                            {p.skill_level && <span>{p.skill_level}</span>}
+                            {(p.skill || p.skill_level) && (
+                              <span style={{
+                                padding: "1px 7px", borderRadius: 8,
+                                background: t.bg, color: t.textSecondary,
+                                fontSize: 10, fontWeight: 700, letterSpacing:"0.02em",
+                              }}>{p.skill || p.skill_level}</span>
+                            )}
                             {p.playsHere && (
                               <span style={{
-                                fontSize:9, fontWeight:800, color:"#fff",
-                                background: t.accent, padding:"1px 6px",
-                                borderRadius:10, letterSpacing:"0.04em",
-                              }}>PLAYS HERE</span>
+                                fontSize: 9, fontWeight:800, color: t.accent,
+                                letterSpacing:"0.06em",
+                                textTransform:"uppercase",
+                              }}>· Plays here</span>
                             )}
                           </div>
                         </div>
-                        {/* Selection check */}
-                        <span style={{
-                          width:18, height:18, borderRadius:"50%",
-                          border:"1.5px solid "+(isSel ? t.accent : t.border),
-                          background: isSel ? t.accent : "transparent",
-                          flexShrink:0, position:"relative",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          color:"#fff", fontSize: 11, fontWeight: 900,
-                        }}>{isSel ? "✓" : ""}</span>
                       </button>
                     );
                   })}
@@ -471,7 +582,7 @@ export default function PlayMatchWizard({
                       }}>
                         <PlayerAvatar size={28} profile={p}/>
                         <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>
-                          {p.full_name || p.username || "Player"}
+                          {p.name || p.username || p.full_name || "Player"}
                         </span>
                       </div>
                     );
@@ -563,10 +674,10 @@ function previewInviteText({ partners, court, zone }){
   if(!partners || !partners.length) return "";
   var venue = court || (zone && zone.name) || "";
   if(partners.length === 1){
-    var who = partners[0].full_name || partners[0].username || "there";
+    var who = partners[0].name || partners[0].username || partners[0].full_name || "there";
     return "Hey " + firstName(who) + ", up for a hit at " + venue + " sometime this week?";
   }
-  var names = partners.map(function(p){ return firstName(p.full_name || p.username || "there"); });
+  var names = partners.map(function(p){ return firstName(p.name || p.username || p.full_name || "there"); });
   var joined = names.length === 2
     ? names.join(" and ")
     : names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
@@ -580,4 +691,19 @@ function buildInviteDraft({ partners, court, zone }){
 function firstName(name){
   if(!name) return "";
   return String(name).trim().split(/\s+/)[0];
+}
+
+// Convert a #rrggbb hex into rgba(...) with the given alpha.
+// Used for the zone-tile soft tinted backgrounds — taking each zone's
+// own colour and dialing it back to ~10% opacity gives the modern
+// "calm pastel chip" look without hardcoding 6 separate fills.
+function hexToRgba(hex, alpha){
+  if(!hex) return "rgba(0,0,0," + alpha + ")";
+  var h = hex.replace("#", "");
+  if(h.length === 3) h = h.split("").map(function(c){ return c + c; }).join("");
+  var r = parseInt(h.slice(0,2), 16);
+  var g = parseInt(h.slice(2,4), 16);
+  var b = parseInt(h.slice(4,6), 16);
+  if(isNaN(r) || isNaN(g) || isNaN(b)) return "rgba(0,0,0," + alpha + ")";
+  return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
 }
