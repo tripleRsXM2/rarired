@@ -320,27 +320,69 @@ export default function SettingsScreen({
               </div>
             </div>
             {/* Skill level — stacked list so SKILL_HINTS sits below each rung.
-                Chips-only was fine when we had 4 flat options, but the 6-rung
-                Beginner 1/2 · Intermediate 1/2 · Advanced 1/2 ladder needs
-                the hint copy for honest self-assessment. */}
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>Skill level</label>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {SKILL_LEVELS.map(function(s){
-                  var on=profileDraft.skill===s;
-                  return (
-                    <button key={s}
-                      onClick={function(){setProfileDraft(function(d){return Object.assign({},d,{skill:s});});}}
-                      style={{textAlign:"left",padding:"8px 12px",borderRadius:8,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.text,cursor:"pointer",display:"flex",flexDirection:"column",gap:2}}>
-                      <span style={{fontSize:12,fontWeight:on?700:600}}>{s}</span>
-                      <span style={{fontSize:10.5,color:on?t.accent:t.textTertiary,fontWeight:400,lineHeight:1.35}}>
-                        {SKILL_HINTS[s]||""}
+                Module 7.7: locked once a confirmed ranked match has been
+                recorded (profile.skill_level_locked = true, set server-side
+                by apply_match_outcome). When locked, picker disabled with a
+                lock-explanation hairline strip + info icon for the full
+                rules. */}
+            {(function(){
+              var locked = !!(profile && profile.skill_level_locked);
+              return (
+                <div style={{marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6}}>
+                    <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,letterSpacing:"0.12em",textTransform:"uppercase"}}>Skill level</label>
+                    {locked && (
+                      <span style={{
+                        fontSize:9,fontWeight:800,letterSpacing:"0.16em",
+                        textTransform:"uppercase",color:t.textTertiary,
+                      }}>
+                        Locked
                       </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                    )}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6,opacity:locked?0.55:1}}>
+                    {SKILL_LEVELS.map(function(s){
+                      var on=profileDraft.skill===s;
+                      return (
+                        <button key={s}
+                          disabled={locked}
+                          onClick={function(){
+                            if(locked) return;
+                            setProfileDraft(function(d){return Object.assign({},d,{skill:s});});
+                          }}
+                          style={{textAlign:"left",padding:"8px 12px",borderRadius:8,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.text,cursor:locked?"not-allowed":"pointer",display:"flex",flexDirection:"column",gap:2}}>
+                          <span style={{fontSize:12,fontWeight:on?700:600}}>{s}</span>
+                          <span style={{fontSize:10.5,color:on?t.accent:t.textTertiary,fontWeight:400,lineHeight:1.35}}>
+                            {SKILL_HINTS[s]||""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {locked && (
+                    <div style={{
+                      marginTop:10,
+                      paddingTop:10,paddingBottom:10,
+                      borderTop:"1px solid "+t.border,
+                      display:"flex",gap:10,alignItems:"baseline",
+                    }}>
+                      <span style={{
+                        fontSize:9,fontWeight:800,letterSpacing:"0.16em",
+                        textTransform:"uppercase",color:t.textTertiary,flexShrink:0,
+                      }}>
+                        Why locked
+                      </span>
+                      <span style={{
+                        fontSize:11.5,color:t.textSecondary,
+                        lineHeight:1.5,letterSpacing:"-0.1px",
+                      }}>
+                        Your starting level locked when you played your first confirmed ranked match. Your displayed level still moves with your CourtSync Rating.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {/* Play style — still chips; these don't need per-option copy. */}
             <div style={{marginBottom:12}}>
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>Play style</label>
@@ -401,11 +443,13 @@ export default function SettingsScreen({
                   // deliberately leave it out of this upsert — otherwise a
                   // stale draft would overwrite a zone the user just set
                   // from the Map side panel.
-                  var res=await supabase.from("profiles").upsert({
+                  // Module 7.7: skill is omitted from the upsert when
+                  // skill_level_locked=true, so the locked-columns guard
+                  // never sees a write attempt on it.
+                  var payload = {
                     id:authUser.id,
                     name:nd.name||"",
                     bio:nd.bio||"",
-                    skill:nd.skill||"Intermediate 1",
                     style:nd.style||"All-Court",
                     avatar:nd.avatar||"",
                     avatar_url:nd.avatar_url||null,
@@ -413,7 +457,11 @@ export default function SettingsScreen({
                     played_courts: nd.played_courts || [],
                     payment_handle: nd.payment_handle,
                     payment_method: nd.payment_method,
-                  },{onConflict:"id"});
+                  };
+                  if (!profile.skill_level_locked) {
+                    payload.skill = nd.skill || "Intermediate 1";
+                  }
+                  var res=await supabase.from("profiles").upsert(payload, { onConflict: "id" });
                   if(res.error){
                     console.error("Profile save error:",res.error);
                     if(toast) toast("Couldn't save — try again.", "error");
