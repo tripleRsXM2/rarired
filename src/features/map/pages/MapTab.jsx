@@ -131,6 +131,14 @@ export default function MapTab({
     return function(){ cancelled = true; };
   },[]);
 
+  // Resolve the basemap tone the user is actually seeing (same logic
+  // as LeafletMap.resolveDark). Used by the Play Match CTA to invert
+  // its colours on dark basemaps so the button never gets lost.
+  var mapDark;
+  if(layers.mapTheme === "light") mapDark = false;
+  else if(layers.mapTheme === "dark") mapDark = true;
+  else mapDark = theme === "hard-court" || theme === "night-court";
+
   // Wrap setters so we can emit analytics at selection time. Zone props
   // include the activity snapshot so funnel queries don't need a join.
   function handleSelect(zoneId){
