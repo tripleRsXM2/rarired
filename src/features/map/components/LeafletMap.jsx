@@ -28,14 +28,34 @@ import { COURTS } from "../data/courts.js";
 // `override` lets the layers panel force a specific basemap regardless of
 // the app theme — some users want a dark map even in light app mode (and
 // vice versa). "auto" defers to the app theme; "light"/"dark" override.
+function resolveDark(theme, override){
+  if(override === "light") return false;
+  if(override === "dark")  return true;
+  return theme === "hard-court" || theme === "night-court";
+}
 function tileUrlFor(theme, override){
-  var dark;
-  if(override === "light") dark = false;
-  else if(override === "dark") dark = true;
-  else dark = theme === "hard-court" || theme === "night-court";
-  return dark
+  return resolveDark(theme, override)
     ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
+}
+
+// Zone-name label HTML — a small all-caps eyebrow set at each zone's
+// rendered centroid. Letter-spaced, white drop-shadow halo so it's
+// readable on either light or dark basemaps. Non-interactive (the
+// underlying polygon still receives clicks).
+function zoneNameLabelHtml(z, isDark){
+  var color = isDark ? "rgba(255,255,255,0.92)" : "rgba(20,18,17,0.85)";
+  var halo  = isDark
+    ? "0 0 3px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.85)"
+    : "0 0 3px rgba(255,255,255,0.95), 0 1px 2px rgba(255,255,255,0.85)";
+  return (
+    '<div style="font: 800 10px/1 system-ui,sans-serif;' +
+      'letter-spacing:0.16em;text-transform:uppercase;' +
+      'color:' + color + ';text-shadow:' + halo + ';' +
+      'white-space:nowrap;pointer-events:none;text-align:center">' +
+      z.name +
+    '</div>'
+  );
 }
 
 var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="17" y1="9" x2="17" y2="15"/></svg>';
@@ -96,6 +116,7 @@ export default function LeafletMap({
   showHomes = true,
   showCourts = true,
   showActivity = true,
+  showZoneNames = true,
   // Map basemap override: "auto" follows app theme (default), "light"
   // forces positron, "dark" forces dark-matter. Lives in the cog
   // panel so users can read a dark map in a light app and vice versa.
@@ -114,6 +135,7 @@ export default function LeafletMap({
   // Home pin retired (see zoneLabelHtml — home is baked into the label).
   // var homePinRef = useRef(null);
   var tileLayersRef = useRef({ base: null });
+  var zoneNameLayersRef = useRef({}); // id -> L.marker (zone-name eyebrow)
   // Court cluster group is held in a ref so the showCourts toggle can
   // add/remove the whole layer without rebuilding markers each flip.
   var courtClusterRef = useRef(null);
@@ -236,7 +258,9 @@ export default function LeafletMap({
   },[]);
 
   // Swap tile layers when the app theme OR the user's map-theme
-  // override changes (keeps zoom / center / selection state).
+  // override changes (keeps zoom / center / selection state). Zone-
+  // name eyebrows also re-render so their halo colour stays readable
+  // (white halo on dark map, dark halo on light map).
   useEffect(function(){
     var map = mapRef.current;
     if(!map || !tileLayersRef.current.base) return;
@@ -246,7 +270,42 @@ export default function LeafletMap({
       subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
     tileLayersRef.current.base = base;
+    // Zone-name labels redraw via their own effect (depends on theme).
   },[theme, mapThemeOverride]);
+
+  // Zone-name eyebrows — small all-caps labels at each zone centroid,
+  // toggleable via the layers panel. Re-rendered when the toggle flips
+  // OR the theme changes (halo colour depends on dark/light basemap).
+  useEffect(function(){
+    var map = mapRef.current;
+    if(!map) return;
+    // Wipe previous markers first — simpler than reconciling a delta.
+    Object.keys(zoneNameLayersRef.current).forEach(function(id){
+      var m = zoneNameLayersRef.current[id];
+      if(m) map.removeLayer(m);
+    });
+    zoneNameLayersRef.current = {};
+    if(!showZoneNames) return;
+    var isDark = resolveDark(theme, mapThemeOverride);
+    ZONES.forEach(function(z){
+      var center = zoneCentersRef.current[z.id] || z.center;
+      if(!center) return;
+      var marker = L.marker(center, {
+        icon: L.divIcon({
+          className: "cs-zone-name",
+          html: zoneNameLabelHtml(z, isDark),
+          iconSize: [140, 16],
+          iconAnchor: [70, 8],
+        }),
+        interactive: false,
+        // Sit above polygons (z 400) but below courts (z 600 via
+        // zIndexOffset 1000) so a court marker pinned at the centroid
+        // doesn't disappear under the label.
+        zIndexOffset: 200,
+      }).addTo(map);
+      zoneNameLayersRef.current[z.id] = marker;
+    });
+  },[showZoneNames, theme, mapThemeOverride]);
 
   // Add/remove the court cluster layer when the courts toggle flips.
   useEffect(function(){

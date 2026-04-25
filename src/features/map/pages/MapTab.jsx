@@ -24,7 +24,16 @@ var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
 // Activity defaults OFF — flame badges are seasonal/editorial signal,
 // not chrome. Users opt in if they want to see "where matches happened
 // this week". Homes + courts stay on as they're navigational anchors.
-var DEFAULT_LAYERS = { homes: true, courts: true, activity: false, mapTheme: "auto" };
+// Defaults locked by UI Designer council:
+//   homes     ON  — personal anchor; your home is the most important pin
+//   courts    ON  — primary content of the map (find where to play)
+//   zoneNames ON  — first-time orientation; without "Inner West" /
+//                   "Eastern Suburbs" eyebrows non-locals can't read the
+//                   coloured polygons. Power users opt out.
+//   activity  OFF — flame badges are seasonal/editorial; loud red as a
+//                   default reads like notifications you didn't subscribe to.
+//   mapTheme  AUTO — follow app theme unless explicitly overridden.
+var DEFAULT_LAYERS = { homes: true, courts: true, zoneNames: true, activity: false, mapTheme: "auto" };
 function loadLayers(){
   try{
     var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
@@ -154,6 +163,7 @@ export default function MapTab({
         showHomes={layers.homes}
         showCourts={layers.courts}
         showActivity={layers.activity}
+        showZoneNames={layers.zoneNames}
         mapThemeOverride={layers.mapTheme}
         onHover={setHovered}
         onSelect={handleSelect}
@@ -244,6 +254,10 @@ export default function MapTab({
             sub="Public courts in each zone"
             checked={layers.courts}
             onChange={function(v){ setLayer("courts", v); }}/>
+          <LayerRow t={t} label="Zone names"
+            sub="Inner West, Eastern Suburbs, etc."
+            checked={layers.zoneNames}
+            onChange={function(v){ setLayer("zoneNames", v); }}/>
           <LayerRow t={t} label="Activity"
             sub="Flame badges on busy zones (7d)"
             checked={layers.activity}
