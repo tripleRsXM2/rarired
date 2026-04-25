@@ -255,20 +255,19 @@ export default function LeafletMap({
       },
     });
     COURTS.forEach(function(c){
-      // Default court marker — flat white pill, no border, soft
-      // shadow for elevation. box-sizing:border-box so the rendered
-      // footprint is exactly iconSize (no 1.5px border halo making
-      // it feel off-centre). Smaller SVG slot (12px in a 22px pill)
-      // gives the icon proper breathing room.
+      // Default court marker — minimalist solid white dot. UI council
+      // call: at this scale the racket icon is barely legible, and
+      // the cluster bubble already conveys "these are venues" by
+      // counting them. Replacing the icon with a small dot makes the
+      // map feel quieter and lets the zone polygons stay the primary
+      // visual. Soft shadow gives definition on light basemaps; the
+      // hairline dark ring keeps it readable on dark basemaps too.
       var html =
-        '<div style="box-sizing:border-box;width:22px;height:22px;border-radius:50%;background:#fff;' +
-          'display:flex;align-items:center;justify-content:center;' +
-          'box-shadow:0 1px 3px rgba(0,0,0,0.18),0 0 0 1px rgba(20,18,17,0.08);' +
-          'color:#14110f;cursor:pointer">' +
-          '<div style="width:12px;height:12px;display:flex;align-items:center;justify-content:center">' + COURT_SVG + '</div>' +
-        '</div>';
+        '<div style="box-sizing:border-box;width:12px;height:12px;border-radius:50%;background:#fff;' +
+          'box-shadow:0 1px 3px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
+          'cursor:pointer"></div>';
       var m = L.marker([c.lat, c.lng], {
-        icon: L.divIcon({ className: "", html: html, iconSize: [22,22], iconAnchor: [11,11] }),
+        icon: L.divIcon({ className: "", html: html, iconSize: [12,12], iconAnchor: [6,6] }),
         zIndexOffset: 1000,
       });
       m.bindTooltip(
@@ -372,20 +371,17 @@ export default function LeafletMap({
     if(showSolo){
       var c = COURTS.find(function(x){ return x.name === focusedCourtName; });
       if(c){
-        // Focused marker — same shape language as the default, just
-        // inverted (dark fill + white icon) and slightly bigger.
-        // Single visual change = clean signal. No stacked rings, no
-        // halo, no busy chrome. Council pick over the previous
-        // 3-ring design which read as 1990s skeuomorphism.
+        // Focused marker — same dot language as the default but
+        // larger (16 vs 12) and inverted (dark fill instead of white)
+        // with a thin white halo so it pops against any basemap.
+        // No icon — keeps the visual system consistent with the
+        // dot-only default markers.
         var html =
-          '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;background:#14110f;' +
-            'display:flex;align-items:center;justify-content:center;' +
-            'box-shadow:0 3px 10px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
-            'color:#fff;cursor:pointer">' +
-            '<div style="width:14px;height:14px;display:flex;align-items:center;justify-content:center">' + COURT_SVG + '</div>' +
-          '</div>';
+          '<div style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;background:#14110f;' +
+            'box-shadow:0 0 0 3px rgba(255,255,255,0.95),0 3px 10px rgba(0,0,0,0.32);' +
+            'cursor:pointer"></div>';
         var m = L.marker([c.lat, c.lng], {
-          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[28,28], iconAnchor:[14,14] }),
+          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[16,16], iconAnchor:[8,8] }),
           zIndexOffset: 2000,
           interactive: true,
         });

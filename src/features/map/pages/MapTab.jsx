@@ -232,11 +232,13 @@ export default function MapTab({
         style={{
           // Slide left to make room for the side panel when a zone is
           // selected so the cog never sits behind it. 372 = panel
-          // maxWidth (360) + 12 gutter. CSS transition keeps it
-          // smooth alongside the panel's slide-in animation.
+          // maxWidth (360) + 12 gutter. Timing + easing match the
+          // panel's slideInRight keyframe (.28s, cubic-bezier(.32,
+          // .72,0,1)) so they glide together as one motion rather
+          // than the cog "popping" out of sync.
           position:"absolute", top:12,
           right: selected ? 372 : 12,
-          transition: "right 0.25s ease",
+          transition: "right 0.28s cubic-bezier(.32,.72,0,1)",
           zIndex:500,
           background: layersOpen ? t.text : t.bgCard,
           color: layersOpen ? t.bg : t.text,
@@ -259,9 +261,11 @@ export default function MapTab({
       {layersOpen && (
         <div ref={layersPanelRef}
           style={{
-            // Slides with the cog when zone panel is open.
+            // Slides with the cog. Same easing/timing as the cog +
+            // side panel so all three motions feel like one gesture.
             position:"absolute", top:54,
             right: selected ? 372 : 12,
+            transition: "right 0.28s cubic-bezier(.32,.72,0,1)",
             zIndex:600,
             background: t.bgCard, color: t.text,
             border: "1px solid " + t.border,
