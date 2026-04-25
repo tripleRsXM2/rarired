@@ -21,7 +21,10 @@ import { track } from "../../../lib/analytics.js";
 // just courts on a dark map" view sticks across reloads. Small Hooked
 // investment — every customisation makes returning more valuable.
 var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
-var DEFAULT_LAYERS = { homes: true, courts: true, activity: true, mapTheme: "auto" };
+// Activity defaults OFF — flame badges are seasonal/editorial signal,
+// not chrome. Users opt in if they want to see "where matches happened
+// this week". Homes + courts stay on as they're navigational anchors.
+var DEFAULT_LAYERS = { homes: true, courts: true, activity: false, mapTheme: "auto" };
 function loadLayers(){
   try{
     var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
@@ -254,29 +257,14 @@ export default function MapTab({
           }}>
             Map theme
           </div>
-          <div style={{ display:"flex", gap:6 }}>
-            {[
+          <UnderlineTabs t={t}
+            value={layers.mapTheme}
+            onChange={function(v){ setLayer("mapTheme", v); }}
+            options={[
               { id:"auto",  label:"Auto"  },
               { id:"light", label:"Light" },
               { id:"dark",  label:"Dark"  },
-            ].map(function(opt){
-              var active = layers.mapTheme === opt.id;
-              return (
-                <button key={opt.id}
-                  onClick={function(){ setLayer("mapTheme", opt.id); }}
-                  style={{
-                    flex:1, padding:"7px 8px", borderRadius:8,
-                    border:"1px solid "+(active ? t.text : t.border),
-                    background: active ? t.text : "transparent",
-                    color: active ? t.bg : t.text,
-                    fontSize:12, fontWeight:700, cursor:"pointer",
-                    transition:"background 0.15s, color 0.15s",
-                  }}>
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+            ]}/>
         </div>
       )}
 
@@ -388,6 +376,39 @@ export default function MapTab({
           setSelectedCourt(null); // close the modal; we navigate away
         }}
         onClose={function(){ setSelectedCourt(null); }}/>
+    </div>
+  );
+}
+
+// Underline-tabs segmented control. No borders, no fills — text only
+// with a 2px underline under the active label. Used for the map-theme
+// picker (Auto/Light/Dark) and any other small "pick one of N" choices.
+// Council pick over iOS-style filled segments because we need this to
+// feel light inside a tight floating panel.
+function UnderlineTabs({ t, value, onChange, options }){
+  return (
+    <div style={{ display:"flex", gap:18, paddingBottom:2 }}>
+      {options.map(function(opt){
+        var active = value === opt.id;
+        return (
+          <button key={opt.id} type="button"
+            onClick={function(){ if(!active) onChange(opt.id); }}
+            style={{
+              padding:"4px 0",
+              background:"transparent",
+              border:"none",
+              borderBottom: "2px solid " + (active ? t.text : "transparent"),
+              color: active ? t.text : t.textTertiary,
+              fontSize: 12,
+              fontWeight: active ? 700 : 500,
+              letterSpacing: "0.01em",
+              cursor: active ? "default" : "pointer",
+              transition: "color 0.15s, border-color 0.15s",
+            }}>
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

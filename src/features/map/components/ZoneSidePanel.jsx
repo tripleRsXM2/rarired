@@ -349,22 +349,29 @@ export default function ZoneSidePanel({
             </span>
           )}
         </div>
-        <div style={{ display:"flex", gap:5, marginBottom:8 }}>
+        {/* Scope picker — underline tabs (no borders, no fills). Same
+            modern segmented language as the map-theme picker so the two
+            controls feel like one system. */}
+        <div style={{ display:"flex", gap:18, marginBottom:10, paddingBottom:2 }}>
           {[
             { id:"zone",       label:"In zone" },
             { id:"everywhere", label:"Everywhere" },
           ].map(function(s){
             var on = scope === s.id;
             return (
-              <button key={s.id}
-                onClick={function(){ setScope(s.id); setSelectedIds([]); }}
+              <button key={s.id} type="button"
+                onClick={function(){ if(!on){ setScope(s.id); setSelectedIds([]); } }}
                 style={{
-                  flex:1, padding:"6px 10px", borderRadius:7,
-                  border:"1px solid "+(on ? t.accent : t.border),
-                  background: on ? t.accentSubtle : "transparent",
-                  color: on ? t.accent : t.textSecondary,
-                  fontSize:11, fontWeight: on ? 700 : 500,
-                  cursor:"pointer",
+                  padding:"4px 0",
+                  background:"transparent",
+                  border:"none",
+                  borderBottom: "2px solid " + (on ? t.text : "transparent"),
+                  color: on ? t.text : t.textTertiary,
+                  fontSize: 12,
+                  fontWeight: on ? 700 : 500,
+                  letterSpacing:"0.01em",
+                  cursor: on ? "default" : "pointer",
+                  transition:"color 0.15s, border-color 0.15s",
                 }}>
                 {s.label}
               </button>
