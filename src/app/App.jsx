@@ -84,10 +84,10 @@ export default function App(){
   // with the signed-in user's id falls back to the own-profile ProfileTab.
   var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
 
-  // Navigate to a top-level tab. Switching to "people" lands on /people/friends,
+  // Navigate to a top-level tab. Switching to "people" lands on /people/messages,
   // switching to "tournaments" (Compete) lands on /tournaments/list.
   function setTab(x){
-    if(x==="people") navigate("/people/friends");
+    if(x==="people") navigate("/people/messages");
     else if(x==="tournaments") navigate("/tournaments/list");
     else navigate("/"+x);
   }
@@ -145,7 +145,11 @@ export default function App(){
   });
   var social=useSocialGraph({ authUser:auth.authUser });
   // Pass friends list so DM logic can bypass the request gate for friends.
-  var dms=useDMs({ authUser:auth.authUser, friends:social.friends });
+  var dms=useDMs({
+    authUser:auth.authUser,
+    friends:social.friends,
+    blockedUserIds: (social.blockedUsers || []).map(function(b){return b.id;}),
+  });
   usePresenceHeartbeat(auth.authUser);
   var notifications=useNotifications({
     authUser:auth.authUser,
@@ -194,7 +198,12 @@ export default function App(){
           matchHistory.loadHistory(supabaseUser.id),
           social.loadSocial(supabaseUser.id, res.profile),
           notifications.loadNotifications(supabaseUser.id),
-          dms.loadConversations(),
+          // Pass user.id explicitly — bootstrap fires before the
+          // SIGNED_IN render lands, so the hook's authUser closure can
+          // still be null at this moment. Other loaders already do
+          // this; dms was the lone outlier and that's why /people/messages
+          // could stay stuck on the skeleton after a hard refresh.
+          dms.loadConversations(supabaseUser.id),
           challenges.loadChallenges(supabaseUser.id),
         ]);
         if(res.isNew&&isFresh)currentUser.triggerOnboarding();
@@ -654,6 +663,7 @@ export default function App(){
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
               openChallenge={openChallenge}
+              blockedUserIds={(social.blockedUsers || []).map(function(b){return b.id;})}
               onMessagePlayer={function(partnerOrPartners, slotOpts){
                 // Accepts either a single partner (legacy call path) or
                 // an array of partners (new zone-panel multi-select,
@@ -729,6 +739,7 @@ export default function App(){
             viewerHistory={matchHistory.history}
             onBack={function(){navigate(-1);}}
             openChallenge={openChallenge}
+            blockUser={social.blockUser}
           />
         )}
         {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(
@@ -791,9 +802,11 @@ export default function App(){
           theme={theme} setTheme={applyTheme}
           profile={currentUser.profile} setProfile={currentUser.setProfile}
           profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
+          profileLoaded={currentUser.profileLoaded}
           editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
           availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
           receivedRequests={social.receivedRequests}
+          toast={toast}
           onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
         />
       )}

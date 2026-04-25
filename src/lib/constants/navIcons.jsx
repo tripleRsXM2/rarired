@@ -5,15 +5,29 @@
 // them means Sidebar and the mobile nav can't drift out of sync.
 
 export var NAV_ICONS = {
-  // Open-in-new-tab (used for booking links that offload to the
-  // operator site). Kept as a line-art SVG per the icon rule.
+  // Booking affordance — a calendar with a highlighted slot. Reads as
+  // "reserve a time" rather than the previous box-with-arrow which was
+  // the generic external-link icon (council vote: calendar over
+  // literal book; book read as library/knowledge, not "booking").
+  // Line-art per the icon rule.
   external: function(size){
     var s = size || 14;
     return (
       <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
-        <path d="M10 3h5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M15 3l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <path d="M13 10.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        {/* Calendar body */}
+        <rect x="2.25" y="4" width="13.5" height="11.5" rx="1.5"
+          stroke="currentColor" strokeWidth="1.5"/>
+        {/* Top binding ticks */}
+        <line x1="6" y1="2" x2="6" y2="5"
+          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="12" y1="2" x2="12" y2="5"
+          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        {/* Header divider */}
+        <line x1="2.25" y1="7.25" x2="15.75" y2="7.25"
+          stroke="currentColor" strokeWidth="1.5"/>
+        {/* Highlighted slot — the "booked" cell */}
+        <rect x="9" y="9.5" width="3.5" height="3" rx="0.5"
+          fill="currentColor" opacity="0.85"/>
       </svg>
     );
   },

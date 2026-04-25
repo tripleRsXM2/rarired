@@ -58,9 +58,13 @@ function ProfileMatchRow({ m, t, profile, openChallenge }) {
   // what the submitter typed for their opponent — which is the viewer).
   // The real opponent from the viewer's POV is the submitter — we pick it
   // up from the enriched friendName (loadHistory participant fetch).
+  // For tagged rows m.oppName is the viewer's OWN name (it's what the
+  // submitter typed for their opponent — which is the viewer). The real
+  // opponent is the submitter, picked up via the enriched friendName.
+  // For own rows m.oppName is the actual opponent.
   var opponentDisplay = m.isTagged
     ? (m.friendName || "Opponent")
-    : (opponentDisplay);
+    : (m.oppName || "Unknown");
   var rows = [
     {
       name: viewerName,

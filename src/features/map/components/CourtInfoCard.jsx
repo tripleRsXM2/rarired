@@ -30,6 +30,9 @@ export default function CourtInfoCard({
   // Phase 2: fires dms.openConversationWith + navigates to /people/messages.
   // Shape: onMessagePlayer(partner, { venue, date, time, draft })
   onMessagePlayer,
+  // Asymmetric block — viewer's blocked-user list is filtered out of
+  // the ranked candidate set in fetchPlayersAtCourt.
+  blockedUserIds,
 }){
   var [players, setPlayers] = useState([]);
   var [loading, setLoading] = useState(false);
@@ -40,7 +43,7 @@ export default function CourtInfoCard({
   useEffect(function(){
     if(!court) { setPlayers([]); return; }
     setLoading(true);
-    fetchPlayersAtCourt(court.name, viewerProfile || { id: authUser && authUser.id }, 12).then(function(r){
+    fetchPlayersAtCourt(court.name, viewerProfile || { id: authUser && authUser.id }, 12, blockedUserIds || []).then(function(r){
       if(r.error){ console.warn("[CourtInfoCard] players:", r.error); setPlayers([]); }
       else setPlayers(r.data || []);
       setLoading(false);
@@ -204,12 +207,13 @@ export default function CourtInfoCard({
                         padding:0, background:"transparent", border:"none",
                         cursor:"pointer", width:"100%", textAlign:"left",
                       }}>
-                      <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={34}/>
+                      <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={34} blurred={!authUser}/>
                       <div style={{ minWidth:0, flex:1 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           <span style={{ fontSize:14, color:t.text, fontWeight:700,
                             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                            minWidth:0, maxWidth:"100%" }}>
+                            minWidth:0, maxWidth:"100%",
+                            filter: !authUser ? "blur(5px)" : "none" }}>
                             {p.name}
                           </span>
                           {hint && (

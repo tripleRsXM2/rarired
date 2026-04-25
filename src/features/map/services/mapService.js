@@ -122,10 +122,15 @@ export function scorePlayerForCourt(viewer, candidate, playsHere) {
 //     if the user never self-reported)
 // Then scores each candidate against the viewer and sorts best first.
 //
+// `excludeIds` (optional) — viewer's blocked-user list, dropped from
+// every candidate set before scoring. Asymmetric block: blocked users
+// never appear in viewer's map.
+//
 // Returns { data: [ { ...profile, playsHere: bool, score: number } ], error }
-export async function fetchPlayersAtCourt(courtName, viewer, limit) {
+export async function fetchPlayersAtCourt(courtName, viewer, limit, excludeIds) {
   var lim = limit || 12;
   var viewerId = viewer && viewer.id;
+  var blockSet = new Set(excludeIds || []);
   // Resolve canonical + aliases so legacy venue strings still match.
   var court = COURTS.find(function (c) {
     return c.name === courtName
@@ -155,8 +160,10 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit) {
 
   // Build the candidate set. "playsHere" is TRUE for both self-reporters
   // AND anyone surfaced from match_history — the two signals merge.
+  // Blocked users are dropped at every entry to the candidate map.
   var byId = {};
   (selfRes.data || []).forEach(function (p) {
+    if (blockSet.has(p.id)) return;
     byId[p.id] = Object.assign({}, p, { playsHere: true });
   });
 
@@ -166,6 +173,7 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit) {
       [m.user_id, m.opponent_id, m.tagged_user_id].forEach(function (uid) {
         if (!uid) return;
         if (viewerId && uid === viewerId) return;
+        if (blockSet.has(uid)) return; // never surface blocked users
         if (byId[uid]) return; // already in set
         derivedIds.add(uid);
       });
@@ -177,6 +185,7 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit) {
         .in("id", idList);
       if (!pRes.error) {
         (pRes.data || []).forEach(function (p) {
+          if (blockSet.has(p.id)) return;
           byId[p.id] = Object.assign({}, p, { playsHere: true });
         });
       }
@@ -256,13 +265,32 @@ export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
 
 // Fetch all players in a given zone — the source for the side-panel
 // "Players here" list. Anyone whose profile.home_zone matches is returned.
-export function fetchPlayersInZone(zoneId, limit){
+// `excludeIds` (optional) filters out specific user ids — used by the
+// caller to drop blocked users before they ever render.
+// `zoneId` null = no zone filter (used for the "Everywhere" toggle in
+// ZoneSidePanel, which widens the roster to anyone with a home_zone).
+export function fetchPlayersInZone(zoneId, limit, excludeIds){
   var l = limit || 20;
-  return supabase.from("profiles")
-    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone")
-    .eq("home_zone", zoneId)
-    .order("last_active", { ascending: false, nullsFirst: false })
-    .limit(l);
+  var q = supabase.from("profiles")
+    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone");
+  if (zoneId) q = q.eq("home_zone", zoneId);
+  else        q = q.not("home_zone", "is", null); // "Everywhere" still requires a zone — skip ghosts
+  if (excludeIds && excludeIds.length) {
+    q = q.not("id", "in", "(" + excludeIds.join(",") + ")");
+  }
+  return q.order("last_active", { ascending: false, nullsFirst: false }).limit(l);
+}
+
+// Anonymous-friendly count of public players in a zone. RLS blocks anon
+// SELECT on profiles entirely, so for the signed-out map preview we
+// route through a SECURITY DEFINER RPC that returns just the integer.
+// No PII leaves the DB; the side panel renders that many blurred
+// shapes + a sign-in nudge.
+export async function fetchPublicPlayersCountInZone(zoneId) {
+  if (!zoneId) return { data: 0, error: null };
+  var r = await supabase.rpc("count_public_players_in_zone", { p_zone_id: zoneId });
+  if (r.error) return { data: 0, error: r.error };
+  return { data: r.data || 0, error: null };
 }
 
 // Group counts — one row per zone — for the map surface itself.

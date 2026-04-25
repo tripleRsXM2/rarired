@@ -485,9 +485,31 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     // mount doesn't flash the empty-state card before the real list
     // lands (user-reported: "sometimes messages don't show on mobile").
     if (!dms.conversationsLoaded && allEmpty) {
+      // Skeleton list — gives the eye structure immediately so the page
+      // feels alive while loadConversations() is in flight. Mobile users
+      // were reporting a long blank-screen wait on cold opens; this
+      // doesn't make the network faster but makes the wait feel
+      // grounded and not "frozen".
       return (
-        <div style={{ padding: "48px 20px", textAlign: "center", color: t.textTertiary, fontSize: 13 }}>
-          Loading messages…
+        <div style={{ padding: "12px 0" }}>
+          {[0, 1, 2, 3].map(function (i) {
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "12px 16px",
+                borderBottom: "1px solid " + t.border,
+              }}>
+                <div className="cs-skeleton" style={{ width: 40, height: 40, borderRadius: "50%" }}/>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="cs-skeleton" style={{ height: 12, width: 120 + (i * 17) % 80, borderRadius: 4 }}/>
+                  <div className="cs-skeleton" style={{ height: 10, width: 200 - (i * 23) % 60, borderRadius: 4 }}/>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ textAlign: "center", color: t.textTertiary, fontSize: 11, padding: "20px 0 0" }}>
+            Loading messages…
+          </div>
         </div>
       );
     }

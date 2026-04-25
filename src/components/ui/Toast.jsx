@@ -52,8 +52,14 @@ export function ToastStack({ t, toasts, dismiss }) {
   return (
     <div
       style={{
-        position: "fixed", zIndex: 300,
-        bottom: 16, right: 16, left: 16,
+        // High z so toasts ride above every modal (Settings overlay is
+        // 2000, AuthModal 400, ComposeMessageModal 800, action review
+        // drawer ~700). At 300 the toast was rendering behind the open
+        // Settings sheet, so users never saw "Profile saved" after
+        // tapping Save Changes — looked like nothing happened.
+        position: "fixed", zIndex: 10000,
+        bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+        right: 16, left: 16,
         display: "flex", flexDirection: "column", alignItems: "flex-end",
         gap: 8, pointerEvents: "none",
       }}

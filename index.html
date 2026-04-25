@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: lets safe-area-inset-* paint into the iOS notch
+         and bottom-bar regions instead of leaving a black strip.
+         interactive-widget=resizes-content: Android Chrome resizes the
+         layout when the keyboard opens instead of overlaying it (stops
+         the "have to resize the window" experience the user reported). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>CourtSync</title>
   </head>
   <body>

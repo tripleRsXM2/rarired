@@ -4,16 +4,27 @@ import { initials } from "../../../lib/utils/avatar.js";
 import { fetchProfile, upsertProfile, defaultProfile } from "../services/profileService.js";
 import { supabase } from "../../../lib/supabase.js";
 
-var INITIAL_PROFILE={name:"Your Name",suburb:"Sydney",skill:"Intermediate",style:"All-Court",bio:"",avatar:"YN",availability:{}};
+// Pre-auth placeholder shown while loadProfile hasn't returned yet. We
+// intentionally render this transient state in read-only surfaces but
+// NEVER let it back into a save: see profileLoaded below — UI gates
+// every write path on it. (See post-mortem in docs / commit a3xx.)
+var INITIAL_PROFILE={name:"Your Name",suburb:"Sydney",skill:"Intermediate 1",style:"All-Court",bio:"",avatar:"YN",availability:{},played_courts:[]};
 
 export function useCurrentUser(){
   var [profile,setProfile]=useState(INITIAL_PROFILE);
   var [profileDraft,setProfileDraft]=useState(INITIAL_PROFILE);
+  // Has loadProfile resolved with real data? UI must check this before
+  // letting the user fire a profile UPDATE — otherwise a stale draft
+  // sourced from INITIAL_PROFILE can stomp populated columns.
+  // Real-world incident: a user opened Settings + tapped Save before
+  // fetchProfile returned, wiping their played_courts / payment_handle
+  // / bio / avatar_url with empty defaults.
+  var [profileLoaded,setProfileLoaded]=useState(false);
   var [editingAvail,setEditingAvail]=useState(false);
   var [availDraft,setAvailDraft]=useState({});
   var [showOnboarding,setShowOnboarding]=useState(false);
   var [onboardStep,setOnboardStep]=useState(1);
-  var [onboardDraft,setOnboardDraft]=useState({skill:"Intermediate",style:"All-Court",suburb:""});
+  var [onboardDraft,setOnboardDraft]=useState({skill:"Intermediate 1",style:"All-Court",suburb:""});
 
   async function loadProfile(user){
     var init=initials(user.user_metadata.name||user.email);
@@ -29,6 +40,7 @@ export function useCurrentUser(){
       setProfile(defaults); setProfileDraft(defaults);
       await upsertProfile(defaults);
     }
+    setProfileLoaded(true);
     return { profile:loaded, isNew:isNewUser };
   }
 
@@ -77,15 +89,16 @@ export function useCurrentUser(){
     // starts at a clean slate regardless of where the previous user left off.
     setProfile(INITIAL_PROFILE);
     setProfileDraft(INITIAL_PROFILE);
+    setProfileLoaded(false);
     setEditingAvail(false);
     setAvailDraft({});
     setShowOnboarding(false);
     setOnboardStep(1);
-    setOnboardDraft({skill:"Intermediate",style:"All-Court",suburb:""});
+    setOnboardDraft({skill:"Intermediate 1",style:"All-Court",suburb:""});
   }
 
   return {
-    profile, setProfile, profileDraft, setProfileDraft,
+    profile, setProfile, profileDraft, setProfileDraft, profileLoaded,
     editingAvail, setEditingAvail, availDraft, setAvailDraft,
     showOnboarding, setShowOnboarding,
     onboardStep, setOnboardStep, onboardDraft, setOnboardDraft,

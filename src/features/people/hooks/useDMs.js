@@ -27,6 +27,12 @@ var PARTNER_FIELDS = "id,name,avatar,avatar_url,skill,suburb,home_zone,last_acti
 export function useDMs(opts) {
   var authUser = (opts && opts.authUser) || null;
   var friends = (opts && opts.friends) || [];
+  // Asymmetric block (council decision): blocked users are invisible
+  // to the viewer's DM list. Their existing thread is hidden, their
+  // new messages don't surface, and they can't be opened as a draft.
+  // The opposite direction (their view of you) is intentionally
+  // unchanged — block is one-way, not a mutual ghost.
+  var blockedUserIds = (opts && opts.blockedUserIds) || [];
 
   var [conversations, setConversations] = useState([]);  // accepted + pending-outgoing
   var [requests, setRequests] = useState([]);             // pending incoming
@@ -119,9 +125,20 @@ export function useDMs(opts) {
 
   // ── Load ────────────────────────────────────────────────────────────────
 
-  async function loadConversations() {
-    if (!authUser) return;
-    var uid = authUser.id;
+  // userId may be passed explicitly by the bootstrap path, which fires
+  // before the SIGNED_IN render has settled and the hook's authUser
+  // prop is still null. Falls back to the closure for callers that
+  // already have a stable hook (e.g. realtime handlers).
+  //
+  // Without the explicit arg, /people/messages stayed stuck on the
+  // skeleton after a hard refresh: the coordinator captured a stale
+  // authUser=null closure, the early-return silently fired, and
+  // conversationsLoaded never flipped true until something else
+  // (e.g. clicking a Friends row → openOrStartConversation) triggered
+  // a second load with the current authUser.
+  async function loadConversations(userIdArg) {
+    var uid = userIdArg || (authUser && authUser.id);
+    if (!uid) return;
     var r = await D.fetchConversations(uid);
     var all = r.data || [];
 
@@ -149,63 +166,78 @@ export function useDMs(opts) {
     var partnerIds = [...new Set(all.map(function (c) { return c.user1_id === uid ? c.user2_id : c.user1_id; }))];
     var convIds = accepted.map(function (c) { return c.id; });
 
-    // Fire the three supplemental fetches (profiles, my reads, partner
-    // reads) in parallel instead of serially. Mobile was waiting on
-    // three sequential round-trips before painting the list, which felt
-    // slow even on a good connection.
+    // ─── PHASE 1 — paint the list NOW with stub partners ──────────────
+    // The conversations fetch above is the only round-trip needed to
+    // know "you have N threads". Profile names + read receipts can land
+    // a beat later. Painting at this point cuts the perceived load
+    // from "wait for 4 sequential round-trips" down to one — the
+    // skeleton clears as soon as the bare list arrives, and per-row
+    // names + unread badges patch in within a few hundred ms.
+    function bareEnrich(c) {
+      var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
+      // Best-effort unread guess: if the most recent message wasn't
+      // ours and we have no read receipt yet, treat it as unread. Once
+      // the reads-fetch resolves the patcher below recomputes.
+      var hasUnread = c.status === "accepted" && c.last_message_sender_id !== uid && !!c.last_message_at;
+      return Object.assign({}, c, {
+        partner: { id: pid, name: "Loading…", avatar: "?" },
+        hasUnread: hasUnread,
+        lastReadAt: null, partnerLastReadAt: null,
+        lastMsgSeenByPartner: false,
+      });
+    }
+    setConversations(accepted.concat(pendingOut).map(bareEnrich));
+    setRequests(pendingIn.map(bareEnrich));
+    setConversationsLoaded(true);
+
+    // ─── PHASE 2 — enrich with profiles, my reads, partner reads ──────
+    // Fire-and-forget; UI patches per-row as the data lands. Pins +
+    // mutes come along for the ride.
     var empty = { data: [] };
-    var parallel = await Promise.all([
+    Promise.all([
       partnerIds.length ? fetchProfilesByIds(partnerIds, PARTNER_FIELDS) : Promise.resolve(empty),
       convIds.length    ? D.fetchReads(uid, convIds)                    : Promise.resolve(empty),
       convIds.length    ? D.fetchPartnerReadsForConvs(uid, convIds)      : Promise.resolve(empty),
-    ]);
+    ]).then(function (parallel) {
+      var partnerMap = {};
+      (parallel[0].data || []).forEach(function (p) { partnerMap[p.id] = p; });
+      var readMap = {};
+      (parallel[1].data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
+      var partnerReadMap = {};
+      (parallel[2].data || []).forEach(function (row) { partnerReadMap[row.conversation_id] = row.last_read_at; });
 
-    var partnerMap = {};
-    (parallel[0].data || []).forEach(function (p) { partnerMap[p.id] = p; });
-
-    var readMap = {};
-    (parallel[1].data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
-
-    // convId → partner's last_read_at (for list "✓ Seen" indicator).
-    var partnerReadMap = {};
-    (parallel[2].data || []).forEach(function (row) {
-      partnerReadMap[row.conversation_id] = row.last_read_at;
+      function patch(c) {
+        var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
+        var partner = partnerMap[pid] || c.partner || { id: pid, name: "Player", avatar: "PL" };
+        var lastRead = readMap[c.id];
+        var partnerRead = partnerReadMap[c.id];
+        var hasUnread = c.status === "accepted" && c.last_message_sender_id !== uid &&
+          (!lastRead || new Date(c.last_message_at) > new Date(lastRead));
+        var lastMsgSeenByPartner = c.last_message_sender_id === uid &&
+          partnerRead && c.last_message_at &&
+          new Date(partnerRead) >= new Date(c.last_message_at);
+        return Object.assign({}, c, {
+          partner: partner,
+          hasUnread: hasUnread,
+          lastReadAt: lastRead,
+          partnerLastReadAt: partnerRead || null,
+          lastMsgSeenByPartner: !!lastMsgSeenByPartner,
+        });
+      }
+      setConversations(function (cs) { return cs.map(patch); });
+      setRequests(function (rs) { return rs.map(patch); });
+    }).catch(function (e) {
+      console.warn("[useDMs] phase-2 enrich failed:", e);
     });
 
-    // Pins + mutes — fire-and-forget so the list paints fast; result
-    // populates state when it lands and re-renders pick up the state.
+    // Pins + mutes — also fire-and-forget; result populates state
+    // independently when it lands.
     D.fetchPinnedConversationIds(uid).then(function (pr) {
       if (pr && pr.data) setPinnedConvIds(pr.data.map(function (p) { return p.conversation_id; }));
     });
     D.fetchMutedConversationIds(uid).then(function (mr) {
       if (mr && mr.data) setMutedConvIds(mr.data.map(function (m) { return m.conversation_id; }));
     });
-
-    function enrich(c) {
-      var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
-      var partner = partnerMap[pid] || { id: pid, name: "Player", avatar: "PL" };
-      var lastRead = readMap[c.id];
-      var partnerRead = partnerReadMap[c.id];
-      var hasUnread = c.status === "accepted" && c.last_message_sender_id !== uid &&
-        (!lastRead || new Date(c.last_message_at) > new Date(lastRead));
-      // "Seen" indicator in the list: my last message is shown as seen
-      // when I sent it AND the partner's last_read_at is >= the message's
-      // timestamp. Otherwise we show "sent" (single check).
-      var lastMsgSeenByPartner = c.last_message_sender_id === uid &&
-        partnerRead && c.last_message_at &&
-        new Date(partnerRead) >= new Date(c.last_message_at);
-      return Object.assign({}, c, {
-        partner: partner,
-        hasUnread: hasUnread,
-        lastReadAt: lastRead,
-        partnerLastReadAt: partnerRead || null,
-        lastMsgSeenByPartner: !!lastMsgSeenByPartner,
-      });
-    }
-
-    setConversations(accepted.concat(pendingOut).map(enrich));
-    setRequests(pendingIn.map(enrich));
-    setConversationsLoaded(true);
   }
 
   // ── Pin / unpin actions ────────────────────────────────────────────────
@@ -1041,7 +1073,15 @@ export function useDMs(opts) {
   }
 
   return {
-    conversations: conversations, requests: requests, conversationsLoaded: conversationsLoaded,
+    // Filter blocked partners out of the visible lists. Asymmetric
+    // block — the row stays in the DB, we just don't render it.
+    conversations: blockedUserIds.length
+      ? conversations.filter(function (c) { return !c.partner || blockedUserIds.indexOf(c.partner.id) < 0; })
+      : conversations,
+    requests: blockedUserIds.length
+      ? requests.filter(function (r) { return !r.partner || blockedUserIds.indexOf(r.partner.id) < 0; })
+      : requests,
+    conversationsLoaded: conversationsLoaded,
     activeConv: activeConv,
     threadMessages: threadMessages, reactions: reactions,
     threadLoading: threadLoading, msgDraft: msgDraft, setMsgDraft: setMsgDraft, sending: sending,
