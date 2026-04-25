@@ -92,9 +92,11 @@ expired   → terminal        (unverified, no stats)
 | `voided` | No | No | No |
 | `expired` | No | No | No |
 
-### Current ranking formula — ELO (Module 5)
+### CourtSync Rating — formula (Module 7.7)
 
-Real ELO. Standard formula, single source of truth (`apply_match_outcome(p_match_id text)` SECURITY DEFINER RPC). Both `bump_stats_for_match(uuid)` and `confirm_match_and_update_stats(text)` delegate to it.
+> **Naming rule** — this is "CourtSync Rating", **not** UTR or any official tennis-federation ranking. The product never claims to be governed by an external rating body.
+
+Standard Elo, single source of truth: `apply_match_outcome(p_match_id text)` SECURITY DEFINER RPC. Both `bump_stats_for_match(uuid)` and `confirm_match_and_update_stats(text)` delegate to it.
 
 ```
 expected_A   = 1 / (1 + 10^((rating_B - rating_A) / 400))
@@ -102,21 +104,88 @@ score_A      = 1 if A won else 0
 new_rating_A = max(0, rating_A + K_A * (score_A - expected_A))   (rounded int)
 ```
 
-Where:
-- `K_A = 32` if A's `matches_played < 20` (provisional)
-- `K_A = 16` once A has 20+ confirmed matches (settled)
+Each player applies their **own K** independently — a provisional winner moves more than the established loser they just beat. This is the calibration-without-destabilising-veterans rule.
 
-Each player has their own K-factor. A settled veteran vs a brand-new player both move at their own appropriate pace — the new player's rating shifts more, the veteran's less.
+#### Opponent-strength asymmetry
 
-**Initial rating** is 1000 (set at signup via `defaultProfile`).
+Because the formula is opponent-strength-weighted (the `(rating_B - rating_A)` term), the same `K` produces asymmetric movement based on who you played:
+- **Upset win** (lower beats higher) → larger gain
+- **Expected win** (higher beats lower) → smaller gain
+- **Unexpected loss** (higher loses to lower) → larger loss
+- **Expected loss** (lower loses to higher) → smaller loss
 
-**Casual matches** (no `opponent_id`) are no-ops in `apply_match_outcome` — no rating change ever. Only ranked matches (linked opponent + confirmed) move the number.
+Example at K=24: equal ratings → ±12. 1100 beats 1500 → +21 / -21. 1500 beats 1100 → +3 / -3. The bigger the upset, the bigger the swing.
+
+#### K-factor table (per player, calibration-aware)
+
+| `confirmed_ranked_match_count` | Status | K |
+|---|---|---|
+| 0–2 | provisional | **40** |
+| 3–4 | provisional | **32** |
+| 5+ | established | **24** |
+| (future tier, not in V1) | highly established | 16 |
+
+#### Initial rating bands (per skill level)
+
+| Self-assessed skill | Starting rating | Band (when displayed level is derived from rating) |
+|---|---|---|
+| Beginner 1     | **800**  | < 900 |
+| Beginner 2     | **1000** | 900–1099 |
+| Intermediate 1 | **1200** | 1100–1299 |
+| Intermediate 2 | **1400** | 1300–1499 |
+| Advanced 1     | **1600** | 1500–1699 |
+| Advanced 2     | **1800** | 1700+ |
+
+A user picks one of these levels during onboarding. The `initialize_rating(p_skill text)` SECURITY DEFINER RPC validates the choice and writes `starting_skill_level` + `initial_rating` + `ranking_points` + `skill` in one go. Errors with "already initialized" if called twice.
+
+#### Casual matches and other exclusions
+
+`apply_match_outcome` only touches rating when **all** of the following are true:
+- `match_type = 'ranked'`
+- `status = 'confirmed'`
+- `opponent_id` is set (real CourtSync user on both sides)
+- the match is not voided / expired
+- (when `completion_type` is wired into the DB layer in a follow-up: `completion_type` is not `'time_limited'` or `'retired'`)
+
+Today the time-limited / retired path is enforced upstream by ScoreModal Slice E — partial scores are filed as `match_type='casual'` so they never reach the rating engine. The JS `isRatingEligibleMatch(match)` helper in `src/features/rating/utils/ratingSystem.js` documents the full predicate.
 
 **Concurrency**: the RPC takes `FOR UPDATE` on both profile rows in id-order before reading the current ratings. Two concurrent confirmations involving the same player can't race; deadlocks between two matches involving the same pair are avoided.
 
-### Provisional rating period
+### Calibration / provisional period (Module 7.7)
 
-A profile is *provisional* while `matches_played < 20`. Surfaced in the UI as an orange "⚖ Provisional · N matches to settle" pill on both own and public profiles. After 20 confirmed matches the pill disappears and the K-factor drops from 32 → 16. Constants in `src/features/profile/utils/profileStats.js` (`PROVISIONAL_THRESHOLD`).
+A profile is *provisional* while `confirmed_ranked_match_count < 5`. The first 5 rating-eligible matches are **calibration matches** — K is higher (40 / 32) so a player whose self-assessment was off recovers fast. After 5, `rating_status` flips to `'established'` and K drops to 24.
+
+Surfaces:
+- ProfileHero / HomeHero show an orange `CALIBRATION X / 5` strip below the rating.
+- `provisionalLabel(profile)` returns `Provisional · N match(es) to calibrate` for the legacy text caption.
+- `RatingInfoModal` explains the rule under the "Calibration" + "Provisional vs Established" sections.
+
+Constants live in `src/features/rating/constants.js` (`PROVISIONAL_THRESHOLD = 5`, `K_FACTORS = { 40, 32, 24, 16 }`); legacy `profileStats.js` re-exports the same threshold so older callers keep working.
+
+### Skill-level lock (Module 7.7)
+
+The user's `starting_skill_level` is set once during onboarding and **locks** automatically the first time `apply_match_outcome` runs against a confirmed ranked match in which they participated. The lock is enforced two ways:
+
+1. **DB layer** — `profiles_locked_columns_guard` rejects client UPDATEs to `starting_skill_level` / `initial_rating` / `skill_level_locked` / `skill_level_locked_at` / `rating_status` / `confirmed_ranked_match_count` always, and rejects UPDATEs to `skill` once `skill_level_locked = true`. SECURITY DEFINER paths bypass.
+2. **UI layer** — `SettingsScreen` greys out the skill picker when locked and shows a "WHY LOCKED" hairline-strip explanation. The save handler omits `skill` from the upsert when locked so even a drift bug couldn't accidentally fire the guard.
+
+The user can NEVER manually edit their starting skill level after lock. The displayed level (the `skill` column) does still move with their rating, but it's server-derived from `ranking_points` via the rating-band table inside `apply_match_outcome` — not user-editable.
+
+### Displayed-level derivation + hysteresis
+
+The displayed skill (`profile.skill`) is recomputed inside `apply_match_outcome` after every rating-eligible match using the band table above + `_derive_displayed_skill(p_rating int, p_prev_skill text)`. **Promotion** is immediate the moment rating crosses the next band's floor. **Demotion** is buffered: the displayed level only falls if the new rating is more than **50 points** below the previous band's floor. This prevents ping-ponging between levels on a single unlucky result. The JS mirror is `getDisplayedSkillLevelFromRating(rating, prevDisplayed)` in `ratingSystem.js`.
+
+### Uninitialised profile rule
+
+A user whose `initial_rating IS NULL` has not yet picked a starting skill. ProfileHero / HomeHero render a "SET YOUR STARTING LEVEL" hairline strip instead of a fake `1000` number, and `useMatchHistory.submitMatch` returns `{ error: 'rating_uninitialised', message }` for any ranked submission attempt. Casual logging is unaffected.
+
+### Deferred follow-ups (P1 — required before "production-ready" rating)
+
+The Module 7.7 foundation deliberately ships without these. Each is a known gap:
+
+- **Rating-event ledger.** `apply_match_outcome` mutates `ranking_points` in place; there's no audit trail of which match contributed which delta. A `rating_events` table (player_id, match_id, old_rating, new_rating, rating_delta, reason, created_at) is required before we can trustfully recalculate or roll back.
+- **Recalc-on-rollback.** When a previously-confirmed match is later voided / disputed back to a non-final state, the rating impact is **not** rolled back today. Mirrors the existing v1 ELO behaviour. Fix follows the ledger.
+- **Admin reset path.** A future `admin_reset_rating(p_user_id, p_starting_skill text)` RPC for clearly-mis-rated accounts. Not exposed to normal users; not in V1.
 
 ### Confirmation rate (trust signal)
 
@@ -302,3 +371,4 @@ See `docs/leagues-and-seasons.md` for the full spec.
 - v5 — Match-type separation (2026-04-25). Made the ranked-vs-casual distinction explicit via `match_history.match_type` ('ranked' | 'casual') instead of inferring it from `tourn_name` + `opponent_id`. Server `apply_match_outcome` short-circuits for casual matches — single point of control for "what affects Elo". `validate_match_league` now requires `match_type='ranked'` for league matches. Backfilled every legacy row via the prior heuristic so player Elo / W/L numbers are unchanged.
 - v6 — League mode (2026-04-25). Replaced the hardcoded `match_type='ranked'` requirement on league matches with a per-league `leagues.mode` column (`'ranked'` | `'casual'`). Trigger now compares `match_type` against `league.mode`, allowing casual leagues to host casual matches with their own per-league standings (no global Elo impact). ScoreModal filters its league selector by mode + viewer + opponent membership; CreateLeagueModal exposes the mode choice (locked at creation).
 - v7 — Score validity (2026-04-25, Module 7.6). Added a three-layer score validator: pure client utility (`tennisScoreValidation.js`, 74 unit tests, canonical rules), service-layer guard (`submitMatch` / `resubmitMatch` re-run the validator after match-type clamping), and DB BEFORE-INSERT trigger (`validate_match_score`, mirrors the rules in PL/pgSQL, strict for ranked confirmed/pending, permissive for casual). Introduced explicit `completion_type` UI toggle (Completed / Time-limited / Retired) on casual matches so partial scores can be intentionally logged. Ranked attempts with partial scores surface a "Save as casual time-limited" CTA instead of being silently downgraded or silently rejected. League `match_format` and `tiebreak_format` columns now drive validator behaviour (final-set match-tiebreak gated to `super_tiebreak_final` leagues).
+- v8 — CourtSync Rating foundation (2026-04-27, Module 7.7). Renamed "Ranking points" → "CourtSync Rating" in user-facing copy (NOT UTR / NOT a federation ranking). Replaced the flat 1000-for-everyone initial rating with six per-skill bands (800 / 1000 / 1200 / 1400 / 1600 / 1800). Replaced the 20-match settled period with a 5-match calibration window using a 40 / 32 / 24 K-table (provisional 0–2 / provisional 3–4 / established 5+). Each player still applies their own K, so opponent-strength asymmetry stays intact (upset wins gain more, expected wins gain less, etc). New profile columns: `starting_skill_level` / `initial_rating` / `skill_level_locked` / `skill_level_locked_at` / `rating_status` / `confirmed_ranked_match_count`, all locked from client writes. New `initialize_rating(p_skill text)` SECURITY DEFINER RPC bootstraps a profile from onboarding. `apply_match_outcome` rewritten to read the new K-table, increment `confirmed_ranked_match_count`, flip `rating_status` at 5, auto-lock skill on first confirmed ranked match, and derive the displayed `skill` column from `ranking_points` using the band table + 50-point demotion hysteresis (immediate promotion). Pure-JS mirror in `src/features/rating/utils/ratingSystem.js` (80 unit tests). New `RatingInfoModal` (10 sections including the "Opponent strength" section per supplement) is reachable via a `(i)` icon next to the rating eyebrow on Profile + Home heroes. Onboarding step 1 now drives `initialize_rating`. Settings disables skill editing once locked. Uninitialised profiles never display a fake rating and can't log ranked matches. Deferred follow-ups documented inline: rating-event ledger, recalc-on-rollback, admin reset path.
