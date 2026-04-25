@@ -181,39 +181,45 @@ export default function MapTab({
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
       {(function(){
-        // v4 — ditch box-shadow entirely. Inset shadows blur INWARD,
-        // which puts the darkest band ~30-40px from the edge instead
-        // of AT the edge. Real Strava/Apple Maps vignettes are radial
-        // gradients painted across the whole overlay: transparent
-        // centre → solid dark corners. The edge IS the darkest part,
-        // which is what makes them look proper.
+        // v5 — total rethink. v4 used a relative-percentage radial
+        // gradient which scales with viewport, so at wide screens the
+        // dark band sits ~150-300px from the edge as a soft halo
+        // while the actual edge stays bright. The user reported it
+        // wasn't reading at all.
         //
-        // Two stacked radial gradients:
-        //   (a) main ellipse vignette — gentle falloff, biases corners
-        //   (b) edge bias — a four-side gradient ring that bites a
-        //       little harder so straight edges (not just corners)
-        //       darken visibly
-        // Theme-aware intensity (dark themes need bigger contrast since
-        // the basemap is already dark). Plus a 1px inset hairline to
-        // crisp the very edge.
+        // v5 uses four FIXED-PIXEL linear-gradient edge strips, each
+        // anchored to one side (top/right/bottom/left). Each is ~100px
+        // deep, dark at the edge, fades to transparent inward. Where
+        // two strips overlap (corners) the alpha compounds → naturally
+        // darker corners → genuine vignette feel that doesn't depend
+        // on viewport size or basemap colour.
+        //
+        // Pointer-events:none so all clicks pass through to Leaflet.
+        // Theme-aware intensity. z-300 (above map content, below all
+        // chrome which lives at 500+).
         var dark = theme === "hard-court" || theme === "night-court";
-        var corner = dark ? "rgba(0,0,0,0.65)"   : "rgba(20,18,17,0.45)";
-        var midRim = dark ? "rgba(0,0,0,0.32)"   : "rgba(20,18,17,0.18)";
-        var hairline = dark ? "rgba(0,0,0,0.7)"  : "rgba(20,18,17,0.35)";
+        // Each stop: at-edge / mid / fully-transparent. The mid stop
+        // is what gives the falloff its s-curve feel.
+        var c0 = dark ? "rgba(0,0,0,0.85)"   : "rgba(15,14,13,0.55)";
+        var c1 = dark ? "rgba(0,0,0,0.40)"   : "rgba(15,14,13,0.22)";
+        var c2 = "transparent";
+        var depth = "100px"; // how far the fade reaches inward
+        var mid   = "32px";  // where the mid-stop sits
+        // Each strip is a multi-background entry: <gradient> <position> / <size> no-repeat
+        function strip(dir, pos, size){
+          return "linear-gradient(" + dir + ", " + c0 + ", " + c1 + " " + mid + ", " + c2 + " " + depth + ") " +
+                 pos + " / " + size + " no-repeat";
+        }
         return (
           <div aria-hidden="true"
             style={{
               position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
-              // Layer order in CSS background: first listed paints on top.
-              backgroundImage:
-                // Edge ring — bias along the four straight edges so they
-                // darken (not just corners).
-                "radial-gradient(ellipse 90% 90% at 50% 50%, " +
-                  "transparent 70%, " + midRim + " 100%), " +
-                // Main vignette — wide soft falloff from centre to corners.
-                "radial-gradient(ellipse 70% 80% at 50% 50%, " +
-                  "transparent 55%, " + corner + " 100%)",
-              boxShadow: "inset 0 0 0 1px " + hairline,
+              backgroundImage: [
+                strip("to bottom", "0 0",    "100% " + depth), // top strip
+                strip("to top",    "0 100%", "100% " + depth), // bottom strip
+                strip("to right",  "0 0",    depth + " 100%"), // left strip
+                strip("to left",   "100% 0", depth + " 100%"), // right strip
+              ].join(", "),
             }}/>
         );
       })()}
