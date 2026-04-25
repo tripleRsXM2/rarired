@@ -66,11 +66,11 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `map_layer_toggled` | User flips a switch in the layers panel (homes / courts / activity / mapTheme) | `layer` ("homes" \| "courts" \| "activity" \| "mapTheme"), `value` (boolean for toggles, "auto"\|"light"\|"dark" for mapTheme) |
 | `map_courts_expanded` | User taps "Show all N courts ↓" in the zone side panel (zones with >5 venues default to a 4-court collapsed view on mobile) | `zone_id`, `total` (number of courts in the zone) |
 | `play_match_cta_tapped` | User taps the "Play Match" CTA at the bottom of the map. Opens the wizard. | `has_zone`, `has_court` |
-| `play_match_step_entered` | Wizard advances to a step (incl. initial open) | `step` (0=zone, 1=court, 2=player, 3=confirm) |
+| `play_match_step_entered` | Wizard advances to a step (incl. initial open) | `step` (0=zone, 1=court, 2=player) |
 | `play_match_zone_picked` | User picks a zone in step 1 | `zone_id` |
 | `play_match_court_picked` | User picks a court in step 2 | `zone_id`, `court_name` |
-| `play_match_player_picked` | User taps "Continue" on the player picker (step 3) | `player_count`, `scope` ("zone"\|"everywhere") |
-| `play_match_invite_sent` | User taps "Send Invite" on step 4 | `zone_id`, `court_name`, `partner_count`, `scope` |
+| `play_match_player_picked` | User taps "Send invite →" on the player picker (fires alongside `play_match_invite_sent`) | `player_count`, `scope` ("zone"\|"everywhere") |
+| `play_match_invite_sent` | User taps "Send invite →" — wizard hands the partners + ctx to the DM pipeline | `zone_id`, `court_name`, `partner_count`, `scope` |
 | `play_match_cancelled` | User dismisses the wizard via close, back, or backdrop | `step` (current), `last_completed` (step − 1) |
 
 ### Reserved (defined but not fired until later modules)

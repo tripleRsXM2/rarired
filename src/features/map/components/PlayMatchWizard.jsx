@@ -26,7 +26,12 @@ import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "..
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { track } from "../../../lib/analytics.js";
 
-var TOTAL_STEPS = 4;
+// Three steps now: zone → court → player(s). The old step-4 confirm
+// screen was dropped because it just echoed the draft the DM composer
+// already shows. Council call: trust the user; the DM is the natural
+// confirmation. Also harmonises with the side-panel "Message" path
+// which goes straight to the DM with no extra confirm.
+var TOTAL_STEPS = 3;
 var MAX_SELECT  = 3; // viewer + 3 others = doubles
 
 export default function PlayMatchWizard({
@@ -144,16 +149,15 @@ export default function PlayMatchWizard({
       return prev.concat([p.id]);
     });
   }
-  function confirmPlayers(){
-    if(!selectedIds.length) return;
-    track("play_match_player_picked", { player_count: selectedIds.length, scope: scope });
-    go(3);
-  }
   function sendInvite(){
     var partners = selectedIds.map(function(id){
       return players.find(function(p){ return p.id === id; });
     }).filter(Boolean);
     if(!partners.length) return;
+    // Funnel: emit player_picked too so we keep the existing
+    // step-completion event even though the dedicated confirm step
+    // is gone.
+    track("play_match_player_picked", { player_count: partners.length, scope: scope });
     var zone = ZONES.find(function(z){ return z.id === zoneId; });
     var ctx = {
       venue: courtName || (zone && zone.name) || "",
@@ -180,9 +184,6 @@ export default function PlayMatchWizard({
 
   var zone   = zoneId ? ZONES.find(function(z){ return z.id === zoneId; }) : null;
   var courts = zoneId ? courtsInZone(zoneId) : [];
-  var selectedPlayers = selectedIds.map(function(id){
-    return players.find(function(p){ return p.id === id; });
-  }).filter(Boolean);
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Play Match"
@@ -264,10 +265,10 @@ export default function PlayMatchWizard({
           padding: "62px 28px 0",
           display:"flex", gap: 5,
         }}>
-          {[0,1,2,3].map(function(i){
+          {[0,1,2].map(function(i){
             return (
               <div key={i} style={{
-                width: 22, height: 3, borderRadius: 2,
+                width: 28, height: 3, borderRadius: 2,
                 background: i <= step ? t.text : t.border,
                 transition: "background 0.2s",
               }}/>
@@ -293,7 +294,6 @@ export default function PlayMatchWizard({
             {step === 0 && "Where do you want to play?"}
             {step === 1 && "Which court?"}
             {step === 2 && "Who do you want to play with?"}
-            {step === 3 && "Send invite"}
           </div>
         </div>
 
@@ -560,74 +560,12 @@ export default function PlayMatchWizard({
             </div>
           )}
 
-          {/* Step 3 — confirm + send */}
-          {step === 3 && (
-            <div style={{ display:"flex", flexDirection:"column", gap: 14 }}>
-              {/* Venue summary */}
-              <div style={{
-                padding:"12px 14px", borderRadius: 10,
-                background: t.bgTertiary,
-                display:"flex", flexDirection:"column", gap: 6,
-              }}>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                  textTransform:"uppercase", color: t.textTertiary,
-                }}>Venue</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing:"-0.01em" }}>
-                  {courtName || (zone && zone.name)}
-                </div>
-                <div style={{ fontSize: 11, color: t.textSecondary }}>
-                  {zone && zone.name}{courtName ? " · " + courtName : ""}
-                </div>
-              </div>
-
-              {/* Recipients */}
-              <div>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                  textTransform:"uppercase", color: t.textTertiary, marginBottom: 8,
-                }}>
-                  {selectedPlayers.length === 1 ? "Sending to" : "Sending to · group"}
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap: 4 }}>
-                  {selectedPlayers.map(function(p){
-                    return (
-                      <div key={p.id} style={{
-                        display:"flex", alignItems:"center", gap: 10,
-                        padding:"6px 0",
-                      }}>
-                        <PlayerAvatar size={28} profile={p}/>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>
-                          {p.name || p.username || p.full_name || "Player"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Message preview */}
-              <div>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                  textTransform:"uppercase", color: t.textTertiary, marginBottom: 8,
-                }}>Message preview</div>
-                <div style={{
-                  padding:"10px 12px", borderRadius: 10,
-                  background: t.bgTertiary,
-                  fontSize: 13, lineHeight: 1.45, color: t.text,
-                }}>
-                  {previewInviteText({ partners: selectedPlayers, court: courtName, zone: zone })}
-                </div>
-                <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 6 }}>
-                  You can edit before sending.
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Footer — step-dependent action */}
+        {/* Footer — Send invite directly from step 2 (player picker).
+            The old step 3 confirm screen was dropped: the DM composer
+            already shows the same draft in editable form, so an extra
+            preview screen is dead weight. Council call. */}
         {step === 2 && (
           <div style={{
             padding: "12px 16px",
@@ -635,47 +573,23 @@ export default function PlayMatchWizard({
             display:"flex", gap:8, justifyContent:"space-between", alignItems:"center",
           }}>
             <span style={{ fontSize: 11, color: t.textSecondary }}>
-              {selectedIds.length === 0 ? "Pick at least one" : selectedIds.length + " selected"}
+              {selectedIds.length === 0
+                ? "Pick at least one"
+                : (selectedIds.length === 1 ? "1 player selected" : selectedIds.length + " players selected")}
             </span>
-            <button type="button" onClick={confirmPlayers}
+            <button type="button" onClick={sendInvite}
               disabled={selectedIds.length === 0}
               style={{
-                padding:"10px 22px", borderRadius: 10,
-                background: selectedIds.length ? t.text : t.border,
-                color: selectedIds.length ? t.bg : t.textTertiary,
+                padding:"11px 22px", borderRadius: 10,
+                background: selectedIds.length ? t.accent : t.border,
+                color: selectedIds.length ? (t.accentText || "#fff") : t.textTertiary,
                 border:"none",
                 fontSize: 13, fontWeight: 800, letterSpacing:"0.02em",
                 cursor: selectedIds.length ? "pointer" : "not-allowed",
-                transition: "background 0.15s",
+                boxShadow: selectedIds.length ? "0 2px 6px rgba(20,18,17,0.18)" : "none",
+                transition: "background 0.15s, box-shadow 0.15s",
               }}>
-              Continue →
-            </button>
-          </div>
-        )}
-        {step === 3 && (
-          <div style={{
-            padding: "12px 16px",
-            borderTop: "1px solid " + t.border,
-            display:"flex", gap:8, justifyContent:"flex-end",
-          }}>
-            <button type="button" onClick={cancel}
-              style={{
-                padding:"10px 18px", borderRadius: 10,
-                background:"transparent", border:"1px solid "+t.border,
-                color:t.text, fontSize: 13, fontWeight: 700, cursor:"pointer",
-              }}>
-              Cancel
-            </button>
-            <button type="button" onClick={sendInvite}
-              style={{
-                padding:"10px 22px", borderRadius: 10,
-                background: t.accent,
-                color: t.accentText || "#fff", border:"none",
-                fontSize: 13, fontWeight: 800, letterSpacing:"0.02em",
-                cursor:"pointer",
-                boxShadow:"0 2px 6px rgba(20,18,17,0.18)",
-              }}>
-              Send Invite
+              Send invite →
             </button>
           </div>
         )}
