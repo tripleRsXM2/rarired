@@ -194,7 +194,12 @@ export default function App(){
           matchHistory.loadHistory(supabaseUser.id),
           social.loadSocial(supabaseUser.id, res.profile),
           notifications.loadNotifications(supabaseUser.id),
-          dms.loadConversations(),
+          // Pass user.id explicitly — bootstrap fires before the
+          // SIGNED_IN render lands, so the hook's authUser closure can
+          // still be null at this moment. Other loaders already do
+          // this; dms was the lone outlier and that's why /people/messages
+          // could stay stuck on the skeleton after a hard refresh.
+          dms.loadConversations(supabaseUser.id),
           challenges.loadChallenges(supabaseUser.id),
         ]);
         if(res.isNew&&isFresh)currentUser.triggerOnboarding();

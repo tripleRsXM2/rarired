@@ -119,9 +119,20 @@ export function useDMs(opts) {
 
   // ── Load ────────────────────────────────────────────────────────────────
 
-  async function loadConversations() {
-    if (!authUser) return;
-    var uid = authUser.id;
+  // userId may be passed explicitly by the bootstrap path, which fires
+  // before the SIGNED_IN render has settled and the hook's authUser
+  // prop is still null. Falls back to the closure for callers that
+  // already have a stable hook (e.g. realtime handlers).
+  //
+  // Without the explicit arg, /people/messages stayed stuck on the
+  // skeleton after a hard refresh: the coordinator captured a stale
+  // authUser=null closure, the early-return silently fired, and
+  // conversationsLoaded never flipped true until something else
+  // (e.g. clicking a Friends row → openOrStartConversation) triggered
+  // a second load with the current authUser.
+  async function loadConversations(userIdArg) {
+    var uid = userIdArg || (authUser && authUser.id);
+    if (!uid) return;
     var r = await D.fetchConversations(uid);
     var all = r.data || [];
 
