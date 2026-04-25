@@ -52,17 +52,16 @@ export default function ScoreModal({
   // the stored winner — we don't want to hard-block.
   var [mismatchAck,setMismatchAck]=useState(false);
 
-  if(!scoreModal) return null;
-
-  var isResubmit=!!scoreModal.resubmit;
-  var isVerified=isResubmit?true:!!casualOppId;
-
   // Module 7.5: opponent's active league memberships (subset of viewer's
   // leagues). Refetched whenever the linked opponent changes — used by the
   // league selector below to show only leagues both players are members of.
+  // MUST be declared above the early-return below so hook order is stable
+  // across modal open/close cycles (rules of hooks).
   var [opponentLeagueIds, setOpponentLeagueIds] = useState(new Set());
+  var isVerifiedForEffect = scoreModal ? (!!scoreModal.resubmit || !!casualOppId) : false;
   useEffect(function () {
-    if (!isVerified || !casualOppId) { setOpponentLeagueIds(new Set()); return; }
+    if (!scoreModal) { setOpponentLeagueIds(new Set()); return; }
+    if (!isVerifiedForEffect || !casualOppId) { setOpponentLeagueIds(new Set()); return; }
     var candidateIds = (myLeagues || [])
       .filter(function (lg) { return lg.status === "active" && lg.my_status === "active"; })
       .map(function (lg) { return lg.id; });
@@ -75,7 +74,12 @@ export default function ScoreModal({
     });
     return function () { alive = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [casualOppId, isVerified, (myLeagues || []).length]);
+  }, [casualOppId, isVerifiedForEffect, !!scoreModal, (myLeagues || []).length]);
+
+  if(!scoreModal) return null;
+
+  var isResubmit=!!scoreModal.resubmit;
+  var isVerified=isResubmit?true:!!casualOppId;
 
   // Compute who the sets say won, in the submitter's frame:
   // "you" > "them" = submitter win. Returns "win" | "loss" | null (tied/empty).
