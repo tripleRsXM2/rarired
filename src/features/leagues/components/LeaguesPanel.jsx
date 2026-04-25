@@ -17,6 +17,7 @@ import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import CreateLeagueModal from "./CreateLeagueModal.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 import LeagueNextOpponent from "./LeagueNextOpponent.jsx";
+import LeagueRivalryCallout from "./LeagueRivalryCallout.jsx";
 
 export default function LeaguesPanel({
   t, authUser,
@@ -358,6 +359,16 @@ function LeagueDetailView({
         authUser={authUser}
         league={league}
         detail={detail}
+        profileMap={profileMap}
+        history={history}
+        openChallenge={openChallenge}
+      />
+
+      {/* Slice 4 — retention callout: closest H2H rivalry within league */}
+      <LeagueRivalryCallout
+        t={t}
+        authUser={authUser}
+        league={league}
         profileMap={profileMap}
         history={history}
         openChallenge={openChallenge}
