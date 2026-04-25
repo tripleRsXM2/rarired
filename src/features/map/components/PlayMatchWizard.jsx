@@ -565,22 +565,22 @@ export default function PlayMatchWizard({
                         style={{
                           flexShrink: 0,
                           scrollSnapAlign: "start",
-                          width: 112,
-                          padding: "10px 6px 12px",
-                          borderRadius: 16,
+                          width: 88,
+                          padding: "8px 4px 10px",
+                          borderRadius: 14,
                           background: isSel ? hexToRgba(t.accent, 0.12) : "transparent",
                           border: "none",
                           cursor: disabled ? "not-allowed" : "pointer",
                           opacity: disabled ? 0.4 : 1,
                           display:"flex", flexDirection:"column",
-                          alignItems:"center", gap: 8,
+                          alignItems:"center", gap: 6,
                           transition: "background 0.15s",
                         }}>
                         {/* Avatar with selection ring */}
                         <div style={{
                           position:"relative",
-                          width: 80, height: 80,
-                          padding: isSel ? 4 : 0,
+                          width: 60, height: 60,
+                          padding: isSel ? 3 : 0,
                           borderRadius:"50%",
                           background: isSel ? t.accent : "transparent",
                           flexShrink: 0,
@@ -593,51 +593,45 @@ export default function PlayMatchWizard({
                             background: t.bgCard,
                             display:"flex", alignItems:"center", justifyContent:"center",
                           }}>
-                            <PlayerAvatar size={isSel ? 72 : 80} profile={p}/>
+                            <PlayerAvatar size={isSel ? 54 : 60} profile={p}/>
                           </div>
                           {isSel && (
                             <div style={{
-                              position:"absolute", bottom: 0, right: 0,
-                              width: 24, height: 24, borderRadius: "50%",
+                              position:"absolute", bottom: -2, right: -2,
+                              width: 20, height: 20, borderRadius: "50%",
                               background: t.accent, color: t.accentText || "#fff",
                               border: "2px solid " + t.bgCard,
                               display:"flex", alignItems:"center", justifyContent:"center",
-                              fontSize: 12, fontWeight: 900,
+                              fontSize: 10, fontWeight: 900,
                             }}>✓</div>
                           )}
                         </div>
                         {/* Name */}
                         <div style={{
                           width: "100%",
-                          fontSize: 12, fontWeight: 700,
+                          fontSize: 11, fontWeight: 700,
                           color: t.text, letterSpacing:"-0.01em",
-                          lineHeight: 1.2,
+                          lineHeight: 1.15,
                           textAlign:"center",
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                          padding: "0 4px",
+                          padding: "0 2px",
                         }}>
                           {firstName(p.name || p.username || p.full_name || "Player")}
                         </div>
                         {/* Skill pill */}
                         {(p.skill || p.skill_level) ? (
                           <span style={{
-                            padding: "2px 8px", borderRadius: 999,
+                            padding: "1px 6px", borderRadius: 999,
                             background: hexToRgba(t.bgCard, 0.78),
                             color: t.textSecondary,
-                            fontSize: 9.5, fontWeight: 800,
+                            fontSize: 8.5, fontWeight: 800,
                             letterSpacing:"0.04em",
                             textTransform:"uppercase",
                           }}>
                             {p.skill || p.skill_level}
                           </span>
                         ) : (
-                          <span style={{ height: 18 }}/>
-                        )}
-                        {p.playsHere && (
-                          <span style={{
-                            fontSize: 8.5, fontWeight: 800, color: t.accent,
-                            letterSpacing: "0.08em", textTransform:"uppercase",
-                          }}>· Plays here</span>
+                          <span style={{ height: 14 }}/>
                         )}
                       </button>
                     );
@@ -811,7 +805,7 @@ export default function PlayMatchWizard({
                         fontSize: 10, color: t.textTertiary,
                         marginTop: 6, letterSpacing:"0.02em",
                       }}>
-                        You can edit before sending in the next screen.
+                        This sends as a direct message to each player.
                       </div>
                     </div>
                   )}
