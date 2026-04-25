@@ -708,6 +708,10 @@ export default function App(){
             openChallenge={openChallenge}
             openConvertToMatch={openConvertToMatch}
             toast={toast}
+            /* Slice 4 (design overhaul) — Leagues retention surfaces
+               (next opponent / rivalry / standings deltas) read the
+               viewer's match history filtered by league_id. */
+            history={matchHistory.history}
           />
         )}
         {tab==="people"&&(
