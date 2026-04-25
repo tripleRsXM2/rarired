@@ -117,6 +117,10 @@ export default function LeafletMap({
   showCourts = true,
   showActivity = true,
   showZoneNames = true,
+  // When set (a venue name string), the map enters focus mode:
+  // the cluster group is hidden and only that one venue's marker
+  // is shown. Driven by the side panel's inline court selection.
+  focusedCourtName = null,
   // Map basemap override: "auto" follows app theme (default), "light"
   // forces positron, "dark" forces dark-matter. Lives in the cog
   // panel so users can read a dark map in a light app and vice versa.
@@ -139,6 +143,9 @@ export default function LeafletMap({
   // Court cluster group is held in a ref so the showCourts toggle can
   // add/remove the whole layer without rebuilding markers each flip.
   var courtClusterRef = useRef(null);
+  // Solo highlight marker shown when focusedCourtName is set —
+  // cluster hides, this single marker takes over.
+  var soloMarkerRef = useRef(null);
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
   // reads the latest callback — otherwise the first render's closure sticks.
@@ -318,17 +325,66 @@ export default function LeafletMap({
     });
   },[showZoneNames, theme, mapThemeOverride]);
 
-  // Add/remove the court cluster layer when the courts toggle flips.
+  // Court visibility — coordinates two independent toggles:
+  //   1. showCourts (layers panel) — hide the whole layer entirely
+  //   2. focusedCourtName (side panel pin) — show ONLY that venue
+  // Effective state:
+  //   - showCourts off                      → both hidden
+  //   - showCourts on, no focus             → cluster shown
+  //   - showCourts on, focus = "Foo Park"   → cluster hidden,
+  //                                           solo highlight marker
   useEffect(function(){
     var map = mapRef.current;
     var cluster = courtClusterRef.current;
     if(!map || !cluster) return;
-    if(showCourts){
+
+    var inFocus = !!focusedCourtName;
+    var showCluster = showCourts && !inFocus;
+    var showSolo    = showCourts && inFocus;
+
+    // Cluster visibility
+    if(showCluster){
       if(!map.hasLayer(cluster)) map.addLayer(cluster);
     } else {
       if(map.hasLayer(cluster)) map.removeLayer(cluster);
     }
-  },[showCourts]);
+
+    // Solo highlight marker — full-opacity court icon with an accent
+    // ring so it pops as "the pinned one". Reuses COURT_SVG to keep
+    // visual language consistent with the cluster's child markers.
+    if(soloMarkerRef.current){
+      map.removeLayer(soloMarkerRef.current);
+      soloMarkerRef.current = null;
+    }
+    if(showSolo){
+      var c = COURTS.find(function(x){ return x.name === focusedCourtName; });
+      if(c){
+        var html =
+          '<div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center">' +
+            '<div style="position:absolute;inset:0;border-radius:50%;border:2px solid rgba(20,18,17,0.92);' +
+              'box-shadow:0 2px 8px rgba(0,0,0,0.22),0 0 0 3px rgba(255,255,255,0.95)"></div>' +
+            '<div style="position:relative;width:26px;height:26px;border-radius:50%;background:#fff;' +
+              'display:flex;align-items:center;justify-content:center;color:#14110f">' +
+              '<div style="width:15px;height:15px">' + COURT_SVG + '</div>' +
+            '</div>' +
+          '</div>';
+        var m = L.marker([c.lat, c.lng], {
+          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[34,34], iconAnchor:[17,17] }),
+          zIndexOffset: 2000,
+          interactive: true,
+        });
+        m.bindTooltip(
+          '<div style="font:600 11px/1.3 system-ui,sans-serif"><b>' + c.name + '</b></div>',
+          { direction:"top", offset:[0,-14], opacity: 1 }
+        );
+        m.on("click", function(){
+          if(courtSelectRef.current) courtSelectRef.current(c);
+        });
+        m.addTo(map);
+        soloMarkerRef.current = m;
+      }
+    }
+  },[showCourts, focusedCourtName]);
 
   // Restyle zones when hover / selected change. Zone colors are always
   // shown — they're identifying chrome, not a heat overlay. (The earlier

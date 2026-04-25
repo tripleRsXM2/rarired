@@ -61,6 +61,15 @@ export default function MapTab({
   var [selected,setSelected]=useState(null);
   var [selectedCourt,setSelectedCourt]=useState(null);
   var [zoneActivity,setZoneActivity]=useState({});
+  // Inline court selection from the side panel (a venue name string).
+  // Distinct from `selectedCourt` above which is the full court object
+  // for the CourtInfoCard modal. When set, LeafletMap goes into focus
+  // mode: cluster hidden, only that one venue's marker shown — and
+  // the side panel header switches "Courts in zone" → "Courts here".
+  var [panelCourtName,setPanelCourtName]=useState(null);
+  // When the zone changes, drop any panel-court selection so we don't
+  // leak a stale venue name into a different zone's panel.
+  useEffect(function(){ setPanelCourtName(null); },[selected]);
   // Layer-panel state — independent toggles for the optional overlays
   // plus a basemap-theme override. Zone colors are NOT here; they're
   // permanent identifying chrome. Persisted to localStorage so a user's
@@ -165,6 +174,7 @@ export default function MapTab({
         showActivity={layers.activity}
         showZoneNames={layers.zoneNames}
         mapThemeOverride={layers.mapTheme}
+        focusedCourtName={panelCourtName}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
@@ -358,6 +368,8 @@ export default function MapTab({
         homeZone={homeZone}
         activity={selectedZone ? zoneActivity[selectedZone.id] : null}
         blockedUserIds={blockedUserIds}
+        panelCourtName={panelCourtName}
+        onPanelCourtChange={setPanelCourtName}
         onSetHome={handleSetHome}
         onClearHome={handleClearHome}
         onOpenProfile={function(uid){

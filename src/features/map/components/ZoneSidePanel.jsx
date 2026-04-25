@@ -39,23 +39,33 @@ export default function ZoneSidePanel({
   // the player-fetch services so blocked users are dropped before
   // they ever render.
   blockedUserIds,
+  // Court-selection state lifted to MapTab so LeafletMap can dim/
+  // hide non-selected venues when a court is pinned in the panel.
+  // panelCourtName is a venue name string (e.g. "Prince Alfred Park
+  // Tennis Courts") or null. onPanelCourtChange takes the new value.
+  panelCourtName,
+  onPanelCourtChange,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
 
-  // Single-selected court (by name) and multi-selected player ids.
-  // Local to the panel — if a user closes it we reset, which matches
-  // the user's mental model of "this is my current workspace".
-  var [selectedCourt, setSelectedCourt] = useState(null);
+  // Local alias to keep the rest of the file readable. Reads from
+  // props; writes go through the parent setter.
+  var selectedCourt = panelCourtName || null;
+  function setSelectedCourt(next){
+    var resolved = typeof next === "function" ? next(selectedCourt) : next;
+    if(onPanelCourtChange) onPanelCourtChange(resolved || null);
+  }
+
   var [selectedIds, setSelectedIds]     = useState([]);
   // Player list scope: "zone" (default, home_zone match in this zone)
   // or "everywhere" (whole user base, ranked the same way). Lets the
   // viewer pitch a match at a court to someone who isn't a local.
   var [scope, setScope] = useState("zone");
 
-  // Clear selection whenever the panel closes / switches zones.
+  // Clear player selection whenever the panel closes / switches zones.
+  // The parent owns panelCourtName and resets it on zone change too.
   useEffect(function () {
-    setSelectedCourt(null);
     setSelectedIds([]);
   }, [zone && zone.id]);
 
@@ -155,6 +165,15 @@ export default function ZoneSidePanel({
 
   var courts = courtsInZone(zone.id);
   var totalCourts = courts.reduce(function(n,c){ return n + c.courts; }, 0);
+  // When a venue is pinned in the panel, the stat-row "Courts" cell
+  // switches from the zone total to that venue's own court count
+  // (e.g. "6 · Courts here") so the user sees the playable size of
+  // the pinned location instead of the whole zone.
+  var pinnedCourt = selectedCourt
+    ? courts.find(function(c){ return c.name === selectedCourt; })
+    : null;
+  var courtsCellValue = pinnedCourt ? pinnedCourt.courts : totalCourts;
+  var courtsCellLabel = pinnedCourt ? "Courts here" : "Courts nearby";
   var isHome = homeZone === zone.id;
   var canSetHome = !!authUser;
 
@@ -249,8 +268,8 @@ export default function ZoneSidePanel({
         padding:"14px 20px", borderBottom:"1px solid "+t.border, gap:12,
       }}>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{totalCourts}</div>
-          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Courts nearby</div>
+          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{courtsCellValue}</div>
+          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>{courtsCellLabel}</div>
         </div>
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading ? "…" : displayPlayers.length}</div>
