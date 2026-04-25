@@ -6,6 +6,83 @@ The visual + structural compass for CourtSync. What the app should *feel* like, 
 
 If a design decision can't be traced to this doc, it shouldn't ship.
 
+## Visual reset (v2)
+
+The first overhaul (slices 1–5) reorganised information architecture but preserved the existing visual primitives: bordered cards, 10–14px rounded corners, 720px center rail, micro-eyebrow labels, conservative type sizing. The result was a tidier dashboard, not a different product. This v2 pass replaces the visual language itself.
+
+### What we are borrowing from Nike NRC / Nike App
+- **Display typography carrying the page** — the Hero number is the largest thing on the screen by a wide margin, not a stat tucked in a card.
+- **Borderless editorial composition** — content sits on the page, divided by negative space and hairline rules, not boxed cards.
+- **Full-bleed visual bands** — one or two moments per surface that break the center rail (typically a near-black band with white type) for emotional emphasis.
+- **Restrained color** — the accent appears in 1–2 places per screen at most. The rest of the page is monochrome (black / white / neutral grays). When the accent appears, it has meaning.
+- **Generous vertical rhythm** — 64–96px between major sections on desktop, 40–56px on mobile.
+
+### What we explicitly do not copy
+- No Nike logos, names, or assets of any kind.
+- No imagery scraped or fetched from Nike or any other brand.
+- No literal recreation of NRC screens or layouts.
+- No copyrighted photography. Premium feel rests on type + spacing + contrast.
+
+### What was wrong with the v1 visual language
+- Every section was a bordered card. The page read as "stack of rectangles".
+- Theme tokens like `bgCard`, `border`, and `r2:10` were applied to every new component.
+- Typography topped out at 38px. The Hero number was bigger than before but still timid for an athletic identity product.
+- Every component lived inside the 720px center rail. Nothing escaped it for emphasis.
+- Section labels stayed at 11px uppercase tracking — the existing eyebrow micro-label rhythm. Editorial section titles never appeared.
+- Spacing was tightened (slice 5A) but never expanded for breathing room.
+
+### New visual principles
+1. **Display typography is the chrome.** A hero number set at 88–96px with the right weight and tracking is more "product" than any decorative panel.
+2. **Borderless by default.** A card has to earn its border (e.g. a feed item with social actions). The Hero, the week strip, the activity list — all live on the page directly.
+3. **Full bleed for emotion.** One or two sections per surface escape the center rail and use a near-black band with white type. Sparingly used.
+4. **Restraint with the accent.** Accent green appears in maybe two places per screen — the primary CTA and the form-W chip. Everything else is ink black, neutral grays, and white.
+5. **Hairline dividers, not boxes.** When sections need separation, a 1px rule does it. Not a border, not a card.
+6. **Generous vertical rhythm.** Empty space communicates intention. Cramped layouts read as "SaaS dashboard"; spacious layouts read as "product I want to open".
+
+### New typography principles
+- **Display** — the hero metric. 80–96px desktop, 56–72px mobile. Weight 800. Tight tracking (-1px or tighter). `font-variant-numeric: tabular-nums`.
+- **Section title** — editorial section header. 22–28px desktop, 20–22px mobile. Weight 700. Used instead of the legacy 11px uppercase eyebrow when the section deserves emphasis.
+- **Eyebrow** — kept for true micro-labels (caption text under a number). 10–11px, weight 700, uppercase, 0.08em tracking.
+- **Body** — 14–15px desktop, 14px mobile. Weight 500.
+- **Caption / meta** — 11–12px, weight 500, textTertiary.
+
+### New spacing principles
+- **Major sections**: 64–96px between them on desktop, 40–56px on mobile.
+- **Inside a section**: 16–24px between blocks.
+- **Inside a row** (e.g. a feed list item): 8–12px.
+- **Above-the-fold mobile**: ONLY the Hero (greeting + number + form chips + primary CTA). Everything else is below the fold.
+- **Above-the-fold desktop**: Hero + the first hairline + the start of the next section.
+
+### New card / section principles
+| Treatment | Used for | Rules |
+|---|---|---|
+| Borderless section | Hero, week strip, activity list, league band | No border. No background fill. Lives on the page background. Optional hairline rule above or below. |
+| Full-bleed band | League moment, future "Today" prompt | Escapes the center rail. Near-black background (`#0A0A0A`). White type. Constrained inner content (max-width 720). |
+| Card with border | Feed-item with social actions, ScoreModal body, modals | Earns its border because it has its own internal interactivity. Stays bordered. |
+| Hairline divider | Section separator within a constrained block | 1px solid `t.border`, full-width-of-the-rail. Used instead of a card boundary when both sides of the rule belong to the same conceptual flow. |
+
+### Desktop vs mobile rules (v2)
+**Mobile (<1024px)**
+- Hero greeting at 28–32px, hero metric at 56–72px.
+- Single column. No center rail constraint at the page level — sections opt-in to constrained vs full-bleed.
+- One primary CTA per screen, generous tap target (≥44px height), centered or left-aligned with the metric.
+- Activity preview is max 3 rows, not 5. The full feed lives one tap away.
+
+**Desktop (≥1024px)**
+- Hero greeting 32–36px, hero metric 88–96px.
+- Constrained sections wrap at 720px with 24–32px horizontal padding.
+- Full-bleed bands extend the full width of `cs-center-col` (between sidebar and right-panel).
+- More vertical rhythm than mobile — 96px between major sections instead of 56.
+
+### Screens that need the biggest visual reset (in order)
+1. **Home** — currently the worst offender (stack of cards). Single biggest before/after impact.
+2. **Profile** — close second; ProfileHero and the leagues strip can adopt the same editorial language.
+3. **Log Match** — modal can be cleaner (display-sized score input, less form-feel).
+4. **League detail** — standings table is fine; the retention cards above can adopt editorial framing.
+5. **Feed (full view)** — borderless list with hairlines instead of bordered cards. FeedCard stays cardlike for the social-action context, but row spacing in the list view tightens.
+
+This v2 pass starts with **Home only** and stops there. Verification on a real device decides whether to roll the same language out to Profile / Log Match / League / Feed. We do not ship the same mistake of "redesign everything in one uncontrolled pass."
+
 ## Design north star
 
 > **"My tennis world, calm and clear."**
