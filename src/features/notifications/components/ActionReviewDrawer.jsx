@@ -3,6 +3,11 @@
 // Opens directly from the notification tray — no navigation required.
 // Displays original vs proposed comparison with diff highlighting, then lets
 // the user Accept, Counter-propose, or Void without leaving the current screen.
+//
+// Visual language: editorial — hairline strips, ALL-CAPS eyebrows at
+// 0.12–0.16em, tabular numerals for scores, no rounded card-on-card.
+// Matches the redesigned Home / Profile / ScoreModal vocabulary so the
+// trust moment reads as part of the same product.
 
 import { useState } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
@@ -13,20 +18,24 @@ import { avColor } from "../../../lib/utils/avatar.js";
 
 var NOTIF_META = {
   match_disputed: {
+    eyebrow:  "Disputed",
     title:    "Match result disputed",
     subtitle: function (name) { return name + " disputed your match result and submitted a correction."; },
   },
   match_correction_requested: {
+    eyebrow:  "Correction proposed",
     title:    "Score correction proposed",
     subtitle: function (name) { return name + " proposed a correction to your match result."; },
   },
   match_counter_proposed: {
+    eyebrow:  "Counter-proposal",
     title:    "Counter-proposal received",
     subtitle: function (name) { return name + " responded to your correction with a counter-proposal."; },
   },
   // Unified review flow — match_tag lands here too. No proposal yet; the user
   // is confirming the original logged match (or disputing / voiding it).
   match_tag: {
+    eyebrow:  "Confirm",
     title:    "Confirm this match",
     subtitle: function (name) { return name + " logged a match with you. Does this look right?"; },
   },
@@ -74,32 +83,44 @@ function Avatar({ name, size }) {
       width: size, height: size, borderRadius: "50%",
       background: avColor(name || "?"),
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.34, fontWeight: 700, color: "#fff", flexShrink: 0,
+      fontSize: size * 0.34, fontWeight: 800, color: "#fff", flexShrink: 0,
+      letterSpacing: "0.04em",
     }}>
       {(name || "?").slice(0, 2).toUpperCase()}
     </div>
   );
 }
 
-function FieldRow({ label, original, proposed, changed, t }) {
-  if (!original && !proposed) return null;
+// Editorial label/value row used inside ORIGINAL / PROPOSED columns.
+// One per field. Diff = orange "CHANGED" eyebrow on the right.
+function FieldRow({ label, value, changed, t }) {
+  if (!value) return null;
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 5 }}>
-      <span style={{ fontSize: 11, color: t.textTertiary, width: 44, flexShrink: 0, paddingTop: 1 }}>
+    <div style={{
+      display: "flex", alignItems: "baseline", justifyContent: "space-between",
+      gap: 8, padding: "8px 0",
+      borderTop: "1px solid " + t.border,
+    }}>
+      <span style={{
+        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: t.textTertiary, flexShrink: 0,
+      }}>
         {label}
       </span>
       <span style={{
-        fontSize: 13, fontWeight: changed ? 600 : 400,
-        color: changed ? t.text : t.textSecondary,
-        flex: 1,
+        fontSize: 13, color: changed ? t.text : t.textSecondary,
+        fontWeight: changed ? 800 : 500,
+        textAlign: "right", letterSpacing: "-0.1px",
+        fontVariantNumeric: "tabular-nums",
+        display: "flex", alignItems: "baseline", gap: 8,
       }}>
-        {proposed || "—"}
+        {value}
         {changed && (
           <span style={{
-            marginLeft: 7, fontSize: 10, fontWeight: 700,
-            color: t.orange, background: t.orange + "22",
-            padding: "1px 6px", borderRadius: 4, letterSpacing: "0.03em",
-            textTransform: "uppercase",
+            fontSize: 9, fontWeight: 800,
+            color: t.orange, letterSpacing: "0.16em",
+            textTransform: "uppercase", flexShrink: 0,
           }}>changed</span>
         )}
       </span>
@@ -107,20 +128,22 @@ function FieldRow({ label, original, proposed, changed, t }) {
   );
 }
 
-function DataCard({ title, accentColor, t, children }) {
+// Editorial hairline-strip section — used for LOGGED BY, REASON, AUTO-VOID,
+// ERROR. Replaces the old `bgTertiary + radius + border` cards.
+function HairlineStrip({ eyebrow, eyebrowColor, t, children, marginBottom }) {
   return (
     <div style={{
-      borderRadius: 10,
-      border: "1px solid " + (accentColor ? accentColor + "44" : t.border),
-      background: accentColor ? accentColor + "08" : t.bgTertiary,
-      padding: "13px 14px",
-      borderLeft: accentColor ? "3px solid " + accentColor : "3px solid " + t.border,
+      borderTop: "1px solid " + t.border,
+      paddingTop: 12,
+      paddingBottom: 12,
+      marginBottom: marginBottom == null ? 14 : marginBottom,
     }}>
       <div style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: accentColor || t.textTertiary,
-        marginBottom: 9,
-      }}>{title}</div>
+        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: eyebrowColor || t.textTertiary,
+        marginBottom: 6,
+      }}>{eyebrow}</div>
       {children}
     </div>
   );
@@ -157,7 +180,7 @@ export default function ActionReviewDrawer({
 
   var wouldAutoVoid = (match.revisionCount || 0) >= 3;
   var revisionLabel = (match.revisionCount || 0) > 0
-    ? "Round " + (match.revisionCount + 1) + " of 3"
+    ? "Round " + (match.revisionCount + 1) + " / 3"
     : null;
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -221,6 +244,10 @@ export default function ActionReviewDrawer({
     ? ([proposal.venue, proposal.court].filter(Boolean).join(" · ") || "—")
     : null;
 
+  // Eyebrow color for the header — match_tag is neutral, dispute/correction/
+  // counter use orange for "needs your attention".
+  var headerEyebrowColor = isMatchTag ? t.text : t.orange;
+
   return (
     // Backdrop — centered dialog (was bottom-sheet slide-up).
     <div
@@ -241,28 +268,35 @@ export default function ActionReviewDrawer({
         style={{
           background: t.modalBg,
           border: "1px solid " + t.border,
-          borderRadius: 16,
+          borderRadius: 14,
           width: "100%",
           maxWidth: 540,
           maxHeight: "92vh",
           overflowY: "auto",
         }}
       >
-        <div style={{ padding: "24px 22px 28px" }}>
+        <div style={{ padding: "26px 22px 26px" }}>
 
           {/* ── Header ───────────────────────────────────────────────────── */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: headerEyebrowColor, marginBottom: 6,
+              }}>
+                {meta.eyebrow}
+              </div>
               <h2 style={{
-                fontSize: 18, fontWeight: 700,
-                color: t.text, letterSpacing: "-0.4px",
-                margin: 0, marginBottom: 5,
+                fontSize: 22, fontWeight: 800,
+                color: t.text, letterSpacing: "-0.6px",
+                margin: 0, marginBottom: 4, lineHeight: 1.1,
               }}>
                 {meta.title}
               </h2>
               <p style={{
                 fontSize: 13, color: t.textSecondary,
-                margin: 0, lineHeight: 1.45,
+                margin: 0, lineHeight: 1.45, letterSpacing: "-0.1px",
               }}>
                 {meta.subtitle(fromName)}
               </p>
@@ -271,9 +305,10 @@ export default function ActionReviewDrawer({
               onClick={onClose}
               style={{
                 background: "none", border: "none",
-                color: t.textTertiary, fontSize: 20,
+                color: t.textTertiary, fontSize: 22,
                 padding: "0 0 0 12px", cursor: "pointer",
                 lineHeight: 1, flexShrink: 0,
+                fontWeight: 300,
                 transition: "color 0.13s",
               }}
               onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
@@ -281,155 +316,149 @@ export default function ActionReviewDrawer({
             >×</button>
           </div>
 
-          {/* ── Match context ─────────────────────────────────────────────── */}
+          {/* ── Match context — hairline strip with avatar + tabular result */}
           <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "12px 14px",
-            borderRadius: 10,
-            background: t.bgTertiary,
-            border: "1px solid " + t.border,
+            display: "flex", alignItems: "center", gap: 12,
+            paddingTop: 14, paddingBottom: 14,
+            borderTop: "1px solid " + t.border,
+            borderBottom: "1px solid " + t.border,
             marginBottom: 18,
           }}>
-            <Avatar name={fromName} size={36} />
+            <Avatar name={fromName} size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>
-                vs {fromName}
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase", color: t.textTertiary,
+                marginBottom: 3,
+              }}>
+                vs
               </div>
-              <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 2 }}>
-                {origDate}
+              <div style={{
+                fontSize: 16, fontWeight: 800, color: t.text,
+                letterSpacing: "-0.3px", lineHeight: 1.1,
+              }}>
+                {fromName}
+              </div>
+              <div style={{
+                fontSize: 11, color: t.textTertiary, marginTop: 4,
+                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+              }}>
+                <span>{origDate}</span>
                 {revisionLabel && (
                   <span style={{
-                    marginLeft: 8, fontSize: 10, fontWeight: 600,
-                    color: t.orange, background: t.orange + "20",
-                    padding: "1px 6px", borderRadius: 4,
-                  }}>{revisionLabel}</span>
+                    fontSize: 9, fontWeight: 800,
+                    color: t.orange, letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                  }}>· {revisionLabel}</span>
                 )}
               </div>
             </div>
             <div style={{
-              fontSize: 13, fontWeight: 700,
-              color: match.result === "win" ? t.green : t.red,
-              padding: "4px 10px",
-              borderRadius: 6,
-              background: (match.result === "win" ? t.green : t.red) + "18",
+              textAlign: "right", flexShrink: 0,
             }}>
-              {origResult}
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase", color: t.textTertiary,
+                marginBottom: 2,
+              }}>
+                Result
+              </div>
+              <div style={{
+                fontSize: 18, fontWeight: 800,
+                color: match.result === "win" ? t.green : t.red,
+                letterSpacing: "-0.3px", lineHeight: 1,
+              }}>
+                {origResult}
+              </div>
             </div>
           </div>
 
           {/* ── For match_tag: show the logged match details (original only). */}
           {isMatchTag && (
-            <div style={{
-              padding: "14px 16px",
-              borderRadius: 10,
-              background: t.bgTertiary,
-              border: "1px solid " + t.border,
-              fontSize: 13, color: t.text, lineHeight: 1.5,
-              marginBottom: 18,
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: t.textTertiary, marginBottom: 8 }}>
-                Logged by {fromName}
+            <HairlineStrip eyebrow={"Logged by " + fromName} t={t}>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <FieldRow label="Result" value={origResult + " (" + fromName + "'s view)"} changed={false} t={t} />
+                {origSets && origSets !== "—" && (
+                  <FieldRow label="Score" value={origSets} changed={false} t={t} />
+                )}
+                {origDate && (
+                  <FieldRow label="Date" value={origDate} changed={false} t={t} />
+                )}
+                {origVenue && origVenue !== "—" && (
+                  <FieldRow label="Venue" value={origVenue} changed={false} t={t} />
+                )}
               </div>
-              <div style={{ marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Result · </span>
-                <span style={{ fontWeight: 600 }}>{origResult}</span>
-                <span style={{ color: t.textTertiary, fontSize: 12 }}> (from {fromName}'s view)</span>
-              </div>
-              {origSets && origSets !== "—" && (
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Score · </span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{origSets}</span>
-                </div>
-              )}
-              {origDate && (
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Date · </span>
-                  {origDate}
-                </div>
-              )}
-              {origVenue && origVenue !== "—" && (
-                <div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary }}>Venue · </span>
-                  {origVenue}
-                </div>
-              )}
-            </div>
+            </HairlineStrip>
           )}
 
           {/* ── No proposal yet (only for correction/dispute notifs, not match_tag) */}
           {!proposal && !isMatchTag && (
-            <div style={{
-              padding: "16px 14px",
-              borderRadius: 10,
-              background: t.bgTertiary,
-              border: "1px solid " + t.border,
-              fontSize: 13, color: t.textSecondary,
-              marginBottom: 18, textAlign: "center",
-            }}>
-              The correction details are not available yet.
-              <br />
-              <span style={{ fontSize: 12, color: t.textTertiary }}>
-                Reload the app if this persists.
-              </span>
-            </div>
+            <HairlineStrip eyebrow="Proposal unavailable" t={t}>
+              <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.45 }}>
+                The correction details are not available yet. Reload the app if this persists.
+              </div>
+            </HairlineStrip>
           )}
 
-          {/* ── Comparison ────────────────────────────────────────────────── */}
+          {/* ── Comparison ── two stacked editorial columns. */}
           {proposal && (
             <div style={{ marginBottom: 18 }}>
               <div style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
                 textTransform: "uppercase", color: t.textTertiary,
-                marginBottom: 10,
+                marginBottom: 12,
               }}>
-                {anyDiff ? "What changed" : "Proposed (no changes detected)"}
+                {anyDiff ? "What changed" : "Proposed (no changes)"}
               </div>
 
-              <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 {/* Original */}
-                <DataCard title="Original" t={t}>
-                  <FieldRow label="Result" original={origResult} proposed={origResult} changed={false} t={t} />
-                  <FieldRow label="Score" original={origSets} proposed={origSets} changed={false} t={t} />
+                <div>
+                  <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                    textTransform: "uppercase", color: t.textTertiary,
+                    marginBottom: 4,
+                  }}>Original</div>
+                  <FieldRow label="Result" value={origResult} changed={false} t={t} />
+                  <FieldRow label="Score" value={origSets} changed={false} t={t} />
                   {(match.venue || match.court) && (
-                    <FieldRow label="Venue" original={origVenue} proposed={origVenue} changed={false} t={t} />
+                    <FieldRow label="Venue" value={origVenue} changed={false} t={t} />
                   )}
-                </DataCard>
-
-                {/* Arrow */}
-                <div style={{
-                  display: "flex", alignItems: "center",
-                  color: t.textTertiary, fontSize: 16, flexShrink: 0, marginTop: 28,
-                }}>→</div>
+                </div>
 
                 {/* Proposed */}
-                <DataCard title="Proposed" accentColor={anyDiff ? t.orange : null} t={t}>
-                  <FieldRow
-                    label="Result" original={origResult} proposed={propResult}
-                    changed={diff.result} t={t}
-                  />
-                  <FieldRow
-                    label="Score" original={origSets} proposed={propSets}
-                    changed={diff.sets} t={t}
-                  />
+                <div>
+                  <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: anyDiff ? t.orange : t.textTertiary,
+                    marginBottom: 4,
+                  }}>Proposed</div>
+                  <FieldRow label="Result" value={propResult} changed={diff.result} t={t} />
+                  <FieldRow label="Score" value={propSets} changed={diff.sets} t={t} />
                   {(proposal.venue || proposal.court || match.venue || match.court) && (
-                    <FieldRow
-                      label="Venue" original={origVenue} proposed={propVenue}
-                      changed={diff.venue || diff.court} t={t}
-                    />
+                    <FieldRow label="Venue" value={propVenue} changed={diff.venue || diff.court} t={t} />
                   )}
-                </DataCard>
+                </div>
               </div>
 
               {/* Date change */}
               {diff.date && propDate && (
                 <div style={{
-                  marginTop: 8, padding: "8px 12px",
-                  borderRadius: 8, background: t.orange + "10",
-                  border: "1px solid " + t.orange + "33",
-                  fontSize: 12, color: t.textSecondary,
+                  marginTop: 12,
+                  paddingTop: 10, paddingBottom: 10,
+                  borderTop: "1px solid " + t.border,
+                  display: "flex", gap: 10, alignItems: "baseline",
                 }}>
-                  <span style={{ color: t.orange, fontWeight: 600 }}>Date changed · </span>
-                  {origDate} → {propDate}
+                  <span style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                    textTransform: "uppercase", color: t.orange, flexShrink: 0,
+                  }}>Date changed</span>
+                  <span style={{
+                    fontSize: 12, color: t.textSecondary, letterSpacing: "-0.1px",
+                  }}>
+                    {origDate} → {propDate}
+                  </span>
                 </div>
               )}
             </div>
@@ -437,57 +466,55 @@ export default function ActionReviewDrawer({
 
           {/* ── Reason ────────────────────────────────────────────────────── */}
           {match.disputeReasonCode && (
-            <div style={{
-              padding: "10px 14px",
-              borderRadius: 8,
-              background: t.bgTertiary,
-              border: "1px solid " + t.border,
-              marginBottom: 12,
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Their reason
-              </div>
-              <div style={{ fontSize: 13, color: t.text }}>
+            <HairlineStrip eyebrow={"Their reason"} t={t}>
+              <div style={{
+                fontSize: 13, color: t.text, fontWeight: 600,
+                letterSpacing: "-0.1px",
+              }}>
                 {REASON_LABELS[match.disputeReasonCode] || match.disputeReasonCode}
               </div>
               {match.disputeReasonDetail && (
-                <div style={{ fontSize: 12, color: t.textSecondary, marginTop: 4, fontStyle: "italic" }}>
+                <div style={{
+                  fontSize: 12, color: t.textSecondary,
+                  marginTop: 4, fontStyle: "italic", letterSpacing: "-0.1px",
+                }}>
                   "{match.disputeReasonDetail}"
                 </div>
               )}
-            </div>
+            </HairlineStrip>
           )}
 
           {/* ── Auto-void warning ─────────────────────────────────────────── */}
           {wouldAutoVoid && (
-            <div style={{
-              padding: "10px 14px", borderRadius: 8, marginBottom: 14,
-              background: t.orange + "15",
-              border: "1px solid " + t.orange + "44",
-            }}>
-              <div style={{ fontSize: 12, color: t.orange, fontWeight: 600 }}>
-                Max correction rounds reached
-              </div>
-              <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 2 }}>
+            <HairlineStrip eyebrow="Max rounds reached" eyebrowColor={t.orange} t={t}>
+              <div style={{
+                fontSize: 13, color: t.text, lineHeight: 1.4,
+                letterSpacing: "-0.1px",
+              }}>
                 Counter-proposing now will void the match automatically.
               </div>
-            </div>
+            </HairlineStrip>
           )}
 
           {/* ── Error ─────────────────────────────────────────────────────── */}
           {error && (
-            <div style={{
-              padding: "10px 14px", borderRadius: 8, marginBottom: 14,
-              background: t.red + "15",
-              border: "1px solid " + t.red + "44",
-              fontSize: 12, color: t.red,
-            }}>
-              {error}
-            </div>
+            <HairlineStrip eyebrow="Can't save" eyebrowColor={t.red} t={t}>
+              <div style={{
+                fontSize: 13, color: t.text, lineHeight: 1.4,
+                letterSpacing: "-0.1px",
+              }}>
+                {error}
+              </div>
+            </HairlineStrip>
           )}
 
           {/* ── Actions ───────────────────────────────────────────────────── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 8,
+            marginTop: 8,
+            paddingTop: 16,
+            borderTop: "1px solid " + t.border,
+          }}>
 
             {/* Primary: Accept */}
             <button
@@ -497,8 +524,9 @@ export default function ActionReviewDrawer({
                 width: "100%", padding: "14px",
                 borderRadius: 10, border: "none",
                 background: saving && action === "accept" ? t.border : t.green,
-                color: "#fff", fontSize: 14, fontWeight: 700,
-                letterSpacing: "-0.1px", cursor: saving ? "default" : "pointer",
+                color: "#fff", fontSize: 13, fontWeight: 800,
+                letterSpacing: "0.08em", textTransform: "uppercase",
+                cursor: saving ? "default" : "pointer",
                 opacity: saving && action !== "accept" ? 0.5 : 1,
                 transition: "opacity 0.15s, background 0.15s",
               }}
@@ -520,7 +548,9 @@ export default function ActionReviewDrawer({
                   borderRadius: 10,
                   border: "1px solid " + t.border,
                   background: "transparent",
-                  color: t.text, fontSize: 13, fontWeight: 600,
+                  color: t.text,
+                  fontSize: 11, fontWeight: 800,
+                  letterSpacing: "0.08em", textTransform: "uppercase",
                   cursor: saving ? "default" : "pointer",
                   opacity: saving ? 0.5 : 1,
                   transition: "opacity 0.15s",
@@ -537,9 +567,11 @@ export default function ActionReviewDrawer({
                 style={{
                   padding: "12px 16px",
                   borderRadius: 10,
-                  border: "1px solid " + t.red + "44",
+                  border: "1px solid " + t.border,
                   background: "transparent",
-                  color: t.red, fontSize: 13, fontWeight: 500,
+                  color: t.red,
+                  fontSize: 11, fontWeight: 800,
+                  letterSpacing: "0.08em", textTransform: "uppercase",
                   cursor: saving ? "default" : "pointer",
                   opacity: saving && action !== "void" ? 0.5 : 1,
                   transition: "opacity 0.15s",
