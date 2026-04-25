@@ -252,11 +252,11 @@ export default function LeafletMap({
       maxClusterRadius: 60,
       iconCreateFunction: function (cluster) {
         var n = cluster.getChildCount();
-        // Modern cluster bubble — solid dark fill, white tabular
-        // number, no border, soft shadow. box-sizing:border-box so
-        // Leaflet's iconSize matches the rendered footprint exactly
-        // (no 1px halo of mis-alignment). Smaller too (28 vs 34) so
-        // mobile doesn't feel cramped.
+        // Cluster bubble — solid dark fill, white tabular-nums.
+        // Restores the contrast user originally liked (dark # vs
+        // white court dots). CTA hierarchy is preserved through
+        // SIZE (88px CTA vs 28px cluster) + POSITION (bottom-centre
+        // vs zone centroid), not colour.
         return L.divIcon({
           className: "cs-court-cluster",
           html:
@@ -480,7 +480,12 @@ export default function LeafletMap({
           iconAnchor: [30, 110],
         }),
         interactive: false,
-        zIndexOffset: 500,
+        // 1500 sits ABOVE court markers (zIndexOffset 1000) and
+        // cluster bubbles. Without this, at broad zoom the cluster
+        // landed on the same centroid as the home indicator and
+        // hid it → user reported "home deregisters when zoomed out
+        // so much".
+        zIndexOffset: 1500,
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });

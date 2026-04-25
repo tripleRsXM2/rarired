@@ -131,6 +131,14 @@ export default function MapTab({
     return function(){ cancelled = true; };
   },[]);
 
+  // Resolve the basemap tone the user is actually seeing (same logic
+  // as LeafletMap.resolveDark). Used by the Play Match CTA to invert
+  // its colours on dark basemaps so the button never gets lost.
+  var mapDark;
+  if(layers.mapTheme === "light") mapDark = false;
+  else if(layers.mapTheme === "dark") mapDark = true;
+  else mapDark = theme === "hard-court" || theme === "night-court";
+
   // Wrap setters so we can emit analytics at selection time. Zone props
   // include the activity snapshot so funnel queries don't need a join.
   function handleSelect(zoneId){
@@ -400,6 +408,76 @@ export default function MapTab({
       />
 
       {/* Court info modal — opens on court marker tap */}
+      {/* Play Match CTA — primary action of the map. Bottom-centre,
+          thumb-zone optimal. Orange so it pops against the green
+          zone polygons + neutral chrome. Phase 1: visual only —
+          tap fires telemetry so we can see interest from day one
+          (Mom-test: instrument before shipping the flow). Phase 2
+          will swap the no-op for a guided 5-step wizard inside a
+          bottom sheet (zone → court → player(s) → send invite). */}
+      <button type="button"
+        onClick={function(){
+          track("play_match_cta_tapped", {
+            has_zone: !!selected,
+            has_court: !!panelCourtName,
+          });
+          // Placeholder until phase 2 ships the wizard.
+          if(typeof window !== "undefined" && window.alert){
+            window.alert("Play Match flow — coming soon. We'll wrap a guided wizard around the existing zone → court → player picker.");
+          }
+        }}
+        aria-label="Play Match"
+        style={{
+          position:"absolute",
+          left:"50%",
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 32px)",
+          transform:"translateX(-50%)",
+          zIndex: 550,
+          // Iconic circle — Strava/Nike/Apple Voice Memos pattern.
+          // Flat solid fill, single soft drop shadow, no gradient,
+          // no inner highlights. Theme-adaptive: dark CTA on light
+          // basemap, light CTA on dark basemap — so contrast stays
+          // constant and the button never gets lost. Apple's primary-
+          // button pattern. 104px reads as confidently primary on
+          // both mobile and desktop without overwhelming the map.
+          width: 104, height: 104,
+          borderRadius: "50%",
+          border: "none",
+          background: mapDark ? "#fff" : "#14110f",
+          color: mapDark ? "#14110f" : "#fff",
+          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
+          cursor: "pointer",
+          // Layered shadow scaled up with the bigger button — deeper
+          // ambient shadow at the bottom for elevation, tighter
+          // contact shadow underneath.
+          boxShadow:
+            "0 14px 32px rgba(20,18,17,0.36), " +
+            "0 4px 8px rgba(20,18,17,0.22)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 0,
+          transition: "transform 0.12s ease, box-shadow 0.18s ease",
+        }}
+        onMouseDown={function(e){
+          e.currentTarget.style.transform = "translateX(-50%) scale(0.95)";
+        }}
+        onMouseUp={function(e){
+          e.currentTarget.style.transform = "translateX(-50%)";
+        }}
+        onMouseLeave={function(e){
+          e.currentTarget.style.transform = "translateX(-50%)";
+        }}>
+        <span style={{
+          fontSize: 19, fontWeight: 900,
+          letterSpacing: "0.10em", lineHeight: 1,
+        }}>PLAY</span>
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.20em", lineHeight: 1,
+          opacity: 0.72, marginTop: 3,
+        }}>MATCH</span>
+      </button>
+
       <CourtInfoCard t={t} court={selectedCourt}
         authUser={authUser}
         viewerProfile={profile}

@@ -65,6 +65,7 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `map_layers_panel_opened` | User taps the layers cog icon on the map | _(none)_ |
 | `map_layer_toggled` | User flips a switch in the layers panel (homes / courts / activity / mapTheme) | `layer` ("homes" \| "courts" \| "activity" \| "mapTheme"), `value` (boolean for toggles, "auto"\|"light"\|"dark" for mapTheme) |
 | `map_courts_expanded` | User taps "Show all N courts ↓" in the zone side panel (zones with >5 venues default to a 4-court collapsed view on mobile) | `zone_id`, `total` (number of courts in the zone) |
+| `play_match_cta_tapped` | User taps the orange "Play match" CTA at the bottom of the map. Phase 1 fires telemetry only (the wizard ships in phase 2). Lets us measure interest before building the flow. | `has_zone` (whether a zone is already selected), `has_court` (whether a venue is already pinned in the side panel) |
 
 ### Reserved (defined but not fired until later modules)
 
