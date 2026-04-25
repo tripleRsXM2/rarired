@@ -226,16 +226,22 @@ function FeedCard({
   var setWinCounts = (function () {
     var sets = m.sets || [];
     var ys = 0, ts = 0;
+    // Track partial-fill counts too — used by the self-heal heuristic
+    // below to detect "stored result contradicts visible scores".
+    var ySides = 0, tSides = 0;
     sets.forEach(function (s) {
       var yStr = s.you == null ? "" : String(s.you).trim();
       var tStr = s.them == null ? "" : String(s.them).trim();
-      if (yStr === "" || tStr === "") return;             // incomplete set → skip
+      var yIsNum = yStr !== "" && !Number.isNaN(Number(yStr));
+      var tIsNum = tStr !== "" && !Number.isNaN(Number(tStr));
+      if (yIsNum) ySides++;
+      if (tIsNum) tSides++;
+      if (!yIsNum || !tIsNum) return;                     // incomplete or garbage → skip
       var y = Number(yStr), th = Number(tStr);
-      if (Number.isNaN(y) || Number.isNaN(th)) return;    // garbage → skip
       if (y === th) return;                                // tied within a set → skip
       if (y > th) ys++; else ts++;
     });
-    return { ys: ys, ts: ts };
+    return { ys: ys, ts: ts, ySides: ySides, tSides: tSides };
   })();
 
   // ── Self-healing winner ──────────────────────────────────────────────────
@@ -243,18 +249,32 @@ function FeedCard({
   // "submitter won" boolean and project it into viewer-frame as needed
   // for the three card types (own / tagged / third-party).
   //
-  // If the sets unambiguously pick a winner, trust them — this heals the
-  // classic "tapped the wrong Win/Loss button but entered winning sets"
-  // data-entry bug without rewriting the DB row. If the sets are tied
-  // or every set was incomplete (all skipped), fall back to the stored
-  // result field. m.result is in the SUBMITTER's POV for own + third-
-  // party rows (normalizeMatch leaves it untouched) and FLIPPED to the
-  // viewer's POV for tagged rows — so we flip back here for tagged so
+  // Rule order:
+  //   1. If the sets unambiguously pick a winner (ys ≠ ts), trust them.
+  //      Self-heals the "tapped the wrong Win/Loss button but entered
+  //      winning sets" data-entry bug.
+  //   2. Otherwise — sets are tied OR every set was incomplete — if the
+  //      stored result claims one side won but ONLY THE OTHER SIDE has
+  //      any completed scores in the visible sets, that's the second
+  //      data-entry bug: marked Win and entered the opp's score in
+  //      "them" with their own column blank. Flip the result so the
+  //      arrow points to the side that actually scored. The empty-set
+  //      case (no scores either side) and legitimate retirements with
+  //      at least one completed set on each side are NOT touched.
+  //   3. Fall back to the stored result.
+  //
+  // m.result is in the SUBMITTER's POV for own + third-party rows
+  // (normalizeMatch leaves it untouched) and FLIPPED to the viewer's
+  // POV for tagged rows — so we flip back here for tagged so
   // `submitterWon` is consistent across all three.
   var submitterWonStored = m.isTagged ? (m.result === "loss") : (m.result === "win");
+  var setsContradictStored = (setWinCounts.ys === setWinCounts.ts) && (
+    (submitterWonStored && setWinCounts.ySides === 0 && setWinCounts.tSides > 0) ||
+    (!submitterWonStored && setWinCounts.tSides === 0 && setWinCounts.ySides > 0)
+  );
   var submitterWon = (setWinCounts.ys !== setWinCounts.ts)
     ? (setWinCounts.ys > setWinCounts.ts)
-    : submitterWonStored;
+    : (setsContradictStored ? !submitterWonStored : submitterWonStored);
   // viewerWon — meaningful only when the viewer is in the match. For
   // third-party rows we don't use it for anything viewer-centric (no
   // win/loss tint on the card border, no viewer-claim share text).
