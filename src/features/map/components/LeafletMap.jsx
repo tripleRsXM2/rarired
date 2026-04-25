@@ -94,7 +94,7 @@ function zoneCentroidBadgeHtml(z, activity, isHome, showHomes, showActivity) {
     : '';
 
   var flame = hasFlame
-    ? ('<div style="margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.02em;' +
+    ? ('<div class="cs-flame" style="margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.02em;' +
         'color:#fff;background:rgba(239,68,68,0.95);padding:2px 8px;border-radius:12px;' +
         'box-shadow:0 1px 2px rgba(0,0,0,0.25)">🔥 ' + activity.matches_7d + '</div>')
     : '';
@@ -220,6 +220,22 @@ export default function LeafletMap({
       var group = L.featureGroup(allZoneLayers);
       map.fitBounds(group.getBounds(), { padding: [24, 24] });
     }
+
+    // Zoom-aware label visibility — UI council rule: at broad zoom
+    // (city-fit) zone names and activity flames are hidden because
+    // they collide with cluster numbers. The layers panel toggles
+    // (zoneNames / activity) become MAX preferences — they still
+    // respect this zoom rule on top. Apple Maps / Mapbox pattern.
+    // Threshold 13: zoom 11-12 hides, zoom 13+ shows.
+    function applyBroadZoomFlag(){
+      var z = map.getZoom();
+      var broad = z < 13;
+      var c = map.getContainer();
+      if(broad){ c.setAttribute("data-broad-zoom","true"); }
+      else     { c.removeAttribute("data-broad-zoom"); }
+    }
+    map.on("zoomend", applyBroadZoomFlag);
+    applyBroadZoomFlag();
 
     // Court markers — clustered at low zoom so the city view doesn't
     // drown in 50+ overlapping pins. Each cluster paints a count badge
@@ -457,10 +473,11 @@ export default function LeafletMap({
           // iconAnchor y > iconSize.height pushes the badge ABOVE the
           // lat/lng (courts at the polygon centre are very common in
           // dense zones — CBD's bbox centre sits right on Prince Alfred,
-          // for instance). 90 means the icon centre paints ~30 px above
-          // the centroid point, leaving room for the court marker
-          // underneath.
-          iconAnchor: [30, 90],
+          // for instance). 110 means the badge paints ~50px above the
+          // centroid point, with the cluster bubble (14px above centre)
+          // sitting clear ~36px below. Rule (locked): home + flame
+          // badges must never overlap cluster numbers.
+          iconAnchor: [30, 110],
         }),
         interactive: false,
         zIndexOffset: 500,

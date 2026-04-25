@@ -93,6 +93,14 @@ export default function Providers({ t, theme, children }){
       ".cs-map-frame{position:relative;overflow:hidden;min-height:360px;isolation:isolate;" +
         "height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))}",
 
+      // Zoom-aware label visibility — at broad zoom (city-fit) zone
+      // names + activity flames hide so they don't collide with
+      // cluster number bubbles. The layers panel toggles still
+      // control max visibility; this rule trims them at low zoom.
+      // Set on the leaflet container by LeafletMap.applyBroadZoomFlag.
+      ".leaflet-container[data-broad-zoom='true'] .cs-zone-name{display:none!important}",
+      ".leaflet-container[data-broad-zoom='true'] .cs-zone-centroid .cs-flame{display:none!important}",
+
       // Leaflet attribution — small, subtle, mobile-safe. Default
       // styling is bulky (12px white pill) and on phones it gets
       // cropped behind the bottom tab bar. Override: small font,
