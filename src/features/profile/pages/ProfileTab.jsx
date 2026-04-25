@@ -15,6 +15,7 @@ import ProfileHero from "../components/ProfileHero.jsx";
 import ProfileRivalry from "../components/ProfileRivalry.jsx";
 import ProfileStatsAccordion from "../components/ProfileStatsAccordion.jsx";
 import HomeLeaguesStrip from "../../home/components/HomeLeaguesStrip.jsx";
+import HomeActivityList from "../../home/components/HomeActivityList.jsx";
 
 // ── ProfileMatchRow ──────────────────────────────────────────────────────────
 // Compact version of the feed scoreboard for use inside the profile (Recent
@@ -277,10 +278,13 @@ export default function ProfileTab({
   }, [profile && profile.id]);
 
   return (
-    <div style={{maxWidth:680,margin:"0 auto"}}>
+    <div style={{ width: "100%" }}>
 
-      {/* ── Hero (slice 2) ─────────────────────────────────────────────────── */}
-      <div style={{padding:"20px 20px 14px"}}>
+      {/* HERO — borderless editorial composition. Generous breathing room. */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(40px, 6vw, 72px) clamp(20px, 4vw, 32px) 0",
+      }}>
         <ProfileHero
           t={t}
           profile={profile}
@@ -291,22 +295,40 @@ export default function ProfileTab({
               onClick={onOpenSettings}
               title="Edit profile"
               style={{
-                padding:"6px 10px",
-                border:"1px solid "+t.border, background:"transparent", color:t.textSecondary,
-                fontSize:12, fontWeight:600,
-                display:"inline-flex", alignItems:"center", gap:6,
-                cursor:"pointer",
+                padding: "8px 14px",
+                border: "1px solid " + t.border,
+                background: "transparent",
+                color: t.textSecondary,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
               }}>
-              <span style={{display:"flex",alignItems:"center"}}>{NAV_ICONS.edit(13)}</span>
+              <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.edit(12)}</span>
               Edit
             </button>
           )}
         />
+      </section>
+
+      {/* HAIRLINE */}
+      <div style={{
+        maxWidth: 720, margin: "clamp(40px, 6vw, 72px) auto 0",
+        padding: "0 clamp(20px, 4vw, 32px)",
+      }}>
+        <div style={{ borderTop: "1px solid " + t.border }} />
       </div>
 
-      {/* Rivalry highlight (slice 2). Only renders when the viewer has
-          a real H2H opponent — see ProfileRivalry for the threshold. */}
-      <div style={{padding:"0 20px 14px"}}>
+      {/* RIVALRY — borderless editorial. Only renders when there's a real
+          H2H opponent (≥3 plays vs same linked user). */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) 0",
+      }}>
         <ProfileRivalry
           t={t}
           authUser={authUser}
@@ -314,102 +336,137 @@ export default function ProfileTab({
           openProfile={openProfile}
           openChallenge={openChallenge}
         />
-      </div>
+      </section>
 
-      {/* Stats accordion (slice 2) — replaces the legacy Ranking +
-          Achievements summary card AND the 4-col Quick-stats strip.
-          Default collapsed; expands to a single editorial card with
-          totals, streak, confirmation rate, type/format breakdowns. */}
-      <div style={{padding:"0 20px 14px"}}>
+      {/* STATS — bordered (it's an interactive accordion; earns its frame). */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(32px, 4vw, 48px) clamp(20px, 4vw, 32px) 0",
+      }}>
         <ProfileStatsAccordion t={t} profile={profile} history={history} />
-      </div>
+      </section>
 
-      <div style={{padding:"0 20px"}}>
-        {/* Sub-tabs: overview / matches / achievements only */}
-        <div style={{display:"flex",borderBottom:"1px solid "+t.border,marginLeft:-20,marginRight:-20,paddingLeft:20}}>
-          {["overview","matches","achievements"].map(function(pt){
-            var on=profileTab===pt;
+      {/* Sub-tabs: overview / matches / achievements */}
+      <section style={{
+        maxWidth: 720, margin: "clamp(32px, 4vw, 48px) auto 0",
+        padding: "0 clamp(20px, 4vw, 32px)",
+      }}>
+        <div style={{ display: "flex", borderBottom: "1px solid " + t.border, gap: 4 }}>
+          {["overview", "matches", "achievements"].map(function (pt) {
+            var on = profileTab === pt;
             return (
               <button key={pt}
-                onClick={function(){setProfileTab(pt);}}
+                onClick={function () { setProfileTab(pt); }}
                 style={{
-                  padding:"10px 16px",border:"none",background:"transparent",
-                  color:on?t.accent:t.textTertiary,
-                  fontSize:12,fontWeight:on?700:500,
-                  borderBottom:"2px solid "+(on?t.accent:"transparent"),
-                  marginBottom:"-1px",textTransform:"capitalize",letterSpacing:"0.01em",
+                  padding: "12px 4px",
+                  marginRight: 20,
+                  border: "none",
+                  background: "transparent",
+                  color: on ? t.text : t.textTertiary,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  borderBottom: "2px solid " + (on ? t.text : "transparent"),
+                  marginBottom: "-1px",
+                  cursor: "pointer",
                 }}>
                 {pt}
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* ── Overview ─────────────────────────────────────────────────────────── */}
       {profileTab==="overview"&&(
-        <div style={{padding:"20px 20px 100px"}} className="fade-up">
-          {/* Recent matches */}
-          <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>Recent Matches</span>
-            {history.length>3&&<button onClick={function(){setProfileTab("matches");}} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600}}>See all</button>}
-          </div>
-          {history.length===0
-            ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"28px 20px",textAlign:"center"}}>
-              <div style={{fontSize:28,marginBottom:8}}>🎾</div>
-              <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:4}}>No matches yet</div>
-              <div style={{fontSize:13,color:t.textTertiary}}>Enter a tournament or log a match to get started.</div>
-            </div>
-            :history.slice(0,3).map(function(m){
-              return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} openChallenge={openChallenge} />;
-            })
-          }
+        <div className="fade-up">
+          {/* Recent matches — editorial activity list (mirrors Home).
+              Tapping the toggle jumps to the Matches sub-tab where the
+              full ProfileMatchRow list lives. */}
+          <section style={{
+            maxWidth: 720, margin: "0 auto",
+            padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) 0",
+          }}>
+            {history.length === 0 ? (
+              <div style={{ padding: "32px 0", textAlign: "center" }}>
+                <div style={{ fontSize: 24, marginBottom: 10 }}>🎾</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 4, letterSpacing: "-0.1px" }}>
+                  No matches yet
+                </div>
+                <div style={{ fontSize: 12, color: t.textTertiary }}>
+                  Log your first match to start tracking your form.
+                </div>
+              </div>
+            ) : (
+              <HomeActivityList
+                t={t}
+                authUser={authUser}
+                profile={profile}
+                history={history}
+                expanded={false}
+                onToggle={history.length > 3 ? function () { setProfileTab("matches"); } : null}
+              />
+            )}
+          </section>
 
-          {/* Most-played opponents — identity check: "I've played these
-              people consistently". Each chip is clickable when the opponent
-              is a real user (opponent_id present), taking the viewer into
-              that player's public profile. */}
-          {mostPlayed.length>0&&(
-            <div style={{marginTop:24}}>
-              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Most played</div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {mostPlayed.map(function(o,i){
+          {/* Most-played opponents — identity check ("I've played these
+              consistently"). Borderless chips with hairline divider. */}
+          {mostPlayed.length > 0 && (
+            <section style={{
+              maxWidth: 720, margin: "0 auto",
+              padding: "clamp(32px, 4vw, 48px) clamp(20px, 4vw, 32px) 0",
+            }}>
+              <div style={{
+                fontSize: "clamp(20px, 3vw, 24px)",
+                fontWeight: 700, color: t.text,
+                letterSpacing: "-0.02em",
+                marginBottom: 14,
+              }}>
+                Most played
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {mostPlayed.map(function (o, i) {
                   var clickable = !!o.opponentId && !!openProfile;
                   return (
                     <div key={i}
-                      onClick={clickable ? function(){openProfile(o.opponentId);} : undefined}
+                      onClick={clickable ? function () { openProfile(o.opponentId); } : undefined}
                       style={{
-                        display:"flex",alignItems:"center",gap:8,
-                        background:t.bgCard,border:"1px solid "+t.border,
-                        borderRadius:0,padding:"8px 12px 8px 8px",
-                        cursor:clickable?"pointer":"default",
+                        display: "flex", alignItems: "center", gap: 10,
+                        background: "transparent",
+                        border: "1px solid " + t.border,
+                        padding: "10px 14px 10px 10px",
+                        cursor: clickable ? "pointer" : "default",
                       }}>
                       <div style={{
-                        width:28,height:28,borderRadius:"50%",flexShrink:0,
-                        background:avColor(o.opponentName),
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        fontSize:10,fontWeight:700,color:"#fff",
-                      }}>{(o.opponentName||"?").slice(0,2).toUpperCase()}</div>
+                        width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                        background: avColor(o.opponentName),
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, fontWeight: 800, color: "#fff",
+                      }}>{(o.opponentName || "?").slice(0, 2).toUpperCase()}</div>
                       <div>
-                        <div style={{fontSize:12,fontWeight:600,color:t.text,lineHeight:1.1}}>{o.opponentName}</div>
-                        <div style={{fontSize:10,color:t.textTertiary,marginTop:2,letterSpacing:"0.02em"}}>
-                          <span style={{color:t.green,fontWeight:700}}>{o.wins}</span>
-                          <span style={{margin:"0 3px"}}>–</span>
-                          <span style={{color:t.red,fontWeight:700}}>{o.losses}</span>
-                          <span style={{marginLeft:6}}>· {o.plays} played</span>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: t.text, lineHeight: 1.2 }}>
+                          {o.opponentName}
+                        </div>
+                        <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 2, letterSpacing: "0.04em" }}>
+                          <span style={{ color: t.green, fontWeight: 700 }}>{o.wins}</span>
+                          <span style={{ margin: "0 3px" }}>–</span>
+                          <span style={{ color: t.red, fontWeight: 700 }}>{o.losses}</span>
+                          <span style={{ marginLeft: 6 }}>· {o.plays} played</span>
                         </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Your leagues (slice 2) — same strip used on Home so the
-              two surfaces feel consistent. Hidden when the viewer has
-              no active leagues. */}
-          <div style={{marginTop:24}}>
+          {/* Your leagues — strip, mirroring Home. */}
+          <section style={{
+            maxWidth: 720, margin: "0 auto",
+            padding: "clamp(32px, 4vw, 48px) clamp(20px, 4vw, 32px) 0",
+          }}>
             <HomeLeaguesStrip
               t={t}
               authUser={authUser}
@@ -419,118 +476,228 @@ export default function ProfileTab({
               loadLeagueDetail={loadLeagueDetail}
               onOpenLeague={onOpenLeague || onOpenLeagues}
             />
-          </div>
+          </section>
 
           {/* Achievements preview */}
-          {unlockedCount>0&&(
-            <div style={{marginTop:24}}>
-              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span>Achievements</span>
-                <button onClick={function(){setProfileTab("achievements");}} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600}}>See all</button>
+          {unlockedCount > 0 && (
+            <section style={{
+              maxWidth: 720, margin: "0 auto",
+              padding: "clamp(32px, 4vw, 48px) clamp(20px, 4vw, 32px) 0",
+            }}>
+              <div style={{
+                display: "flex", alignItems: "baseline", justifyContent: "space-between",
+                marginBottom: 14,
+              }}>
+                <div style={{
+                  fontSize: "clamp(20px, 3vw, 24px)",
+                  fontWeight: 700, color: t.text,
+                  letterSpacing: "-0.02em",
+                }}>
+                  Achievements
+                </div>
+                <button
+                  onClick={function () { setProfileTab("achievements"); }}
+                  style={{
+                    background: "transparent", border: "none", padding: 0,
+                    fontSize: 11, fontWeight: 700, color: t.textSecondary,
+                    letterSpacing: "0.08em", textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}>
+                  See all →
+                </button>
               </div>
-              <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
-                {badges.filter(function(b){return b.unlocked;}).map(function(b){
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                {badges.filter(function (b) { return b.unlocked; }).map(function (b) {
                   return (
-                    <div key={b.id} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"12px",textAlign:"center",minWidth:80,flexShrink:0}}>
-                      <div style={{fontSize:22,marginBottom:4}}>{b.icon}</div>
-                      <div style={{fontSize:9,fontWeight:700,color:t.text,lineHeight:1.2,textTransform:"uppercase",letterSpacing:"0.04em"}}>{b.label}</div>
+                    <div key={b.id} style={{
+                      border: "1px solid " + t.border,
+                      padding: "14px 12px",
+                      textAlign: "center",
+                      minWidth: 88,
+                      flexShrink: 0,
+                    }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>{b.icon}</div>
+                      <div style={{
+                        fontSize: 9, fontWeight: 700, color: t.text,
+                        lineHeight: 1.2, textTransform: "uppercase", letterSpacing: "0.06em",
+                      }}>{b.label}</div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Availability (read-only, Edit link opens Settings) */}
-          <div style={{marginTop:24}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>Availability</span>
-              {authUser&&<button onClick={onOpenSettings} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600}}>Edit</button>}
+          {/* Availability — borderless rows with hairline divider above. */}
+          <section style={{
+            maxWidth: 720, margin: "0 auto",
+            padding: "clamp(32px, 4vw, 48px) clamp(20px, 4vw, 32px) clamp(56px, 8vw, 80px)",
+          }}>
+            <div style={{
+              display: "flex", alignItems: "baseline", justifyContent: "space-between",
+              marginBottom: 14,
+            }}>
+              <div style={{
+                fontSize: "clamp(20px, 3vw, 24px)",
+                fontWeight: 700, color: t.text,
+                letterSpacing: "-0.02em",
+              }}>
+                Availability
+              </div>
+              {authUser && (
+                <button
+                  onClick={onOpenSettings}
+                  style={{
+                    background: "transparent", border: "none", padding: 0,
+                    fontSize: 11, fontWeight: 700, color: t.textSecondary,
+                    letterSpacing: "0.08em", textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}>
+                  Edit
+                </button>
+              )}
             </div>
-            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"14px 16px"}}>
-              {DAYS_SHORT.filter(function(d){return((profile.availability||{})[d]||[]).length>0;}).length===0
-                ?<p style={{fontSize:13,color:t.textTertiary,margin:0}}>No availability set yet.</p>
-                :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {DAYS_SHORT.filter(function(d){return((profile.availability||{})[d]||[]).length>0;}).map(function(day){
-                    return (
-                      <div key={day} style={{display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{fontSize:10,fontWeight:700,color:t.textSecondary,width:30,flexShrink:0,textTransform:"uppercase",letterSpacing:"0.06em"}}>{day}</span>
-                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                          {((profile.availability||{})[day]||[]).map(function(b){
-                            return <span key={b} style={{fontSize:10,fontWeight:600,color:t.accent,background:t.accentSubtle,border:"1px solid "+t.accent+"33",padding:"2px 8px",borderRadius:0}}>{b}</span>;
-                          })}
-                        </div>
+            {DAYS_SHORT.filter(function (d) { return ((profile.availability || {})[d] || []).length > 0; }).length === 0 ? (
+              <p style={{ fontSize: 13, color: t.textTertiary, margin: 0 }}>No availability set yet.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {DAYS_SHORT.filter(function (d) { return ((profile.availability || {})[d] || []).length > 0; }).map(function (day, i) {
+                  return (
+                    <div key={day} style={{
+                      display: "flex", alignItems: "center", gap: 14,
+                      padding: "12px 0",
+                      borderTop: i === 0 ? "none" : "1px solid " + t.border,
+                    }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, color: t.text,
+                        width: 36, flexShrink: 0,
+                        textTransform: "uppercase", letterSpacing: "0.12em",
+                      }}>{day}</span>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {((profile.availability || {})[day] || []).map(function (b) {
+                          return (
+                            <span key={b} style={{
+                              fontSize: 11, fontWeight: 600, color: t.text,
+                              padding: "3px 10px",
+                              border: "1px solid " + t.border,
+                              letterSpacing: "0.04em",
+                            }}>{b}</span>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              }
-            </div>
-          </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
       )}
 
       {/* ── Matches ──────────────────────────────────────────────────────────── */}
       {profileTab==="matches"&&(
-        <div style={{padding:"20px 20px 100px"}} className="fade-up">
-          <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>
-            Match History · {history.length} {history.length===1?"match":"matches"}
-          </div>
-          {history.length===0
-            ?<div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"40px 20px",textAlign:"center"}}>
-              <div style={{fontSize:36,marginBottom:12}}>🎾</div>
-              <div style={{fontSize:15,fontWeight:700,color:t.text,marginBottom:6}}>No matches yet</div>
-              <div style={{fontSize:13,color:t.textTertiary,lineHeight:1.5}}>Complete a tournament match and log your score to see your history here.</div>
+        <section
+          className="fade-up"
+          style={{
+            maxWidth: 720, margin: "0 auto",
+            padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) clamp(56px, 8vw, 80px)",
+          }}>
+          <div style={{
+            display: "flex", alignItems: "baseline", justifyContent: "space-between",
+            marginBottom: 18,
+          }}>
+            <div style={{
+              fontSize: "clamp(22px, 3.2vw, 28px)",
+              fontWeight: 700, color: t.text,
+              letterSpacing: "-0.02em",
+            }}>
+              Match history
             </div>
-            :history.map(function(m){
+            <span style={{
+              fontSize: 11, fontWeight: 700, color: t.textTertiary,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+            }}>
+              {history.length} {history.length === 1 ? "match" : "matches"}
+            </span>
+          </div>
+          {history.length === 0 ? (
+            <div style={{ padding: "40px 0", textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🎾</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 6 }}>No matches yet</div>
+              <div style={{ fontSize: 13, color: t.textTertiary, lineHeight: 1.5 }}>
+                Complete a tournament match and log your score to see your history here.
+              </div>
+            </div>
+          ) : (
+            history.map(function (m) {
               return <ProfileMatchRow key={m.id} m={m} t={t} profile={profile} openChallenge={openChallenge} />;
             })
-          }
-        </div>
+          )}
+        </section>
       )}
 
       {/* ── Achievements ─────────────────────────────────────────────────────── */}
       {profileTab==="achievements"&&(
-        <div style={{padding:"20px 20px 100px"}} className="fade-up">
-          <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Badges</div>
-          <div style={{fontSize:13,color:t.textSecondary,marginBottom:14}}>{unlockedCount} of {badges.length} unlocked</div>
-          <div style={{background:t.bgTertiary,borderRadius:0,height:3,marginBottom:20,overflow:"hidden"}}>
-            <div style={{height:"100%",width:(unlockedCount/badges.length*100)+"%",background:t.gold,transition:"width 0.5s ease"}}/>
+        <section
+          className="fade-up"
+          style={{
+            maxWidth: 720, margin: "0 auto",
+            padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) clamp(56px, 8vw, 80px)",
+          }}>
+          <div style={{
+            fontSize: "clamp(22px, 3.2vw, 28px)",
+            fontWeight: 700, color: t.text,
+            letterSpacing: "-0.02em",
+            marginBottom: 6,
+          }}>
+            Achievements
           </div>
-          <div style={{background:t.bgCard,border:"1px solid "+t.border}}>
-            {badges.map(function(b,i){
+          <div style={{ fontSize: 12, color: t.textTertiary, marginBottom: 18, letterSpacing: "0.04em" }}>
+            {unlockedCount} of {badges.length} unlocked
+          </div>
+          <div style={{
+            background: t.bgTertiary, height: 3, marginBottom: 24, overflow: "hidden",
+          }}>
+            <div style={{
+              height: "100%",
+              width: (unlockedCount / badges.length * 100) + "%",
+              background: t.gold, transition: "width 0.5s ease",
+            }}/>
+          </div>
+          <div>
+            {badges.map(function (b, i) {
               return (
                 <div key={b.id} style={{
-                  borderTop:i===0?"none":"1px solid "+t.border,
-                  padding:"12px 14px",display:"flex",alignItems:"center",gap:12,
-                  opacity:b.unlocked?1:0.45,
+                  borderTop: i === 0 ? "none" : "1px solid " + t.border,
+                  padding: "14px 0",
+                  display: "flex", alignItems: "center", gap: 14,
+                  opacity: b.unlocked ? 1 : 0.45,
                 }}>
                   <div style={{
-                    width:36,height:36,borderRadius:0,flexShrink:0,
-                    background:b.unlocked?t.goldSubtle:t.bgTertiary,
-                    border:"1px solid "+(b.unlocked?t.gold+"33":t.border),
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:18,filter:b.unlocked?"none":"grayscale(1)",
-                  }}>
-                    {b.icon}
+                    width: 40, height: 40, flexShrink: 0,
+                    background: b.unlocked ? t.goldSubtle : t.bgTertiary,
+                    border: "1px solid " + (b.unlocked ? t.gold + "33" : t.border),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, filter: b.unlocked ? "none" : "grayscale(1)",
+                  }}>{b.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.1px" }}>
+                      {b.label}
+                    </div>
+                    <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 3 }}>{b.desc}</div>
                   </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:700,color:t.text,letterSpacing:"-0.1px"}}>{b.label}</div>
-                    <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{b.desc}</div>
-                  </div>
-                  {b.unlocked&&(
+                  {b.unlocked && (
                     <span style={{
-                      fontSize:9,fontWeight:700,color:t.gold,flexShrink:0,
-                      textTransform:"uppercase",letterSpacing:"0.06em",
-                      background:t.goldSubtle,border:"1px solid "+t.gold+"33",
-                      padding:"2px 7px",borderRadius:20,
+                      fontSize: 9, fontWeight: 800, color: t.gold,
+                      flexShrink: 0,
+                      textTransform: "uppercase", letterSpacing: "0.12em",
                     }}>Unlocked</span>
                   )}
                 </div>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

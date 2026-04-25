@@ -60,19 +60,16 @@ export default function PlayerProfileView({
   // H2H computed from the viewer's own history (RLS-safe).
   var h2h = computeHeadToHead(viewerHistory || [], authUser && authUser.id, profile.id);
 
-  // Slice 2: ProfileHero handles avatar / name / location / skill / style /
-  // bio / signature metric / single trust pill. Recent-form chips show only
-  // when the viewer has confirmed matches with this player (we don't have
-  // public match history for arbitrary users — RLS), so we hide them here
-  // and surface H2H instead.
+  // v2: the public-profile Challenge CTA renders below the Hero identity row
+  // as a full-width primary block (mirrors Home's LOG A MATCH).
   var challengeBlock = (openChallenge && authUser && profile.id !== authUser.id) ? (
-    <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
       <button
         onClick={function () { openChallenge(profile, "profile"); }}
         style={{
-          flex: 1, padding: "12px", borderRadius: 8, border: "none",
-          background: t.accent, color: "#fff",
-          fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase",
+          flex: 1, padding: "16px", border: "none",
+          background: t.text, color: t.bg,
+          fontSize: 14, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
           cursor: "pointer", transition: "opacity 0.15s",
         }}
         onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
@@ -88,8 +85,11 @@ export default function PlayerProfileView({
 
   return (
     <Shell t={t} onBack={onBack}>
-      {/* Hero (slice 2) */}
-      <div style={{ padding: "20px 20px 14px" }}>
+      {/* HERO — borderless editorial composition, mirrors own-profile. */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(16px, 3vw, 32px) clamp(20px, 4vw, 32px) 0",
+      }}>
         <ProfileHero
           t={t}
           profile={profile}
@@ -97,95 +97,146 @@ export default function PlayerProfileView({
           recentFormHistory={null}
           belowIdentitySlot={challengeBlock}
         />
+      </section>
+
+      {/* HAIRLINE */}
+      <div style={{
+        maxWidth: 720, margin: "clamp(40px, 6vw, 64px) auto 0",
+        padding: "0 clamp(20px, 4vw, 32px)",
+      }}>
+        <div style={{ borderTop: "1px solid " + t.border }} />
       </div>
 
-      <div style={{ padding: "0 20px" }}>
-        {/* Streak summary — kept until commit 2D folds it into the
-            stats accordion. Ranking already lives in the Hero. */}
-        {streakCount > 0 && (
-          <div style={{
-            background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
-            padding: "12px 14px", marginBottom: 12,
-            display: "flex", justifyContent: "flex-end", alignItems: "center",
-          }}>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
-                Current streak
-              </div>
-              <div style={{
-                fontSize: 22, fontWeight: 800,
-                color: streakType === "win" ? t.green : t.red,
-                letterSpacing: "-0.4px", lineHeight: 1.1,
-              }}>
-                {streakLabel}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Stats strip — 4-col, shared outer border, uppercase caps labels */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, marginBottom: 18, background: t.bgCard, border: "1px solid " + t.border }}>
+      {/* PUBLIC STATS — borderless 4-stat row with hairlines (mirrors HomeWeekStrip). */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) 0",
+      }}>
+        <div style={{ display: "flex", alignItems: "stretch" }}>
           {[
-            { l: "Matches", v: played, c: t.text },
-            { l: "Wins",    v: wins,   c: t.green },
-            { l: "Losses",  v: losses, c: t.red },
-            { l: "Win %",   v: played ? winRate + "%" : "—", c: t.accent },
-          ].map(function (s, i) {
+            { l: "Played", v: played, c: t.text },
+            { l: "Wins",   v: wins,   c: t.text },
+            { l: "Losses", v: losses, c: t.text },
+            { l: "Win %",  v: played ? winRate + "%" : "—", c: t.text },
+          ].map(function (s, i, arr) {
             return (
-              <div key={s.l} style={{ padding: "10px 8px", textAlign: "center", borderLeft: i === 0 ? "none" : "1px solid " + t.border }}>
-                <div style={{ fontSize: 9, color: t.textTertiary, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: s.c, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.2px", lineHeight: 1.1 }}>{s.v}</div>
+              <div key={s.l} style={{
+                flex: 1,
+                padding: "0 4px",
+                borderRight: i === arr.length - 1 ? "none" : "1px solid " + t.border,
+                textAlign: "center",
+              }}>
+                <div style={{
+                  fontSize: "clamp(28px, 4.5vw, 40px)",
+                  fontWeight: 800, color: s.c,
+                  letterSpacing: "-0.025em", lineHeight: 1,
+                  fontVariantNumeric: "tabular-nums",
+                }}>
+                  {s.v}
+                </div>
+                <div style={{
+                  marginTop: 8,
+                  fontSize: 10, fontWeight: 700, color: t.textTertiary,
+                  letterSpacing: "0.12em", textTransform: "uppercase",
+                }}>
+                  {s.l}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Head-to-head — only shown when the two players have actually played */}
-        {authUser && h2h.totalMatches > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
-              Head-to-head
-            </div>
-            <div style={{
-              background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
-            }}>
-              <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between" }}>
-                <div style={{ textAlign: "center", flex: 1, padding: "12px 10px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>You</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: h2h.viewerWins > h2h.subjectWins ? t.green : t.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.4px", lineHeight: 1.1 }}>
-                    {h2h.viewerWins}
-                  </div>
-                </div>
-                <div style={{ fontSize: 14, color: t.textTertiary, fontWeight: 300, alignSelf: "center", padding: "0 4px" }}>—</div>
-                <div style={{ textAlign: "center", flex: 1, padding: "12px 10px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {profile.name || "Them"}
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: h2h.subjectWins > h2h.viewerWins ? t.green : t.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.4px", lineHeight: 1.1 }}>
-                    {h2h.subjectWins}
-                  </div>
-                </div>
+        {/* Streak — single line of meta beneath the stats, only when applicable */}
+        {streakCount > 0 && (
+          <div style={{
+            marginTop: 18,
+            fontSize: 11, fontWeight: 700,
+            color: streakType === "win" ? t.green : t.red,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            textAlign: "center",
+          }}>
+            Current streak · {streakLabel}
+          </div>
+        )}
+      </section>
+
+      {/* HEAD-TO-HEAD — borderless display block, only when there's a real H2H */}
+      {authUser && h2h.totalMatches > 0 && (
+        <section style={{
+          maxWidth: 720, margin: "0 auto",
+          padding: "clamp(40px, 6vw, 64px) clamp(20px, 4vw, 32px) 0",
+        }}>
+          <div style={{
+            fontSize: "clamp(20px, 3vw, 24px)",
+            fontWeight: 700, color: t.text,
+            letterSpacing: "-0.02em",
+            marginBottom: 18,
+          }}>
+            Head to head
+          </div>
+          <div style={{ display: "flex", alignItems: "stretch" }}>
+            <div style={{ flex: 1, textAlign: "center", borderRight: "1px solid " + t.border, padding: "0 8px" }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, color: t.textTertiary,
+                textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8,
+              }}>
+                You
               </div>
-              <div style={{ textAlign: "center", fontSize: 10, color: t.textTertiary, borderTop: "1px solid " + t.border, padding: "8px 10px", letterSpacing: "0.02em" }}>
-                {h2h.totalMatches} match{h2h.totalMatches !== 1 ? "es" : ""} played
-                {h2h.lastDate ? " · last " + h2h.lastDate : ""}
+              <div style={{
+                fontSize: "clamp(36px, 5vw, 56px)",
+                fontWeight: 800,
+                color: h2h.viewerWins > h2h.subjectWins ? t.green : t.text,
+                fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1,
+              }}>
+                {h2h.viewerWins}
+              </div>
+            </div>
+            <div style={{ flex: 1, textAlign: "center", padding: "0 8px", minWidth: 0 }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, color: t.textTertiary,
+                textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {profile.name || "Them"}
+              </div>
+              <div style={{
+                fontSize: "clamp(36px, 5vw, 56px)",
+                fontWeight: 800,
+                color: h2h.subjectWins > h2h.viewerWins ? t.green : t.text,
+                fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1,
+              }}>
+                {h2h.subjectWins}
               </div>
             </div>
           </div>
-        )}
-
-        {authUser && h2h.totalMatches === 0 && played > 0 && (
           <div style={{
-            marginBottom: 20,
-            padding: "12px 14px",
-            background: t.bgCard, border: "1px dashed " + t.border, borderRadius: 0,
+            marginTop: 14,
             textAlign: "center",
-            fontSize: 12, color: t.textSecondary,
+            fontSize: 11, color: t.textTertiary, letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}>
+            {h2h.totalMatches} match{h2h.totalMatches !== 1 ? "es" : ""} played
+            {h2h.lastDate ? " · last " + h2h.lastDate : ""}
+          </div>
+        </section>
+      )}
+
+      {authUser && h2h.totalMatches === 0 && played > 0 && (
+        <section style={{
+          maxWidth: 720, margin: "0 auto",
+          padding: "clamp(40px, 5vw, 56px) clamp(20px, 4vw, 32px) 0",
+        }}>
+          <div style={{
+            padding: "16px 0",
+            textAlign: "center",
+            fontSize: 12, color: t.textSecondary, letterSpacing: "0.04em",
           }}>
             You haven't played {profile.name || "this player"} yet.
           </div>
-        )}
-      </div>
+        </section>
+      )}
+
+      <div style={{ height: "clamp(56px, 8vw, 80px)" }} />
     </Shell>
   );
 }
@@ -246,18 +297,26 @@ function ProfileOverflowMenu({ t, profile, blockUser }) {
 
 function Shell({ t, onBack, children }) {
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 100 }}>
+    <div style={{ width: "100%" }}>
       {onBack && (
-        <button
-          onClick={onBack}
-          style={{
-            margin: "14px 20px 0", padding: "6px 12px",
-            background: "transparent", border: "1px solid " + t.border,
-            borderRadius: 0, color: t.textSecondary, fontSize: 12, fontWeight: 600,
-            cursor: "pointer",
-          }}>
-          ← Back
-        </button>
+        <div style={{
+          maxWidth: 720, margin: "0 auto",
+          padding: "20px clamp(20px, 4vw, 32px) 0",
+        }}>
+          <button
+            onClick={onBack}
+            style={{
+              padding: "8px 14px",
+              background: "transparent",
+              border: "1px solid " + t.border,
+              color: t.textSecondary,
+              fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              cursor: "pointer",
+            }}>
+            ← Back
+          </button>
+        </div>
       )}
       {children}
     </div>

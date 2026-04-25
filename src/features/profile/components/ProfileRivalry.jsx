@@ -77,125 +77,117 @@ export default function ProfileRivalry({
   }
 
   return (
-    <div>
+    <div className="cs-profile-rivalry">
+      {/* Section header — editorial title, not a micro-eyebrow */}
       <div style={{
-        fontSize: 11, fontWeight: 700, color: t.textTertiary,
-        textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10,
+        fontSize: "clamp(20px, 3vw, 24px)",
+        fontWeight: 700,
+        color: t.text,
+        letterSpacing: "-0.02em",
+        marginBottom: 16,
       }}>
         Rivalry
       </div>
 
-      <div style={{
-        background: t.bgCard,
-        border: "1px solid " + t.border,
-        borderRadius: 12,
-        padding: "16px 18px",
-        display: "flex", flexDirection: "column", gap: 14,
+      <div className="cs-profile-rivalry-body" style={{
+        display: "flex", flexDirection: "column", gap: 20,
       }}>
-        {/* Identity row — avatar + name + a "you lead / they lead / even" line */}
+        {/* Opponent row — avatar + name + lead caption */}
         <div
           onClick={openProfile ? onTapOpponent : undefined}
           style={{
-            display: "flex", alignItems: "center", gap: 12,
+            display: "flex", alignItems: "center", gap: 14,
             cursor: openProfile ? "pointer" : "default",
             minWidth: 0,
           }}>
           <div style={{
-            width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+            width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
             background: avColor(rival.opponentName),
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 14, fontWeight: 800, color: "#fff",
+            fontSize: 15, fontWeight: 800, color: "#fff",
           }}>
             {(rival.opponentName || "?").slice(0, 2).toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontSize: 15, fontWeight: 700, color: t.text,
-              letterSpacing: "-0.1px", lineHeight: 1.2,
+              fontSize: 17, fontWeight: 700, color: t.text,
+              letterSpacing: "-0.15px", lineHeight: 1.2,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {rival.opponentName}
             </div>
             <div style={{
-              fontSize: 11, color: t.textTertiary, marginTop: 3,
-              letterSpacing: "0.01em",
+              marginTop: 4,
+              fontSize: 11, fontWeight: 700,
+              color: iLead ? t.green : theyLead ? t.red : t.textTertiary,
+              letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
               {iLead     ? "You lead" :
                theyLead  ? "They lead" :
-                           "Even"}
-              {" · "}
-              {h2h.totalMatches} match{h2h.totalMatches !== 1 ? "es" : ""} played
+                           "Tied"}
+              <span style={{ color: t.textTertiary, fontWeight: 500, marginLeft: 6 }}>
+                · {h2h.totalMatches} played
+              </span>
             </div>
           </div>
         </div>
 
-        {/* H2H score block — wins on each side, mirroring the public-profile
-            head-to-head card so the rhythm is consistent. */}
+        {/* H2H — display numbers separated by a hairline divider, no card */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: t.bg,
-          border: "1px solid " + t.border,
-          padding: "10px 14px",
-          borderRadius: 10,
+          display: "flex", alignItems: "stretch",
+          paddingTop: 8, paddingBottom: 8,
         }}>
-          <div style={{ textAlign: "center", flex: 1 }}>
+          <div style={{ flex: 1, textAlign: "center", borderRight: "1px solid " + t.border, padding: "0 8px" }}>
             <div style={{
-              fontSize: 9, fontWeight: 700, color: t.textTertiary,
-              textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4,
+              fontSize: 10, fontWeight: 700, color: t.textTertiary,
+              textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8,
             }}>
               You
             </div>
             <div style={{
-              fontSize: 24, fontWeight: 800,
+              fontSize: "clamp(36px, 5vw, 48px)",
+              fontWeight: 800,
               color: iLead ? t.green : t.text,
-              fontVariantNumeric: "tabular-nums", letterSpacing: "-0.4px", lineHeight: 1,
+              fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1,
             }}>
               {h2h.viewerWins}
             </div>
           </div>
-          <div style={{
-            fontSize: 12, color: t.textTertiary, fontWeight: 400,
-            alignSelf: "center", padding: "0 8px",
-          }}>
-            —
-          </div>
-          <div style={{ textAlign: "center", flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, textAlign: "center", padding: "0 8px", minWidth: 0 }}>
             <div style={{
-              fontSize: 9, fontWeight: 700, color: t.textTertiary,
-              textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4,
+              fontSize: 10, fontWeight: 700, color: t.textTertiary,
+              textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {rival.opponentName}
             </div>
             <div style={{
-              fontSize: 24, fontWeight: 800,
+              fontSize: "clamp(36px, 5vw, 48px)",
+              fontWeight: 800,
               color: theyLead ? t.green : t.text,
-              fontVariantNumeric: "tabular-nums", letterSpacing: "-0.4px", lineHeight: 1,
+              fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1,
             }}>
               {h2h.subjectWins}
             </div>
           </div>
         </div>
 
-        {/* Footer: last result chip + rematch CTA */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {/* Last result + rematch CTA — single line of text + ink CTA */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {lastMatch && (
             <span style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              fontSize: 11, color: t.textSecondary,
+              fontSize: 12,
+              color: t.textSecondary,
+              letterSpacing: "0.01em",
             }}>
-              <span style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+              Last match · <span style={{
+                color: lastWasWin ? t.green : t.red,
+                fontWeight: 700,
                 textTransform: "uppercase",
-                padding: "3px 7px", borderRadius: 0,
-                background: lastWasWin ? t.greenSubtle : t.redSubtle,
-                color:      lastWasWin ? t.green       : t.red,
-                border: "1px solid " + (lastWasWin ? t.green : t.red) + "33",
-              }}>
-                Last: {lastWasWin ? "Won" : "Lost"}
-              </span>
+                letterSpacing: "0.08em",
+              }}>{lastWasWin ? "Won" : "Lost"}</span>
               {lastMatch.date && (
-                <span style={{ color: t.textTertiary }}>{lastMatch.date}</span>
+                <span style={{ color: t.textTertiary, marginLeft: 6 }}>· {lastMatch.date}</span>
               )}
             </span>
           )}
@@ -205,12 +197,13 @@ export default function ProfileRivalry({
               onClick={onRematch}
               style={{
                 flexShrink: 0,
-                padding: "9px 16px",
-                borderRadius: 8,
+                padding: "12px 22px",
+                background: t.text,
+                color: t.bg,
                 border: "none",
-                background: t.accent, color: "#fff",
                 fontSize: 12, fontWeight: 700,
-                letterSpacing: "0.02em",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
                 cursor: "pointer",
                 transition: "opacity 0.15s",
               }}

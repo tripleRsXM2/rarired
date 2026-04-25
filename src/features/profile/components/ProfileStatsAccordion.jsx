@@ -101,10 +101,13 @@ function PairLine({ t, label, won, lost }) {
 }
 
 function Chevron({ t, open }) {
+  // v2: vertical chevron that rotates 180° between collapsed/expanded.
+  // Matches the toggle pattern used by HomeActivityList so the language
+  // is consistent across the product.
   return (
-    <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
-      style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-      <path d="M7 4l5 5-5 5" stroke={t.textSecondary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+      style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+      <path d="M4 7l5 5 5-5" stroke={t.textSecondary} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
