@@ -1,6 +1,11 @@
 import { supabase } from "../../../lib/supabase.js";
 import { inputStyle } from "../../../lib/theme.js";
 
+// Editorial AuthModal. Same flow + same supabase calls as before — only
+// the visual language changed: 0.12em ALL-CAPS labels, 800-weight display
+// titles, hairline error strip, ALL-CAPS uppercase action buttons. Matches
+// the rest of the redesigned product.
+
 export default function AuthModal({
   t, showAuth, setShowAuth,
   authMode, setAuthMode, authStep, setAuthStep,
@@ -27,6 +32,56 @@ export default function AuthModal({
   }
 
   if(!showAuth) return null;
+
+  // Editorial style helpers — used by every form step below.
+  var labelStyle = {
+    fontSize: 10, fontWeight: 800, color: t.textSecondary,
+    display: "block", marginBottom: 6,
+    letterSpacing: "0.12em", textTransform: "uppercase",
+  };
+  var fieldErrorStyle = {
+    fontSize: 9, fontWeight: 800, letterSpacing: "0.12em",
+    textTransform: "uppercase", color: t.red,
+    marginTop: 5,
+  };
+  var primaryBtn = {
+    width: "100%", padding: "14px", borderRadius: 10, border: "none",
+    background: t.accent, color: "#fff",
+    fontSize: 11, fontWeight: 800,
+    letterSpacing: "0.12em", textTransform: "uppercase",
+    cursor: "pointer",
+  };
+  var ghostBtn = {
+    background: "none", border: "none",
+    color: t.text,
+    fontSize: 10, fontWeight: 800,
+    letterSpacing: "0.12em", textTransform: "uppercase",
+    borderBottom: "1px solid " + t.text,
+    padding: "0 0 2px 0",
+    cursor: "pointer",
+  };
+
+  function ErrorStrip({ msg }) {
+    if (!msg) return null;
+    return (
+      <div style={{
+        marginBottom: 14,
+        paddingTop: 10, paddingBottom: 10,
+        borderTop: "1px solid " + t.border,
+        display: "flex", gap: 10, alignItems: "baseline",
+      }}>
+        <span style={{
+          fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+          textTransform: "uppercase", color: t.red, flexShrink: 0,
+        }}>Error</span>
+        <span style={{
+          fontSize: 12, color: t.text,
+          lineHeight: 1.4, letterSpacing: "-0.1px",
+        }}>{msg}</span>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={function(){if(authStep==="set-password")return;setShowAuth(false);setAuthError("");setAuthFieldErrors({});setAuthStep("choose");}}
@@ -34,9 +89,6 @@ export default function AuthModal({
         position:"fixed",inset:0,
         background:"rgba(0,0,0,0.4)",
         backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
-        // Centred (not bottom slide-up) per user feedback. Padding caps
-        // edge spacing on small phones; bottom respects the iOS home-
-        // indicator safe area so the card doesn't ride under it.
         display:"flex",alignItems:"center",justifyContent:"center",
         padding:"16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
         zIndex:300,
@@ -46,23 +98,36 @@ export default function AuthModal({
         className="pop"
         style={{
           background:t.modalBg,border:"1px solid "+t.border,borderRadius:14,
-          padding:"24px 22px 26px",
+          padding:"26px 22px 28px",
           width:"100%",maxWidth:440,
-          // Cap to viewport so on a 360×640 phone (or with the keyboard
-          // open) the card scrolls inside its own frame instead of
-          // pushing the Continue button off-screen.
           maxHeight:"calc(100dvh - 32px)",overflowY:"auto",
           boxShadow:"0 20px 60px rgba(0,0,0,0.35)",
         }}>
-        {/* Drop the slide-handle bar — it only made sense on a bottom sheet. */}
 
         {authStep!=="forgot-sent"&&authStep!=="set-password"&&(
-          <div style={{marginBottom:24}}>
-            <div style={{width:36,height:36,borderRadius:9,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",marginBottom:12}}>CS</div>
-            <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>
-              {authStep==="forgot"?"Reset password":authMode==="signup"?"Create account":"Welcome back"}
+          <div style={{marginBottom:22}}>
+            <div style={{
+              width:36,height:36,borderRadius:9,background:t.accent,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:13,fontWeight:800,color:"#fff",marginBottom:14,
+              letterSpacing:"0.04em",
+            }}>CS</div>
+            <div style={{
+              fontSize:9,fontWeight:800,letterSpacing:"0.16em",
+              textTransform:"uppercase",color:t.textTertiary,marginBottom:6,
+            }}>
+              {authStep==="forgot"?"Reset":authMode==="signup"?"Create account":"Welcome back"}
+            </div>
+            <h2 style={{
+              fontSize:26,fontWeight:800,color:t.text,
+              margin:0,marginBottom:6,letterSpacing:"-0.8px",lineHeight:1.05,
+            }}>
+              {authStep==="forgot"?"Reset password":authMode==="signup"?"Join CourtSync":"Welcome back"}
             </h2>
-            <p style={{fontSize:13,color:t.textSecondary}}>
+            <p style={{
+              fontSize:13,color:t.textSecondary,margin:0,
+              lineHeight:1.5,letterSpacing:"-0.1px",
+            }}>
               {authStep==="forgot"?"We'll send a reset link to your email.":"Enter tournaments. Compete for prizes."}
             </p>
           </div>
@@ -70,17 +135,27 @@ export default function AuthModal({
 
         {/* Choose */}
         {authStep==="choose"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <button
               onClick={function(){setAuthStep("email");setAuthError("");setAuthFieldErrors({});}}
-              style={{width:"100%",padding:"14px",borderRadius:9,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:14,fontWeight:500}}>
-              Continue with Email
+              style={{
+                width:"100%",padding:"14px",borderRadius:10,
+                border:"1px solid "+t.border,background:"transparent",
+                color:t.text,
+                fontSize:11,fontWeight:800,
+                letterSpacing:"0.12em",textTransform:"uppercase",
+                cursor:"pointer",
+              }}>
+              Continue with email
             </button>
-            <p style={{textAlign:"center",fontSize:13,color:t.textSecondary,marginTop:4}}>
+            <p style={{
+              textAlign:"center",fontSize:13,color:t.textSecondary,
+              marginTop:8,letterSpacing:"-0.1px",
+            }}>
               {authMode==="login"?"No account? ":"Have an account? "}
               <button
                 onClick={function(){setAuthMode(authMode==="login"?"signup":"login");setAuthError("");setAuthFieldErrors({});}}
-                style={{background:"none",border:"none",color:t.accent,fontWeight:600,fontSize:13}}>
+                style={Object.assign({}, ghostBtn, { marginLeft: 4 })}>
                 {authMode==="login"?"Sign up":"Log in"}
               </button>
             </p>
@@ -91,40 +166,47 @@ export default function AuthModal({
         {authStep==="email"&&(
           <div className="fade-up">
             {authMode==="signup"&&(
-              <div style={{marginBottom:12}}>
-                <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Full name</label>
+              <div style={{marginBottom:14}}>
+                <label style={labelStyle}>Full name</label>
                 <input value={authName} placeholder="Your name"
                   onChange={function(e){setAuthName(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{name:null});});}}
                   style={Object.assign({},iStyle,{borderColor:authFieldErrors.name?t.red:t.border})}/>
-                {authFieldErrors.name&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.name}</div>}
+                {authFieldErrors.name&&<div style={fieldErrorStyle}>{authFieldErrors.name}</div>}
               </div>
             )}
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Email</label>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Email</label>
               <input type="email" value={authEmail} placeholder="you@example.com"
                 onChange={function(e){setAuthEmail(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{email:null});});}}
                 style={Object.assign({},iStyle,{borderColor:authFieldErrors.email?t.red:t.border})}/>
-              {authFieldErrors.email&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.email}</div>}
+              {authFieldErrors.email&&<div style={fieldErrorStyle}>{authFieldErrors.email}</div>}
             </div>
             <div style={{marginBottom:6}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Password</label>
+              <label style={labelStyle}>Password</label>
               <input type="password" value={authPassword}
                 placeholder={authMode==="signup"?"Min 6 characters":"Your password"}
                 onChange={function(e){setAuthPassword(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{password:null});});}}
                 style={Object.assign({},iStyle,{borderColor:authFieldErrors.password?t.red:t.border})}/>
-              {authFieldErrors.password&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.password}</div>}
+              {authFieldErrors.password&&<div style={fieldErrorStyle}>{authFieldErrors.password}</div>}
             </div>
             {authMode==="login"&&(
-              <div style={{textAlign:"right",marginBottom:18}}>
+              <div style={{textAlign:"right",marginBottom:18,marginTop:8}}>
                 <button
                   onClick={function(){setAuthStep("forgot");setAuthError("");setAuthFieldErrors({});}}
-                  style={{background:"none",border:"none",color:t.accent,fontSize:12,fontWeight:500}}>
+                  style={{
+                    background:"none",border:"none",
+                    color:t.textSecondary,
+                    fontSize:10,fontWeight:800,
+                    letterSpacing:"0.12em",textTransform:"uppercase",
+                    borderBottom:"1px solid "+t.textSecondary,
+                    padding:"0 0 2px 0",cursor:"pointer",
+                  }}>
                   Forgot password?
                 </button>
               </div>
             )}
             {authMode==="signup"&&<div style={{height:18}}/>}
-            {authError&&<div style={{fontSize:12,color:t.red,marginBottom:12,padding:"10px 12px",background:t.redSubtle,border:"1px solid "+t.red+"33",borderRadius:7}}>{authError}</div>}
+            <ErrorStrip msg={authError}/>
             <button
               disabled={authLoading}
               onClick={async function(){
@@ -143,13 +225,20 @@ export default function AuthModal({
                 if(r.error){setAuthError(mapAuthError(r.error.message));return;}
                 setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthPassword("");setAuthName("");setAuthError("");setAuthFieldErrors({});
               }}
-              style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,opacity:authLoading?0.65:1}}>
+              style={Object.assign({}, primaryBtn, { opacity: authLoading?0.65:1 })}>
               {authLoading?"Please wait…":authMode==="signup"?"Create account":"Log in"}
             </button>
             <button
               onClick={function(){setAuthStep("choose");setAuthError("");setAuthFieldErrors({});}}
-              style={{width:"100%",marginTop:8,padding:"10px",background:"none",border:"none",color:t.textSecondary,fontSize:12}}>
-              Back
+              style={{
+                width:"100%",marginTop:12,padding:"6px",
+                background:"none",border:"none",
+                color:t.textTertiary,
+                fontSize:10,fontWeight:800,
+                letterSpacing:"0.12em",textTransform:"uppercase",
+                cursor:"pointer",
+              }}>
+              ← Back
             </button>
           </div>
         )}
@@ -157,13 +246,13 @@ export default function AuthModal({
         {/* Forgot */}
         {authStep==="forgot"&&(
           <div className="fade-up">
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Email</label>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Email</label>
               <input type="email" value={authEmail} placeholder="you@example.com"
                 onChange={function(e){setAuthEmail(e.target.value);setAuthError("");}}
                 style={Object.assign({},iStyle,{borderColor:authError?t.red:t.border})}/>
             </div>
-            {authError&&<div style={{fontSize:12,color:t.red,marginBottom:12,padding:"10px 12px",background:t.redSubtle,border:"1px solid "+t.red+"33",borderRadius:7}}>{authError}</div>}
+            <ErrorStrip msg={authError}/>
             <button
               disabled={authLoading}
               onClick={async function(){
@@ -174,13 +263,20 @@ export default function AuthModal({
                 if(r.error){setAuthError(mapAuthError(r.error.message));return;}
                 setAuthStep("forgot-sent");
               }}
-              style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,opacity:authLoading?0.65:1,marginBottom:8}}>
+              style={Object.assign({}, primaryBtn, { opacity: authLoading?0.65:1, marginBottom: 10 })}>
               {authLoading?"Sending…":"Send reset link"}
             </button>
             <button
               onClick={function(){setAuthStep("email");setAuthError("");}}
-              style={{width:"100%",padding:"10px",background:"none",border:"none",color:t.textSecondary,fontSize:12}}>
-              Back to login
+              style={{
+                width:"100%",padding:"6px",
+                background:"none",border:"none",
+                color:t.textTertiary,
+                fontSize:10,fontWeight:800,
+                letterSpacing:"0.12em",textTransform:"uppercase",
+                cursor:"pointer",
+              }}>
+              ← Back to login
             </button>
           </div>
         )}
@@ -188,14 +284,29 @@ export default function AuthModal({
         {/* Forgot sent */}
         {authStep==="forgot-sent"&&(
           <div className="fade-up" style={{textAlign:"center",padding:"12px 0 8px"}}>
-            <div style={{width:52,height:52,borderRadius:"50%",background:t.greenSubtle,border:"1px solid "+t.green+"44",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:22}}>✓</div>
-            <h2 style={{fontSize:20,fontWeight:700,color:t.text,marginBottom:8,letterSpacing:"-0.3px"}}>Check your email</h2>
-            <p style={{fontSize:14,color:t.textSecondary,lineHeight:1.6,marginBottom:24}}>
+            <div style={{
+              width:52,height:52,borderRadius:"50%",
+              background:t.greenSubtle,border:"1px solid "+t.green+"44",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              margin:"0 auto 16px",fontSize:24,color:t.green,fontWeight:800,
+            }}>✓</div>
+            <div style={{
+              fontSize:9,fontWeight:800,letterSpacing:"0.16em",
+              textTransform:"uppercase",color:t.textTertiary,marginBottom:8,
+            }}>Sent</div>
+            <h2 style={{
+              fontSize:22,fontWeight:800,color:t.text,
+              margin:0,marginBottom:10,letterSpacing:"-0.6px",lineHeight:1.05,
+            }}>Check your email</h2>
+            <p style={{
+              fontSize:13,color:t.textSecondary,
+              lineHeight:1.6,marginBottom:24,letterSpacing:"-0.1px",
+            }}>
               We sent a reset link to <strong style={{color:t.text}}>{authEmail}</strong>. Check your inbox and follow the link.
             </p>
             <button
               onClick={function(){setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthError("");}}
-              style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600}}>
+              style={primaryBtn}>
               Done
             </button>
           </div>
@@ -204,24 +315,39 @@ export default function AuthModal({
         {/* Set new password */}
         {authStep==="set-password"&&(
           <div className="fade-up">
-            <div style={{width:36,height:36,borderRadius:9,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",marginBottom:12}}>CS</div>
-            <h2 style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>Set new password</h2>
-            <p style={{fontSize:13,color:t.textSecondary,marginBottom:24}}>Choose a new password for your account.</p>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>New password</label>
+            <div style={{
+              width:36,height:36,borderRadius:9,background:t.accent,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:13,fontWeight:800,color:"#fff",marginBottom:14,
+              letterSpacing:"0.04em",
+            }}>CS</div>
+            <div style={{
+              fontSize:9,fontWeight:800,letterSpacing:"0.16em",
+              textTransform:"uppercase",color:t.textTertiary,marginBottom:6,
+            }}>Set password</div>
+            <h2 style={{
+              fontSize:26,fontWeight:800,color:t.text,
+              margin:0,marginBottom:6,letterSpacing:"-0.8px",lineHeight:1.05,
+            }}>New password</h2>
+            <p style={{
+              fontSize:13,color:t.textSecondary,
+              margin:0,marginBottom:22,lineHeight:1.5,letterSpacing:"-0.1px",
+            }}>Choose a new password for your account.</p>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>New password</label>
               <input type="password" value={authNewPassword} placeholder="Min 6 characters"
                 onChange={function(e){setAuthNewPassword(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{np:null});});}}
                 style={Object.assign({},iStyle,{borderColor:authFieldErrors.np?t.red:t.border})}/>
-              {authFieldErrors.np&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.np}</div>}
+              {authFieldErrors.np&&<div style={fieldErrorStyle}>{authFieldErrors.np}</div>}
             </div>
             <div style={{marginBottom:20}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>Confirm password</label>
+              <label style={labelStyle}>Confirm password</label>
               <input type="password" value={authNewPassword2} placeholder="Repeat password"
                 onChange={function(e){setAuthNewPassword2(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{np2:null});});}}
                 style={Object.assign({},iStyle,{borderColor:authFieldErrors.np2?t.red:t.border})}/>
-              {authFieldErrors.np2&&<div style={{fontSize:11,color:t.red,marginTop:4}}>{authFieldErrors.np2}</div>}
+              {authFieldErrors.np2&&<div style={fieldErrorStyle}>{authFieldErrors.np2}</div>}
             </div>
-            {authError&&<div style={{fontSize:12,color:t.red,marginBottom:12,padding:"10px 12px",background:t.redSubtle,border:"1px solid "+t.red+"33",borderRadius:7}}>{authError}</div>}
+            <ErrorStrip msg={authError}/>
             <button
               disabled={authLoading}
               onClick={async function(){
@@ -235,7 +361,7 @@ export default function AuthModal({
                 if(r.error){setAuthError(mapAuthError(r.error.message));return;}
                 setShowAuth(false);setAuthStep("choose");setAuthNewPassword("");setAuthNewPassword2("");setAuthError("");setAuthFieldErrors({});
               }}
-              style={{width:"100%",padding:"14px",borderRadius:9,border:"none",background:t.accent,color:"#fff",fontSize:14,fontWeight:600,opacity:authLoading?0.65:1}}>
+              style={Object.assign({}, primaryBtn, { opacity: authLoading?0.65:1 })}>
               {authLoading?"Updating…":"Update password"}
             </button>
           </div>

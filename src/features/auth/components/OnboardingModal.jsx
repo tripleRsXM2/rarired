@@ -48,9 +48,11 @@ export default function OnboardingModal({
     return (
       <button onClick={onClick} disabled={!!disabled}
         style={{
-          width: "100%", padding: "14px", borderRadius: 9, border: "none",
+          width: "100%", padding: "14px", borderRadius: 10, border: "none",
           background: disabled ? t.border : t.accent, color: "#fff",
-          fontSize: 14, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+          fontSize: 11, fontWeight: 800,
+          letterSpacing: "0.12em", textTransform: "uppercase",
+          cursor: disabled ? "not-allowed" : "pointer",
           marginBottom: 8,
         }}>
         {label}
@@ -60,11 +62,44 @@ export default function OnboardingModal({
   function secondaryBtn(label, onClick) {
     return (
       <button onClick={onClick}
-        style={{ width: "100%", padding: "10px", background: "none", border: "none", color: t.textSecondary, fontSize: 12, cursor: "pointer" }}>
+        style={{
+          width: "100%", padding: "10px", background: "none", border: "none",
+          color: t.textTertiary,
+          fontSize: 10, fontWeight: 800,
+          letterSpacing: "0.12em", textTransform: "uppercase",
+          cursor: "pointer",
+        }}>
         {label}
       </button>
     );
   }
+  // Shared style for the field labels.
+  var labelStyle = {
+    fontSize: 10, fontWeight: 800, color: t.textSecondary,
+    display: "block", marginBottom: 8,
+    letterSpacing: "0.12em", textTransform: "uppercase",
+  };
+  // Step eyebrow (STEP X / 3) above each step's display title.
+  function stepEyebrow(n) {
+    return (
+      <div style={{
+        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+        textTransform: "uppercase", color: t.textTertiary,
+        marginBottom: 8,
+      }}>Step {n} / 3</div>
+    );
+  }
+  // Display title style — 26/800/-0.8px tight for tabloid feel.
+  var titleStyle = {
+    fontSize: 26, fontWeight: 800, color: t.text,
+    margin: 0, marginBottom: 6,
+    letterSpacing: "-0.8px", lineHeight: 1.05,
+  };
+  var subtitleStyle = {
+    fontSize: 13, color: t.textSecondary,
+    margin: 0, marginBottom: 22,
+    lineHeight: 1.55, letterSpacing: "-0.1px",
+  };
 
   async function finish() {
     var updated = Object.assign({}, profile, {
@@ -123,28 +158,38 @@ export default function OnboardingModal({
         {/* ─── Step 1: skill + style ─── */}
         {onboardStep === 1 && (
           <div className="fade-up">
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 6, letterSpacing: "-0.4px" }}>Your game, your level.</h2>
-            <p style={{ fontSize: 13, color: t.textSecondary, marginBottom: 22, lineHeight: 1.55 }}>
+            {stepEyebrow(1)}
+            <h2 style={titleStyle}>Your game, your level.</h2>
+            <p style={subtitleStyle}>
               Pick honest — we use this to match you with players at the right level, not to show off.
             </p>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Skill level</label>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ marginBottom: 22 }}>
+              <label style={labelStyle}>Skill level</label>
+              <div style={{ borderTop: "1px solid " + t.border }}>
                 {SKILL_LEVELS.map(function (s) {
                   var on = onboardDraft.skill === s;
                   return (
                     <button key={s}
                       onClick={function () { setOnboardDraft(function (d) { return Object.assign({}, d, { skill: s }); }); }}
                       style={{
-                        textAlign: "left", padding: "10px 14px", borderRadius: 10,
-                        border: "1px solid " + (on ? t.accent : t.border),
+                        textAlign: "left", padding: "12px 14px",
+                        borderRadius: 0,
+                        border: "none",
+                        borderBottom: "1px solid " + t.border,
+                        borderLeft: "2px solid " + (on ? t.text : "transparent"),
                         background: on ? t.accentSubtle : "transparent",
-                        color: on ? t.accent : t.text,
-                        cursor: "pointer", display: "flex", flexDirection: "column", gap: 2,
+                        color: t.text, width: "100%",
+                        cursor: "pointer", display: "flex", flexDirection: "column", gap: 3,
                       }}>
-                      <span style={{ fontSize: 13, fontWeight: on ? 700 : 600 }}>{s}</span>
-                      <span style={{ fontSize: 11, color: on ? t.accent : t.textTertiary, fontWeight: 400 }}>
+                      <span style={{
+                        fontSize: 14, fontWeight: 800, letterSpacing: "-0.2px",
+                      }}>{s}</span>
+                      <span style={{
+                        fontSize: 11,
+                        color: on ? t.textSecondary : t.textTertiary,
+                        fontWeight: 500, lineHeight: 1.4, letterSpacing: "-0.1px",
+                      }}>
                         {SKILL_HINTS[s] || ""}
                       </span>
                     </button>
@@ -153,8 +198,8 @@ export default function OnboardingModal({
               </div>
             </div>
 
-            <div style={{ marginBottom: 22 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Play style</label>
+            <div style={{ marginBottom: 24 }}>
+              <label style={labelStyle}>Play style</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {PLAY_STYLES.map(function (s) {
                   var on = onboardDraft.style === s;
@@ -162,11 +207,13 @@ export default function OnboardingModal({
                     <button key={s}
                       onClick={function () { setOnboardDraft(function (d) { return Object.assign({}, d, { style: s }); }); }}
                       style={{
-                        padding: "8px 14px", borderRadius: 8,
-                        border: "1px solid " + (on ? t.accent : t.border),
-                        background: on ? t.accentSubtle : "transparent",
-                        color: on ? t.accent : t.textSecondary,
-                        fontSize: 13, fontWeight: on ? 700 : 500, cursor: "pointer",
+                        padding: "9px 14px", borderRadius: 6,
+                        border: "1px solid " + (on ? t.text : t.border),
+                        background: "transparent",
+                        color: on ? t.text : t.textTertiary,
+                        fontSize: 10, fontWeight: 800,
+                        letterSpacing: "0.12em", textTransform: "uppercase",
+                        cursor: "pointer",
                       }}>{s}</button>
                   );
                 })}
@@ -180,13 +227,14 @@ export default function OnboardingModal({
         {/* ─── Step 2: home zone + availability ─── */}
         {onboardStep === 2 && (
           <div className="fade-up">
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 6, letterSpacing: "-0.4px" }}>Where + when.</h2>
-            <p style={{ fontSize: 13, color: t.textSecondary, marginBottom: 20, lineHeight: 1.55 }}>
+            {stepEyebrow(2)}
+            <h2 style={titleStyle}>Where + when.</h2>
+            <p style={subtitleStyle}>
               Home zone maps you to the right slice of Sydney. Availability helps us surface people whose week overlaps yours.
             </p>
 
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Home zone</label>
+            <div style={{ marginBottom: 20 }}>
+              <label style={labelStyle}>Home zone</label>
               <select value={localZone} onChange={function (e) { setLocalZone(e.target.value); }}
                 style={Object.assign({}, iStyle)}>
                 <option value="">Pick your home zone…</option>
@@ -194,31 +242,32 @@ export default function OnboardingModal({
               </select>
             </div>
 
-            <div style={{ marginBottom: 22 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>When are you usually free?</label>
+            <div style={{ marginBottom: 24 }}>
+              <label style={labelStyle}>When are you usually free?</label>
               <AvailabilityChips t={t} value={localAvail} onChange={setLocalAvail}/>
             </div>
 
             {primaryBtn("Next →", function () { setOnboardStep(3); }, !localZone)}
-            {secondaryBtn("Back", function () { setOnboardStep(1); })}
+            {secondaryBtn("← Back", function () { setOnboardStep(1); })}
           </div>
         )}
 
         {/* ─── Step 3: courts + bio ─── */}
         {onboardStep === 3 && (
           <div className="fade-up">
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 6, letterSpacing: "-0.4px" }}>Your courts.</h2>
-            <p style={{ fontSize: 13, color: t.textSecondary, marginBottom: 20, lineHeight: 1.55 }}>
+            {stepEyebrow(3)}
+            <h2 style={titleStyle}>Your courts.</h2>
+            <p style={subtitleStyle}>
               Which courts do you actually play at? Pick up to 8 — this drives who shows up when someone taps a court on the map.
             </p>
 
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ marginBottom: 20 }}>
               <CourtsPicker t={t} value={localCourts} onChange={setLocalCourts}/>
             </div>
 
-            <div style={{ marginBottom: 22 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                Short bio <span style={{ color: t.textTertiary, fontWeight: 400, textTransform: "none" }}>(optional)</span>
+            <div style={{ marginBottom: 24 }}>
+              <label style={labelStyle}>
+                Short bio <span style={{ color: t.textTertiary, fontWeight: 600, letterSpacing: "0.06em" }}>· optional</span>
               </label>
               <input value={onboardDraft.bio || ""} placeholder="e.g. Weekend warrior, ex-uni player…"
                 onChange={function (e) { var v = e.target.value; setOnboardDraft(function (d) { return Object.assign({}, d, { bio: v }); }); }}
@@ -226,7 +275,7 @@ export default function OnboardingModal({
             </div>
 
             {primaryBtn("Get started", finish)}
-            {secondaryBtn("Back", function () { setOnboardStep(2); })}
+            {secondaryBtn("← Back", function () { setOnboardStep(2); })}
           </div>
         )}
       </div>
