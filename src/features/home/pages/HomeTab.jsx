@@ -573,11 +573,26 @@ function FeedCard({
                 }}>{row.name}</div>
 
               {/* Set scores — refined typography: winner sets in full weight,
-                  loser sets dimmed. Smaller per-column width. */}
+                  loser sets dimmed. Smaller per-column width.
+                  When the OTHER side's score is missing entirely
+                  (retirement / time-limited / partial), the present
+                  positive number is still the meaningful one — bold
+                  it on the row that has it instead of dimming both. */}
               {row.scores.map(function(score, i) {
                 var opp = row.oppScores[i];
-                var wonSet = (score !== "" && score !== undefined && opp !== "" && opp !== undefined)
-                  ? Number(score) > Number(opp) : false;
+                var hasMine = score !== "" && score !== undefined && score !== null;
+                var hasOpp  = opp   !== "" && opp   !== undefined && opp   !== null;
+                var wonSet;
+                if (hasMine && hasOpp) {
+                  wonSet = Number(score) > Number(opp);
+                } else if (hasMine && !hasOpp) {
+                  // Only my side recorded a number (e.g. opponent
+                  // retired). Treat any positive value as the
+                  // meaningful set winner so it doesn't render dim.
+                  wonSet = Number(score) > 0;
+                } else {
+                  wonSet = false;
+                }
                 return (
                   <div key={i} style={{
                     width: 24, textAlign: "center",
