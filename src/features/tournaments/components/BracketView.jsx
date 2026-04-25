@@ -11,7 +11,7 @@ export default function BracketView({tournament, myId, t}) {
         {rounds.map(function(r,ri){
           return (
             <div key={ri} style={{marginBottom:24}}>
-              <div style={{fontSize:11,fontWeight:700,color:t.textTertiary,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:10}}>{roundLabel(r.round,tournament.size)}</div>
+              <div style={{fontSize:11,fontWeight:700,color:t.textTertiary,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10}}>{roundLabel(r.round,tournament.size)}</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {(r.matches||[]).map(function(m){
                   var isMyMatch=(m.p1&&m.p1.id===myId)||(m.p2&&m.p2.id===myId);
@@ -69,7 +69,7 @@ export default function BracketView({tournament, myId, t}) {
           return (
             <div key={si} style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,overflow:"hidden"}}>
               <div style={{padding:"6px 12px",background:t.bgTertiary,borderBottom:"1px solid "+t.border}}>
-                <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.06em"}}>{semi.label}</div>
+                <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em"}}>{semi.label}</div>
               </div>
               {[semi.p1,semi.p2].map(function(player,pi){
                 var isWinner=semi.match&&semi.match.winner&&player&&player.id===semi.match.winner;
@@ -103,7 +103,7 @@ export default function BracketView({tournament, myId, t}) {
 
       <div style={{background:t.bgCard,border:"1px solid "+t.border,borderLeft:"3px solid "+t.gold,borderRadius:10,overflow:"hidden"}}>
         <div style={{padding:"7px 14px",borderBottom:"1px solid "+t.border,display:"flex",alignItems:"center",gap:8}}>
-          <div style={{fontSize:9,fontWeight:700,color:t.gold,textTransform:"uppercase",letterSpacing:"0.06em"}}>Final</div>
+          <div style={{fontSize:9,fontWeight:700,color:t.gold,textTransform:"uppercase",letterSpacing:"0.12em"}}>Final</div>
           {finalMatch&&finalMatch.status==="complete"&&<div style={{fontSize:9,color:t.textTertiary}}>·</div>}
           {finalMatch&&finalMatch.status==="complete"&&<div style={{fontSize:9,color:t.textTertiary}}>Completed</div>}
         </div>

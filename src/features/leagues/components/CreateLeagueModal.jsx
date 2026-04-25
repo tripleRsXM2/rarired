@@ -105,7 +105,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
 
         {/* Name */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Name</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Name</label>
           <input value={name} placeholder="e.g. Sunday Crew Autumn"
             autoFocus
             onChange={function (e) { setName(e.target.value); }}
@@ -114,7 +114,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
 
         {/* Description */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Description (optional)</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Description (optional)</label>
           <textarea value={description}
             placeholder="A short note so friends know what this league is."
             rows={2}
@@ -126,7 +126,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
             controls which match_type can be tagged into the league
             (DB trigger enforces match_type === league.mode). */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Mode</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Mode</label>
           <div style={{ display: "flex", gap: 8 }}>
             {[
               { id: "ranked", label: "Ranked", hint: "Counts toward Elo + W/L" },
@@ -151,19 +151,19 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
         {/* Dates + Max members */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Start</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Start</label>
             <input type="date" value={startDate}
               onChange={function (e) { setStartDate(e.target.value); }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
           </div>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>End</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>End</label>
             <input type="date" value={endDate}
               onChange={function (e) { setEndDate(e.target.value); }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
           </div>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Max members</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Max members</label>
             <input type="number" min="2" value={maxMembers} placeholder="—"
               onChange={function (e) { setMaxMembers(e.target.value); }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
@@ -172,7 +172,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
 
         {/* Match format */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Match format</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Match format</label>
           <div style={{ display: "flex", gap: 8 }}>
             {MATCH_FORMATS.map(function (o) {
               var on = matchFormat === o.id;
@@ -189,7 +189,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
 
         {/* Tiebreak */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Tiebreak</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Tiebreak</label>
           <div style={{ display: "flex", gap: 8 }}>
             {TIEBREAK_FORMATS.map(function (o) {
               var on = tiebreakFormat === o.id;
@@ -206,7 +206,7 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
 
         {/* Max matches per opponent */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Max matches per opponent</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Max matches per opponent</label>
           <div style={{ display: "flex", gap: 8 }}>
             {MAX_MATCHES_OPTIONS.map(function (o) {
               var on = maxMatchesPerOpponent === o.id;
@@ -224,13 +224,13 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
         {/* Points */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Win points</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Win points</label>
             <input type="number" min="0" value={winPoints}
               onChange={function (e) { setWinPoints(parseInt(e.target.value || "0", 10)); }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
           </div>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Loss points</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Loss points</label>
             <input type="number" min="0" value={lossPoints}
               onChange={function (e) { setLossPoints(parseInt(e.target.value || "0", 10)); }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>

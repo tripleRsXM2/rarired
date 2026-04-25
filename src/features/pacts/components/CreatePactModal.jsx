@@ -138,7 +138,7 @@ export default function CreatePactModal({
         {/* Direct mode — partner pick with search + scrollable list */}
         {mode === "direct" && (
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Partner</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Partner</label>
             {partner ? (
               <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: "1px solid " + t.border, borderRadius: 8 }}>
                 <PlayerAvatar name={partner.name} avatar={partner.avatar} avatarUrl={partner.avatar_url} size={30}/>
@@ -213,14 +213,14 @@ export default function CreatePactModal({
         {mode === "open" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Zone</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Zone</label>
               <select value={zoneId || ""} onChange={function (e) { setZoneId(e.target.value || null); }}
                 style={Object.assign({}, inputStyle, { marginTop: 6 })}>
                 {ZONES.map(function (z) { return <option key={z.id} value={z.id}>{z.name}</option>; })}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Skill</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Skill</label>
               <select value={skill || ""} onChange={function (e) { setSkill(e.target.value); }}
                 style={Object.assign({}, inputStyle, { marginTop: 6 })}>
                 <option value="">Any</option>
@@ -236,7 +236,7 @@ export default function CreatePactModal({
             on which zone this match belongs to. "Other (type your own)"
             unlocks the freetext field below for venues we haven't curated. */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Venue</label>
+          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Venue</label>
           <select
             value={venueSource}
             onChange={function (e) {
@@ -281,7 +281,7 @@ export default function CreatePactModal({
 
         <div style={{ marginBottom: 10 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Court #</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Court #</label>
             <input value={court} onChange={function (e) { setCourtText(e.target.value); }}
               placeholder="optional"
               style={Object.assign({}, inputStyle, { marginTop: 6 })}/>
@@ -291,12 +291,12 @@ export default function CreatePactModal({
         {/* Date + time */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Date</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Date</label>
             <input type="date" value={date} onChange={function (e) { setDate(e.target.value); }}
               style={Object.assign({}, inputStyle, { marginTop: 6 })}/>
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Time</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Time</label>
             <input type="time" value={time} onChange={function (e) { setTime(e.target.value); }}
               style={Object.assign({}, inputStyle, { marginTop: 6 })}/>
           </div>
@@ -304,7 +304,7 @@ export default function CreatePactModal({
 
         {/* Message */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Note (optional)</label>
+          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Note (optional)</label>
           <textarea value={message} onChange={function (e) { setMessage(e.target.value.slice(0, 280)); }}
             placeholder={mode === "open" ? "e.g. Looking for a 4.0 level hit, doubles welcome." : "e.g. Best of 3 sets, bring balls."}
             style={Object.assign({}, inputStyle, { marginTop: 6, resize: "vertical", minHeight: 60, fontFamily: "inherit" })}/>
@@ -313,13 +313,13 @@ export default function CreatePactModal({
         {/* Cost + split */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 10, marginBottom: 10 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Court fee (AU$)</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Court fee (AU$)</label>
             <input type="number" value={totalCost} onChange={function (e) { setTotalCost(e.target.value); }}
               placeholder="optional"
               style={Object.assign({}, inputStyle, { marginTop: 6 })}/>
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Split</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Split</label>
             <select value={splitMode} onChange={function (e) { setSplitMode(e.target.value); }}
               style={Object.assign({}, inputStyle, { marginTop: 6 })}>
               <option value="50_50">50 / 50</option>
@@ -332,7 +332,7 @@ export default function CreatePactModal({
 
         {/* Booking ref */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Already booked? Confirmation #</label>
+          <label style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Already booked? Confirmation #</label>
           <input value={bookingRef} onChange={function (e) { setBookingRef(e.target.value); }}
             placeholder="optional — paste the operator's reference"
             style={Object.assign({}, inputStyle, { marginTop: 6 })}/>

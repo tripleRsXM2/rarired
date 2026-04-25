@@ -21,7 +21,7 @@ export default function ScheduleModal({
         {[{l:"Date",k:"date",type:"date"},{l:"Time",k:"time",type:"text",ph:"e.g. 6:00 PM"},{l:"Court",k:"court",type:"text",ph:"e.g. Court 3"}].map(function(f){
           return (
             <div key={f.k} style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>{f.l}</label>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:5,letterSpacing:"0.12em",textTransform:"uppercase"}}>{f.l}</label>
               <input type={f.type} value={scheduleDraft[f.k]} placeholder={f.ph||""}
                 onChange={function(e){var v=e.target.value;setScheduleDraft(function(d){return Object.assign({},d,{[f.k]:v});});}}
                 style={iStyle}/>

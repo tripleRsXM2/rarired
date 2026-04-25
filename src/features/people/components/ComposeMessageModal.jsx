@@ -171,7 +171,7 @@ export default function ComposeMessageModal({
             Date + time are optional — a blank pair sends a plain ping
             without a proposed slot. */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Venue</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Venue</label>
           <input value={venue}
             onChange={function (e) { setVenue(e.target.value); }}
             placeholder="e.g. Prince Alfred Park"
@@ -180,7 +180,7 @@ export default function ComposeMessageModal({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Date <span style={{ fontWeight: 400, color: t.textTertiary, textTransform: "none" }}>(optional)</span>
             </label>
             <input type="date" value={date}
@@ -188,7 +188,7 @@ export default function ComposeMessageModal({
               style={Object.assign({}, inputStyle, { width: "100%", marginTop: 5 })}/>
           </div>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Time <span style={{ fontWeight: 400, color: t.textTertiary, textTransform: "none" }}>(optional)</span>
             </label>
             <input type="time" value={time}
@@ -212,7 +212,7 @@ export default function ComposeMessageModal({
         {/* Template chips — tap to swap the draft tone. "Custom" hands
             editing back to the user without overwriting. */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
             Tone
           </label>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
@@ -238,7 +238,7 @@ export default function ComposeMessageModal({
         {/* Draft textarea — always editable; template changes rewrite it
             unless the user picked Custom. */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.06em", textTransform: "uppercase" }}>Message</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, letterSpacing: "0.12em", textTransform: "uppercase" }}>Message</label>
           <textarea value={draft}
             onChange={function (e) { setDraft(e.target.value.slice(0, 500)); }}
             rows={4}

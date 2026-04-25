@@ -127,7 +127,7 @@ export default function LeagueRivalryCallout({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 10, fontWeight: 700, color: tone,
-            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3,
+            letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 3,
           }}>
             Rivalry
           </div>
@@ -148,7 +148,7 @@ export default function LeagueRivalryCallout({
               padding: "2px 6px", borderRadius: 0,
               background: toneSubtle, color: tone,
               border: "1px solid " + tone + "33",
-              letterSpacing: "0.06em", textTransform: "uppercase",
+              letterSpacing: "0.12em", textTransform: "uppercase",
               flexShrink: 0,
             }}>
               {iLead ? "You lead" : theyLead ? "They lead" : "Tied"}

@@ -164,7 +164,7 @@ function ListHeader({ t, onNew }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
       <div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em" }}>
           Your leagues
         </div>
         <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 2 }}>
@@ -221,7 +221,7 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
             <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {league.name}
             </div>
-            <span style={{ fontSize: 9, fontWeight: 700, color: statusColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: statusColor, textTransform: "uppercase", letterSpacing: "0.12em" }}>
               {league.status}
             </span>
           </div>
@@ -314,7 +314,7 @@ function LeagueDetailView({
             <span style={{
               fontSize: 9, fontWeight: 700, color: league.status === "active" ? t.green : t.textTertiary,
               background: league.status === "active" ? t.greenSubtle : t.bgTertiary,
-              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.12em", textTransform: "uppercase",
             }}>{league.status}</span>
             {/* Mode pill — Module 7.5. Locked at creation; affects which
                 match_type can be tagged into this league. */}
@@ -322,7 +322,7 @@ function LeagueDetailView({
               fontSize: 9, fontWeight: 700,
               color: league.mode === "casual" ? t.textSecondary : t.accent,
               background: league.mode === "casual" ? t.bgTertiary : t.accentSubtle,
-              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
+              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.12em", textTransform: "uppercase",
             }}>{league.mode || "ranked"}</span>
           </div>
         </div>
@@ -443,12 +443,12 @@ function StandingsTable({ t, league, detail, profileMap, openProfile }) {
   var weekly = weeklyPointsByUser(recent, league);
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
         Standings
       </div>
       <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0, overflow: "hidden" }}>
         {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 36px 36px 40px 42px", gap: 4, padding: "8px 12px", borderBottom: "1px solid " + t.border, background: t.bgTertiary, fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 36px 36px 40px 42px", gap: 4, padding: "8px 12px", borderBottom: "1px solid " + t.border, background: t.bgTertiary, fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em" }}>
           <span>#</span>
           <span>Player</span>
           <span style={{ textAlign: "center" }}>MP</span>
@@ -544,7 +544,7 @@ function MembersList({ t, authUser, detail, profileMap, iAmOwner, leagueId, onRe
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {p.name}
-            {m.role === "owner" && <span style={{ marginLeft: 6, fontSize: 9, color: t.accent, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>Owner</span>}
+            {m.role === "owner" && <span style={{ marginLeft: 6, fontSize: 9, color: t.accent, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Owner</span>}
           </div>
           {m.status !== "active" && (
             <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 1, letterSpacing: "0.02em" }}>
@@ -567,14 +567,14 @@ function MembersList({ t, authUser, detail, profileMap, iAmOwner, leagueId, onRe
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
         Members · {active.length}
       </div>
       <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0 }}>
         {active.map(function (m) { return <Row key={m.id} m={m} showRemove={iAmOwner} />; })}
         {invited.length > 0 && (
           <>
-            <div style={{ padding: "6px 12px", borderTop: "1px solid " + t.border, background: t.bgTertiary, fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <div style={{ padding: "6px 12px", borderTop: "1px solid " + t.border, background: t.bgTertiary, fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em" }}>
               Invited · {invited.length}
             </div>
             {invited.map(function (m) { return <Row key={m.id} m={m} showRemove={false} />; })}
@@ -582,7 +582,7 @@ function MembersList({ t, authUser, detail, profileMap, iAmOwner, leagueId, onRe
         )}
         {declined.length > 0 && iAmOwner && (
           <>
-            <div style={{ padding: "6px 12px", borderTop: "1px solid " + t.border, background: t.bgTertiary, fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <div style={{ padding: "6px 12px", borderTop: "1px solid " + t.border, background: t.bgTertiary, fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em" }}>
               Inactive · {declined.length}
             </div>
             {declined.map(function (m) { return <Row key={m.id} m={m} showRemove={false} />; })}
@@ -600,7 +600,7 @@ function RecentActivityList({ t, detail, profileMap }) {
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
         Recent activity
       </div>
       <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0 }}>

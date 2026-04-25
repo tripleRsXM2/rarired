@@ -977,7 +977,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 {showDateSep && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, margin: idx === 0 ? "4px 0 10px" : "18px 0 10px" }}>
                     <div style={{ flex: 1, height: 1, background: t.border }} />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.08em", flexShrink: 0 }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.16em", flexShrink: 0 }}>
                       {dateSeparatorLabel(msg.created_at)}
                     </span>
                     <div style={{ flex: 1, height: 1, background: t.border }} />

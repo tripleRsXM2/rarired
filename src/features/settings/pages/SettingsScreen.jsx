@@ -238,7 +238,7 @@ export default function SettingsScreen({
             ].map(function(f){
               return (
                 <div key={f.k} style={{marginBottom:10}}>
-                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase"}}>{f.l}</label>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.12em",textTransform:"uppercase"}}>{f.l}</label>
                   <input type={f.type} value={profileDraft[f.k]||""} placeholder={f.ph}
                     onChange={function(e){var v=e.target.value;setProfileDraft(function(d){return Object.assign({},d,{[f.k]:v});});}}
                     style={iStyle}/>
@@ -250,7 +250,7 @@ export default function SettingsScreen({
                 map + settings dropdown always agree. Reads from `profile`
                 (source of truth), not from the draft. */}
             <div style={{marginBottom:10}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase"}}>Home zone</label>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.12em",textTransform:"uppercase"}}>Home zone</label>
               <div style={{position:"relative"}}>
                 <select
                   disabled={!profileLoaded}
@@ -293,7 +293,7 @@ export default function SettingsScreen({
                 We never receive or transmit money; the handle is purely a
                 reminder string rendered back to the partner when they owe. */}
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
                 Payment handle (for Tindis)
               </label>
               <div style={{display:"grid",gridTemplateColumns:"1.2fr 2fr",gap:8}}>
@@ -324,7 +324,7 @@ export default function SettingsScreen({
                 Beginner 1/2 · Intermediate 1/2 · Advanced 1/2 ladder needs
                 the hint copy for honest self-assessment. */}
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Skill level</label>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>Skill level</label>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {SKILL_LEVELS.map(function(s){
                   var on=profileDraft.skill===s;
@@ -343,7 +343,7 @@ export default function SettingsScreen({
             </div>
             {/* Play style — still chips; these don't need per-option copy. */}
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Play style</label>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>Play style</label>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {PLAY_STYLES.map(function(o){
                   var on=profileDraft.style===o;
@@ -361,7 +361,7 @@ export default function SettingsScreen({
                 CourtInfoCard in Phase 2. Capped at 8 client-side; value
                 rides into the same upsert below. */}
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Courts I play at</label>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>Courts I play at</label>
               <CourtsPicker t={t}
                 value={profileDraft.played_courts||[]}
                 onChange={function(next){setProfileDraft(function(d){return Object.assign({},d,{played_courts:next});});}}/>
@@ -614,7 +614,7 @@ export default function SettingsScreen({
         {authUser&&(
           <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
             <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
-              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Account</div>
+              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:2}}>Account</div>
               <div style={{fontSize:14,color:t.text,fontWeight:500}}>{authUser.email}</div>
             </div>
             {/* Friend requests row removed — duplicates the People tab.

@@ -279,13 +279,13 @@ function TournamentDetail({
 
           {isLeague&&(
             <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Format</div>
+              <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:10}}>Format</div>
               <FormatExplainer t={t}/>
             </div>
           )}
 
           <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"14px 16px",marginBottom:12}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Venue</div>
+            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8}}>Venue</div>
             <div style={{fontSize:14,fontWeight:600,color:t.text,marginBottom:2}}>{PILOT_VENUE.name}</div>
             <div style={{fontSize:12,color:t.textSecondary,marginBottom:5}}>{PILOT_VENUE.address} · {PILOT_VENUE.courts.length} courts</div>
             <div style={{fontSize:12,color:t.textSecondary,marginBottom:8}}>Players book and pay court slots directly. New balls provided by CourtSync per match.</div>
@@ -306,7 +306,7 @@ function TournamentDetail({
           )}
 
           <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,padding:"14px 16px",marginBottom:12}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Rules</div>
+            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:10}}>Rules</div>
             {[
               isLeague?"Each player plays 5 league matches against different opponents.":"Single elimination draw.",
               isLeague?"Top 4 players by points qualify for the semifinals.":null,
@@ -402,7 +402,7 @@ function TournamentDetail({
               borderLeft:"3px solid "+t.gold,
               borderRadius:10, padding:"20px", textAlign:"center", marginTop:16
             }}>
-              <div style={{fontSize:11,color:t.gold,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Tournament Winner</div>
+              <div style={{fontSize:11,color:t.gold,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8}}>Tournament Winner</div>
               <div style={{fontSize:22,fontWeight:800,color:t.text,marginBottom:4,letterSpacing:"-0.4px"}}>{t2.winner.name}</div>
               <div style={{fontSize:13,color:t.textSecondary}}>{prize.item}</div>
             </div>
@@ -437,7 +437,7 @@ function TournamentDetail({
         <div className="fade-up">
           {myMatches.length>0&&(
             <div style={{marginBottom:24}}>
-              <div style={{fontSize:11,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Your Matches</div>
+              <div style={{fontSize:11,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12}}>Your Matches</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {myMatches.map(function(item){
                   var m=item.match, dl2=daysUntil(m.deadline), urgent=dl2!==null&&dl2<=3&&m.status!=="complete";
@@ -449,7 +449,7 @@ function TournamentDetail({
                       borderRadius:10, padding:"14px 16px"
                     }}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                        <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.06em"}}>{item.roundLabel}</div>
+                        <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.12em"}}>{item.roundLabel}</div>
                         {m.status==="complete"
                           ?<Pill label={m.winner===myId?"Won":"Lost"} color={m.winner===myId?t.green:t.red}/>
                           :dl2!==null&&<div style={{fontSize:12,color:urgent?t.orange:t.textSecondary}}>{dl2<0?"Overdue":dl2===0?"Due today":"Due in "+dl2+"d"}</div>
@@ -481,7 +481,7 @@ function TournamentDetail({
             return (
               <div key={ri} style={{marginBottom:20}}>
                 <div style={{
-                  fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:10,
+                  fontSize:11,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10,
                   color:r.type==="semi"?t.purple:r.type==="final"?t.gold:t.textTertiary
                 }}>
                   {r.type==="semi"?"Semifinals":r.type==="final"?"Final":"League Round "+r.round}
