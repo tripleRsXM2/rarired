@@ -19,7 +19,7 @@
 //   play_match_invite_sent     { zone_id, court_name, partner_count, scope }
 //   play_match_cancelled       { step, last_completed }
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ZONES } from "../data/zones.js";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "../services/mapService.js";
@@ -61,6 +61,12 @@ export default function PlayMatchWizard({
   //   "days"     — pick specific day-of-week chips (multi-select)
   var [whenMode, setWhenMode] = useState("week");
   var [pickedDays, setPickedDays] = useState([]); // ["Mon","Tue",...]
+
+  // Tracks whether a mouse-press started on the backdrop. Used to
+  // distinguish "user clicked the dim area" from "user drag-selected
+  // text inside the modal and overshot". See backdrop onMouseDown +
+  // onClick below.
+  var backdropDownRef = useRef(false);
 
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
@@ -220,7 +226,18 @@ export default function PlayMatchWizard({
         display:"flex", alignItems:"center", justifyContent:"center",
         padding: 12,
       }}
-      onClick={function(e){ if(e.target === e.currentTarget) cancel(); }}>
+      // Backdrop dismiss — track that the mousedown started on the
+      // backdrop too, otherwise drag-selecting text inside the modal
+      // and releasing on the backdrop fires a click event on the
+      // common ancestor (this backdrop) and dismisses the wizard.
+      // The bug: user drags to highlight text, overshoots, modal
+      // disappears with their work. Fix: only close if the click
+      // genuinely STARTED on the backdrop.
+      onMouseDown={function(e){ backdropDownRef.current = e.target === e.currentTarget; }}
+      onClick={function(e){
+        if(backdropDownRef.current && e.target === e.currentTarget) cancel();
+        backdropDownRef.current = false;
+      }}>
       <div style={{
         // Translucent glass card — the boxy bordered modal is gone.
         // Content is the design; chrome is invisible. Theme-aware
