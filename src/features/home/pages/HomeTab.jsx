@@ -6,8 +6,8 @@ import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
-import NextChallengeBanner from "../../challenges/components/NextChallengeBanner.jsx";
 import HomeHero from "../components/HomeHero.jsx";
+import HomeNextAction from "../components/HomeNextAction.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 var REASON_LABELS = {
@@ -290,6 +290,7 @@ function FeedCard({
   var mergedClassName = "cs-card" + (rowAnchor && rowAnchor.className ? " " + rowAnchor.className : "");
   return (
     <div
+      id={"feed-match-" + m.id}
       ref={rowAnchor && rowAnchor.ref}
       className={mergedClassName}
       style={{
@@ -1031,33 +1032,22 @@ export default function HomeTab({
         <HomeHero t={t} profile={profile} history={history} friends={friends} />
       </div>
 
-      {/* Temporary slim CTA — bridges the gap until commit C replaces this
-          with the contextual Next Action card. Hidden at ≥1440px because
-          RightPanel's Quick Actions already has a "Log match" button. */}
+      {/* Slice 1: single contextual next-action card. Replaces both the
+          generic "+ Log match" header CTA and the standalone NextChallengeBanner
+          — one card, one job (docs/design-direction.md). Priority order:
+          dispute → pending confirm → accepted challenge → "log a match". */}
       <div style={{ padding: "0 20px 14px" }}>
-        <button
-          onClick={openLogMatch}
-          className="cs-hide-at-rightpanel"
-          style={{ padding: "10px 18px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, letterSpacing: "-0.1px", transition: "opacity 0.15s" }}
-          onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
-          + Log match
-        </button>
+        <HomeNextAction
+          t={t}
+          authUser={authUser}
+          profile={profile}
+          history={history}
+          challengesList={challengesList}
+          challengesProfileMap={challengesProfileMap}
+          onLogScores={onLogConvertedMatch}
+          openLogMatch={openLogMatch}
+        />
       </div>
-
-      {/* Next-challenge banner — single lean card for the most-imminent
-          accepted challenge. Full list lives in People → Challenges. */}
-      {challengesList && (
-        <div style={{ padding: "0 20px", maxWidth: 720 }}>
-          <NextChallengeBanner
-            t={t}
-            authUser={authUser}
-            challenges={challengesList}
-            profileMap={challengesProfileMap}
-            onLogScores={onLogConvertedMatch}
-            onOpenChallenges={goToChallengesTab}
-          />
-        </div>
-      )}
 
       {/* Filter pills — functional. Friends = matches where poster or opponent
           is in the viewer's friends list. */}
