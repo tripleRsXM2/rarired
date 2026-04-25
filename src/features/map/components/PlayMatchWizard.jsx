@@ -33,6 +33,11 @@ import { track } from "../../../lib/analytics.js";
 // confirmation. Also harmonises with the side-panel "Message" path
 // which goes straight to the DM with no extra confirm.
 var TOTAL_STEPS = 3;
+
+// Day-of-week chip labels — Mon-Sun. Match what people actually
+// type when planning ("Sat" not "Saturday") so the rendered draft
+// reads naturally.
+var DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 var MAX_SELECT  = 3; // viewer + 3 others = doubles
 
 export default function PlayMatchWizard({
@@ -49,6 +54,13 @@ export default function PlayMatchWizard({
   var [selectedIds, setSelectedIds] = useState([]);
   var [players, setPlayers]     = useState([]);
   var [loading, setLoading]     = useState(false);
+  // When? — drives the "this Saturday" / "Sat or Sun" wording in the
+  // pre-filled invite. Three modes:
+  //   "week"     — default, "sometime this week"
+  //   "weekend"  — "this weekend"
+  //   "days"     — pick specific day-of-week chips (multi-select)
+  var [whenMode, setWhenMode] = useState("week");
+  var [pickedDays, setPickedDays] = useState([]); // ["Mon","Tue",...]
 
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
@@ -59,6 +71,8 @@ export default function PlayMatchWizard({
     setCourtName(null);
     setSelectedIds([]);
     setScope("zone");
+    setWhenMode("week");
+    setPickedDays([]);
     track("play_match_step_entered", { step: startStep });
     if(typeof document !== "undefined"){
       var prev = document.body.style.overflow;
@@ -160,17 +174,21 @@ export default function PlayMatchWizard({
     // is gone.
     track("play_match_player_picked", { player_count: partners.length, scope: scope });
     var zone = ZONES.find(function(z){ return z.id === zoneId; });
+    var when = resolveWhen(whenMode, pickedDays);
     var ctx = {
       venue: courtName || (zone && zone.name) || "",
       zoneId: zoneId,
       courtName: courtName,
+      when: when, // structured for downstream consumers
       // Friendly pre-filled draft. The DM hook accepts a `draft` and
       // pre-populates the composer.
-      draft: buildInviteDraft({ partners: partners, court: courtName, zone: zone }),
+      draft: buildInviteDraft({ partners: partners, court: courtName, zone: zone, when: when }),
     };
     track("play_match_invite_sent", {
       zone_id: zoneId, court_name: courtName,
       partner_count: partners.length, scope: scope,
+      when_mode: whenMode,
+      day_count: whenMode === "days" ? pickedDays.length : null,
     });
     if(onSendInvite) onSendInvite(partners, ctx);
   }
@@ -610,6 +628,90 @@ export default function PlayMatchWizard({
                   })}
                 </div>
               )}
+
+              {/* When? — chip group for the day/range, drives the
+                  pre-filled draft wording. Optional; defaults to
+                  "this week". Three modes: week / weekend / pick days.
+                  "Pick days" expands a Mon-Sun multi-select. */}
+              {!loading && players.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
+                    textTransform: "uppercase", color: t.textTertiary,
+                    marginBottom: 8,
+                  }}>
+                    When?
+                  </div>
+                  <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
+                    {[
+                      { id:"week",    label:"This week" },
+                      { id:"weekend", label:"Weekend" },
+                      { id:"days",    label:"Pick days" },
+                    ].map(function(opt){
+                      var on = whenMode === opt.id;
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={function(){
+                            setWhenMode(opt.id);
+                            if(opt.id !== "days") setPickedDays([]);
+                          }}
+                          style={{
+                            padding: "8px 14px", borderRadius: 999,
+                            background: on ? t.text : hexToRgba(t.bgCard, 0.78),
+                            color: on ? t.bg : t.textSecondary,
+                            border:"none", cursor:"pointer",
+                            fontSize: 12, fontWeight: 700,
+                            letterSpacing:"0.01em",
+                            transition: "background 0.15s, color 0.15s",
+                          }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {whenMode === "days" && (
+                    <div style={{
+                      display:"flex", gap: 5, flexWrap:"wrap",
+                      marginTop: 10,
+                    }}>
+                      {DAYS.map(function(d){
+                        var on = pickedDays.indexOf(d) !== -1;
+                        return (
+                          <button key={d} type="button"
+                            onClick={function(){
+                              setPickedDays(function(prev){
+                                return prev.indexOf(d) !== -1
+                                  ? prev.filter(function(x){ return x !== d; })
+                                  : prev.concat([d]);
+                              });
+                            }}
+                            style={{
+                              minWidth: 38,
+                              padding: "7px 0", borderRadius: 10,
+                              background: on ? t.accent : hexToRgba(t.bgCard, 0.78),
+                              color: on ? (t.accentText || "#fff") : t.textSecondary,
+                              border:"none", cursor:"pointer",
+                              fontSize: 11, fontWeight: 800,
+                              letterSpacing:"0.04em",
+                              transition: "background 0.15s, color 0.15s",
+                            }}>
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Tiny preview of how the wording will read */}
+                  <div style={{
+                    fontSize: 11, color: t.textTertiary,
+                    marginTop: 10, fontStyle:"italic",
+                  }}>
+                    "{whenPhrase(resolveWhen(whenMode, pickedDays))}"
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -653,22 +755,62 @@ export default function PlayMatchWizard({
 
 // ── helpers ──────────────────────────────────────────────────────────
 
-function previewInviteText({ partners, court, zone }){
+function previewInviteText({ partners, court, zone, when }){
   if(!partners || !partners.length) return "";
   var venue = court || (zone && zone.name) || "";
+  var phrase = whenPhrase(when);
   if(partners.length === 1){
     var who = partners[0].name || partners[0].username || partners[0].full_name || "there";
-    return "Hey " + firstName(who) + ", up for a hit at " + venue + " sometime this week?";
+    return "Hey " + firstName(who) + ", up for a hit at " + venue + " " + phrase + "?";
   }
   var names = partners.map(function(p){ return firstName(p.name || p.username || p.full_name || "there"); });
   var joined = names.length === 2
     ? names.join(" and ")
     : names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
-  return "Hey " + joined + " — keen for doubles at " + venue + " sometime this week?";
+  return "Hey " + joined + " — keen for doubles at " + venue + " " + phrase + "?";
 }
 
-function buildInviteDraft({ partners, court, zone }){
-  return previewInviteText({ partners: partners, court: court, zone: zone });
+function buildInviteDraft({ partners, court, zone, when }){
+  return previewInviteText({ partners: partners, court: court, zone: zone, when: when });
+}
+
+// Resolve the chip selection into a structured value the rest of the
+// pipeline (draft text, ctx, analytics) can consume.
+function resolveWhen(mode, days){
+  if(mode === "weekend") return { kind: "weekend" };
+  if(mode === "days" && Array.isArray(days) && days.length){
+    return { kind: "days", days: days.slice() };
+  }
+  return { kind: "week" }; // default
+}
+
+// Render a "when" structure into the natural-language phrase that
+// fits inside the invite sentence ("...up for a hit at X <phrase>?").
+function whenPhrase(when){
+  if(!when || when.kind === "week") return "sometime this week";
+  if(when.kind === "weekend")       return "this weekend";
+  if(when.kind === "days" && when.days && when.days.length){
+    var d = sortDaysOfWeek(when.days);
+    if(d.length === 1) return "this " + d[0];
+    if(isContiguous(d)) return d[0] + "–" + d[d.length - 1]; // range
+    if(d.length === 2)  return d[0] + " or " + d[1];
+    return d.slice(0, -1).join(", ") + " or " + d[d.length - 1];
+  }
+  return "sometime this week";
+}
+
+function sortDaysOfWeek(arr){
+  var order = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 };
+  return arr.slice().sort(function(a, b){ return (order[a]||0) - (order[b]||0); });
+}
+
+function isContiguous(sortedDays){
+  if(sortedDays.length < 3) return false; // 1-2 days don't read as a "range"
+  var order = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 };
+  for(var i = 1; i < sortedDays.length; i++){
+    if(order[sortedDays[i]] !== order[sortedDays[i-1]] + 1) return false;
+  }
+  return true;
 }
 
 function firstName(name){
