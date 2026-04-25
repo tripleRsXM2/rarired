@@ -16,6 +16,7 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import CreateLeagueModal from "./CreateLeagueModal.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
+import LeagueNextOpponent from "./LeagueNextOpponent.jsx";
 
 export default function LeaguesPanel({
   t, authUser,
@@ -350,6 +351,17 @@ function LeagueDetailView({
           </div>
         )}
       </div>
+
+      {/* Slice 4 — retention card: most-overdue league opponent */}
+      <LeagueNextOpponent
+        t={t}
+        authUser={authUser}
+        league={league}
+        detail={detail}
+        profileMap={profileMap}
+        history={history}
+        openChallenge={openChallenge}
+      />
 
       {/* Standings table */}
       <StandingsTable t={t} league={league} detail={detail} profileMap={profileMap} openProfile={openProfile} />
