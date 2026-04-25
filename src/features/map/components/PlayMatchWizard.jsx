@@ -209,6 +209,7 @@ export default function PlayMatchWizard({
 
   var zone   = zoneId ? ZONES.find(function(z){ return z.id === zoneId; }) : null;
   var courts = zoneId ? courtsInZone(zoneId) : [];
+  var pickedCourt = courtName ? courts.find(function(c){ return c.name === courtName; }) : null;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Play Match"
@@ -411,20 +412,9 @@ export default function PlayMatchWizard({
                 <span style={{ color: t.textTertiary }}>·</span>
                 <span>{courts.length} {courts.length === 1 ? "venue" : "venues"}</span>
               </div>
-              {/* Helpful nudge so users discover the booking-link
-                  affordance — tap-to-pick is the primary action,
-                  the booking icon is secondary and easy to miss. */}
-              <div style={{
-                fontSize: 10.5, color: t.textTertiary,
-                marginBottom: 12, display:"flex", alignItems:"center", gap: 5,
-              }}>
-                <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
-                     stroke="currentColor" strokeWidth="1.6"
-                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M11 4h3v3M14 4l-6 6M8 5H5v8h8v-3"/>
-                </svg>
-                <span>Tap the link icon to check times on the venue's site</span>
-              </div>
+              {/* (Booking-link affordance moved to step 3 — by then
+                  the user has chosen a venue and the "check times"
+                  context is meaningful. In step 2 it was premature.) */}
               <div style={{ display:"flex", flexDirection:"column", gap: 8 }}>
                 {courts.map(function(c){
                   return (
@@ -476,38 +466,15 @@ export default function PlayMatchWizard({
                           {c.courts} {c.courts === 1 ? "court" : "courts"}
                         </div>
                       </div>
-                      {/* Booking link — secondary affordance. Opens in
-                          a new tab without picking the court. Lets
-                          users check availability before committing.
-                          stopPropagation so the row's pickCourt
-                          doesn't also fire. */}
-                      {c.bookingUrl && (
-                        <a href={c.bookingUrl}
-                          target="_blank" rel="noopener noreferrer"
-                          onClick={function(e){ e.stopPropagation(); }}
-                          aria-label={"Check times at " + c.name + " (opens in a new tab)"}
-                          title={"Check times at " + c.name}
-                          style={{
-                            flexShrink: 0,
-                            display:"inline-flex", alignItems:"center", justifyContent:"center",
-                            width: 34, height: 34, borderRadius: 10,
-                            color: t.textTertiary, textDecoration:"none",
-                            opacity: 0.78,
-                            transition: "background 0.15s, opacity 0.15s, color 0.15s",
-                          }}
-                          onMouseEnter={function(e){
-                            e.currentTarget.style.background = hexToRgba(t.text, 0.06);
-                            e.currentTarget.style.color = t.accent;
-                            e.currentTarget.style.opacity = 1;
-                          }}
-                          onMouseLeave={function(e){
-                            e.currentTarget.style.background = "transparent";
-                            e.currentTarget.style.color = t.textTertiary;
-                            e.currentTarget.style.opacity = 0.78;
-                          }}>
-                          {NAV_ICONS.external(15)}
-                        </a>
-                      )}
+                      {/* Subtle right-pointing chevron — visual cue
+                          that the row advances. Booking link moved to
+                          step 3 where venue context exists. */}
+                      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
+                           stroke="currentColor" strokeWidth="1.7"
+                           strokeLinecap="round" strokeLinejoin="round"
+                           style={{ color: t.textTertiary, flexShrink: 0 }}>
+                        <path d="M7 4l5 5-5 5"/>
+                      </svg>
                     </div>
                   );
                 })}
@@ -720,13 +687,89 @@ export default function PlayMatchWizard({
                     </div>
                   )}
 
-                  {/* Tiny preview of how the wording will read */}
-                  <div style={{
-                    fontSize: 11, color: t.textTertiary,
-                    marginTop: 10, fontStyle:"italic",
-                  }}>
-                    "{whenPhrase(resolveWhen(whenMode, pickedDays))}"
-                  </div>
+                  {/* Booking-link slot — venue is locked in by now
+                      so "check times at <venue>" reads naturally and
+                      can directly inform the day choice above. */}
+                  {pickedCourt && pickedCourt.bookingUrl && (
+                    <a href={pickedCourt.bookingUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        marginTop: 12,
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        background: hexToRgba(t.bgCard, 0.78),
+                        color: t.text, textDecoration:"none",
+                        display:"flex", alignItems:"center", gap: 10,
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background = t.bgCard; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = hexToRgba(t.bgCard, 0.78); }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 10,
+                        background: hexToRgba(t.accent, 0.14),
+                        color: t.accent, flexShrink: 0,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                      }}>
+                        <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                             stroke="currentColor" strokeWidth="1.8"
+                             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M11 4h3v3M14 4l-6 6M8 5H5v8h8v-3"/>
+                        </svg>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{
+                          fontSize: 12.5, fontWeight: 700, color: t.text,
+                          letterSpacing: "-0.01em",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        }}>
+                          Check times at {pickedCourt.name}
+                        </div>
+                        <div style={{
+                          fontSize: 10, color: t.textTertiary, marginTop: 2,
+                          letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:700,
+                        }}>
+                          Opens venue's booking site
+                        </div>
+                      </div>
+                    </a>
+                  )}
+
+                  {/* Live draft preview — message-bubble style so the
+                      user sees EXACTLY what lands in the DM. Updates
+                      as they tweak partners / when. */}
+                  {selectedIds.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
+                        textTransform: "uppercase", color: t.textTertiary,
+                        marginBottom: 6,
+                      }}>
+                        Message preview
+                      </div>
+                      <div style={{
+                        padding: "12px 14px",
+                        borderRadius: "16px 16px 16px 4px",
+                        background: hexToRgba(t.accent, 0.10),
+                        color: t.text,
+                        fontSize: 13.5, lineHeight: 1.45,
+                        letterSpacing: "-0.005em",
+                        maxWidth: "95%",
+                      }}>
+                        {previewInviteText({
+                          partners: selectedIds.map(function(id){ return players.find(function(p){ return p.id === id; }); }).filter(Boolean),
+                          court: courtName,
+                          zone: zone,
+                          when: resolveWhen(whenMode, pickedDays),
+                        })}
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: t.textTertiary,
+                        marginTop: 6, letterSpacing:"0.02em",
+                      }}>
+                        You can edit before sending in the next screen.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
