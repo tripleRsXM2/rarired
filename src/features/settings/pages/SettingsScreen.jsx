@@ -21,6 +21,7 @@ import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUp
 import { THEME_OPTIONS } from "../../../lib/theme.js";
 import { track } from "../../../lib/analytics.js";
 import { useEffect } from "react";
+import PushSettingsCard from "../../notifications/components/PushSettingsCard.jsx";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
@@ -138,6 +139,11 @@ export default function SettingsScreen({
 
       {/* Content */}
       <div style={{padding:"20px 20px 100px", maxWidth:680, margin:"0 auto", width:"100%"}}>
+
+        {/* Phone alerts — push notification setup. Lives at the top
+            because it's the only setting that requires per-device
+            action (the rest of the page is account-wide). */}
+        <PushSettingsCard t={t} authUser={authUser}/>
 
         {/* ── Edit Profile ─────────────────────────────────────────────────────
             User feedback: previously the Edit Profile card collapsed when
