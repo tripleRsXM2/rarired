@@ -184,8 +184,8 @@ export default function MapTab({
           corner. WebkitMaskImage + maskImage for cross-browser. */}
       <div style={{
         position:"absolute", inset:0,
-        WebkitMaskImage: "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
-        maskImage:       "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
+        WebkitMaskImage: "radial-gradient(ellipse 95% 95% at 50% 50%, #000 50%, transparent 100%)",
+        maskImage:       "radial-gradient(ellipse 95% 95% at 50% 50%, #000 50%, transparent 100%)",
       }}>
         <LeafletMap
           t={t} theme={theme}
