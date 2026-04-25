@@ -181,15 +181,42 @@ export default function MapTab({
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
       {(function(){
+        // v3 — crank the vignette to actually be visible. The probe
+        // confirmed v2 was deployed correctly but blur:80 / opacity:0.22
+        // spread the darkness so gently it produced ~0 visible contrast
+        // at the edge. Strava/Apple Maps vignettes are MUCH stronger
+        // than that. Compose two layers:
+        //   (a) sharp inner darken — small blur, high opacity, hugs
+        //       the edge so the boundary is unambiguous
+        //   (b) soft outer halo — large blur, lower opacity, eases
+        //       the transition so it doesn't look like a cheap border
+        // Plus a near-transparent gradient pass that biases the corners
+        // a touch darker (true vignette feel).
         var dark = theme === "hard-court" || theme === "night-court";
         var shadow = dark
-          ? "inset 0 0 90px 8px rgba(0,0,0,0.55), inset 0 0 24px rgba(0,0,0,0.35)"
-          : "inset 0 0 80px 4px rgba(20,18,17,0.22), inset 0 0 22px rgba(20,18,17,0.10)";
+          ? [
+              "inset 0 0 0 1px rgba(0,0,0,0.6)",
+              "inset 0 0 40px 4px rgba(0,0,0,0.7)",
+              "inset 0 0 120px 20px rgba(0,0,0,0.55)",
+            ].join(", ")
+          : [
+              "inset 0 0 0 1px rgba(20,18,17,0.18)",
+              "inset 0 0 36px 0 rgba(20,18,17,0.45)",
+              "inset 0 0 110px 16px rgba(20,18,17,0.28)",
+            ].join(", ");
+        // Corner bias — radial vignette overlay from each corner.
+        var cornerColor = dark ? "rgba(0,0,0,0.55)" : "rgba(20,18,17,0.35)";
+        var corners =
+          "radial-gradient(circle at 0% 0%,   " + cornerColor + ", transparent 30%), " +
+          "radial-gradient(circle at 100% 0%, " + cornerColor + ", transparent 30%), " +
+          "radial-gradient(circle at 0% 100%, " + cornerColor + ", transparent 30%), " +
+          "radial-gradient(circle at 100% 100%, " + cornerColor + ", transparent 30%)";
         return (
           <div aria-hidden="true"
             style={{
               position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
               boxShadow: shadow,
+              backgroundImage: corners,
             }}/>
         );
       })()}

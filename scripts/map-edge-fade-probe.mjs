@@ -42,16 +42,30 @@ async function probe(u, label) {
   await u.page.goto(SITE + "/map", { waitUntil: "domcontentloaded" });
   await u.page.waitForTimeout(5500);
 
-  var snap = await u.page.evaluate(function () {
+  var snap = await u.page.evaluate(async function () {
     var frame = document.querySelector(".cs-map-frame");
     if (!frame) return { err: "no .cs-map-frame" };
-    // The fade is a direct child div with aria-hidden + pointer-events:none.
+    // v2 uses box-shadow inset, not gradients. Detect any aria-hidden
+    // child that has either a non-empty box-shadow OR linear-gradient.
     var children = Array.from(frame.children);
     var fade = children.find(function (el) {
       if (el.getAttribute("aria-hidden") !== "true") return false;
       var st = getComputedStyle(el);
-      return /linear-gradient/.test(st.backgroundImage);
+      var hasShadow = st.boxShadow && st.boxShadow !== "none";
+      var hasGrad = /linear-gradient/.test(st.backgroundImage);
+      return hasShadow || hasGrad;
     });
+    // Bundle check — does the deployed JS contain the v2 string?
+    var bundleHasV2 = false, bundleHasV1 = false;
+    try {
+      var scripts = Array.from(document.scripts).map(function(s){ return s.src; });
+      var bsrc = scripts.find(function(x){ return /\/assets\/index-.*\.js/.test(x); });
+      if (bsrc) {
+        var js = await (await fetch(bsrc)).text();
+        bundleHasV2 = /inset 0 0 90px|inset 0 0 80px/.test(js);
+        bundleHasV1 = /linear-gradient\(to right,/.test(js);
+      }
+    } catch(_) {}
     if (!fade) {
       return {
         err: "no fade overlay found",
@@ -70,7 +84,9 @@ async function probe(u, label) {
       zIndex: st.zIndex,
       position: st.position,
       gradientCount: gradientCount,
-      backgroundImageHead: st.backgroundImage.slice(0, 220),
+      boxShadow: st.boxShadow,
+      bundleHasV2: bundleHasV2,
+      bundleHasV1: bundleHasV1,
       frameBg: frameBg,
       // Click-through sanity: at the centre of the map, what is the
       // top-most element under the cursor? Should NOT be the fade
