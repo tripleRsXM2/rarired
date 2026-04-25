@@ -428,22 +428,25 @@ export default function MapTab({
           // Iconic circle — Strava/Nike/Apple Voice Memos pattern.
           // Flat solid fill, single soft drop shadow, no gradient,
           // no inner highlights. Big enough to feel primary (80px)
-          // without eating the map.
+          // without eating the map. Black instead of orange because
+          // Eastern Suburbs zone is orange — semantic collision. Black
+          // is the unambiguous "action layer" colour against every
+          // zone palette + Apple's iconic primary-button choice.
           width: 80, height: 80,
           borderRadius: "50%",
           border: "none",
-          background: "#f97316",
+          background: "#14110f",
           color: "#fff",
           fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
           cursor: "pointer",
-          // Single warm shadow for elevation, in the button's own
-          // colour family. No aura/glow stack.
+          // Single soft shadow for elevation. Subtle warm tint at
+          // the bottom so it doesn't feel like a clinical black puck.
           boxShadow:
-            "0 10px 24px rgba(249,115,22,0.40), " +
-            "0 3px 6px rgba(20,18,17,0.18)",
+            "0 10px 24px rgba(20,18,17,0.32), " +
+            "0 3px 6px rgba(20,18,17,0.20)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          gap: 1,
+          gap: 0,
           transition: "transform 0.12s ease, box-shadow 0.18s ease",
         }}
         onMouseDown={function(e){
@@ -462,7 +465,7 @@ export default function MapTab({
         <span style={{
           fontSize: 9, fontWeight: 700,
           letterSpacing: "0.18em", lineHeight: 1,
-          opacity: 0.78, marginTop: 4,
+          opacity: 0.72, marginTop: 2,
         }}>MATCH</span>
       </button>
 
