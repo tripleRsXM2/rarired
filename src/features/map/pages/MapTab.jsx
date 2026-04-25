@@ -170,23 +170,29 @@ export default function MapTab({
         onCourtSelect={handleCourtSelect}
       />
 
-      {/* Edge-fade overlay — non-interactive presentation polish. Four
-          stacked linear gradients fade the basemap into the frame
-          colour (t.bg) on every side so the hard tile boundary
-          dissolves. Sits ABOVE the map but BELOW all chrome (cog,
-          hover card, side panel, markers stay crisp). pointer-events
-          off so it can never steal clicks. Theme-aware: in dark mode
-          the fade ends in the dark frame, in light mode the light
-          frame — never a fixed colour. */}
-      <div aria-hidden="true"
-        style={{
-          position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
-          background:
-            "linear-gradient(to right,  " + t.bg + ", transparent 36px), " +
-            "linear-gradient(to left,   " + t.bg + ", transparent 36px), " +
-            "linear-gradient(to bottom, " + t.bg + ", transparent 36px), " +
-            "linear-gradient(to top,    " + t.bg + ", transparent 36px)",
-        }}/>
+      {/* Edge-fade vignette — non-interactive presentation polish.
+          v1 used gradients fading to t.bg, but on light themes the
+          frame colour is so close to CARTO's near-white basemap that
+          the fade was mathematically present and visually invisible.
+          v2 uses an inset box-shadow which ALWAYS darkens the edges
+          regardless of basemap colour, plus a subtle gradient pass
+          to soften the very corners. Theme-aware intensity: dark
+          themes get a deeper shadow (the basemap is already dark, so
+          we need more contrast at the edge). pointer-events:none
+          so click-throughs are unaffected. */}
+      {(function(){
+        var dark = theme === "hard-court" || theme === "night-court";
+        var shadow = dark
+          ? "inset 0 0 90px 8px rgba(0,0,0,0.55), inset 0 0 24px rgba(0,0,0,0.35)"
+          : "inset 0 0 80px 4px rgba(20,18,17,0.22), inset 0 0 22px rgba(20,18,17,0.10)";
+        return (
+          <div aria-hidden="true"
+            style={{
+              position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
+              boxShadow: shadow,
+            }}/>
+        );
+      })()}
 
       {/* Title pill — sits top-left, shifted right of the Leaflet zoom
           control (+/−) so the two don't stack. */}
