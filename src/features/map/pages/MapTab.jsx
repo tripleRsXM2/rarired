@@ -181,46 +181,50 @@ export default function MapTab({
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
       {(function(){
-        // v5 — total rethink. v4 used a relative-percentage radial
-        // gradient which scales with viewport, so at wide screens the
-        // dark band sits ~150-300px from the edge as a soft halo
-        // while the actual edge stays bright. The user reported it
-        // wasn't reading at all.
+        // v6 — four separate edge divs, one per side. v5 packed all
+        // four edge strips into a single multi-background backgroundImage
+        // string with `<gradient> <pos> / <size> no-repeat` syntax —
+        // but background-image only accepts the image part of that
+        // shorthand. The position/size/repeat clauses were silently
+        // dropped and each gradient covered the whole element instead
+        // of being clipped to one edge band. Result: no visible vignette.
         //
-        // v5 uses four FIXED-PIXEL linear-gradient edge strips, each
-        // anchored to one side (top/right/bottom/left). Each is ~100px
-        // deep, dark at the edge, fades to transparent inward. Where
-        // two strips overlap (corners) the alpha compounds → naturally
-        // darker corners → genuine vignette feel that doesn't depend
-        // on viewport size or basemap colour.
-        //
-        // Pointer-events:none so all clicks pass through to Leaflet.
-        // Theme-aware intensity. z-300 (above map content, below all
-        // chrome which lives at 500+).
+        // v6 ditches the CSS-shorthand puzzle. Four real DOM divs
+        // with explicit absolute positioning. Each carries a single
+        // linear-gradient from dark-at-the-edge to transparent. Where
+        // two divs overlap at corners, alpha compounds → natural
+        // corner darkening. Bulletproof.
         var dark = theme === "hard-court" || theme === "night-court";
-        // Each stop: at-edge / mid / fully-transparent. The mid stop
-        // is what gives the falloff its s-curve feel.
-        var c0 = dark ? "rgba(0,0,0,0.85)"   : "rgba(15,14,13,0.55)";
-        var c1 = dark ? "rgba(0,0,0,0.40)"   : "rgba(15,14,13,0.22)";
-        var c2 = "transparent";
-        var depth = "100px"; // how far the fade reaches inward
-        var mid   = "32px";  // where the mid-stop sits
-        // Each strip is a multi-background entry: <gradient> <position> / <size> no-repeat
-        function strip(dir, pos, size){
-          return "linear-gradient(" + dir + ", " + c0 + ", " + c1 + " " + mid + ", " + c2 + " " + depth + ") " +
-                 pos + " / " + size + " no-repeat";
-        }
+        var c0 = dark ? "rgba(0,0,0,0.80)" : "rgba(15,14,13,0.50)";
+        var c1 = dark ? "rgba(0,0,0,0.35)" : "rgba(15,14,13,0.20)";
+        var depth = 110; // px of fade
+        var common = { position:"absolute", pointerEvents:"none", zIndex:300 };
+        var grad = function(dir){
+          return "linear-gradient(" + dir + ", " + c0 + " 0%, " + c1 + " 30%, transparent 100%)";
+        };
         return (
-          <div aria-hidden="true"
-            style={{
-              position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
-              backgroundImage: [
-                strip("to bottom", "0 0",    "100% " + depth), // top strip
-                strip("to top",    "0 100%", "100% " + depth), // bottom strip
-                strip("to right",  "0 0",    depth + " 100%"), // left strip
-                strip("to left",   "100% 0", depth + " 100%"), // right strip
-              ].join(", "),
-            }}/>
+          <>
+            {/* Top edge */}
+            <div aria-hidden="true" style={Object.assign({}, common, {
+              top:0, left:0, right:0, height: depth + "px",
+              background: grad("to bottom"),
+            })}/>
+            {/* Bottom edge */}
+            <div aria-hidden="true" style={Object.assign({}, common, {
+              bottom:0, left:0, right:0, height: depth + "px",
+              background: grad("to top"),
+            })}/>
+            {/* Left edge */}
+            <div aria-hidden="true" style={Object.assign({}, common, {
+              top:0, bottom:0, left:0, width: depth + "px",
+              background: grad("to right"),
+            })}/>
+            {/* Right edge */}
+            <div aria-hidden="true" style={Object.assign({}, common, {
+              top:0, bottom:0, right:0, width: depth + "px",
+              background: grad("to left"),
+            })}/>
+          </>
         );
       })()}
 

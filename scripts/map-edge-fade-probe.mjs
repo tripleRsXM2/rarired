@@ -8,12 +8,13 @@ import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
 import { mkdir } from "node:fs/promises";
 
-var SITE = "https://rarired-git-mdawg-miikhcs-projects.vercel.app";
+var SITE = "https://rarired-git-mdawg-michaellhuerto-6485s-projects.vercel.app";
 function log(m) { console.log("[probe]", m); }
 
 async function getCreds(page) {
   var html = await page.content();
-  var m = html.match(/src="(\/assets\/index-[^"]+\.js)"/);
+  var m = html.match(/src=["'](\/assets\/index-[^"']+\.js)["']/);
+  if (!m) throw new Error("could not find /assets/index-*.js in HTML (len=" + html.length + ")");
   var js = await (await fetch(SITE + m[1])).text();
   return {
     url: js.match(/(https:\/\/[a-z0-9]+\.supabase\.co)/)[1],
