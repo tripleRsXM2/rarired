@@ -122,6 +122,20 @@ export default function MapTab({
     return function(){ cancelled = true; };
   },[]);
 
+  // Resolve the basemap tone the user is actually seeing (same logic
+  // as LeafletMap.resolveDark) so the page bg revealed by the CSS
+  // mask vignette matches the basemap. Result: the dissolve feels
+  // seamless rather than fading to a "wrong-coloured" frame. Light
+  // basemap → near-white frame; dark basemap → near-black frame.
+  // Independent of app theme so a "dark map in a light app" still
+  // gets the right frame colour.
+  var mapDark;
+  if(layers.mapTheme === "light") mapDark = false;
+  else if(layers.mapTheme === "dark") mapDark = true;
+  else mapDark = theme === "hard-court" || theme === "night-court";
+  // Tones picked to match CARTO's nolabels basemap tiles.
+  var frameBg = mapDark ? "#1a1c20" : "#f8f8f5";
+
   // Wrap setters so we can emit analytics at selection time. Zone props
   // include the activity snapshot so funnel queries don't need a join.
   function handleSelect(zoneId){
@@ -152,7 +166,7 @@ export default function MapTab({
   }
 
   return (
-    <div className="cs-map-frame" style={{ width:"100%", background: t.bg }}>
+    <div className="cs-map-frame" style={{ width:"100%", background: frameBg }}>
 
       {/* The map — wrapped in a CSS-mask container so the basemap
           PIXELS dissolve to transparent at the edges (rather than
