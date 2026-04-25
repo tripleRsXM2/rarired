@@ -96,6 +96,18 @@ export default function Providers({ t, theme, children }){
       // ── Feed card ─────────────────────────────────────────────────────────
       ".cs-card{transition:border-color 0.15s ease,box-shadow 0.15s ease}",
       "@media(hover:hover){.cs-card:hover{border-color:"+t.borderStrong+"!important}}",
+      // Slice 5 (design overhaul) — feed-card vertical-spacing pass.
+      // Default = mobile = tight (10px between cards, slim header gutter).
+      // Desktop ≥1024px restores the existing rhythm. Inline-style
+      // overrides require !important here.
+      ".cs-feed-card{margin-bottom:10px!important}",
+      ".cs-feed-card .cs-feed-card-header{padding:12px 14px 0!important}",
+      ".cs-feed-card .cs-feed-card-footer{padding:8px 14px!important}",
+      "@media(min-width:1024px){",
+        ".cs-feed-card{margin-bottom:14px!important}",
+        ".cs-feed-card .cs-feed-card-header{padding:14px 16px 0!important}",
+        ".cs-feed-card .cs-feed-card-footer{padding:10px 16px!important}",
+      "}",
 
       // ── Sidebar nav items ─────────────────────────────────────────────────
       ".cs-nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;",

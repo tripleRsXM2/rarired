@@ -288,7 +288,11 @@ function FeedCard({
 
   // If rowAnchor has a className (deep-link active), merge with cs-card so
   // the pulse ring renders alongside the regular card hover styling.
-  var mergedClassName = "cs-card" + (rowAnchor && rowAnchor.className ? " " + rowAnchor.className : "");
+  // cs-feed-card is the slice-5 hook for the mobile vertical-spacing pass
+  // (see providers.jsx — tighter margin / header / footer paddings on
+  // viewports < 1024px, restored at desktop).
+  var mergedClassName = "cs-card cs-feed-card"
+    + (rowAnchor && rowAnchor.className ? " " + rowAnchor.className : "");
   return (
     <div
       id={"feed-match-" + m.id}
@@ -307,8 +311,10 @@ function FeedCard({
         opacity: cardOpacity,
       }}
     >
-      {/* ── Header — tightened sizing to feel refined, not chunky ── */}
-      <div style={{ padding: "14px 16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+      {/* ── Header — tightened sizing to feel refined, not chunky.
+            cs-feed-card-header lets slice 5's mobile pass trim the
+            vertical gutter without touching the desktop rhythm. ── */}
+      <div className="cs-feed-card-header" style={{ padding: "14px 16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
         {/* Poster avatar — real photo if we have one (uploaded avatar_url),
             else deterministic colour + initials via PlayerAvatar. Clickable
             when the poster is a linked user. */}
@@ -737,7 +743,7 @@ function FeedCard({
                 the empty-state prompt). Right: compact icon-first buttons.
           No big colored labels — the card visualization is the hero. */}
       {isConfirmed && !demo && (
-        <div style={{
+        <div className="cs-feed-card-footer" style={{
           borderTop: "1px solid " + t.border,
           padding: "10px 14px",
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
