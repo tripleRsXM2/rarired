@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import { formatSetScore } from "../../scoring/utils/tennisScoreValidation.js";
 import {
   getEffectiveType,
   getNotifLabel,
@@ -115,12 +116,14 @@ function MatchScoreCard({ t, n, viewerId }) {
         ) : viewerSets.map(function (s, i) {
           var youN = Number(s.you), themN = Number(s.them);
           var wonSet = !isNaN(youN) && !isNaN(themN) && youN > themN;
+          // Centralised renderer — emits "7-6" / "7-6 (7-4)" / "10-8"
+          // depending on the set shape and any inner tiebreak.
           return (
             <span key={i} style={{
               color: wonSet ? t.text : t.textTertiary,
               fontWeight: wonSet ? 800 : 500,
             }}>
-              {s.you}-{s.them}{i < viewerSets.length - 1 ? "," : ""}
+              {formatSetScore(s)}{i < viewerSets.length - 1 ? "," : ""}
             </span>
           );
         })}

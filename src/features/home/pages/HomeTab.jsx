@@ -12,6 +12,7 @@ import HomeWeekStrip from "../components/HomeWeekStrip.jsx";
 import HomeLeagueBand from "../components/HomeLeagueBand.jsx";
 import HomeActivityList from "../components/HomeActivityList.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
+import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 
 var REASON_LABELS = {
   wrong_score:   "Score is wrong",
@@ -151,7 +152,10 @@ function FeedCard({
   function goOpponent() { if (openProfile && opponentUserId) openProfile(opponentUserId); }
   var posterClickable   = !demo && !!posterUserId   && (!authUser || posterUserId   !== authUser.id) && !!openProfile;
   var opponentClickable = !demo && !!opponentUserId && (!authUser || opponentUserId !== authUser.id) && !!openProfile;
-  var scoreStr   = (m.sets || []).map(function(s) { return s.you + "-" + s.them; }).join("  ");
+  // Centralised through formatMatchScore so 7-6 sets render with their
+  // tiebreak suffix ("7-6 (7-4)") in the proposal-changed line + share
+  // text. The double-space separator we used to use becomes a comma.
+  var scoreStr   = formatMatchScore(m.sets || []);
   var liked      = !!feedLikes[m.id];
   var likeCount  = feedLikeCounts[m.id] || 0;
   var comments   = feedComments[m.id] || [];
@@ -197,7 +201,7 @@ function FeedCard({
 
   function proposalScoreStr() {
     if (!m.currentProposal || !m.currentProposal.sets) return "";
-    return m.currentProposal.sets.map(function(s) { return s.you + "-" + s.them; }).join("  ");
+    return formatMatchScore(m.currentProposal.sets);
   }
   function changed(field) {
     if (!m.currentProposal) return false;
@@ -577,7 +581,11 @@ function FeedCard({
                   When the OTHER side's score is missing entirely
                   (retirement / time-limited / partial), the present
                   positive number is still the meaningful one — bold
-                  it on the row that has it instead of dimming both. */}
+                  it on the row that has it instead of dimming both.
+                  When a set is 7-6 / 6-7 with valid inner tiebreak
+                  details, the LOSING row shows a tiny superscript of
+                  their inner-tiebreak points (tennis convention:
+                  "7-6 (7-4)" = the 6-row scored 4 in the tiebreak). */}
               {row.scores.map(function(score, i) {
                 var opp = row.oppScores[i];
                 var hasMine = score !== "" && score !== undefined && score !== null;
@@ -593,6 +601,27 @@ function FeedCard({
                 } else {
                   wonSet = false;
                 }
+                // Inner tiebreak read — shown only on the LOSING row's
+                // cell (the side with 6 in a 7-6 set) when valid.
+                var setObj = (m.sets || [])[i];
+                var tbSuper = null;
+                if (setObj && setObj.tieBreak && hasMine && hasOpp) {
+                  var hi = Math.max(Number(score), Number(opp));
+                  var lo = Math.min(Number(score), Number(opp));
+                  if (hi === 7 && lo === 6 && !wonSet) {
+                    // This is the loser's row — show their tiebreak
+                    // points (the smaller of the inner pair). Reading
+                    // off the original set object so we always get
+                    // *this row's* points regardless of orientation.
+                    var tbY = Number(setObj.tieBreak.you);
+                    var tbT = Number(setObj.tieBreak.them);
+                    if (Number.isFinite(tbY) && Number.isFinite(tbT)) {
+                      // The loser's row points are the LOSER's inner
+                      // score (Math.min of the inner pair).
+                      tbSuper = Math.min(tbY, tbT);
+                    }
+                  }
+                }
                 return (
                   <div key={i} style={{
                     width: 24, textAlign: "center",
@@ -601,8 +630,18 @@ function FeedCard({
                     fontVariantNumeric: "tabular-nums",
                     letterSpacing: "-0.2px",
                     lineHeight: 1,
+                    position: "relative",
                   }}>
                     {score !== undefined && score !== "" ? score : "–"}
+                    {tbSuper != null && (
+                      <span style={{
+                        position: "absolute",
+                        top: -4, right: -1,
+                        fontSize: 8, fontWeight: 700,
+                        color: t.textTertiary,
+                        letterSpacing: 0,
+                      }}>{tbSuper}</span>
+                    )}
                   </div>
                 );
               })}

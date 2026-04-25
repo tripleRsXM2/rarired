@@ -20,15 +20,13 @@
 // until a dedicated /feed route exists).
 
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 
+// Centralised — keeps the 3-row activity preview's score string in sync
+// with the feed card + dispute drawer + share text. Old rows without
+// tieBreak metadata still render as "7-6" (no parenthesis).
 function shortScore(sets) {
-  if (!sets || !sets.length) return null;
-  return sets.map(function (s) {
-    var y = s.you == null ? "" : String(s.you).trim();
-    var t = s.them == null ? "" : String(s.them).trim();
-    if (y === "" && t === "") return null;
-    return (y || "—") + "-" + (t || "—");
-  }).filter(Boolean).join(" ");
+  return formatMatchScore(sets) || null;
 }
 
 function ActivityRow({ t, m, isLast, onTap, profile }) {

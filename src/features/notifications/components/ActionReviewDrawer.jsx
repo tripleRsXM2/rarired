@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
+import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -56,10 +57,10 @@ function formatResult(result) {
 
 function formatSets(sets) {
   if (!sets || !sets.length) return "—";
-  return sets
-    .filter(function (s) { return s.you !== "" || s.them !== ""; })
-    .map(function (s) { return s.you + "–" + s.them; })
-    .join(", ");
+  // Centralised in tennisScoreValidation so the dispute drawer renders
+  // tiebreak details ("7-6 (7-4)") the same way the rest of the app does.
+  var s = formatMatchScore(sets);
+  return s || "—";
 }
 
 // Compute which fields changed between original match and the proposal.
