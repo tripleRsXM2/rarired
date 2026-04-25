@@ -400,6 +400,64 @@ export default function MapTab({
       />
 
       {/* Court info modal — opens on court marker tap */}
+      {/* Play Match CTA — primary action of the map. Bottom-centre,
+          thumb-zone optimal. Orange so it pops against the green
+          zone polygons + neutral chrome. Phase 1: visual only —
+          tap fires telemetry so we can see interest from day one
+          (Mom-test: instrument before shipping the flow). Phase 2
+          will swap the no-op for a guided 5-step wizard inside a
+          bottom sheet (zone → court → player(s) → send invite). */}
+      <button type="button"
+        onClick={function(){
+          track("play_match_cta_tapped", {
+            has_zone: !!selected,
+            has_court: !!panelCourtName,
+          });
+          // Placeholder until phase 2 ships the wizard.
+          if(typeof window !== "undefined" && window.alert){
+            window.alert("Play Match flow — coming soon. We'll wrap a guided wizard around the existing zone → court → player picker.");
+          }
+        }}
+        aria-label="Play match"
+        style={{
+          position:"absolute",
+          left:"50%",
+          // Sit above the attribution + iOS safe-area.
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 22px)",
+          transform:"translateX(-50%)",
+          zIndex: 550,
+          minWidth: 220, height: 56,
+          padding: "0 28px",
+          borderRadius: 28,
+          border: "none",
+          background: "#f97316", // orange — action energy, contrasts brand green
+          color: "#fff",
+          fontSize: 15,
+          fontWeight: 800,
+          letterSpacing: "0.01em",
+          cursor: "pointer",
+          boxShadow:
+            "0 6px 18px rgba(249,115,22,0.42), " +
+            "0 2px 4px rgba(20,18,17,0.18), " +
+            "inset 0 1px 0 rgba(255,255,255,0.18)",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          transition: "transform 0.12s ease, box-shadow 0.18s ease",
+        }}
+        onMouseDown={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(1px) scale(0.98)"; }}
+        onMouseUp={function(e){ e.currentTarget.style.transform = "translateX(-50%)"; }}
+        onMouseLeave={function(e){ e.currentTarget.style.transform = "translateX(-50%)"; }}>
+        {/* Tennis-ball glyph — small, decorative, line-art consistent
+            with the rest of the icon system (no emoji per CLAUDE.md). */}
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
+             stroke="currentColor" strokeWidth="1.6"
+             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="9" cy="9" r="6.5"/>
+          <path d="M3 6.5 c2.5 1 5 3 6.5 6.5"/>
+          <path d="M15 6.5 c-2.5 1 -5 3 -6.5 6.5"/>
+        </svg>
+        <span>Play match</span>
+      </button>
+
       <CourtInfoCard t={t} court={selectedCourt}
         authUser={authUser}
         viewerProfile={profile}
