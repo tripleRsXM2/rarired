@@ -481,7 +481,7 @@ function FeedCard({
             visual structure. Only the social footer earns a hairline,
             because that's a passive→active section change. */}
       <div style={{
-        margin: "8px 0 4px",
+        margin: "0 0 4px",
       }}>
         {/* Column-label strip — smaller, subtler, right-aligned. No visual weight. */}
         {(m.sets || []).length > 0 && (
