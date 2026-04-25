@@ -45,8 +45,11 @@ var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 //
 // Returns null when there's nothing worth painting (saves a marker
 // per zone in the common case).
-function zoneCentroidBadgeHtml(z, activity, isHome) {
-  var hasFlame = activity && activity.matches_7d > 0;
+function zoneCentroidBadgeHtml(z, activity, isHome, heatVisible) {
+  // Flame is part of the heat-map signal — hide when heat is toggled
+  // off. Home indicator stays regardless; it's a personal anchor, not
+  // a heat overlay.
+  var hasFlame = heatVisible !== false && activity && activity.matches_7d > 0;
   if (!isHome && !hasFlame) return null;
 
   var homeBadge = isHome
@@ -78,6 +81,10 @@ function zoneCentroidBadgeHtml(z, activity, isHome) {
 export default function LeafletMap({
   t, theme, hovered, selected, homeZone, zoneActivity,
   onHover, onSelect, onCourtSelect,
+  // Heat-map toggle (zone polygon fills + activity flame badges).
+  // Default true. Off = polygons fade out, flame badges hide so the
+  // basemap reads cleanly. Home + court markers are unaffected.
+  heatVisible = true,
 }){
   var elRef = useRef(null);
   var mapRef = useRef(null);
@@ -221,7 +228,7 @@ export default function LeafletMap({
     tileLayersRef.current.base = base;
   },[theme]);
 
-  // Restyle zones when hover / selected change.
+  // Restyle zones when hover / selected / heat-toggle change.
   useEffect(function(){
     Object.keys(zoneLayersRef.current).forEach(function(id){
       var layer = zoneLayersRef.current[id];
@@ -229,6 +236,13 @@ export default function LeafletMap({
       if(!layer || !z) return;
       var isHover = hovered === id;
       var isSel   = selected === id;
+      // Heat off → fade the fill so the basemap reads clearly. We keep
+      // a 1px hairline on each polygon so users can still click them
+      // (otherwise the click target disappears).
+      if(!heatVisible){
+        layer.setStyle({ color: z.color, weight: 1, opacity: isHover || isSel ? 0.6 : 0.25, fillColor: z.color, fillOpacity: 0 });
+        return;
+      }
       if(isSel){
         layer.setStyle({ color: z.color, weight: 3, opacity: 1, fillColor: z.color, fillOpacity: 0.62 });
       } else if(isHover){
@@ -237,7 +251,7 @@ export default function LeafletMap({
         layer.setStyle({ color: z.color, weight: 2, opacity: 0.9, fillColor: z.color, fillOpacity: 0.42 });
       }
     });
-  },[hovered, selected]);
+  },[hovered, selected, heatVisible]);
 
   // Update zone label HTML when activity streams in — the flame badge is
   // attached to the zone number/name stack so it follows the polygon
@@ -254,7 +268,7 @@ export default function LeafletMap({
       if(!z) return;
       var prev = zoneLabelsRef.current[id];
       if(prev){ map.removeLayer(prev); }
-      var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id);
+      var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id, heatVisible);
       if(!html){
         zoneLabelsRef.current[id] = null;
         return;
@@ -264,14 +278,21 @@ export default function LeafletMap({
         icon: L.divIcon({
           className: "cs-zone-centroid",
           html: html,
-          iconSize: [60, 56], iconAnchor: [30, 28],
+          iconSize: [60, 60],
+          // iconAnchor y > iconSize.height pushes the badge ABOVE the
+          // lat/lng (courts at the polygon centre are very common in
+          // dense zones — CBD's bbox centre sits right on Prince Alfred,
+          // for instance). 90 means the icon centre paints ~30 px above
+          // the centroid point, leaving room for the court marker
+          // underneath.
+          iconAnchor: [30, 90],
         }),
         interactive: false,
         zIndexOffset: 500,
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });
-  },[zoneActivity, homeZone]);
+  },[zoneActivity, homeZone, heatVisible]);
 
   // (Old standalone home-pin effect retired — the home indicator is
   // baked into the zone-number label's house-shaped badge above. One

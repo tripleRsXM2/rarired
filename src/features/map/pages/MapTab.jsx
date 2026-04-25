@@ -32,6 +32,10 @@ export default function MapTab({
   var [selected,setSelected]=useState(null);
   var [selectedCourt,setSelectedCourt]=useState(null);
   var [zoneActivity,setZoneActivity]=useState({});
+  // Heat-map toggle — controls zone polygon fill + activity flame
+  // badges. Default on. Off lets the user read the basemap + courts
+  // without our color overlay.
+  var [heatVisible,setHeatVisible]=useState(true);
   var selectedZone = selected ? ZONE_BY_ID[selected] : null;
   var homeZone = profile && profile.home_zone;
 
@@ -92,6 +96,7 @@ export default function MapTab({
         hovered={hovered} selected={selected}
         homeZone={homeZone}
         zoneActivity={zoneActivity}
+        heatVisible={heatVisible}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
@@ -116,6 +121,28 @@ export default function MapTab({
           <div style={{ fontSize:13, fontWeight:700, color:t.text, letterSpacing:"-0.02em", marginTop:2, lineHeight:1 }}>Sydney</div>
         </div>
       </div>
+
+      {/* Heat-map toggle — top-right. Off = the colored zone fills +
+          flame badges hide so the basemap reads cleanly with just the
+          court markers + your home indicator. */}
+      <button
+        onClick={function(){ setHeatVisible(function(v){ return !v; }); }}
+        title={heatVisible ? "Hide heat (zone colors + activity)" : "Show heat (zone colors + activity)"}
+        aria-label={heatVisible ? "Hide heat map" : "Show heat map"}
+        style={{
+          position:"absolute", top:12, right:12, zIndex:500,
+          background: heatVisible ? t.bgCard : t.text,
+          color: heatVisible ? t.text : t.bg,
+          border:"1px solid "+(heatVisible ? t.border : t.text),
+          borderRadius:8, padding:"8px 12px",
+          fontSize:12, fontWeight:700, letterSpacing:"0.02em",
+          cursor:"pointer", boxShadow:"0 1px 4px rgba(0,0,0,0.08)",
+          display:"flex", alignItems:"center", gap:6,
+          transition:"background 0.15s, color 0.15s",
+        }}>
+        <span style={{ fontSize:13, lineHeight:1 }}>🔥</span>
+        <span>{heatVisible ? "Heat on" : "Heat off"}</span>
+      </button>
 
       {/* Hovered-zone card — promoted from a small chip to a card-style
           element now that the floating zone-name labels are gone. This
