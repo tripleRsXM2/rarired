@@ -181,42 +181,39 @@ export default function MapTab({
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
       {(function(){
-        // v3 — crank the vignette to actually be visible. The probe
-        // confirmed v2 was deployed correctly but blur:80 / opacity:0.22
-        // spread the darkness so gently it produced ~0 visible contrast
-        // at the edge. Strava/Apple Maps vignettes are MUCH stronger
-        // than that. Compose two layers:
-        //   (a) sharp inner darken — small blur, high opacity, hugs
-        //       the edge so the boundary is unambiguous
-        //   (b) soft outer halo — large blur, lower opacity, eases
-        //       the transition so it doesn't look like a cheap border
-        // Plus a near-transparent gradient pass that biases the corners
-        // a touch darker (true vignette feel).
+        // v4 — ditch box-shadow entirely. Inset shadows blur INWARD,
+        // which puts the darkest band ~30-40px from the edge instead
+        // of AT the edge. Real Strava/Apple Maps vignettes are radial
+        // gradients painted across the whole overlay: transparent
+        // centre → solid dark corners. The edge IS the darkest part,
+        // which is what makes them look proper.
+        //
+        // Two stacked radial gradients:
+        //   (a) main ellipse vignette — gentle falloff, biases corners
+        //   (b) edge bias — a four-side gradient ring that bites a
+        //       little harder so straight edges (not just corners)
+        //       darken visibly
+        // Theme-aware intensity (dark themes need bigger contrast since
+        // the basemap is already dark). Plus a 1px inset hairline to
+        // crisp the very edge.
         var dark = theme === "hard-court" || theme === "night-court";
-        var shadow = dark
-          ? [
-              "inset 0 0 0 1px rgba(0,0,0,0.6)",
-              "inset 0 0 40px 4px rgba(0,0,0,0.7)",
-              "inset 0 0 120px 20px rgba(0,0,0,0.55)",
-            ].join(", ")
-          : [
-              "inset 0 0 0 1px rgba(20,18,17,0.18)",
-              "inset 0 0 36px 0 rgba(20,18,17,0.45)",
-              "inset 0 0 110px 16px rgba(20,18,17,0.28)",
-            ].join(", ");
-        // Corner bias — radial vignette overlay from each corner.
-        var cornerColor = dark ? "rgba(0,0,0,0.55)" : "rgba(20,18,17,0.35)";
-        var corners =
-          "radial-gradient(circle at 0% 0%,   " + cornerColor + ", transparent 30%), " +
-          "radial-gradient(circle at 100% 0%, " + cornerColor + ", transparent 30%), " +
-          "radial-gradient(circle at 0% 100%, " + cornerColor + ", transparent 30%), " +
-          "radial-gradient(circle at 100% 100%, " + cornerColor + ", transparent 30%)";
+        var corner = dark ? "rgba(0,0,0,0.65)"   : "rgba(20,18,17,0.45)";
+        var midRim = dark ? "rgba(0,0,0,0.32)"   : "rgba(20,18,17,0.18)";
+        var hairline = dark ? "rgba(0,0,0,0.7)"  : "rgba(20,18,17,0.35)";
         return (
           <div aria-hidden="true"
             style={{
               position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
-              boxShadow: shadow,
-              backgroundImage: corners,
+              // Layer order in CSS background: first listed paints on top.
+              backgroundImage:
+                // Edge ring — bias along the four straight edges so they
+                // darken (not just corners).
+                "radial-gradient(ellipse 90% 90% at 50% 50%, " +
+                  "transparent 70%, " + midRim + " 100%), " +
+                // Main vignette — wide soft falloff from centre to corners.
+                "radial-gradient(ellipse 70% 80% at 50% 50%, " +
+                  "transparent 55%, " + corner + " 100%)",
+              boxShadow: "inset 0 0 0 1px " + hairline,
             }}/>
         );
       })()}

@@ -109,11 +109,49 @@ async function probe(u, label) {
   });
   log(label + ": " + JSON.stringify(snap));
 
-  // Screenshot for visual confirmation.
+  // Capture three screenshots so we can confirm the vignette is
+  // present BEFORE / DURING (just after) / AFTER zoom — Theory 1
+  // was that the "fade" the user saw was actually empty tile gaps
+  // during zoom that vanish once tiles paint.
   await mkdir("scripts/_screens", { recursive: true });
-  var path = "scripts/_screens/map-edge-fade-" + label.toLowerCase() + ".png";
-  await u.page.screenshot({ path: path, fullPage: false });
-  log("  screenshot -> " + path);
+  var base = "scripts/_screens/map-edge-fade-" + label.toLowerCase();
+  await u.page.screenshot({ path: base + "-initial.png", fullPage: false });
+  log("  screenshot -> " + base + "-initial.png");
+
+  // Zoom in twice via the Leaflet zoom-in control, wait for tiles.
+  await u.page.evaluate(function () {
+    var btn = document.querySelector(".leaflet-control-zoom-in");
+    if (btn) { btn.click(); setTimeout(function(){ btn.click(); }, 350); }
+  });
+  await u.page.waitForTimeout(2000);
+  await u.page.screenshot({ path: base + "-zoomedin.png", fullPage: false });
+  log("  screenshot -> " + base + "-zoomedin.png");
+
+  // Zoom back out twice.
+  await u.page.evaluate(function () {
+    var btn = document.querySelector(".leaflet-control-zoom-out");
+    if (btn) { btn.click(); setTimeout(function(){ btn.click(); }, 350); }
+  });
+  await u.page.waitForTimeout(2000);
+  await u.page.screenshot({ path: base + "-zoomedout.png", fullPage: false });
+  log("  screenshot -> " + base + "-zoomedout.png");
+
+  // Re-snapshot after zoom to confirm overlay still in DOM with correct CSS.
+  var post = await u.page.evaluate(function () {
+    var frame = document.querySelector(".cs-map-frame");
+    var fade = Array.from(frame.children).find(function (el) {
+      return el.getAttribute("aria-hidden") === "true";
+    });
+    if (!fade) return { stillThere: false };
+    var st = getComputedStyle(fade);
+    return {
+      stillThere: true,
+      hasGradient: /radial-gradient/.test(st.backgroundImage),
+      zIndex: st.zIndex,
+      pointerEvents: st.pointerEvents,
+    };
+  });
+  log("  post-zoom: " + JSON.stringify(post));
 
   var errs = u.errs.filter(function (e) { return !/401/.test(e); });
   log("  " + (errs.length === 0 ? "OK" : "X") + " runtime errors: " + errs.length);
