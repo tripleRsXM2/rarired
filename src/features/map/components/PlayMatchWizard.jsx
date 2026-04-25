@@ -462,15 +462,21 @@ export default function PlayMatchWizard({
                           color: t.text,
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>{c.name}</div>
-                        {/* Description: address if we have it, else
-                            suburb. Address is more specific so it
-                            wins. Then the court count. */}
+                        {/* Description: ALWAYS show suburb + court
+                            count for consistent scanability. All 52
+                            courts have a suburb; only ~half had an
+                            address, which made the list jagged
+                            ("Beaconsfield · 4 courts" next to "Cnr
+                            Cleveland St & Chalmers St · 6 courts"
+                            felt inconsistent). Address still wins
+                            for the Google Maps URL helper in
+                            courts.js where specificity matters. */}
                         <div style={{
                           fontSize: 11, color: t.textSecondary,
                           marginTop: 3, fontWeight: 600, letterSpacing:"0.01em",
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>
-                          {(c.address || c.suburb) ? (c.address || c.suburb) + " · " : ""}
+                          {c.suburb ? c.suburb + " · " : ""}
                           {c.courts} {c.courts === 1 ? "court" : "courts"}
                         </div>
                       </div>
