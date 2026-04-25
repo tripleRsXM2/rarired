@@ -62,6 +62,42 @@ export default function ScoreModal({
   // diagnostic here so the user can tap "Save as casual time-limited"
   // explicitly. Shape: { code, message } | null.
   var [casualFallbackOffer, setCasualFallbackOffer] = useState(null);
+  // Slice E: live validation message rendered as a quiet caption
+  // beneath the Sets block. Recomputes whenever sets / matchType /
+  // completionType / leagueId changes. Does NOT block typing — the
+  // hard block stays at handleSave time.
+  var liveValidation = useMemo(function () {
+    if (!scoreDraft || !scoreDraft.sets) return null;
+    var clean = scoreDraft.sets.filter(function (s) { return s.you !== "" || s.them !== ""; });
+    if (!clean.length) return null;
+    var league = scoreDraft.leagueId
+      ? (myLeagues || []).find(function (lg) { return lg.id === scoreDraft.leagueId; })
+      : null;
+    var matchType = scoreDraft.matchType
+      || ((isResubmit || casualOppId) ? 'ranked' : 'casual');
+    if (matchType === 'ranked' && !casualOppId && !isResubmit) matchType = 'casual';
+    var completionType = scoreDraft.completionType || 'completed';
+    var allowPartial = (matchType === 'casual') && (completionType !== 'completed');
+    return validateMatchScore(clean, {
+      matchType: matchType,
+      completionType: completionType,
+      matchFormat: (league && league.match_format) || 'best_of_3',
+      finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
+        ? 'match_tiebreak' : 'normal_set',
+      allowPartialScores: allowPartial,
+      requireTiebreakDetails: false,
+      leagueMode: league ? league.mode : null,
+      leagueAllowPartial: false,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    scoreDraft && JSON.stringify(scoreDraft.sets),
+    scoreDraft && scoreDraft.matchType,
+    scoreDraft && scoreDraft.completionType,
+    scoreDraft && scoreDraft.leagueId,
+    casualOppId, isResubmit,
+    (myLeagues || []).length,
+  ]);
 
   // Module 7.5: opponent's active league memberships (subset of viewer's
   // leagues). Refetched whenever the linked opponent changes — used by the
@@ -477,6 +513,39 @@ export default function ScoreModal({
           </div>
         </div>
 
+        {/* Completion type — slice E. Only shown when the match would
+            be casual (no linked opponent OR explicitly downgraded). For
+            ranked matches the "completed" rule is non-negotiable; the
+            casual-fallback affordance below the error block handles the
+            partial-score path explicitly. */}
+        {(scoreDraft.matchType === 'casual' || (!casualOppId && !isResubmit)) && (
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,letterSpacing:"0.06em",textTransform:"uppercase",display:"block",marginBottom:6}}>How did it end?</label>
+            <div style={{display:"flex",gap:6}}>
+              {[
+                { id: 'completed',    label: 'Completed' },
+                { id: 'time_limited', label: 'Time-limited' },
+                { id: 'retired',      label: 'Retired' },
+              ].map(function (c) {
+                var on = (scoreDraft.completionType || 'completed') === c.id;
+                return (
+                  <button key={c.id}
+                    onClick={function () { setScoreDraft(function (d) { return Object.assign({}, d, { completionType: c.id }); }); }}
+                    style={{
+                      flex: 1, padding: "8px 10px", borderRadius: 8,
+                      background: on ? t.accentSubtle : "transparent",
+                      border: "1px solid " + (on ? t.accent : t.border),
+                      color: on ? t.accent : t.textSecondary,
+                      fontSize: 12, fontWeight: on ? 700 : 500, cursor: "pointer",
+                    }}>
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Sets */}
         <div style={{marginBottom:16}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,alignItems:"center"}}>
@@ -495,7 +564,7 @@ export default function ScoreModal({
                 <span style={{fontSize:12,fontWeight:500,color:t.textSecondary}}>Set {si+1}</span>
                 {["you","them"].map(function(who){
                   return (
-                    <input key={who} type="number" min="0" max="7" value={set[who]} placeholder="0"
+                    <input key={who} type="number" min="0" value={set[who]} placeholder="0"
                       onChange={function(e){var v=e.target.value;setScoreDraft(function(d){var ns=d.sets.map(function(ss,idx){return idx!==si?ss:Object.assign({},ss,{[who]:v});});return Object.assign({},d,{sets:ns});});}}
                       style={{padding:"10px 0",textAlign:"center",borderRadius:8,border:"1px solid "+t.border,background:t.inputBg,color:t.text,fontSize:20,fontWeight:700,width:"100%",fontVariantNumeric:"tabular-nums"}}/>
                   );
@@ -507,6 +576,35 @@ export default function ScoreModal({
               </div>
             );
           })}
+          {/* Slice E: live validation caption — quiet, non-blocking. */}
+          {liveValidation && !liveValidation.ok && (
+            <div style={{
+              marginTop: 6,
+              padding: "8px 10px",
+              borderRadius: 6,
+              fontSize: 11,
+              color: t.textSecondary,
+              background: t.bgTertiary,
+              border: "1px solid " + t.border,
+              lineHeight: 1.4,
+            }}>
+              {liveValidation.message}
+            </div>
+          )}
+          {liveValidation && liveValidation.ok && liveValidation.completionStatus === "partial" && (
+            <div style={{
+              marginTop: 6,
+              padding: "8px 10px",
+              borderRadius: 6,
+              fontSize: 11,
+              color: t.textSecondary,
+              background: t.bgTertiary,
+              border: "1px solid " + t.border,
+              lineHeight: 1.4,
+            }}>
+              Saving as a casual {scoreDraft.completionType === 'retired' ? 'retired' : 'time-limited'} result. Won't affect rating.
+            </div>
+          )}
         </div>
 
         {/* Venue + Court
