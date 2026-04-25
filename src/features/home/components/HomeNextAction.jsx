@@ -1,26 +1,19 @@
 // src/features/home/components/HomeNextAction.jsx
 //
-// Slice 1 of the design overhaul: the single contextual "next thing"
-// card that sits directly under the Hero. Replaces both the generic
-// "+ Log match" header button AND the standalone NextChallengeBanner.
+// Visual reset v2: the contextual next-action surface is no longer a
+// bordered card. It's a single line of bold text with an inline arrow
+// link, sitting under the Hero. The accent left-border / boxed body /
+// avatar / CTA-pill chrome is gone.
 //
-// Design rule (docs/design-direction.md): one strong next action per
-// screen, contextual to the user's state — never a generic CTA when
-// there's a real next step.
+// Three urgency states + neutral default:
+//   1. dispute_needs_response  — red text, urgent verb
+//   2. pending_confirm         — orange text, action verb
+//   3. accepted_challenge      — accent text, calendar context
+//   4. neutral                 — primary CTA pill, generously sized
 //
-// Priority (highest first — only one renders at a time):
-//   1. Match in dispute needing MY response   (red,    urgent)
-//   2. Match pending MY confirmation          (orange, urgent)
-//   3. Accepted challenge in next 14 days     (accent, action)
-//   4. (Future) League rank moved last 7d     (green,  positive)
-//   5. Default: "Log a match"                 (neutral)
-//
-// "League rank moved" is intentionally deferred — it needs per-match
-// snapshot deltas we don't surface yet. Documented in design-direction.md.
-
-import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
-
-// ── Selection helpers ────────────────────────────────────────────────────────
+// 1-3 render inline above the primary CTA when relevant. The neutral
+// default is the primary "Log a match" CTA. Per docs/design-direction
+// → Visual reset v2 ("Restraint with the accent").
 
 function pickDisputeMatch(history, authUserId) {
   if (!history || !authUserId) return null;
@@ -34,8 +27,6 @@ function pickDisputeMatch(history, authUserId) {
 
 function pickPendingConfirmMatch(history, authUserId) {
   if (!history || !authUserId) return null;
-  // I need to confirm a match someone else logged: status=pending_confirmation
-  // AND I'm the tagged opponent (m.isTagged means viewer is the opponent).
   for (var i = 0; i < history.length; i++) {
     var m = history[i];
     if (m.status === "pending_confirmation" && m.isTagged) return m;
@@ -73,9 +64,9 @@ function fmtChallengeWhen(iso) {
   var tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
   var isTomorrow = d.toDateString() === tomorrow.toDateString();
   var hm = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
-  if (sameDay)    return "Today · " + hm;
-  if (isTomorrow) return "Tomorrow · " + hm;
-  return d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) + " · " + hm;
+  if (sameDay)    return "today · " + hm;
+  if (isTomorrow) return "tomorrow · " + hm;
+  return d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }).toLowerCase() + " · " + hm;
 }
 
 function scrollToFeedMatch(matchId) {
@@ -87,149 +78,141 @@ function scrollToFeedMatch(matchId) {
   setTimeout(function () { el.classList.remove("cs-deeplink-pulse"); }, 2000);
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Inline urgency rows — bold text, no card ────────────────────────────────
+
+function UrgencyLine({ t, color, label, verb, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        margin: 0,
+        textAlign: "left",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "baseline",
+        gap: 8,
+        fontSize: "clamp(15px, 2vw, 17px)",
+        fontWeight: 600,
+        color: t.text,
+        letterSpacing: "-0.2px",
+        lineHeight: 1.4,
+        maxWidth: "100%",
+      }}>
+      <span style={{
+        fontSize: 10,
+        fontWeight: 800,
+        color: color,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        flexShrink: 0,
+      }}>
+        {label}
+      </span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {verb}
+      </span>
+      <span style={{ color: color, flexShrink: 0, fontWeight: 800 }}>→</span>
+    </button>
+  );
+}
+
+// ── Primary CTA — pill, generous, single accent moment ──────────────────────
+
+function PrimaryCTA({ t, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: t.text,
+        color: t.bg,
+        border: "none",
+        padding: "16px 28px",
+        fontSize: 14,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        cursor: "pointer",
+        transition: "opacity 0.15s",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+      onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
+      {label}
+    </button>
+  );
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
 
 export default function HomeNextAction({
   t, authUser, profile,
   history,
   challengesList, challengesProfileMap,
-  onLogScores,        // (challenge, partner) => void   — accepted-challenge path
-  openLogMatch,       // ()                  => void   — neutral-default path
+  onLogScores,
+  openLogMatch,
 }) {
   if (!authUser) return null;
 
-  // Resolve in priority order — first hit wins.
   var disputeMatch = pickDisputeMatch(history, authUser.id);
   var pendingMatch = !disputeMatch ? pickPendingConfirmMatch(history, authUser.id) : null;
   var challenge    = (!disputeMatch && !pendingMatch) ? pickNextChallenge(challengesList, authUser.id) : null;
 
-  var card = null;
-
+  // Urgency line (if any) renders above the primary CTA. The CTA is
+  // always present — the page's primary action is "Log a match",
+  // contextual urgency just precedes it.
+  var urgency = null;
   if (disputeMatch) {
     var oppName = disputeMatch.opponentName || disputeMatch.playerName || "your opponent";
-    card = {
-      tone: "red",
-      eyebrow: "Action needed",
-      title: "Match needs your response",
-      subtitle: "vs " + oppName + " · review proposal or dispute",
-      ctaLabel: "Review match",
-      onCta: function () { scrollToFeedMatch(disputeMatch.id); },
+    urgency = {
+      color: t.red,
+      label: "Action needed",
+      verb: "Match vs " + oppName + " needs your response",
+      onClick: function () { scrollToFeedMatch(disputeMatch.id); },
     };
   } else if (pendingMatch) {
     var poster = pendingMatch.playerName || "Opponent";
-    card = {
-      tone: "orange",
-      eyebrow: "Confirm match",
-      title: poster + " logged a match against you",
-      subtitle: "Confirm the score or open a dispute",
-      ctaLabel: "Review",
-      onCta: function () { scrollToFeedMatch(pendingMatch.id); },
+    urgency = {
+      color: t.orange,
+      label: "Confirm match",
+      verb: poster + " logged a match against you",
+      onClick: function () { scrollToFeedMatch(pendingMatch.id); },
     };
   } else if (challenge) {
     var partnerId = challenge.challenger_id === authUser.id ? challenge.challenged_id : challenge.challenger_id;
     var partner = (challengesProfileMap && challengesProfileMap[partnerId]) || { id: partnerId, name: "Player" };
-    var whenLabel  = fmtChallengeWhen(challenge.proposed_at);
-    var whereLabel = [challenge.venue, challenge.court].filter(Boolean).join(" · ");
-    var sub = [whenLabel, whereLabel].filter(Boolean).join(" · ");
-    card = {
-      tone: "accent",
-      eyebrow: "Next challenge",
-      title: "vs " + (partner.name || "Player"),
-      subtitle: sub || "Coordinate a time and log the result",
-      avatar: partner,
-      ctaLabel: "Log scores",
-      onCta: function () { if (onLogScores) onLogScores(challenge, partner); },
-    };
-  } else {
-    // Neutral default — single CTA per screen rule.
-    var hasMatches = (profile && profile.matches_played != null && profile.matches_played > 0)
-      || (history || []).some(function (m) { return m.status === "confirmed"; });
-    card = {
-      tone: "neutral",
-      eyebrow: hasMatches ? "Up next" : "Get started",
-      title: hasMatches ? "Log a match" : "Log your first match",
-      subtitle: hasMatches ? "Track your progress and rank" : "Start your CourtSync identity",
-      ctaLabel: hasMatches ? "Log match" : "Log first match",
-      onCta: function () { if (openLogMatch) openLogMatch(); },
+    var when = fmtChallengeWhen(challenge.proposed_at);
+    var verb = "Playing " + (partner.name || "Player") + (when ? " · " + when : "");
+    urgency = {
+      color: t.accent,
+      label: "Next challenge",
+      verb: verb,
+      onClick: function () { if (onLogScores) onLogScores(challenge, partner); },
     };
   }
 
-  // Tone → colors. We deliberately keep the tonal cue subtle — the eyebrow
-  // line carries the urgency, the card itself stays calm.
-  var toneAccent =
-    card.tone === "red"     ? t.red    :
-    card.tone === "orange"  ? t.orange :
-    card.tone === "green"   ? t.green  :
-    card.tone === "accent"  ? t.accent :
-    /* neutral */             t.textSecondary;
-
-  var ctaBg = card.tone === "neutral" ? t.text : toneAccent;
+  // Choose CTA label based on whether the user has any confirmed matches.
+  var hasMatches = (profile && profile.matches_played != null && profile.matches_played > 0)
+    || (history || []).some(function (m) { return m.status === "confirmed"; });
+  var ctaLabel = hasMatches ? "Log a match" : "Log your first match";
 
   return (
-    <div style={{
-      background: t.bgCard,
-      border: "1px solid " + t.border,
-      borderLeft: "3px solid " + toneAccent,
-      borderRadius: 12,
-      padding: "16px 18px",
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-    }}>
-      {card.avatar && (
-        <div style={{ flexShrink: 0 }}>
-          <PlayerAvatar
-            name={card.avatar.name}
-            avatar={card.avatar.avatar}
-            profile={card.avatar}
-            size={44}
-          />
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {urgency && (
+        <UrgencyLine
+          t={t}
+          color={urgency.color}
+          label={urgency.label}
+          verb={urgency.verb}
+          onClick={urgency.onClick}
+        />
       )}
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 10, fontWeight: 700, color: toneAccent,
-          letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4,
-        }}>
-          {card.eyebrow}
-        </div>
-        <div style={{
-          fontSize: 15, fontWeight: 700, color: t.text,
-          letterSpacing: "-0.2px", lineHeight: 1.25,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {card.title}
-        </div>
-        {card.subtitle && (
-          <div style={{
-            fontSize: 12, color: t.textSecondary, marginTop: 3,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {card.subtitle}
-          </div>
-        )}
-      </div>
-
-      <button
-        onClick={card.onCta}
-        style={{
-          flexShrink: 0,
-          padding: "10px 16px",
-          borderRadius: 8,
-          border: "none",
-          background: ctaBg,
-          color: "#fff",
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: "0.02em",
-          cursor: "pointer",
-          transition: "opacity 0.15s",
-        }}
-        onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-        onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
-        {card.ctaLabel}
-      </button>
+      <PrimaryCTA
+        t={t}
+        label={ctaLabel}
+        onClick={openLogMatch}
+      />
     </div>
   );
 }

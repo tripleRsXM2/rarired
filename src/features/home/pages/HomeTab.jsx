@@ -8,7 +8,9 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 import HomeHero from "../components/HomeHero.jsx";
 import HomeNextAction from "../components/HomeNextAction.jsx";
-import HomeLeaguesStrip from "../components/HomeLeaguesStrip.jsx";
+import HomeWeekStrip from "../components/HomeWeekStrip.jsx";
+import HomeLeagueBand from "../components/HomeLeagueBand.jsx";
+import HomeActivityList from "../components/HomeActivityList.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 var REASON_LABELS = {
@@ -1096,21 +1098,44 @@ export default function HomeTab({
   }
 
   // ── Authenticated feed ─────────────────────────────────────────────────────
-  return (
-    <div style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
-      {/* Slice 1 of design overhaul: Hero replaces the old "Feed" page-header.
-          Establishes identity (avatar + name) and the signature metric
-          (ranking points) before any list of activity. Pulse one-liner is
-          folded into Hero — it no longer renders as a standalone strip. */}
-      <div style={{ padding: "20px 20px 14px" }}>
-        <HomeHero t={t} profile={profile} history={history} friends={friends} />
-      </div>
+  // Visual reset v2: the outer wrapper drops the 720px max-width so editorial
+  // sections (HomeLeagueBand) can full-bleed. Constrained sections wrap their
+  // own content to 720 with generous horizontal padding.
+  function tapActivityRow(matchId) {
+    if (!matchId) return;
+    function scroll() {
+      var el = typeof document !== "undefined" ? document.getElementById("feed-match-" + matchId) : null;
+      if (!el) return;
+      if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("cs-deeplink-pulse");
+      setTimeout(function () { el.classList.remove("cs-deeplink-pulse"); }, 2000);
+    }
+    if (!feedExpanded) {
+      setFeedExpanded(true);
+      // Wait for the full feed to render before trying to scroll.
+      setTimeout(scroll, 80);
+    } else {
+      scroll();
+    }
+  }
 
-      {/* Slice 1: single contextual next-action card. Replaces both the
-          generic "+ Log match" header CTA and the standalone NextChallengeBanner
-          — one card, one job (docs/design-direction.md). Priority order:
-          dispute → pending confirm → accepted challenge → "log a match". */}
-      <div style={{ padding: "0 20px 14px" }}>
+  return (
+    <div style={{ width: "100%" }}>
+      {/* HERO — borderless editorial composition. Sits directly on the
+          page background, generous breathing room around it. */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(40px, 6vw, 72px) clamp(20px, 4vw, 32px) 0",
+      }}>
+        <HomeHero t={t} profile={profile} history={history} />
+      </section>
+
+      {/* NEXT ACTION — single-line urgency (when present) + primary CTA.
+          No card chrome. The CTA is the one accent moment in this surface. */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) 0",
+      }}>
         <HomeNextAction
           t={t}
           authUser={authUser}
@@ -1121,54 +1146,61 @@ export default function HomeTab({
           onLogScores={onLogConvertedMatch}
           openLogMatch={openLogMatch}
         />
+      </section>
+
+      {/* HAIRLINE — 1px rule, full-rail width. Used instead of a card boundary
+          when both sides of the rule belong to the same conceptual flow. */}
+      <div style={{
+        maxWidth: 720, margin: "clamp(48px, 7vw, 80px) auto 0",
+        padding: "0 clamp(20px, 4vw, 32px)",
+      }}>
+        <div style={{ borderTop: "1px solid " + t.border }} />
       </div>
 
-      {/* Slice 1: Your leagues — up to 2 active leagues with rank + last
-          result + member count. Hidden entirely when the viewer has no
-          active leagues (Home stays calm). */}
-      <div style={{ padding: "0 20px 14px" }}>
-        <HomeLeaguesStrip
+      {/* WEEK STRIP — three numbers separated by hairlines, no card. Only
+          renders when there's been activity in the last 7 days. */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) clamp(28px, 4vw, 40px)",
+      }}>
+        <HomeWeekStrip t={t} history={history} />
+      </section>
+
+      {/* LEAGUE BAND — full-bleed near-black moment. Escapes the 720px rail
+          deliberately for editorial impact. Hidden when the viewer has no
+          active leagues. */}
+      <HomeLeagueBand
+        t={t}
+        authUser={authUser}
+        history={history}
+        myLeagues={myLeagues}
+        leagueDetailCache={leagueDetailCache}
+        loadLeagueDetail={loadLeagueDetail}
+        onOpenLeague={onOpenLeague}
+      />
+
+      {/* ACTIVITY LIST — 3-row borderless preview. "See all" toggles the
+          full feed (FeedCards) below. */}
+      <section style={{
+        maxWidth: 720, margin: "0 auto",
+        padding: "clamp(40px, 5vw, 64px) clamp(20px, 4vw, 32px) clamp(24px, 3vw, 32px)",
+      }}>
+        <HomeActivityList
           t={t}
           authUser={authUser}
           history={history}
-          myLeagues={myLeagues}
-          leagueDetailCache={leagueDetailCache}
-          loadLeagueDetail={loadLeagueDetail}
-          onOpenLeague={onOpenLeague}
+          onSeeAll={function () { setFeedExpanded(true); }}
+          onTapMatch={tapActivityRow}
         />
-      </div>
+      </section>
 
-      {/* Filter pills — functional. Friends = matches where poster or opponent
-          is in the viewer's friends list. */}
-      <div style={{ display: "flex", gap: 6, padding: "0 20px 18px", maxWidth: 720 }}>
-        {[
-          { id: "everyone", label: "Everyone" },
-          { id: "friends",  label: "Friends"  },
-        ].map(function (f) {
-          var on = feedFilter === f.id;
-          return (
-            <button key={f.id}
-              onClick={function () { setFeedFilter(f.id); setFeedExpanded(false); }}
-              style={{
-                fontSize: 12, fontWeight: on ? 700 : 500,
-                color: on ? t.accent : t.textTertiary,
-                background: on ? t.accentSubtle : t.bgCard,
-                border: on ? "1px solid transparent" : "1px solid " + t.border,
-                padding: "5px 14px", borderRadius: 20,
-                cursor: "pointer",
-              }}>
-              {f.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* New-match banner (Module 6.5): shown when realtime detects a
-          match_history INSERT involving the viewer that isn't in local state
-          yet. Tap refreshes the feed — we don't eagerly splice the row in
-          because it'd jump the list mid-scroll. */}
-      {pendingFreshCount > 0 && refreshFeed && (
-        <div style={{ padding: "0 20px 12px", maxWidth: 720, margin: "0 auto", width: "100%" }}>
+      {/* NEW-MATCH BANNER — only when realtime detects a fresh match-row that
+          isn't in local state. Sits above the full feed when expanded. */}
+      {pendingFreshCount > 0 && refreshFeed && feedExpanded && (
+        <div style={{
+          maxWidth: 720, margin: "0 auto",
+          padding: "0 clamp(20px, 4vw, 32px) 12px",
+        }}>
           <button
             onClick={refreshFeed}
             className="pop"
@@ -1193,8 +1225,42 @@ export default function HomeTab({
         </div>
       )}
 
-      {/* Feed */}
-      <div style={{ padding: "0 20px 40px", maxWidth: 720 }}>
+      {/* FILTER PILLS — only render when the full feed is expanded. */}
+      {feedExpanded && (
+        <div style={{
+          maxWidth: 720, margin: "0 auto",
+          padding: "0 clamp(20px, 4vw, 32px) 18px",
+          display: "flex", gap: 6,
+        }}>
+          {[
+            { id: "everyone", label: "Everyone" },
+            { id: "friends",  label: "Friends"  },
+          ].map(function (f) {
+            var on = feedFilter === f.id;
+            return (
+              <button key={f.id}
+                onClick={function () { setFeedFilter(f.id); }}
+                style={{
+                  fontSize: 12, fontWeight: on ? 700 : 500,
+                  color: on ? t.accent : t.textTertiary,
+                  background: on ? t.accentSubtle : t.bgCard,
+                  border: on ? "1px solid transparent" : "1px solid " + t.border,
+                  padding: "5px 14px", borderRadius: 20,
+                  cursor: "pointer",
+                }}>
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Full FeedCard list — only when expanded. */}
+      <div style={{
+        display: feedExpanded ? "block" : "none",
+        maxWidth: 720, margin: "0 auto",
+        padding: "0 clamp(20px, 4vw, 32px) 40px",
+      }}>
         {(function () {
           // Apply feed filter once, render the chosen slice.
           var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));

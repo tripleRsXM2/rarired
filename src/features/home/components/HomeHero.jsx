@@ -1,154 +1,156 @@
 // src/features/home/components/HomeHero.jsx
 //
-// Slice 1 of the design overhaul: the Hero is the FIRST thing the
-// authenticated user sees. It establishes identity (avatar + name),
-// surfaces the signature metric (ranking points), and shows recent
-// form. Replaces the old "Feed" page-header.
+// Visual reset v2: the Home Hero is no longer a card. It's a borderless
+// editorial composition that lives directly on the page background —
+// generous breathing room, display-sized hero metric, hairline divider
+// instead of a frame.
 //
-// Design rules followed (see docs/design-direction.md):
-//   • Identity over utility — Hero reads as "who I am as a player"
-//   • One thing matters most — the ranking number is dominant
-//   • Calm hierarchy — no equal-weight badges, single trust pill
+// Composition (top → bottom):
+//   1. Greeting line — "Good evening, {name}" at editorial scale
+//   2. Display metric — ranking_points at 88-96px desktop / 56-72px
+//      mobile. The largest thing on the screen. Tabular nums, tight
+//      tracking, weight 800.
+//   3. Caption row — "Ranking points · Suburb · Skill" as a single
+//      quiet line, NOT three pills.
+//   4. Recent form chips — sharp horizontal sequence (up to 5 W/L),
+//      placed below the metric, not next to it.
+//   5. Single trust signal (provisional / confirmed) — one quiet line
+//      of meta, no pill chrome.
 //
-// Responsive intent:
-//   • Mobile <1024px:  centered vertical stack, avatar 72px
-//   • Desktop ≥1024px: editorial 2-col layout, avatar 88px on the
-//                      left, identity + signature metric on the right
+// Empty state (zero confirmed matches): same composition, but the
+// display number is replaced by a welcoming statement and the caption
+// nudges the user toward logging their first match.
 //
-// Empty state (no confirmed matches yet): the Hero renders a welcome
-// frame instead of a 1000-rating ghost number — so brand-new users
-// land on something motivating, not a zero.
+// Per docs/design-direction.md → Visual reset (v2).
 
-import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { displayLocation } from "../../../lib/utils/avatar.js";
-import { computeRecentForm } from "../../profile/utils/profileStats.js";
+import {
+  computeRecentForm,
+  formatConfirmedBadge,
+  provisionalLabel,
+} from "../../profile/utils/profileStats.js";
 
-export default function HomeHero({ t, profile, history, friends }) {
+function greeting() {
+  var h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function trustLine(t, profile) {
+  var prov = provisionalLabel(profile);
+  if (prov) return { text: prov, color: t.orange };
+  var confirmed = formatConfirmedBadge(profile);
+  if (confirmed) return { text: confirmed, color: t.textTertiary };
+  return null;
+}
+
+export default function HomeHero({ t, profile, history }) {
   if (!profile) return null;
 
-  var played       = (profile.matches_played != null)
-    ? profile.matches_played
-    : (history || []).filter(function (m) { return m.status === "confirmed"; }).length;
+  var played       = profile.matches_played != null ? profile.matches_played : 0;
   var hasMatches   = played > 0;
   var rankPts      = profile.ranking_points != null ? profile.ranking_points : 1000;
   var recentForm   = computeRecentForm(history || [], 5);
   var location     = displayLocation(profile);
+  var trust        = trustLine(t, profile);
+  var firstName    = (profile.name || "").split(" ")[0] || profile.name;
 
-  // Light community-pulse phrase folded in from the old standalone strip
-  // — kept short and only when there's something to say.
-  var pulse = (function () {
-    if (!history || !history.length) return null;
-    var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));
-    var oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    var thisWeek = history.filter(function (m) {
-      if (m.status !== "confirmed") return false;
-      var d = m.rawDate ? new Date(m.rawDate).getTime() : 0;
-      return d >= oneWeekAgo;
-    });
-    if (!thisWeek.length) return null;
-    var friendsThisWeek = thisWeek.filter(function (m) {
-      return (m.submitterId && friendIdSet.has(m.submitterId))
-          || (m.opponent_id && friendIdSet.has(m.opponent_id));
-    });
-    if (friendsThisWeek.length) {
-      return friendsThisWeek.length + " friend match" + (friendsThisWeek.length !== 1 ? "es" : "") + " this week";
-    }
-    return thisWeek.length + " confirmed match" + (thisWeek.length !== 1 ? "es" : "") + " this week";
-  })();
-
-  // ── Empty-state hero (zero confirmed matches) ──────────────────────────
-  if (!hasMatches) {
-    return (
-      <div style={shellStyle(t)}>
-        <div className="cs-hero-row" style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <PlayerAvatar name={profile.name} avatar={profile.avatar} profile={profile} size={72}/>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: "-0.5px", lineHeight: 1.1 }}>
-              {profile.name || "Welcome"}
-            </div>
-            <div style={{ fontSize: 13, color: t.textSecondary, marginTop: 4 }}>
-              {location || "Set your suburb to see local players"}
-            </div>
-          </div>
-        </div>
-        <div style={{ marginTop: 18, fontSize: 14, color: t.textSecondary, lineHeight: 1.5 }}>
-          Log your first match to start tracking your ranking and form.
-        </div>
-      </div>
-    );
-  }
-
-  // ── Standard hero ──────────────────────────────────────────────────────
   return (
-    <div style={shellStyle(t)}>
-      {/* Identity row — avatar + name + location/skill */}
-      <div className="cs-hero-row" style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <PlayerAvatar name={profile.name} avatar={profile.avatar} profile={profile} size={72}/>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: "-0.5px", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {profile.name || "You"}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: 12, color: t.textSecondary }}>
-            {location && <span>{location}</span>}
-            {location && profile.skill && <span style={{ color: t.textTertiary }}>·</span>}
-            {profile.skill && <span style={{ color: t.accent, fontWeight: 600 }}>{profile.skill}</span>}
-          </div>
-        </div>
+    <div className="cs-home-hero">
+      {/* Greeting — editorial scale, not a header */}
+      <div className="cs-home-hero-greeting" style={{
+        fontSize: "clamp(22px, 3.4vw, 32px)",
+        fontWeight: 400,
+        color: t.textSecondary,
+        letterSpacing: "-0.4px",
+        lineHeight: 1.15,
+      }}>
+        {greeting()}{firstName ? ", " : ""}<span style={{ color: t.text, fontWeight: 600 }}>{firstName || "player"}</span>
       </div>
 
-      {/* Signature metric + recent form. On desktop, side-by-side; on mobile, stacked. */}
-      <div className="cs-hero-stats" style={{ display: "flex", alignItems: "flex-end", gap: 28, marginTop: 22, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 38, fontWeight: 800, color: t.text, letterSpacing: "-1px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+      {/* Display metric — the largest thing on the screen by a wide margin.
+          clamp() keeps it generous on desktop and proportional on phones
+          without needing media queries here. */}
+      <div className="cs-home-hero-metric" style={{ marginTop: "clamp(20px, 3vw, 32px)" }}>
+        {hasMatches ? (
+          <div style={{
+            fontSize: "clamp(56px, 11vw, 96px)",
+            fontWeight: 800,
+            color: t.text,
+            letterSpacing: "-0.04em",
+            lineHeight: 0.95,
+            fontVariantNumeric: "tabular-nums",
+          }}>
             {rankPts.toLocaleString()}
           </div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 6 }}>
-            Ranking points
-          </div>
-        </div>
-
-        {recentForm.length > 0 && (
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", gap: 4 }}>
-              {recentForm.map(function (r, i) {
-                var isW = r === "W";
-                return (
-                  <span key={i} style={{
-                    width: 22, height: 22,
-                    borderRadius: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11, fontWeight: 700,
-                    color: isW ? t.green : t.red,
-                    background: isW ? t.greenSubtle : t.redSubtle,
-                    border: "1px solid " + (isW ? t.green : t.red) + "33",
-                  }}>{r}</span>
-                );
-              })}
-            </div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 6 }}>
-              Recent form
-            </div>
+        ) : (
+          <div style={{
+            fontSize: "clamp(28px, 5vw, 44px)",
+            fontWeight: 700,
+            color: t.text,
+            letterSpacing: "-0.025em",
+            lineHeight: 1.05,
+            maxWidth: 520,
+          }}>
+            Welcome to your tennis identity.
           </div>
         )}
       </div>
 
-      {/* Pulse line — small, subtle, only when there's signal */}
-      {pulse && (
-        <div style={{ marginTop: 18, fontSize: 11, color: t.textTertiary, letterSpacing: "0.01em", display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.green, flexShrink: 0 }}/>
-          <span>{pulse}</span>
+      {/* Caption row — one quiet line, not pills */}
+      <div className="cs-home-hero-caption" style={{
+        marginTop: 14,
+        fontSize: 13,
+        fontWeight: 500,
+        color: t.textTertiary,
+        letterSpacing: "0.01em",
+      }}>
+        {hasMatches ? (
+          [
+            "Ranking points",
+            location || null,
+            profile.skill || null,
+          ].filter(Boolean).join("  ·  ")
+        ) : (
+          "Log your first match to start tracking your ranking and form."
+        )}
+      </div>
+
+      {/* Recent form — sharp horizontal sequence, only when we have history */}
+      {hasMatches && recentForm.length > 0 && (
+        <div className="cs-home-hero-form" style={{ marginTop: 28, display: "flex", gap: 5 }}>
+          {recentForm.map(function (r, i) {
+            var isW = r === "W";
+            return (
+              <span key={i} style={{
+                width: 26, height: 26,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, fontWeight: 800,
+                color: isW ? t.green : t.red,
+                background: "transparent",
+                border: "1.5px solid " + (isW ? t.green : t.red),
+                borderRadius: 0,
+                letterSpacing: "0.02em",
+              }}>{r}</span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Trust line — one quiet caption, no pill */}
+      {trust && (
+        <div style={{
+          marginTop: 22,
+          fontSize: 11,
+          fontWeight: 700,
+          color: trust.color,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+        }}>
+          {trust.text}
         </div>
       )}
     </div>
   );
-}
-
-function shellStyle(t) {
-  return {
-    margin: "0 auto",
-    padding: "28px 20px 24px",
-    background: t.bgCard,
-    border: "1px solid " + t.border,
-    borderRadius: 14,
-  };
 }
