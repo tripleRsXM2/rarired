@@ -1,355 +1,188 @@
 # CourtSync — Claude Project Context
 
-## Product Vision (locked — never contradict this)
+## Product compass — read these, don't duplicate them here
 
-> **CourtSync is a verified social tennis identity product first, and a lightweight coordination product second.**
+The product rules live in `/docs/` and are the source of truth. Do not paraphrase them in this file — re-read the relevant doc when a question arises:
 
-Every feature decision, UI trade-off, and prioritisation call must be consistent with this. If a proposed change leans toward heavy scheduling/coordination tooling at the expense of social identity and verification, push back or flag it.
-
-## Product Lenses (locked — apply to all future work)
-
-Every module, feature, and UX choice must pass through these three lenses before shipping.
-
-### 1. The Cold Start Problem
-Build for **network density in a small local tennis community first**. Prioritise suburb/club identity, local discovery, people-you-played, rematches, rivalries, and meaningful Friends-feed behaviour. Do NOT optimise for broad generic scale yet. If a feature makes sense only at 100k users but not at 100, it's the wrong feature now.
-
-### 2. Hooked (Eyal)
-For every feature, design the loop: **trigger → action → reward → investment**. Prioritise notifications as triggers, one-tap actions, visible profile/stat changes as variable rewards, and actions that make the app more valuable next time (investment). If a feature has no obvious re-entry hook, explain why.
-
-### 3. The Mom Test (Fitzpatrick)
-Do not only build UX. Also add **instrumentation so we can learn from real user behaviour**. Track core events, measure drop-offs, and support small experiments. Shipping without telemetry is shipping blind.
-
-## Standing requirements (locked)
-
-- Every module must explain how it improves **density, retention, or learning**.
-- Every module must include **analytics/event tracking** if relevant.
-- Every module must keep the user journey **lightweight**.
-- **Avoid**: broad booking systems, generic messaging platforms. Those are not the product.
-- **Optimise for the core loop**: play → log → confirm → profile/feed update → challenge/rematch.
-
-### Icon rule (locked — never regress)
-
-**No emoji as icons.** Every UI affordance — nav buttons, tab pills, inline action icons inside buttons / badges / status strips, notification bells, social footer actions, status indicators — uses an **SVG line-art icon** with `stroke="currentColor"`, `strokeWidth="1.5"`, and an 18×18 viewBox. Colour flows through the parent button's text colour (no hardcoded strokes).
-
-- Shared icon set lives in **`src/lib/constants/navIcons.jsx`** (`NAV_ICONS.home`, `.map`, `.tournaments`, `.people`, `.profile`, `.admin`, `.notifications`, `.rematch`, …). Feed-local icons live in `src/features/home/pages/HomeTab.jsx` under `ICONS` (`like`, `likeFilled`, `comment`, `rematch`, `share`, `tennisBall`).
-- If you need a new icon, add it to one of those sets. **Don't** inline a one-off SVG in a component and **don't** reach for an emoji as a shortcut.
-- Exception: **decorative hero illustrations** inside empty-state blocks (e.g. a large 🎾 in "no matches yet" or 💬 in "no comments yet") at 28px+ are permitted as illustrations, not icons. When in doubt, use an SVG.
-
-### Pre-module report format (required before starting any module)
-1. How this improves local network density
-2. How this improves the retention loop
-3. What measurable user behaviour should change (hypothesis)
-4. What analytics/events are being added (concrete event names)
-
-## Product docs — always kept in sync with code (locked)
-
-Code changes the product. Docs explain the product. Both must stay in sync. A module is **not complete** until the relevant docs are updated.
-
-### Required docs (lives in `/docs/`)
-
-| File | Owns |
+| Concern | Doc |
 |---|---|
-| `product-principles.md` | What CourtSync is / isn't. Tradeoffs. Scope boundaries. |
-| `trust-and-ranking-rules.md` | Match validity, confirmation, dispute, void, expiry, ranking formula. |
-| `core-loop.md` | Primary + secondary loops, activation, aha moment, retention triggers, key metrics. |
-| `notification-taxonomy.md` | Every notification type: trigger, recipient, priority, deep-link, copy. |
-| `discovery-seeding-plan.md` | Atomic network, discovery behaviour, empty states, invite flow, seed metrics. |
-| `analytics-events.md` | Every tracked event: trigger, props, loop-stage mapping, example queries. |
+| What CourtSync is / isn't, scope, tradeoffs | `docs/product-principles.md` |
+| Match validity, confirmation, dispute, void, ranking | `docs/trust-and-ranking-rules.md` |
+| Primary loop, activation, retention triggers, metrics | `docs/core-loop.md` |
+| Notification types, triggers, deep-links, copy | `docs/notification-taxonomy.md` |
+| Local discovery, atomic network, invite flow | `docs/discovery-seeding-plan.md` |
+| Tracked events + props + loop-stage mapping | `docs/analytics-events.md` |
+| Visual / structural design rules | `docs/design-direction.md` |
 
-### Doc structure (required for each file)
-1. Title
-2. Purpose
-3. Current Product Rule / Current State
-4. Design / Decision Principles
-5. Open Questions
-6. Out of Scope
-7. Last Updated By Module
+Headline rule (everything else flows from this): **CourtSync is a verified social tennis identity product first, lightweight coordination second.** Never let scheduling/coordination tooling bleed into the design.
 
-### Change classification — which doc to update
+Three locked product lenses applied to every change: **(1) cold-start density** over scale, **(2) Hooked loop** trigger→action→reward→investment, **(3) Mom-test telemetry** — every meaningful module ships with at least one tracked event.
 
-| If the change touches… | Update |
-|---|---|
-| Trust, ranking, confirmation, disputes, match validity | `trust-and-ranking-rules.md` |
-| The main user journey, onboarding, activation, next-step behaviour | `core-loop.md` |
-| App scope, product direction, tradeoffs | `product-principles.md` |
-| Alerts, inbox behaviour, deep links, notification copy | `notification-taxonomy.md` |
-| Player search, follows, local discovery, empty states, growth assumptions | `discovery-seeding-plan.md` |
-| Adds or changes a tracked analytics event (or its props) | `analytics-events.md` |
+## Working process per module
 
-### Working process for every module
-1. **Audit** what already exists.
-2. **Classify** which areas the module touches (from the table above).
-3. **Before coding**: state which docs will update and what product rule is being introduced or changed.
-4. **Implement** the code.
-5. **Verify**.
-6. **Update** all relevant docs in the *same commit* (or at minimum the same merge).
-7. **Summarise** code changes + product rule changes + docs touched + open questions.
+1. State which `/docs/` files this change touches and what product rule (if any) is changing.
+2. Implement.
+3. Update the affected docs in the same commit.
+4. Summarise: code changes + product-rule changes + docs touched + open questions.
 
-### Doc writing rules
-- Plain English, not aspirational fluff.
-- Opinionated and specific; avoid "we should consider…" hedging.
-- Concise and skimmable; prefer product rules over implementation detail.
-- Include "Open Questions" when a thing is undecided — don't pretend it's settled.
-- Include "Out of Scope" to prevent drift.
-- Mark inferred-from-code assumptions clearly.
-- Write for a future model to use as a source of truth.
+## Icon rule (locked — never regress)
+
+**No emoji as icons.** Every UI affordance uses an SVG line-art icon with `stroke="currentColor"`, `strokeWidth="1.5"`, 18×18 viewBox.
+
+- Shared set: `src/lib/constants/navIcons.jsx` (`NAV_ICONS.home`, `.map`, `.tournaments`, `.people`, `.profile`, `.admin`, `.notifications`, `.rematch`, …).
+- Feed-local: `src/features/home/pages/HomeTab.jsx` `ICONS` (`like`, `likeFilled`, `comment`, `rematch`, `share`, `tennisBall`).
+- Add to one of those sets — never inline a one-off SVG, never reach for emoji.
+- Exception: large decorative hero illustrations inside empty-states (e.g. 🎾 in "no matches yet") at 28px+ are OK as illustration.
 
 ## Git Workflow
 
 ### Branch ownership
-- **`Mikey` / `Mikey/<feature>`** — the user's branches. All Claude work goes here.
-- **`Mdawg` / `Mdawg/<feature>`** — the other developer's branches. **Claude must never touch these under any circumstances.**
-- **`main`** — shared production branch. Only merge into main when explicitly instructed.
+- **`Mikey` / `Mikey/<feature>`** — your branches. All Claude work goes here.
+- **`Mdawg` / `Mdawg/*`** — the other developer's branches. **Never touch — not checkout, not merge, not push.**
+- **`main`** — shared production. Only merge in when explicitly instructed.
 
 ### Rules
-- **Never push directly to `main`** unless the user explicitly says to.
-- **Never touch `Mdawg` or any `Mdawg/*` branch** — not checkout, not merge, not push. Ever.
-- Always pull latest `main` before starting new work.
-- Use a separate branch per feature/fix: `Mikey/<feature-name>`.
-- When merging `main` into a feature branch and conflicts arise, always keep `main`'s version unless the user says otherwise.
+- Never push directly to `main` unless the user explicitly says to.
+- Pull latest `main` before starting new work.
+- One feature per branch: `Mikey/<feature-name>`.
+- When merging `main` into a feature branch and conflicts arise, keep `main`'s version unless told otherwise.
 
 ### Standard flow
 ```bash
-# Start new work
-git checkout main
-git pull origin main
-git checkout -b Mikey/feature-name
-
-# Commit
-git add .
-git commit -m "Description"
-
-# Sync main before pushing
 git checkout main && git pull origin main
-git checkout Mikey/feature-name
-git merge main
-
-# Push
+git checkout -b Mikey/feature-name
+# … work + commit …
+git checkout main && git pull origin main && git checkout Mikey/feature-name && git merge main
 git push origin Mikey/feature-name
-
-# Merge to main (only when instructed)
-git checkout main
-git merge Mikey/feature-name
-git push origin main
+# Merge to main only when instructed:
+git checkout main && git merge Mikey/feature-name && git push origin main
 ```
 
 ## Tech Stack
 
 - **Framework**: React 18 + Vite
 - **Backend**: Supabase (Postgres, Auth, Realtime, Storage)
-- **Styling**: Inline styles with theme tokens (no CSS framework)
+- **Styling**: Inline styles with theme tokens (`t` passed as prop everywhere); no CSS framework
 - **State**: Local React state + custom hooks (no Redux/Zustand)
 - **Deploy**: Vercel
 
 ## Key Infrastructure
 
-- `src/lib/supabase.js` — Supabase client singleton (import this everywhere, not the raw package)
+- `src/lib/supabase.js` — Supabase client singleton (import this, not the raw package)
 - `src/lib/db.js` — Shared db helpers (`fetchProfilesByIds`)
-- `src/lib/theme.js` — `makeTheme(dark)` returns all design tokens; `t` is passed as prop throughout the app
-- `src/app/App.jsx` — Root component; owns all hooks and wires them to pages via props
-- `src/app/providers.jsx` — Global CSS/keyframes injected via `<style>`
+- `src/lib/theme.js` — `makeTheme(name)` returns all design tokens
+- `src/app/App.jsx` — Root; owns all hooks, wires them into pages via props
+- `src/app/providers.jsx` — Global CSS / keyframes injected via `<style>`
 
-## Supabase CLI access (DB migrations, direct queries)
+## Supabase CLI access
 
-The Supabase personal access token is stored at `~/.supabase/access-token` (outside the repo, `chmod 600`, never commit).
-
-To apply a migration or run a one-off query:
+Personal access token at `~/.supabase/access-token` (`chmod 600`, never commit, never echo).
 
 ```bash
 SUPABASE_ACCESS_TOKEN="$(cat ~/.supabase/access-token)" /tmp/supabase db query --linked -f path/to/file.sql
 ```
 
-Project is already linked via `supabase/.temp/linked-project.json` (ref `yndpjabmrkqclcxeecei`, org TripleRs). No need to re-link per session.
-
-**Rules**:
-- Never paste or echo the token in any committed file, commit message, or conversation transcript.
-- Prefer `db query --linked -f <file>` over `db push --linked` — the latter will re-run any untracked older migrations.
-- If the token is ever compromised, rotate it in Supabase Dashboard → Account → Access Tokens and overwrite `~/.supabase/access-token`.
+Project linked already (ref `yndpjabmrkqclcxeecei`). Prefer `db query --linked -f <file>` over `db push --linked` (the latter re-runs untracked older migrations).
 
 ## Coordinator Pattern
 
-`App.jsx` uses a `coordRef` to break circular hook dependencies:
+`App.jsx` uses a `coordRef` to break circular hook dependencies — auth callbacks call `coordRef.current.bootstrap(user)` so they reach hooks declared after `useAuthController` without stale closures.
 
 ```js
 var coordRef = useRef({});
-// After all hooks declared:
+// after all hooks declared:
 coordRef.current = { bootstrap, reset };
 ```
 
-Auth callbacks call `coordRef.current.bootstrap(user)` so they can reach hooks declared after `useAuthController` without stale closures.
+## Key custom hooks (all in `src/features/`)
 
-## Key Custom Hooks (all in src/features/)
+| Hook | Owns |
+|---|---|
+| `useAuthController` | session, sign-in/out lifecycle |
+| `useCurrentUser` | profile load/save/draft |
+| `useMatchHistory` | match history, tag flow, friends-feed RPC |
+| `useSocialGraph` | friends, requests, blocks, search |
+| `useDMs` | conversations, messages, realtime |
+| `usePresenceHeartbeat` | heartbeat to last_active |
+| `useNotifications` | notification list, realtime |
+| `useTournamentManager` | tournament CRUD, draws, results |
+| `useLeagues` | league memberships, standings, detail cache |
+| `useChallenges` | challenge proposals, accept/decline |
 
-| Hook | Location | Owns |
-|---|---|---|
-| `useAuthController` | auth/hooks | session, sign-in/out lifecycle |
-| `useCurrentUser` | profile/hooks | profile load/save/draft |
-| `useMatchHistory` | scoring/hooks | match history, tag flow |
-| `useSocialGraph` | people/hooks | friends, requests, blocks, search |
-| `useDMs` | people/hooks | conversations, messages, realtime |
-| `usePresenceHeartbeat` | people/hooks | heartbeat to last_active |
-| `useNotifications` | notifications/hooks | notification list, realtime |
-| `useTournamentManager` | tournaments/hooks | tournament CRUD, draws, results |
+## Realtime subscriptions
 
-## Realtime Subscriptions
+- `useNotifications` — `notifications` (INSERT, filter `user_id`)
+- `useSocialGraph` — `friend_requests` (INSERT, filter `receiver_id`)
+- `useDMs` — `direct_messages`, `conversations`
 
-- `useNotifications` — listens on `notifications` table (INSERT filtered by `user_id`)
-- `useSocialGraph` — listens on `friend_requests` table (INSERT filtered by `receiver_id`)
-- `useDMs` — listens on `direct_messages` and `conversations` tables
+## Supabase tables (key ones)
 
-## Supabase Tables (key ones)
+- `profiles` — name, avatar, skill, suburb, ranking_points, privacy, last_active, show_online_status, show_last_seen
+- `match_history` — score/status/tags + `match_type` (`'ranked'` vs `'casual'`) + `league_id`
+- `friend_requests` — sender_id, receiver_id, status (pending/accepted/declined)
+- `blocks` — blocker_id, blocked_id
+- `direct_messages`, `conversations`
+- `notifications` — type, from_user_id, entity_id, metadata jsonb, read
+- `leagues`, `league_members`, `league_standings`
 
-- `profiles` — user profile (name, avatar, skill, suburb, ranking_points, privacy, last_active, show_online_status, show_last_seen)
-- `friend_requests` — (id, sender_id, receiver_id, status: pending/accepted/declined)
-- `blocks` — (blocker_id, blocked_id)
-- `direct_messages` — (id, conversation_id, sender_id, content, created_at)
-- `conversations` — (id, participant_ids uuid[])
-- `notifications` — (id, user_id, type, from_user_id, entity_id, metadata jsonb, read, created_at)
-- `matches` — match records with score/status/tags
+RLS notes: `match_history.match_select` policy is tight (`auth.uid() IN (user_id, opponent_id)`). Cross-RLS reads (e.g. friends' matches the viewer isn't in) go through `SECURITY DEFINER` RPCs like `fetch_friends_matches`.
 
-## Presence System
+## Presence system
 
-- Heartbeat every 60s while tab visible (`usePresenceHeartbeat`)
-- `presenceService.getPresence(profile, viewerIsSelf)` returns `{dot, label, online, hidden}`
-- Privacy: `show_online_status` hides dot, `show_last_seen` hides last-seen label
-- Windows: online = within 5 min, away = within 30 min
+- `usePresenceHeartbeat` pings every 60s while tab visible
+- `presenceService.getPresence(profile, viewerIsSelf)` → `{dot, label, online, hidden}`
+- Online = <5 min since last_active; away = <30 min
+- `profile.show_online_status` hides dot, `profile.show_last_seen` hides last-seen label
 
 ---
 
-## Architecture — Follow This Strictly
+## Architecture rules
 
-### Folder Structure
+### Folder structure
 
 ```
 src/
-  app/
-    App.jsx
-    App.css
-    providers.jsx
-
+  app/        App.jsx, providers.jsx
   assets/
-
-  lib/
-    supabase.js
-    db.js
-    theme.js
-    utils/
-      avatar.js
-      dates.js
-    constants/
-      ui.js
-      domain.js
-
-  components/
-    ui/
-      Pill.jsx
-      PlayerAvatar.jsx
-
-  features/
-    admin/
-      pages/
-    auth/
-      components/
-      hooks/
-      services/
-    home/
-      pages/
-    notifications/
-      components/
-      hooks/
-      services/
-    people/
-      pages/
-      components/
-      hooks/
-      services/
-    profile/
-      pages/
-      hooks/
-      services/
-    scoring/
-      components/
-      hooks/
-      services/
-      utils/
-    settings/
-      pages/
-    tournaments/
-      pages/
-      components/
-      hooks/
-      services/
-      utils/
-      constants.js
+  lib/        supabase.js, db.js, theme.js, utils/, constants/
+  components/ui/   (generic, presentation-only primitives)
+  features/<domain>/
+    pages/        components/        hooks/        services/        utils/
 ```
 
-### Architecture Rules
+Domains today: `admin`, `auth`, `challenges`, `home`, `leagues`, `map`, `notifications`, `pacts`, `people`, `profile`, `scoring`, `settings`, `tournaments`.
 
-1. Organize by feature/domain, not by file type alone.
-2. Only put truly generic, reusable, presentation-only UI primitives in `src/components/ui/`.
-3. Keep business/domain code inside the owning feature folder.
-4. Keep route-level screens/pages inside that feature's `pages/` folder.
-5. Keep global infrastructure only in `src/lib/`.
-6. Tournament-only logic must stay in `features/tournaments/`.
-7. Shared avatar/date helpers must stay in `lib/utils/`.
-8. Shared UI/domain constants must stay in `lib/constants/`.
-9. Do not recreate deleted or abandoned top-level folders:
-   - `src/modals`
-   - `src/tabs`
-   - `src/screens`
-   - `src/components/social`
-   - `src/components/tournaments`
-   - `src/components/common`
-10. Preserve existing behavior unless the task explicitly requires behavior changes.
+### Placement rules
 
-### File Placement Rules
+1. Organise by feature/domain, not by file type.
+2. `components/ui/` is for **truly generic** primitives only (Pill, PlayerAvatar, etc.). Domain code stays in its feature.
+3. Route-level screens/pages live in the feature's `pages/`.
+4. Global infrastructure only in `src/lib/`.
+5. Tournament logic stays in `features/tournaments/`. Same for every other domain.
+6. Shared avatar/date helpers in `lib/utils/`. Shared UI/domain constants in `lib/constants/`.
+7. Do **not** recreate deleted top-level folders: `src/modals`, `src/tabs`, `src/screens`, `src/components/social`, `src/components/tournaments`, `src/components/common`.
 
-**`components/ui/`** — generic, presentation-only, zero business meaning (Pill, PlayerAvatar, future Button/Input/Modal shell)
-
-**`lib/`** — shared global infrastructure or generic utility (supabase, db helpers, theme, avatar/date helpers, shared constants)
-
-**`features/people/`** — people list, presence, DMs, social graph, people page UI
-
-**`features/profile/`** — current user profile, profile display/edit, profile page logic
-
-**`features/tournaments/`** — brackets, standings, tournament pages, schedule/dispute/comment flows, tournament constants, tournament math
-
-**`features/scoring/`** — score modal, match history, score submission, scoring utilities
-
-**`features/notifications/`** — notification panel, notification hooks/services
-
-**`features/auth/`** — auth modal, onboarding, auth controller, auth services
-
-**`features/settings/`** — settings page, user preferences, privacy settings, notification settings
-
-**`features/admin/`** — admin-only tools, management workflows, reporting, admin financial controls
-
-### Import Rules
+### Import rules
 
 1. Prefer local feature-relative imports inside a feature.
-2. Do not import from deleted/old paths.
-3. Do not duplicate helpers to avoid imports.
-4. If a utility is tournament-specific, keep it in `features/tournaments/utils/`, not `lib/`.
-5. If a constant is tournament-specific, keep it in `features/tournaments/constants.js`, not `lib/constants/`.
-6. If a component is reused but still domain-specific, keep it in the feature unless there is a strong reason to promote it.
-7. Do not move something to shared just because it is used twice.
+2. Don't import from deleted/old paths.
+3. Don't duplicate a helper just to avoid an import.
+4. Domain-specific utilities/constants stay in their feature folder, not `lib/`.
+5. Don't promote something to shared just because two features use it.
 
-### Refactor Rules
+### Refactor rules
 
 1. Inspect target files first.
-2. Keep diffs minimal.
-3. Preserve behavior unless asked otherwise.
-4. Update imports carefully.
-5. Do not rename or move unrelated files.
-6. If a file should move, explain why before moving it.
-7. If architecture drift seems necessary, stop and explain before doing it.
+2. Keep diffs minimal — preserve behaviour unless asked.
+3. Update imports carefully; don't rename/move unrelated files.
+4. If a file should move or the architecture should drift, stop and explain before doing it.
 
-### Before Coding — Always State
+### Before coding — always state
 
 1. Which files will be touched.
 2. Where any new files will go.
-3. Why those locations match the repo architecture.
+3. Why those locations match the architecture above.
 
-### Anti-Drift Rule
+### Anti-drift rule
 
-If a requested change can be done inside the existing structure, do it there. Do not create a new organizational pattern unless explicitly approved.
+If a requested change fits in the existing structure, do it there. Don't create a new organisational pattern without explicit approval.
