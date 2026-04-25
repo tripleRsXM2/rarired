@@ -25,6 +25,8 @@ import { inputStyle } from "../../../lib/theme.js";
 import { ZONES } from "../../map/data/zones.js";
 import AvailabilityChips from "../../../components/ui/AvailabilityChips.jsx";
 import CourtsPicker from "../../../components/ui/CourtsPicker.jsx";
+import SkillLevelPicker from "../../rating/components/SkillLevelPicker.jsx";
+import { LOCK_WARNING } from "../../rating/copy.js";
 import { track } from "../../../lib/analytics.js";
 
 var TOTAL_STEPS = 3;
@@ -113,6 +115,15 @@ export default function OnboardingModal({
     setProfile(updated);
     setProfileDraft(updated);
     if (authUser) {
+      // 1. Upsert the user-writable profile fields. Skill is included
+      //    here so the row exists with the right starting value before
+      //    initialize_rating runs (the RPC also sets skill so this is
+      //    redundant but harmless on first run; on a returning user
+      //    re-running onboarding without rating, the upsert keeps
+      //    skill aligned with whatever they re-pick — the rating RPC
+      //    will reject the re-init with "already initialized" and the
+      //    skill change will be blocked by the locked-columns guard if
+      //    they've already played a confirmed match).
       var res = await supabase.from("profiles").upsert({
         id: authUser.id,
         name:          updated.name || "",
@@ -125,10 +136,29 @@ export default function OnboardingModal({
         played_courts: updated.played_courts || [],
       }, { onConflict: "id" });
       if (res.error) console.error("Onboarding save error:", res.error);
-      else {
-        // Fire-and-forget instrumentation — we want to know which
-        // fields new users bothered to fill out. No PII leaves the
-        // client; counts + booleans only.
+
+      // 2. Initialize the CourtSync Rating. SECURITY DEFINER RPC reads
+      //    auth.uid() server-side, validates skill, snaps initial_rating
+      //    + ranking_points to the spec's band start. Errors with
+      //    "rating already initialized" if the user re-runs onboarding
+      //    after a previous completion — that's expected and we just
+      //    keep going (their existing rating is still correct).
+      if (updated.skill) {
+        var initRes = await supabase.rpc("initialize_rating", { p_skill: updated.skill });
+        if (initRes.error) {
+          var msg = initRes.error.message || "";
+          if (msg.indexOf("already initialized") < 0) {
+            // Real failure (network, RLS, unknown skill, etc.) — log so
+            // we can spot pattern but don't block the flow; user lands
+            // on Home with their pre-rating-module state intact.
+            console.error("Onboarding initialize_rating error:", initRes.error);
+          }
+        } else {
+          if (track) track("calibration_started", { starting_skill: updated.skill });
+        }
+      }
+
+      if (!res.error) {
         track("onboarding_completed", {
           skill:           updated.skill || null,
           style:           updated.style || null,
@@ -164,38 +194,15 @@ export default function OnboardingModal({
               Pick honest — we use this to match you with players at the right level, not to show off.
             </p>
 
-            <div style={{ marginBottom: 22 }}>
-              <label style={labelStyle}>Skill level</label>
-              <div style={{ borderTop: "1px solid " + t.border }}>
-                {SKILL_LEVELS.map(function (s) {
-                  var on = onboardDraft.skill === s;
-                  return (
-                    <button key={s}
-                      onClick={function () { setOnboardDraft(function (d) { return Object.assign({}, d, { skill: s }); }); }}
-                      style={{
-                        textAlign: "left", padding: "12px 14px",
-                        borderRadius: 0,
-                        border: "none",
-                        borderBottom: "1px solid " + t.border,
-                        borderLeft: "2px solid " + (on ? t.text : "transparent"),
-                        background: on ? t.accentSubtle : "transparent",
-                        color: t.text, width: "100%",
-                        cursor: "pointer", display: "flex", flexDirection: "column", gap: 3,
-                      }}>
-                      <span style={{
-                        fontSize: 14, fontWeight: 800, letterSpacing: "-0.2px",
-                      }}>{s}</span>
-                      <span style={{
-                        fontSize: 11,
-                        color: on ? t.textSecondary : t.textTertiary,
-                        fontWeight: 500, lineHeight: 1.4, letterSpacing: "-0.1px",
-                      }}>
-                        {SKILL_HINTS[s] || ""}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+            <div style={{ marginBottom: 18 }}>
+              <SkillLevelPicker
+                t={t}
+                value={onboardDraft.skill || ""}
+                onChange={function (s) {
+                  setOnboardDraft(function (d) { return Object.assign({}, d, { skill: s }); });
+                }}
+                showLockWarning
+              />
             </div>
 
             <div style={{ marginBottom: 24 }}>

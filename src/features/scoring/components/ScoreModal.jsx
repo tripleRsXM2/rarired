@@ -274,6 +274,11 @@ export default function ScoreModal({
     if(res&&res.error){
       if(res.error==='duplicate'){
         setSaveError(res.message||"This match is already logged.");
+      } else if(res.error==='rating_uninitialised'){
+        // Module 7.7: user hasn't picked a starting CourtSync Rating
+        // skill level yet. Surface the helper message verbatim so the
+        // hook owns the copy.
+        setSaveError(res.message||"Set your starting skill level before logging ranked matches.");
       } else if(res.error!=='not_authenticated'){
         setSaveError(typeof res.error==='string'?res.error:"Could not save match — please try again.");
       }

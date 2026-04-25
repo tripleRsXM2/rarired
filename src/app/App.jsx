@@ -133,6 +133,7 @@ export default function App(){
   var currentUser=useCurrentUser();
   var matchHistory=useMatchHistory({
     authUser:auth.authUser,
+    profile:currentUser.profile,
     sendNotification:insertNotification,
     bumpStats:currentUser.bumpMatchStats,
     refreshProfile:currentUser.refreshProfileUI,

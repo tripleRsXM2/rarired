@@ -23,6 +23,11 @@ function formatRpcError(err, fallback){
 
 export function useMatchHistory(opts){
   var authUser=(opts&&opts.authUser)||null;
+  // Module 7.7: profile is read at submit time so we can gate ranked
+  // submissions on the user having initialised their CourtSync Rating.
+  // Optional — the hook stays usable in tests / contexts where no
+  // profile is available.
+  var profileGetter=(opts&&opts.profile)||null;
   var sendNotification=(opts&&opts.sendNotification)||null;
   var bumpStats=(opts&&opts.bumpStats)||null;
   var refreshProfile=(opts&&opts.refreshProfile)||null;
@@ -273,6 +278,19 @@ export function useMatchHistory(opts){
     // 'ranked' with no opponent can't actually affect Elo, so demote.
     var matchType = scoreDraft.matchType || (isVerified ? 'ranked' : 'casual');
     if (matchType === 'ranked' && !opponentId) matchType = 'casual';
+
+    // ── Module 7.7: uninitialised-rating gate ────────────────────────────
+    // A ranked match changes the player's CourtSync Rating, so the user
+    // must have initialised one (run initialize_rating during onboarding)
+    // before they can log a ranked result. Casual matches are unaffected.
+    // We re-derive matchType after the linkage clamp above so a freetext
+    // submission always falls through this gate as 'casual'.
+    if (matchType === 'ranked' && profileGetter && profileGetter.initial_rating == null) {
+      return {
+        error: 'rating_uninitialised',
+        message: 'Set your starting skill level before logging ranked matches. Open Settings → Profile to pick a level.',
+      };
+    }
 
     // ── Defensive score validation (slice C) ─────────────────────────────
     // ScoreModal already validates before calling here (slice B). This
