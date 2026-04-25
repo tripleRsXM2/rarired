@@ -154,21 +154,36 @@ export default function MapTab({
   return (
     <div className="cs-map-frame" style={{ width:"100%", background: t.bg }}>
 
-      {/* The map */}
-      <LeafletMap
-        t={t} theme={theme}
-        hovered={hovered} selected={selected}
-        homeZone={homeZone}
-        zoneActivity={zoneActivity}
-        showHomes={layers.homes}
-        showCourts={layers.courts}
-        showActivity={layers.activity}
-        showZoneNames={layers.zoneNames}
-        mapThemeOverride={layers.mapTheme}
-        onHover={setHovered}
-        onSelect={handleSelect}
-        onCourtSelect={handleCourtSelect}
-      />
+      {/* The map — wrapped in a CSS-mask container so the basemap
+          PIXELS dissolve to transparent at the edges (rather than
+          painting darkness over them, which v1-v6 tried with limited
+          success). The mask cuts the corners of the Leaflet view so
+          the page background shows through, producing the Apple Maps
+          / Strava "map fades into the frame" feel.
+
+          Mask is radial: full-opaque from centre out to 60% radius,
+          then a 35%-wide feather to fully transparent at the very
+          corner. WebkitMaskImage + maskImage for cross-browser. */}
+      <div style={{
+        position:"absolute", inset:0,
+        WebkitMaskImage: "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
+        maskImage:       "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
+      }}>
+        <LeafletMap
+          t={t} theme={theme}
+          hovered={hovered} selected={selected}
+          homeZone={homeZone}
+          zoneActivity={zoneActivity}
+          showHomes={layers.homes}
+          showCourts={layers.courts}
+          showActivity={layers.activity}
+          showZoneNames={layers.zoneNames}
+          mapThemeOverride={layers.mapTheme}
+          onHover={setHovered}
+          onSelect={handleSelect}
+          onCourtSelect={handleCourtSelect}
+        />
+      </div>
 
       {/* Edge-fade vignette — non-interactive presentation polish.
           v1 used gradients fading to t.bg, but on light themes the
@@ -180,53 +195,10 @@ export default function MapTab({
           themes get a deeper shadow (the basemap is already dark, so
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
-      {(function(){
-        // v6 — four separate edge divs, one per side. v5 packed all
-        // four edge strips into a single multi-background backgroundImage
-        // string with `<gradient> <pos> / <size> no-repeat` syntax —
-        // but background-image only accepts the image part of that
-        // shorthand. The position/size/repeat clauses were silently
-        // dropped and each gradient covered the whole element instead
-        // of being clipped to one edge band. Result: no visible vignette.
-        //
-        // v6 ditches the CSS-shorthand puzzle. Four real DOM divs
-        // with explicit absolute positioning. Each carries a single
-        // linear-gradient from dark-at-the-edge to transparent. Where
-        // two divs overlap at corners, alpha compounds → natural
-        // corner darkening. Bulletproof.
-        var dark = theme === "hard-court" || theme === "night-court";
-        var c0 = dark ? "rgba(0,0,0,0.80)" : "rgba(15,14,13,0.50)";
-        var c1 = dark ? "rgba(0,0,0,0.35)" : "rgba(15,14,13,0.20)";
-        var depth = 110; // px of fade
-        var common = { position:"absolute", pointerEvents:"none", zIndex:300 };
-        var grad = function(dir){
-          return "linear-gradient(" + dir + ", " + c0 + " 0%, " + c1 + " 30%, transparent 100%)";
-        };
-        return (
-          <>
-            {/* Top edge */}
-            <div aria-hidden="true" style={Object.assign({}, common, {
-              top:0, left:0, right:0, height: depth + "px",
-              background: grad("to bottom"),
-            })}/>
-            {/* Bottom edge */}
-            <div aria-hidden="true" style={Object.assign({}, common, {
-              bottom:0, left:0, right:0, height: depth + "px",
-              background: grad("to top"),
-            })}/>
-            {/* Left edge */}
-            <div aria-hidden="true" style={Object.assign({}, common, {
-              top:0, bottom:0, left:0, width: depth + "px",
-              background: grad("to right"),
-            })}/>
-            {/* Right edge */}
-            <div aria-hidden="true" style={Object.assign({}, common, {
-              top:0, bottom:0, right:0, width: depth + "px",
-              background: grad("to left"),
-            })}/>
-          </>
-        );
-      })()}
+      {/* (v6 four-edge gradient divs retired — replaced by the CSS
+          mask on the LeafletMap wrapper above. Mask provides a real
+          dissolve effect at the basemap pixel level, which is what
+          v1-v6 were all approximating with overlays.) */}
 
       {/* Title pill — sits top-left, shifted right of the Leaflet zoom
           control (+/−) so the two don't stack. */}

@@ -1,20 +1,22 @@
 #!/usr/bin/env node
-// Probe the map edge-fade overlay on the deployed Mdawg preview.
-// Confirms: (1) the overlay div is in the DOM, (2) it has four
-// linear-gradient stacks, (3) it doesn't steal clicks, (4) it sits
-// below the chrome. Also saves a screenshot per user.
-
+// v7 probe — test the CSS-mask-based edge fade.
+// Verifies: (a) maskImage CSS prop is applied to the wrapper div,
+//           (b) Leaflet content renders inside the masked wrapper,
+//           (c) corner pixels of the cs-map-frame are now actually
+//               showing the page bg colour (mask is cutting through),
+//           (d) click-throughs still work.
+// Captures one screenshot per user.
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
 import { mkdir } from "node:fs/promises";
 
-var SITE = "https://rarired-git-mdawg-michaellhuerto-6485s-projects.vercel.app";
+var SITE = "https://rarired-git-mdawg-miikhcs-projects.vercel.app";
 function log(m) { console.log("[probe]", m); }
 
 async function getCreds(page) {
   var html = await page.content();
   var m = html.match(/src=["'](\/assets\/index-[^"']+\.js)["']/);
-  if (!m) throw new Error("could not find /assets/index-*.js in HTML (len=" + html.length + ")");
+  if (!m) throw new Error("could not find /assets/index-*.js");
   var js = await (await fetch(SITE + m[1])).text();
   return {
     url: js.match(/(https:\/\/[a-z0-9]+\.supabase\.co)/)[1],
@@ -33,9 +35,9 @@ async function signInAs(email, password, browser) {
   var client = createClient(creds.url, creds.key, { auth: { persistSession: false } });
   var { data: authData, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw new Error(email + ": " + error.message);
-  var projectRef = creds.url.replace("https://", "").split(".")[0];
+  var ref = creds.url.replace("https://", "").split(".")[0];
   await page.evaluate(function (a) { localStorage.setItem(a.k, a.v); },
-    { k: "sb-" + projectRef + "-auth-token", v: JSON.stringify(authData.session) });
+    { k: "sb-" + ref + "-auth-token", v: JSON.stringify(authData.session) });
   return { page, ctx, errs };
 }
 
@@ -43,120 +45,44 @@ async function probe(u, label) {
   await u.page.goto(SITE + "/map", { waitUntil: "domcontentloaded" });
   await u.page.waitForTimeout(5500);
 
-  var snap = await u.page.evaluate(async function () {
+  var snap = await u.page.evaluate(function () {
     var frame = document.querySelector(".cs-map-frame");
     if (!frame) return { err: "no .cs-map-frame" };
-    // v2 uses box-shadow inset, not gradients. Detect any aria-hidden
-    // child that has either a non-empty box-shadow OR linear-gradient.
-    var children = Array.from(frame.children);
-    var fade = children.find(function (el) {
-      if (el.getAttribute("aria-hidden") !== "true") return false;
+    // Look for the masked wrapper — first child with maskImage set.
+    var maskedWrapper = Array.from(frame.children).find(function (el) {
       var st = getComputedStyle(el);
-      var hasShadow = st.boxShadow && st.boxShadow !== "none";
-      var hasGrad = /linear-gradient/.test(st.backgroundImage);
-      return hasShadow || hasGrad;
+      return /radial-gradient/.test(st.maskImage || "") ||
+             /radial-gradient/.test(st.webkitMaskImage || "");
     });
-    // Bundle check — does the deployed JS contain the v2 string?
-    var bundleHasV2 = false, bundleHasV1 = false;
-    try {
-      var scripts = Array.from(document.scripts).map(function(s){ return s.src; });
-      var bsrc = scripts.find(function(x){ return /\/assets\/index-.*\.js/.test(x); });
-      if (bsrc) {
-        var js = await (await fetch(bsrc)).text();
-        bundleHasV2 = /inset 0 0 90px|inset 0 0 80px/.test(js);
-        bundleHasV1 = /linear-gradient\(to right,/.test(js);
-      }
-    } catch(_) {}
-    if (!fade) {
-      return {
-        err: "no fade overlay found",
-        childCount: children.length,
-        ariaHiddenChildren: children.filter(function (c) { return c.getAttribute("aria-hidden") === "true"; }).length,
-      };
+    var rect = frame.getBoundingClientRect();
+    // Sample pixel colours at corner vs centre to confirm the mask
+    // is actually punching through (corners should match page bg).
+    function sample(x, y){
+      var el = document.elementFromPoint(x, y);
+      return el ? el.tagName + "." + (el.className || "").toString().split(" ")[0] : null;
     }
-    var st = getComputedStyle(fade);
-    // Count how many linear-gradient stops are present (should be 4).
-    var gradientCount = (st.backgroundImage.match(/linear-gradient\(/g) || []).length;
-    // Sample which color the fade ends in (should match the frame bg).
-    var frameBg = getComputedStyle(frame).backgroundColor;
     return {
-      hasOverlay: true,
-      pointerEvents: st.pointerEvents,
-      zIndex: st.zIndex,
-      position: st.position,
-      gradientCount: gradientCount,
-      boxShadow: st.boxShadow,
-      bundleHasV2: bundleHasV2,
-      bundleHasV1: bundleHasV1,
-      frameBg: frameBg,
-      // Click-through sanity: at the centre of the map, what is the
-      // top-most element under the cursor? Should NOT be the fade
-      // overlay (Leaflet container or marker should be on top).
-      topElCenter: (function () {
-        var rect = frame.getBoundingClientRect();
-        var x = rect.left + rect.width / 2;
-        var y = rect.top + rect.height / 2;
-        var el = document.elementFromPoint(x, y);
-        return el ? (el.tagName + "." + (el.className || "").toString().split(" ")[0]) : null;
-      })(),
-      // Click-through at corner: the fade is most opaque here. We
-      // still want pointer-events to fall through to the map.
-      topElCorner: (function () {
-        var rect = frame.getBoundingClientRect();
-        var el = document.elementFromPoint(rect.left + 8, rect.top + 8);
-        return el ? (el.tagName + "." + (el.className || "").toString().split(" ")[0]) : null;
-      })(),
+      hasMaskedWrapper: !!maskedWrapper,
+      maskCss: maskedWrapper ? (getComputedStyle(maskedWrapper).maskImage || getComputedStyle(maskedWrapper).webkitMaskImage || "").slice(0, 200) : null,
+      // Does Leaflet still mount inside?
+      hasLeafletInside: maskedWrapper ? !!maskedWrapper.querySelector(".leaflet-container") : false,
+      // Click-through sanity at center + corners
+      topElCenter: sample(rect.left + rect.width / 2, rect.top + rect.height / 2),
+      topElCorner: sample(rect.left + 8, rect.top + 8),
+      // Cog button still on top right (chrome lives outside mask)
+      cogVisible: !!document.querySelector('button[aria-label="Map layers"]'),
     };
   });
   log(label + ": " + JSON.stringify(snap));
 
-  // Capture three screenshots so we can confirm the vignette is
-  // present BEFORE / DURING (just after) / AFTER zoom — Theory 1
-  // was that the "fade" the user saw was actually empty tile gaps
-  // during zoom that vanish once tiles paint.
   await mkdir("scripts/_screens", { recursive: true });
-  var base = "scripts/_screens/map-edge-fade-" + label.toLowerCase();
-  await u.page.screenshot({ path: base + "-initial.png", fullPage: false });
-  log("  screenshot -> " + base + "-initial.png");
-
-  // Zoom in twice via the Leaflet zoom-in control, wait for tiles.
-  await u.page.evaluate(function () {
-    var btn = document.querySelector(".leaflet-control-zoom-in");
-    if (btn) { btn.click(); setTimeout(function(){ btn.click(); }, 350); }
-  });
-  await u.page.waitForTimeout(2000);
-  await u.page.screenshot({ path: base + "-zoomedin.png", fullPage: false });
-  log("  screenshot -> " + base + "-zoomedin.png");
-
-  // Zoom back out twice.
-  await u.page.evaluate(function () {
-    var btn = document.querySelector(".leaflet-control-zoom-out");
-    if (btn) { btn.click(); setTimeout(function(){ btn.click(); }, 350); }
-  });
-  await u.page.waitForTimeout(2000);
-  await u.page.screenshot({ path: base + "-zoomedout.png", fullPage: false });
-  log("  screenshot -> " + base + "-zoomedout.png");
-
-  // Re-snapshot after zoom to confirm overlay still in DOM with correct CSS.
-  var post = await u.page.evaluate(function () {
-    var frame = document.querySelector(".cs-map-frame");
-    var fade = Array.from(frame.children).find(function (el) {
-      return el.getAttribute("aria-hidden") === "true";
-    });
-    if (!fade) return { stillThere: false };
-    var st = getComputedStyle(fade);
-    return {
-      stillThere: true,
-      hasGradient: /radial-gradient/.test(st.backgroundImage),
-      zIndex: st.zIndex,
-      pointerEvents: st.pointerEvents,
-    };
-  });
-  log("  post-zoom: " + JSON.stringify(post));
+  var path = "scripts/_screens/map-edge-fade-v7-" + label.toLowerCase() + ".png";
+  await u.page.screenshot({ path: path, fullPage: false });
+  log("  screenshot -> " + path);
 
   var errs = u.errs.filter(function (e) { return !/401/.test(e); });
   log("  " + (errs.length === 0 ? "OK" : "X") + " runtime errors: " + errs.length);
-  if (errs.length) errs.slice(0, 3).forEach(function (e) { log("  " + e); });
+  if (errs.length) errs.slice(0, 3).forEach(function (e) { log("    " + e); });
 }
 
 async function main() {
