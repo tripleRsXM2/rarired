@@ -94,7 +94,7 @@ function zoneCentroidBadgeHtml(z, activity, isHome, showHomes, showActivity) {
     : '';
 
   var flame = hasFlame
-    ? ('<div style="margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.02em;' +
+    ? ('<div class="cs-flame" style="margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.02em;' +
         'color:#fff;background:rgba(239,68,68,0.95);padding:2px 8px;border-radius:12px;' +
         'box-shadow:0 1px 2px rgba(0,0,0,0.25)">🔥 ' + activity.matches_7d + '</div>')
     : '';
@@ -117,6 +117,10 @@ export default function LeafletMap({
   showCourts = true,
   showActivity = true,
   showZoneNames = true,
+  // When set (a venue name string), the map enters focus mode:
+  // the cluster group is hidden and only that one venue's marker
+  // is shown. Driven by the side panel's inline court selection.
+  focusedCourtName = null,
   // Map basemap override: "auto" follows app theme (default), "light"
   // forces positron, "dark" forces dark-matter. Lives in the cog
   // panel so users can read a dark map in a light app and vice versa.
@@ -139,6 +143,9 @@ export default function LeafletMap({
   // Court cluster group is held in a ref so the showCourts toggle can
   // add/remove the whole layer without rebuilding markers each flip.
   var courtClusterRef = useRef(null);
+  // Solo highlight marker shown when focusedCourtName is set —
+  // cluster hides, this single marker takes over.
+  var soloMarkerRef = useRef(null);
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
   // reads the latest callback — otherwise the first render's closure sticks.
@@ -150,13 +157,24 @@ export default function LeafletMap({
   useEffect(function(){
     if(!elRef.current || mapRef.current) return;
     var map = L.map(elRef.current, {
-      zoomControl: true,
-      attributionControl: true,
+      // Zoom +/- buttons retired — users still get pinch + scroll
+      // zoom; the chrome was just visual noise top-left and
+      // competed with the title pill.
+      zoomControl: false,
+      // Custom attribution config — drops the default "Leaflet"
+      // prefix (legally optional, visually noisy) and keeps only
+      // the OSM/CARTO licence-required attribution. Styled small
+      // via CSS in providers.jsx.
+      attributionControl: false,
       preferCanvas: true,
     });
+    L.control.attribution({
+      prefix: false, // drop the "Leaflet" word
+      position: "bottomright",
+    }).addTo(map);
 
     var base = L.tileLayer(tileUrlFor(theme, mapThemeOverride), {
-      attribution: "© OpenStreetMap · © CARTO",
+      attribution: "© OSM · © CARTO",
       subdomains: "abcd",
       maxZoom: 19,
     }).addTo(map);
@@ -203,6 +221,22 @@ export default function LeafletMap({
       map.fitBounds(group.getBounds(), { padding: [24, 24] });
     }
 
+    // Zoom-aware label visibility — UI council rule: at broad zoom
+    // (city-fit) zone names and activity flames are hidden because
+    // they collide with cluster numbers. The layers panel toggles
+    // (zoneNames / activity) become MAX preferences — they still
+    // respect this zoom rule on top. Apple Maps / Mapbox pattern.
+    // Threshold 13: zoom 11-12 hides, zoom 13+ shows.
+    function applyBroadZoomFlag(){
+      var z = map.getZoom();
+      var broad = z < 13;
+      var c = map.getContainer();
+      if(broad){ c.setAttribute("data-broad-zoom","true"); }
+      else     { c.removeAttribute("data-broad-zoom"); }
+    }
+    map.on("zoomend", applyBroadZoomFlag);
+    applyBroadZoomFlag();
+
     // Court markers — clustered at low zoom so the city view doesn't
     // drown in 50+ overlapping pins. Each cluster paints a count badge
     // ("12") and expands when the user zooms in or taps. Individual
@@ -218,26 +252,38 @@ export default function LeafletMap({
       maxClusterRadius: 60,
       iconCreateFunction: function (cluster) {
         var n = cluster.getChildCount();
+        // Cluster bubble — solid dark fill, white tabular-nums.
+        // Restores the contrast user originally liked (dark # vs
+        // white court dots). CTA hierarchy is preserved through
+        // SIZE (88px CTA vs 28px cluster) + POSITION (bottom-centre
+        // vs zone centroid), not colour.
         return L.divIcon({
           className: "cs-court-cluster",
           html:
-            '<div style="width:34px;height:34px;border-radius:50%;background:#fff;' +
-              'border:1.5px solid rgba(20,18,17,0.9);' +
+            '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;' +
+              'background:#14110f;color:#fff;' +
               'display:flex;align-items:center;justify-content:center;' +
-              'box-shadow:0 2px 6px rgba(0,0,0,0.18);color:#14110f;' +
-              'font:700 13px/1 system-ui,sans-serif">' + n + '</div>',
-          iconSize: [34, 34], iconAnchor: [17, 17],
+              'box-shadow:0 2px 8px rgba(0,0,0,0.22);' +
+              'font:700 12px/1 ui-sans-serif,system-ui,sans-serif;' +
+              'font-variant-numeric:tabular-nums;letter-spacing:-0.02em">' + n + '</div>',
+          iconSize: [28, 28], iconAnchor: [14, 14],
         });
       },
     });
     COURTS.forEach(function(c){
+      // Default court marker — minimalist solid white dot. The
+      // visible dot is 14px but the icon (hit) box is 26px so the
+      // tap target is comfortable on mobile (small dots were hard
+      // to hit). Soft shadow + hairline ring keep it readable on
+      // both light + dark basemaps.
       var html =
-        '<div style="width:22px;height:22px;border-radius:50%;background:#fff;border:1.5px solid rgba(20,18,17,0.9);' +
-          'display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,0.15);color:#14110f;cursor:pointer">' +
-          '<div style="width:13px;height:13px">' + COURT_SVG + '</div>' +
+        '<div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center">' +
+          '<div style="box-sizing:border-box;width:14px;height:14px;border-radius:50%;background:#fff;' +
+            'box-shadow:0 1px 3px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
+            'cursor:pointer"></div>' +
         '</div>';
       var m = L.marker([c.lat, c.lng], {
-        icon: L.divIcon({ className: "", html: html, iconSize: [22,22], iconAnchor: [11,11] }),
+        icon: L.divIcon({ className: "", html: html, iconSize: [26,26], iconAnchor: [13,13] }),
         zIndexOffset: 1000,
       });
       m.bindTooltip(
@@ -266,7 +312,7 @@ export default function LeafletMap({
     if(!map || !tileLayersRef.current.base) return;
     map.removeLayer(tileLayersRef.current.base);
     var base = L.tileLayer(tileUrlFor(theme, mapThemeOverride), {
-      attribution: "© OpenStreetMap · © CARTO",
+      attribution: "© OSM · © CARTO",
       subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
     tileLayersRef.current.base = base;
@@ -295,7 +341,13 @@ export default function LeafletMap({
           className: "cs-zone-name",
           html: zoneNameLabelHtml(z, isDark),
           iconSize: [140, 16],
-          iconAnchor: [70, 8],
+          // Rule (locked): zone names must never overlap the cluster
+          // number bubbles. Clusters sit AT the centroid (28px tall,
+          // anchored centre → 14px above centroid). Pushing the
+          // label anchor down to 51 (icon height 16 + 35 below)
+          // means the label paints 35px ABOVE the centroid, leaving
+          // ~21px of clearance above any cluster bubble.
+          iconAnchor: [70, 51],
         }),
         interactive: false,
         // Sit above polygons (z 400) but below courts (z 600 via
@@ -307,17 +359,69 @@ export default function LeafletMap({
     });
   },[showZoneNames, theme, mapThemeOverride]);
 
-  // Add/remove the court cluster layer when the courts toggle flips.
+  // Court visibility — coordinates two independent toggles:
+  //   1. showCourts (layers panel) — hide the whole layer entirely
+  //   2. focusedCourtName (side panel pin) — show ONLY that venue
+  // Effective state:
+  //   - showCourts off                      → both hidden
+  //   - showCourts on, no focus             → cluster shown
+  //   - showCourts on, focus = "Foo Park"   → cluster hidden,
+  //                                           solo highlight marker
   useEffect(function(){
     var map = mapRef.current;
     var cluster = courtClusterRef.current;
     if(!map || !cluster) return;
-    if(showCourts){
+
+    var inFocus = !!focusedCourtName;
+    var showCluster = showCourts && !inFocus;
+    var showSolo    = showCourts && inFocus;
+
+    // Cluster visibility
+    if(showCluster){
       if(!map.hasLayer(cluster)) map.addLayer(cluster);
     } else {
       if(map.hasLayer(cluster)) map.removeLayer(cluster);
     }
-  },[showCourts]);
+
+    // Solo highlight marker — full-opacity court icon with an accent
+    // ring so it pops as "the pinned one". Reuses COURT_SVG to keep
+    // visual language consistent with the cluster's child markers.
+    if(soloMarkerRef.current){
+      map.removeLayer(soloMarkerRef.current);
+      soloMarkerRef.current = null;
+    }
+    if(showSolo){
+      var c = COURTS.find(function(x){ return x.name === focusedCourtName; });
+      if(c){
+        // Focused marker — same white-dot language as the default,
+        // just a touch bigger (18 vs 14) so it has presence. In
+        // focus mode it's the only court visible on the map, so a
+        // colour swap isn't needed — the size + the fact that it
+        // stands alone is enough signal. Keeps the visual system
+        // cohesive (everything is a white dot).
+        var html =
+          '<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center">' +
+            '<div style="box-sizing:border-box;width:18px;height:18px;border-radius:50%;background:#fff;' +
+              'box-shadow:0 2px 6px rgba(0,0,0,0.32),0 0 0 1px rgba(20,18,17,0.22);' +
+              'cursor:pointer"></div>' +
+          '</div>';
+        var m = L.marker([c.lat, c.lng], {
+          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[30,30], iconAnchor:[15,15] }),
+          zIndexOffset: 2000,
+          interactive: true,
+        });
+        m.bindTooltip(
+          '<div style="font:600 11px/1.3 system-ui,sans-serif"><b>' + c.name + '</b></div>',
+          { direction:"top", offset:[0,-14], opacity: 1 }
+        );
+        m.on("click", function(){
+          if(courtSelectRef.current) courtSelectRef.current(c);
+        });
+        m.addTo(map);
+        soloMarkerRef.current = m;
+      }
+    }
+  },[showCourts, focusedCourtName]);
 
   // Restyle zones when hover / selected change. Zone colors are always
   // shown — they're identifying chrome, not a heat overlay. (The earlier
@@ -367,15 +471,21 @@ export default function LeafletMap({
           html: html,
           iconSize: [60, 60],
           // iconAnchor y > iconSize.height pushes the badge ABOVE the
-          // lat/lng (courts at the polygon centre are very common in
-          // dense zones — CBD's bbox centre sits right on Prince Alfred,
-          // for instance). 90 means the icon centre paints ~30 px above
-          // the centroid point, leaving room for the court marker
-          // underneath.
-          iconAnchor: [30, 90],
+          // lat/lng. 70 places the home circle ~10-40px above the
+          // centroid (close enough to read as "this zone is yours"
+          // at any zoom level) while still clearing the cluster
+          // bubble's top edge (-14px) by ~24px. Earlier value of 110
+          // pushed home 78-110px above centroid which at broad zoom
+          // looked like it had drifted off the polygon entirely
+          // ("home deregisters when we zoom out so much").
+          iconAnchor: [30, 70],
         }),
         interactive: false,
-        zIndexOffset: 500,
+        // 10000 wins against any other marker layer including the
+        // marker-cluster plugin's internal pane shuffling. Earlier
+        // 1500 wasn't enough to consistently beat the cluster's
+        // own zindex management at broad zoom.
+        zIndexOffset: 10000,
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });

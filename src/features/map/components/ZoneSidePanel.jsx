@@ -26,6 +26,7 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone } from "../services/mapService.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import { track } from "../../../lib/analytics.js";
 
 var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
 
@@ -39,25 +40,60 @@ export default function ZoneSidePanel({
   // the player-fetch services so blocked users are dropped before
   // they ever render.
   blockedUserIds,
+  // Court-selection state lifted to MapTab so LeafletMap can dim/
+  // hide non-selected venues when a court is pinned in the panel.
+  // panelCourtName is a venue name string (e.g. "Prince Alfred Park
+  // Tennis Courts") or null. onPanelCourtChange takes the new value.
+  panelCourtName,
+  onPanelCourtChange,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
 
-  // Single-selected court (by name) and multi-selected player ids.
-  // Local to the panel — if a user closes it we reset, which matches
-  // the user's mental model of "this is my current workspace".
-  var [selectedCourt, setSelectedCourt] = useState(null);
+  // Local alias to keep the rest of the file readable. Reads from
+  // props; writes go through the parent setter.
+  var selectedCourt = panelCourtName || null;
+  function setSelectedCourt(next){
+    var resolved = typeof next === "function" ? next(selectedCourt) : next;
+    if(onPanelCourtChange) onPanelCourtChange(resolved || null);
+  }
+
   var [selectedIds, setSelectedIds]     = useState([]);
   // Player list scope: "zone" (default, home_zone match in this zone)
   // or "everywhere" (whole user base, ranked the same way). Lets the
   // viewer pitch a match at a court to someone who isn't a local.
   var [scope, setScope] = useState("zone");
 
-  // Clear selection whenever the panel closes / switches zones.
+  // Clear player selection whenever the panel closes / switches zones.
+  // The parent owns panelCourtName and resets it on zone change too.
   useEffect(function () {
-    setSelectedCourt(null);
     setSelectedIds([]);
   }, [zone && zone.id]);
+
+  // Long-list collapse — zones with >5 venues feel cramped on mobile
+  // when every court renders. Council call: collapse only on mobile;
+  // desktop has ample vertical room and the full list reads fine. The
+  // clutter complaint was mobile-only.
+  var COLLAPSE_THRESHOLD = 5;
+  var COLLAPSED_VISIBLE  = 4;
+  var [courtsExpanded, setCourtsExpanded] = useState(false);
+  useEffect(function(){ setCourtsExpanded(false); }, [zone && zone.id]);
+  // Track viewport — collapse only applies under 768px. Re-evaluates
+  // on resize so a phone-rotation widening past breakpoint expands.
+  var [isNarrow, setIsNarrow] = useState(function(){
+    return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+  });
+  useEffect(function(){
+    if(typeof window === "undefined") return;
+    var mq = window.matchMedia("(max-width: 767px)");
+    function onChange(e){ setIsNarrow(e.matches); }
+    if(mq.addEventListener) mq.addEventListener("change", onChange);
+    else mq.addListener(onChange);
+    return function(){
+      if(mq.removeEventListener) mq.removeEventListener("change", onChange);
+      else mq.removeListener(onChange);
+    };
+  },[]);
 
   // Fetch + rank the player list. Always returns the WHOLE zone roster
   // (by home_zone) so users can reach anyone in their area — even to
@@ -155,6 +191,28 @@ export default function ZoneSidePanel({
 
   var courts = courtsInZone(zone.id);
   var totalCourts = courts.reduce(function(n,c){ return n + c.courts; }, 0);
+  // If the user picks a court via the panel that's beyond the
+  // collapsed slice, auto-expand so the active row stays visible.
+  var collapseActive = isNarrow && courts.length > COLLAPSE_THRESHOLD && !courtsExpanded;
+  var selectedIdx = selectedCourt ? courts.findIndex(function(c){ return c.name === selectedCourt; }) : -1;
+  if (collapseActive && selectedIdx >= COLLAPSED_VISIBLE) {
+    collapseActive = false;
+    // setState in render is fine here because it's idempotent and
+    // the auto-expand only happens when a hidden court gets selected.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    if (!courtsExpanded) setCourtsExpanded(true);
+  }
+  var visibleCourts = collapseActive ? courts.slice(0, COLLAPSED_VISIBLE) : courts;
+  var hiddenCount = courts.length - visibleCourts.length;
+  // When a venue is pinned in the panel, the stat-row "Courts" cell
+  // switches from the zone total to that venue's own court count
+  // (e.g. "6 · Courts here") so the user sees the playable size of
+  // the pinned location instead of the whole zone.
+  var pinnedCourt = selectedCourt
+    ? courts.find(function(c){ return c.name === selectedCourt; })
+    : null;
+  var courtsCellValue = pinnedCourt ? pinnedCourt.courts : totalCourts;
+  var courtsCellLabel = pinnedCourt ? "Courts here" : "Courts nearby";
   var isHome = homeZone === zone.id;
   var canSetHome = !!authUser;
 
@@ -249,8 +307,8 @@ export default function ZoneSidePanel({
         padding:"14px 20px", borderBottom:"1px solid "+t.border, gap:12,
       }}>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{totalCourts}</div>
-          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Courts nearby</div>
+          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{courtsCellValue}</div>
+          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>{courtsCellLabel}</div>
         </div>
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading ? "…" : displayPlayers.length}</div>
@@ -276,45 +334,35 @@ export default function ZoneSidePanel({
         {courts.length === 0 ? (
           <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:18 }}>
-            {courts.map(function (c) {
+          <div style={{ display:"flex", flexDirection:"column", gap:2, marginBottom:18 }}>
+            {visibleCourts.map(function (c) {
               var selected = selectedCourt === c.name;
+              // Flat row — no border, no card chrome. Selection state
+              // = soft accent-tinted bg filling the whole row + bolded
+              // accent-coloured text. Booking icon ghost on the right
+              // with no divider line; just whitespace. Spotify x Apple
+              // Maps hybrid. Distinct from the underline-tabs scope
+              // picker so the two controls don't visually merge.
               return (
                 <div key={c.name} style={{
-                  display:"flex", alignItems:"stretch", gap:0,
-                  borderRadius:8,
-                  border:"1px solid "+(selected ? t.accent : t.border),
-                  background: selected ? t.accentSubtle : t.bgTertiary,
-                  overflow:"hidden",
-                  transition:"background 0.15s, border-color 0.15s",
+                  display:"flex", alignItems:"center", gap:0,
+                  borderRadius: 8,
+                  background: selected ? t.accentSubtle : "transparent",
+                  transition:"background 0.15s",
                 }}>
                   <button
                     onClick={function () { toggleCourt(c); }}
                     style={{
                       flex:1, minWidth:0, textAlign:"left",
-                      padding:"9px 11px", background:"transparent", border:"none",
+                      padding:"7px 10px", background:"transparent", border:"none",
                       color: selected ? t.accent : t.text,
-                      fontSize:12, fontWeight: selected ? 700 : 500,
+                      fontSize: 12.5,
+                      fontWeight: selected ? 700 : 500,
+                      letterSpacing: "-0.01em",
                       cursor:"pointer",
-                      display:"flex", alignItems:"center", gap:8,
+                      whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
                     }}>
-                    <span style={{
-                      width:14, height:14, borderRadius:"50%",
-                      border:"1.5px solid "+(selected ? t.accent : t.border),
-                      background: selected ? t.accent : "transparent",
-                      flexShrink:0, position:"relative",
-                    }}>
-                      {selected && (
-                        <span style={{
-                          position:"absolute", inset:0, display:"flex",
-                          alignItems:"center", justifyContent:"center",
-                          color:"#fff", fontSize:10, fontWeight:900, lineHeight:1,
-                        }}>✓</span>
-                      )}
-                    </span>
-                    <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                      {c.name}
-                    </span>
+                    {c.name}
                   </button>
                   {c.bookingUrl && (
                     <a href={c.bookingUrl}
@@ -324,15 +372,53 @@ export default function ZoneSidePanel({
                       title={"Book " + c.name + " (opens in a new tab)"}
                       style={{
                         display:"inline-flex", alignItems:"center", justifyContent:"center",
-                        padding:"0 12px", borderLeft:"1px solid "+t.border,
-                        color:t.accent, textDecoration:"none", flexShrink:0,
-                      }}>
-                      {NAV_ICONS.external(14)}
+                        width: 28, height: 28, marginRight: 4,
+                        color: selected ? t.accent : t.textTertiary,
+                        textDecoration:"none", flexShrink:0,
+                        opacity: selected ? 1 : 0.7,
+                        transition:"opacity 0.15s, color 0.15s",
+                      }}
+                      onMouseEnter={function(e){ e.currentTarget.style.opacity = 1; e.currentTarget.style.color = t.accent; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.opacity = selected ? 1 : 0.7; e.currentTarget.style.color = selected ? t.accent : t.textTertiary; }}>
+                      {NAV_ICONS.external(13)}
                     </a>
                   )}
                 </div>
               );
             })}
+            {isNarrow && courts.length > COLLAPSE_THRESHOLD && (
+              <button type="button"
+                onClick={function(){
+                  var next = !courtsExpanded;
+                  setCourtsExpanded(next);
+                  // Track expansion so we can validate the collapsed
+                  // default — if 80%+ expand we picked the wrong cap;
+                  // if <20% the list past 4 is rarely valued.
+                  if(next) track("map_courts_expanded", { zone_id: zone && zone.id, total: courts.length });
+                }}
+                style={{
+                  marginTop: 6, padding: "10px 12px",
+                  background: t.accentSubtle,
+                  border: "1px solid " + t.border,
+                  borderRadius: 8,
+                  color: t.accent, fontSize: 12.5,
+                  fontWeight: 700, letterSpacing: "0.01em",
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  transition: "background 0.15s",
+                }}>
+                <span>{courtsExpanded ? "Show fewer" : "Show all " + courts.length + " courts"}</span>
+                <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                     stroke="currentColor" strokeWidth="2"
+                     strokeLinecap="round" strokeLinejoin="round"
+                     style={{
+                       transform: courtsExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                       transition: "transform 0.18s ease",
+                     }}>
+                  <path d="M4 7l5 5 5-5"/>
+                </svg>
+              </button>
+            )}
           </div>
         )}
 

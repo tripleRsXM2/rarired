@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import LeafletMap from "../components/LeafletMap.jsx";
 import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
 import CourtInfoCard from "../components/CourtInfoCard.jsx";
+import PlayMatchWizard from "../components/PlayMatchWizard.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
 import { fetchZoneActivity } from "../services/mapService.js";
 import { track } from "../../../lib/analytics.js";
@@ -61,6 +62,19 @@ export default function MapTab({
   var [selected,setSelected]=useState(null);
   var [selectedCourt,setSelectedCourt]=useState(null);
   var [zoneActivity,setZoneActivity]=useState({});
+  // Inline court selection from the side panel (a venue name string).
+  // Distinct from `selectedCourt` above which is the full court object
+  // for the CourtInfoCard modal. When set, LeafletMap goes into focus
+  // mode: cluster hidden, only that one venue's marker shown — and
+  // the side panel header switches "Courts in zone" → "Courts here".
+  var [panelCourtName,setPanelCourtName]=useState(null);
+  // Phase 2: Play Match wizard. Opens from the orange CTA. Walks the
+  // user through zone → court → player(s) → send invite. Respects
+  // any zone already selected on the map (skips step 1 if so).
+  var [wizardOpen,setWizardOpen]=useState(false);
+  // When the zone changes, drop any panel-court selection so we don't
+  // leak a stale venue name into a different zone's panel.
+  useEffect(function(){ setPanelCourtName(null); },[selected]);
   // Layer-panel state — independent toggles for the optional overlays
   // plus a basemap-theme override. Zone colors are NOT here; they're
   // permanent identifying chrome. Persisted to localStorage so a user's
@@ -122,6 +136,14 @@ export default function MapTab({
     return function(){ cancelled = true; };
   },[]);
 
+  // Resolve the basemap tone the user is actually seeing (same logic
+  // as LeafletMap.resolveDark). Used by the Play Match CTA to invert
+  // its colours on dark basemaps so the button never gets lost.
+  var mapDark;
+  if(layers.mapTheme === "light") mapDark = false;
+  else if(layers.mapTheme === "dark") mapDark = true;
+  else mapDark = theme === "hard-court" || theme === "night-court";
+
   // Wrap setters so we can emit analytics at selection time. Zone props
   // include the activity snapshot so funnel queries don't need a join.
   function handleSelect(zoneId){
@@ -165,30 +187,26 @@ export default function MapTab({
         showActivity={layers.activity}
         showZoneNames={layers.zoneNames}
         mapThemeOverride={layers.mapTheme}
+        focusedCourtName={panelCourtName}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
       />
 
-      {/* Title pill — sits top-left, shifted right of the Leaflet zoom
-          control (+/−) so the two don't stack. */}
-      <div style={{
-        position:"absolute", top:12, left:56, zIndex:500,
-        background: t.bgCard, border:"1px solid "+t.border,
-        borderRadius:8, padding:"8px 14px",
-        display:"flex", alignItems:"center", gap:10,
-        boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
-      }}>
-        <div style={{
-          width:26, height:26, borderRadius:6, background: t.accent,
-          color: t.accentText, display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:12, fontWeight:800, letterSpacing:"-0.5px",
-        }}>SYD</div>
-        <div>
-          <div style={{ fontSize:9, letterSpacing:"0.12em", color:t.textTertiary, textTransform:"uppercase", lineHeight:1 }}>Tennis zones</div>
-          <div style={{ fontSize:13, fontWeight:700, color:t.text, letterSpacing:"-0.02em", marginTop:2, lineHeight:1 }}>Sydney</div>
-        </div>
-      </div>
+      {/* Edge-fade vignette — non-interactive presentation polish.
+          v1 used gradients fading to t.bg, but on light themes the
+          frame colour is so close to CARTO's near-white basemap that
+          the fade was mathematically present and visually invisible.
+          v2 uses an inset box-shadow which ALWAYS darkens the edges
+          regardless of basemap colour, plus a subtle gradient pass
+          to soften the very corners. Theme-aware intensity: dark
+          themes get a deeper shadow (the basemap is already dark, so
+          we need more contrast at the edge). pointer-events:none
+          so click-throughs are unaffected. */}
+
+      {/* SYD Tennis Zones title pill retired — redundant chrome.
+          Map tab + Sydney polygons are self-evident; the pill was
+          adding visual noise top-left without affording anything. */}
 
       {/* Map layers control — Nike Run-style. A small layers icon top-
           right opens a card with independent switches for each optional
@@ -209,7 +227,16 @@ export default function MapTab({
         aria-label="Map layers"
         aria-expanded={layersOpen}
         style={{
-          position:"absolute", top:12, right:12, zIndex:500,
+          // Slide left to make room for the side panel when a zone is
+          // selected so the cog never sits behind it. 372 = panel
+          // maxWidth (360) + 12 gutter. Timing + easing match the
+          // panel's slideInRight keyframe (.28s, cubic-bezier(.32,
+          // .72,0,1)) so they glide together as one motion rather
+          // than the cog "popping" out of sync.
+          position:"absolute", top:12,
+          right: selected ? 372 : 12,
+          transition: "right 0.28s cubic-bezier(.32,.72,0,1)",
+          zIndex:500,
           background: layersOpen ? t.text : t.bgCard,
           color: layersOpen ? t.bg : t.text,
           border:"1px solid "+(layersOpen ? t.text : t.border),
@@ -231,7 +258,12 @@ export default function MapTab({
       {layersOpen && (
         <div ref={layersPanelRef}
           style={{
-            position:"absolute", top:54, right:12, zIndex:600,
+            // Slides with the cog. Same easing/timing as the cog +
+            // side panel so all three motions feel like one gesture.
+            position:"absolute", top:54,
+            right: selected ? 372 : 12,
+            transition: "right 0.28s cubic-bezier(.32,.72,0,1)",
+            zIndex:600,
             background: t.bgCard, color: t.text,
             border: "1px solid " + t.border,
             borderRadius: 12, padding: "12px 14px",
@@ -347,6 +379,8 @@ export default function MapTab({
         homeZone={homeZone}
         activity={selectedZone ? zoneActivity[selectedZone.id] : null}
         blockedUserIds={blockedUserIds}
+        panelCourtName={panelCourtName}
+        onPanelCourtChange={setPanelCourtName}
         onSetHome={handleSetHome}
         onClearHome={handleClearHome}
         onOpenProfile={function(uid){
@@ -363,6 +397,73 @@ export default function MapTab({
       />
 
       {/* Court info modal — opens on court marker tap */}
+      {/* Play Match CTA — primary action of the map. Bottom-centre,
+          thumb-zone optimal. Orange so it pops against the green
+          zone polygons + neutral chrome. Phase 1: visual only —
+          tap fires telemetry so we can see interest from day one
+          (Mom-test: instrument before shipping the flow). Phase 2
+          will swap the no-op for a guided 5-step wizard inside a
+          bottom sheet (zone → court → player(s) → send invite). */}
+      <button type="button"
+        onClick={function(){
+          track("play_match_cta_tapped", {
+            has_zone: !!selected,
+            has_court: !!panelCourtName,
+          });
+          setWizardOpen(true);
+        }}
+        aria-label="Play Match"
+        style={{
+          position:"absolute",
+          left:"50%",
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 32px)",
+          transform:"translateX(-50%)",
+          zIndex: 550,
+          // Iconic circle — Strava/Nike/Apple Voice Memos pattern.
+          // Flat solid fill, single soft drop shadow, no gradient,
+          // no inner highlights. Theme-adaptive: dark CTA on light
+          // basemap, light CTA on dark basemap — so contrast stays
+          // constant and the button never gets lost. Apple's primary-
+          // button pattern. 104px reads as confidently primary on
+          // both mobile and desktop without overwhelming the map.
+          width: 104, height: 104,
+          borderRadius: "50%",
+          border: "none",
+          background: mapDark ? "#fff" : "#14110f",
+          color: mapDark ? "#14110f" : "#fff",
+          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
+          cursor: "pointer",
+          // Layered shadow scaled up with the bigger button — deeper
+          // ambient shadow at the bottom for elevation, tighter
+          // contact shadow underneath.
+          boxShadow:
+            "0 14px 32px rgba(20,18,17,0.36), " +
+            "0 4px 8px rgba(20,18,17,0.22)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 0,
+          transition: "transform 0.12s ease, box-shadow 0.18s ease",
+        }}
+        onMouseDown={function(e){
+          e.currentTarget.style.transform = "translateX(-50%) scale(0.95)";
+        }}
+        onMouseUp={function(e){
+          e.currentTarget.style.transform = "translateX(-50%)";
+        }}
+        onMouseLeave={function(e){
+          e.currentTarget.style.transform = "translateX(-50%)";
+        }}>
+        <span style={{
+          fontSize: 19, fontWeight: 900,
+          letterSpacing: "0.10em", lineHeight: 1,
+        }}>PLAY</span>
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.20em", lineHeight: 1,
+          opacity: 0.72, marginTop: 3,
+        }}>MATCH</span>
+      </button>
+
       <CourtInfoCard t={t} court={selectedCourt}
         authUser={authUser}
         viewerProfile={profile}
@@ -390,6 +491,26 @@ export default function MapTab({
           setSelectedCourt(null); // close the modal; we navigate away
         }}
         onClose={function(){ setSelectedCourt(null); }}/>
+
+      {/* Play Match wizard — guided zone → court → player → invite
+          flow. Respects any zone already selected on the map (skips
+          step 1 if so). On Send Invite, fans the picked partners
+          out via the existing onMessagePlayer pipeline so the DM
+          opens with the venue context pre-filled. */}
+      <PlayMatchWizard
+        t={t}
+        open={wizardOpen}
+        authUser={authUser}
+        blockedUserIds={blockedUserIds}
+        initialZoneId={selected}
+        onClose={function(){ setWizardOpen(false); }}
+        onSendInvite={function(partners, ctx){
+          if(onMessagePlayer && partners && partners.length){
+            onMessagePlayer(partners, ctx);
+          }
+          setWizardOpen(false);
+        }}
+      />
     </div>
   );
 }
