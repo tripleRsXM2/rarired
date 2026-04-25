@@ -139,23 +139,44 @@ export function formatConfirmedBadge(profile) {
   return n === 1 ? "1 confirmed match" : n + " confirmed matches";
 }
 
-// Module 5: provisional period gates the "settled" rating signal. Mirrors the
-// SQL: matches_played < 20 → K=32 (provisional); >= 20 → K=16 (settled).
-// We expose a boolean + a small label-fragment for UI use.
-export var PROVISIONAL_THRESHOLD = 20;
+// Module 7.7: CourtSync Rating provisional period. Replaces the old
+// Module-5 20-match settled threshold with a 5-match calibration window.
+// Reads `confirmed_ranked_match_count` (server-managed via
+// apply_match_outcome) and falls back to `matches_played` for legacy
+// profiles that predate the new column.
+//
+// Authoritative spec lives in src/features/rating/constants.js;
+// re-exported here so legacy callers don't all have to change imports.
+export var PROVISIONAL_THRESHOLD = 5;
+
+function confirmedRanked(profile) {
+  if (!profile) return 0;
+  if (profile.confirmed_ranked_match_count != null) return profile.confirmed_ranked_match_count;
+  return profile.matches_played || 0;
+}
 
 export function isProvisional(profile) {
   if (!profile) return true;
-  return (profile.matches_played || 0) < PROVISIONAL_THRESHOLD;
+  return confirmedRanked(profile) < PROVISIONAL_THRESHOLD;
 }
 
 export function provisionalLabel(profile) {
   if (!profile) return null;
-  var played = profile.matches_played || 0;
+  var played = confirmedRanked(profile);
   if (played >= PROVISIONAL_THRESHOLD) return null;
   var remaining = PROVISIONAL_THRESHOLD - played;
-  if (remaining === PROVISIONAL_THRESHOLD) return "Provisional rating";
-  return "Provisional · " + remaining + " match" + (remaining === 1 ? "" : "es") + " to settle";
+  if (played === 0) return "Provisional · calibrating";
+  return "Provisional · " + remaining + " match" + (remaining === 1 ? "" : "es") + " to calibrate";
+}
+
+// Calibration progress label — shown next to the rating display while
+// the player is still provisional. Editorial vocabulary:
+// "Calibration X / 5". Returns null once they're established.
+export function calibrationProgressLabel(profile) {
+  if (!profile) return null;
+  var played = confirmedRanked(profile);
+  if (played >= PROVISIONAL_THRESHOLD) return null;
+  return "Calibration " + played + " / " + PROVISIONAL_THRESHOLD;
 }
 
 // Confirmation rate trust signal. Computed from the viewer's *own* match

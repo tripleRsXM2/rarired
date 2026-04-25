@@ -28,7 +28,9 @@ import {
   computeRecentForm,
   formatConfirmedBadge,
   provisionalLabel,
+  calibrationProgressLabel,
 } from "../../profile/utils/profileStats.js";
+import RatingInfoIcon from "../../rating/components/RatingInfoIcon.jsx";
 
 function greeting() {
   var h = new Date().getHours();
@@ -50,10 +52,13 @@ export default function HomeHero({ t, profile, history }) {
 
   var played       = profile.matches_played != null ? profile.matches_played : 0;
   var hasMatches   = played > 0;
-  var rankPts      = profile.ranking_points != null ? profile.ranking_points : 1000;
+  // Module 7.7: only show a rating once initialise_rating has run.
+  var ratingInitialised = profile.initial_rating != null;
+  var rankPts      = profile.ranking_points != null ? profile.ranking_points : null;
   var recentForm   = computeRecentForm(history || [], 5);
   var location     = displayLocation(profile);
   var trust        = trustLine(t, profile);
+  var calibLabel   = calibrationProgressLabel(profile);
   var firstName    = (profile.name || "").split(" ")[0] || profile.name;
 
   return (
@@ -73,7 +78,7 @@ export default function HomeHero({ t, profile, history }) {
           clamp() keeps it generous on desktop and proportional on phones
           without needing media queries here. */}
       <div className="cs-home-hero-metric" style={{ marginTop: "clamp(20px, 3vw, 32px)" }}>
-        {hasMatches ? (
+        {ratingInitialised && rankPts != null ? (
           <div style={{
             fontSize: "clamp(56px, 11vw, 96px)",
             fontWeight: 800,
@@ -98,24 +103,52 @@ export default function HomeHero({ t, profile, history }) {
         )}
       </div>
 
-      {/* Caption row — one quiet line, not pills */}
+      {/* Caption row — eyebrow + info icon for the rating; nudge for newbies */}
       <div className="cs-home-hero-caption" style={{
         marginTop: 14,
-        fontSize: 13,
-        fontWeight: 500,
-        color: t.textTertiary,
-        letterSpacing: "0.01em",
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
       }}>
-        {hasMatches ? (
-          [
-            "Ranking points",
-            location || null,
-            profile.skill || null,
-          ].filter(Boolean).join("  ·  ")
+        {ratingInitialised && rankPts != null ? (
+          <>
+            <span style={{
+              fontSize: 10, fontWeight: 800,
+              color: t.textTertiary, letterSpacing: "0.16em",
+              textTransform: "uppercase",
+            }}>
+              CourtSync Rating
+            </span>
+            <RatingInfoIcon t={t} size={13} label="home_hero"/>
+            {(location || profile.skill) && (
+              <span style={{
+                fontSize: 12, fontWeight: 500,
+                color: t.textTertiary, letterSpacing: "0.01em",
+              }}>
+                ·  {[location, profile.skill].filter(Boolean).join("  ·  ")}
+              </span>
+            )}
+          </>
         ) : (
-          "Log your first match to start tracking your ranking and form."
+          <span style={{
+            fontSize: 13, fontWeight: 500,
+            color: t.textTertiary, letterSpacing: "0.01em",
+          }}>
+            {hasMatches
+              ? "Pick a starting skill level to get your CourtSync Rating."
+              : "Log your first match to start tracking your form."}
+          </span>
         )}
       </div>
+
+      {calibLabel && ratingInitialised && (
+        <div style={{
+          marginTop: 8,
+          fontSize: 10, fontWeight: 800,
+          color: t.orange, letterSpacing: "0.16em",
+          textTransform: "uppercase",
+        }}>
+          {calibLabel}
+        </div>
+      )}
 
       {/* Recent form — sharp horizontal sequence, only when we have history */}
       {hasMatches && recentForm.length > 0 && (

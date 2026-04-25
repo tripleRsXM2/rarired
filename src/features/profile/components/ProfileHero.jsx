@@ -25,7 +25,9 @@ import {
   computeRecentForm,
   formatConfirmedBadge,
   provisionalLabel,
+  calibrationProgressLabel,
 } from "../utils/profileStats.js";
+import RatingInfoIcon from "../../rating/components/RatingInfoIcon.jsx";
 
 function trustLine(t, profile) {
   var prov = provisionalLabel(profile);
@@ -74,10 +76,14 @@ export default function ProfileHero({
 
   var played       = profile.matches_played != null ? profile.matches_played : 0;
   var hasMatches   = played > 0;
-  var rankPts      = profile.ranking_points != null ? profile.ranking_points : 1000;
+  // Module 7.7: only show a rating once initialise_rating has run.
+  // Uninitialised profiles must NOT display fake rating values.
+  var ratingInitialised = profile.initial_rating != null;
+  var rankPts      = profile.ranking_points != null ? profile.ranking_points : null;
   var location     = displayLocation(profile);
   var recentForm   = recentFormHistory ? computeRecentForm(recentFormHistory, 5) : [];
   var trust        = trustLine(t, profile);
+  var calibLabel   = calibrationProgressLabel(profile);
 
   var captionParts = [profile.skill, profile.style, location].filter(Boolean);
 
@@ -133,8 +139,8 @@ export default function ProfileHero({
         </p>
       )}
 
-      {/* Display ranking metric */}
-      {hasMatches && (
+      {/* Display rating metric */}
+      {ratingInitialised && rankPts != null && (
         <div style={{ marginTop: "clamp(28px, 4vw, 40px)" }}>
           <div style={{
             fontSize: "clamp(56px, 11vw, 96px)",
@@ -148,13 +154,53 @@ export default function ProfileHero({
           </div>
           <div style={{
             marginTop: 8,
-            fontSize: 10,
-            fontWeight: 700,
-            color: t.textTertiary,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
+            display: "flex", alignItems: "center", gap: 6,
           }}>
-            Ranking points
+            <span style={{
+              fontSize: 10,
+              fontWeight: 800,
+              color: t.textTertiary,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+            }}>
+              CourtSync Rating
+            </span>
+            <RatingInfoIcon t={t} size={13} label="profile_hero"/>
+          </div>
+          {calibLabel && (
+            <div style={{
+              marginTop: 6,
+              fontSize: 10,
+              fontWeight: 800,
+              color: t.orange,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+            }}>
+              {calibLabel}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Uninitialised profile — show a setup nudge instead of a fake rating. */}
+      {!ratingInitialised && (
+        <div style={{
+          marginTop: "clamp(28px, 4vw, 40px)",
+          paddingTop: 16, paddingBottom: 16,
+          borderTop: "1px solid " + t.border,
+          borderBottom: "1px solid " + t.border,
+          display: "flex", flexDirection: "column", gap: 6,
+        }}>
+          <div style={{
+            fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+            textTransform: "uppercase", color: t.orange,
+          }}>
+            Set your starting level
+          </div>
+          <div style={{
+            fontSize: 13, color: t.text, lineHeight: 1.5, letterSpacing: "-0.1px",
+          }}>
+            Pick a starting skill level in onboarding to get your CourtSync Rating.
           </div>
         </div>
       )}
