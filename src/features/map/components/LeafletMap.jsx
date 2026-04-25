@@ -24,8 +24,15 @@ import { COURTS } from "../data/courts.js";
 // Dark themes (hard-court, night-court) use dark-matter; light themes use
 // positron. Both are "nolabels" — we deliberately don't layer streetnames
 // or suburb labels on top so the zones read as the primary content.
-function tileUrlFor(theme){
-  var dark = theme === "hard-court" || theme === "night-court";
+//
+// `override` lets the layers panel force a specific basemap regardless of
+// the app theme — some users want a dark map even in light app mode (and
+// vice versa). "auto" defers to the app theme; "light"/"dark" override.
+function tileUrlFor(theme, override){
+  var dark;
+  if(override === "light") dark = false;
+  else if(override === "dark") dark = true;
+  else dark = theme === "hard-court" || theme === "night-court";
   return dark
     ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
@@ -45,14 +52,15 @@ var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 //
 // Returns null when there's nothing worth painting (saves a marker
 // per zone in the common case).
-function zoneCentroidBadgeHtml(z, activity, isHome, heatVisible) {
-  // Flame is part of the heat-map signal — hide when heat is toggled
-  // off. Home indicator stays regardless; it's a personal anchor, not
-  // a heat overlay.
-  var hasFlame = heatVisible !== false && activity && activity.matches_7d > 0;
-  if (!isHome && !hasFlame) return null;
+function zoneCentroidBadgeHtml(z, activity, isHome, showHomes, showActivity) {
+  // Each layer toggles independently — homes via showHomes, flame
+  // (activity) badges via showActivity. Returns null if both toggles
+  // suppress the badge so we render no marker at all (saves DOM).
+  var paintHome  = isHome && showHomes !== false;
+  var hasFlame   = showActivity !== false && activity && activity.matches_7d > 0;
+  if (!paintHome && !hasFlame) return null;
 
-  var homeBadge = isHome
+  var homeBadge = paintHome
     ? ('<div style="width:32px;height:32px;border-radius:50%;background:' + z.color + ';' +
          'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.92);' +
          'display:flex;align-items:center;justify-content:center">' +
@@ -81,10 +89,17 @@ function zoneCentroidBadgeHtml(z, activity, isHome, heatVisible) {
 export default function LeafletMap({
   t, theme, hovered, selected, homeZone, zoneActivity,
   onHover, onSelect, onCourtSelect,
-  // Heat-map toggle (zone polygon fills + activity flame badges).
-  // Default true. Off = polygons fade out, flame badges hide so the
-  // basemap reads cleanly. Home + court markers are unaffected.
-  heatVisible = true,
+  // Independent layer toggles, controlled by the on-map cog panel in
+  // MapTab. All default true; flipping any one off removes that layer
+  // without touching the others. Zone colors are NEVER toggled — they
+  // are identifying chrome, not an overlay.
+  showHomes = true,
+  showCourts = true,
+  showActivity = true,
+  // Map basemap override: "auto" follows app theme (default), "light"
+  // forces positron, "dark" forces dark-matter. Lives in the cog
+  // panel so users can read a dark map in a light app and vice versa.
+  mapThemeOverride = "auto",
 }){
   var elRef = useRef(null);
   var mapRef = useRef(null);
@@ -99,6 +114,9 @@ export default function LeafletMap({
   // Home pin retired (see zoneLabelHtml — home is baked into the label).
   // var homePinRef = useRef(null);
   var tileLayersRef = useRef({ base: null });
+  // Court cluster group is held in a ref so the showCourts toggle can
+  // add/remove the whole layer without rebuilding markers each flip.
+  var courtClusterRef = useRef(null);
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
   // reads the latest callback — otherwise the first render's closure sticks.
@@ -115,7 +133,7 @@ export default function LeafletMap({
       preferCanvas: true,
     });
 
-    var base = L.tileLayer(tileUrlFor(theme), {
+    var base = L.tileLayer(tileUrlFor(theme, mapThemeOverride), {
       attribution: "© OpenStreetMap · © CARTO",
       subdomains: "abcd",
       maxZoom: 19,
@@ -209,26 +227,43 @@ export default function LeafletMap({
       });
       clusterGroup.addLayer(m);
     });
-    map.addLayer(clusterGroup);
+    courtClusterRef.current = clusterGroup;
+    if(showCourts) map.addLayer(clusterGroup);
 
     mapRef.current = map;
     return function(){ map.remove(); mapRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // Swap tile layers when theme changes (keeps zoom / center / selection state).
+  // Swap tile layers when the app theme OR the user's map-theme
+  // override changes (keeps zoom / center / selection state).
   useEffect(function(){
     var map = mapRef.current;
     if(!map || !tileLayersRef.current.base) return;
     map.removeLayer(tileLayersRef.current.base);
-    var base = L.tileLayer(tileUrlFor(theme), {
+    var base = L.tileLayer(tileUrlFor(theme, mapThemeOverride), {
       attribution: "© OpenStreetMap · © CARTO",
       subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
     tileLayersRef.current.base = base;
-  },[theme]);
+  },[theme, mapThemeOverride]);
 
-  // Restyle zones when hover / selected / heat-toggle change.
+  // Add/remove the court cluster layer when the courts toggle flips.
+  useEffect(function(){
+    var map = mapRef.current;
+    var cluster = courtClusterRef.current;
+    if(!map || !cluster) return;
+    if(showCourts){
+      if(!map.hasLayer(cluster)) map.addLayer(cluster);
+    } else {
+      if(map.hasLayer(cluster)) map.removeLayer(cluster);
+    }
+  },[showCourts]);
+
+  // Restyle zones when hover / selected change. Zone colors are always
+  // shown — they're identifying chrome, not a heat overlay. (The earlier
+  // "heat off fades polygons to 0" branch was a regression: it removed
+  // the very thing that tells users which suburb they're looking at.)
   useEffect(function(){
     Object.keys(zoneLayersRef.current).forEach(function(id){
       var layer = zoneLayersRef.current[id];
@@ -236,13 +271,6 @@ export default function LeafletMap({
       if(!layer || !z) return;
       var isHover = hovered === id;
       var isSel   = selected === id;
-      // Heat off → fade the fill so the basemap reads clearly. We keep
-      // a 1px hairline on each polygon so users can still click them
-      // (otherwise the click target disappears).
-      if(!heatVisible){
-        layer.setStyle({ color: z.color, weight: 1, opacity: isHover || isSel ? 0.6 : 0.25, fillColor: z.color, fillOpacity: 0 });
-        return;
-      }
       if(isSel){
         layer.setStyle({ color: z.color, weight: 3, opacity: 1, fillColor: z.color, fillOpacity: 0.62 });
       } else if(isHover){
@@ -251,7 +279,7 @@ export default function LeafletMap({
         layer.setStyle({ color: z.color, weight: 2, opacity: 0.9, fillColor: z.color, fillOpacity: 0.42 });
       }
     });
-  },[hovered, selected, heatVisible]);
+  },[hovered, selected]);
 
   // Update zone label HTML when activity streams in — the flame badge is
   // attached to the zone number/name stack so it follows the polygon
@@ -268,7 +296,7 @@ export default function LeafletMap({
       if(!z) return;
       var prev = zoneLabelsRef.current[id];
       if(prev){ map.removeLayer(prev); }
-      var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id, heatVisible);
+      var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id, showHomes, showActivity);
       if(!html){
         zoneLabelsRef.current[id] = null;
         return;
@@ -292,7 +320,7 @@ export default function LeafletMap({
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });
-  },[zoneActivity, homeZone, heatVisible]);
+  },[zoneActivity, homeZone, showHomes, showActivity]);
 
   // (Old standalone home-pin effect retired — the home indicator is
   // baked into the zone-number label's house-shaped badge above. One

@@ -9,13 +9,30 @@
 // over the last 7 days so the label shows "🔥 N this week". Emits map
 // analytics events so we can measure whether the map drives challenges.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LeafletMap from "../components/LeafletMap.jsx";
 import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
 import CourtInfoCard from "../components/CourtInfoCard.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
 import { fetchZoneActivity } from "../services/mapService.js";
 import { track } from "../../../lib/analytics.js";
+
+// Layer + map-theme preferences persist locally so a user's "show me
+// just courts on a dark map" view sticks across reloads. Small Hooked
+// investment — every customisation makes returning more valuable.
+var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
+var DEFAULT_LAYERS = { homes: true, courts: true, activity: true, mapTheme: "auto" };
+function loadLayers(){
+  try{
+    var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
+    if(!raw) return DEFAULT_LAYERS;
+    var parsed = JSON.parse(raw);
+    return Object.assign({}, DEFAULT_LAYERS, parsed);
+  } catch(_){ return DEFAULT_LAYERS; }
+}
+function saveLayers(v){
+  try{ localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(v)); } catch(_){}
+}
 
 export default function MapTab({
   t, theme, authUser, profile,
@@ -32,12 +49,47 @@ export default function MapTab({
   var [selected,setSelected]=useState(null);
   var [selectedCourt,setSelectedCourt]=useState(null);
   var [zoneActivity,setZoneActivity]=useState({});
-  // Heat-map toggle — controls zone polygon fill + activity flame
-  // badges. Default on. Off lets the user read the basemap + courts
-  // without our color overlay.
-  var [heatVisible,setHeatVisible]=useState(true);
+  // Layer-panel state — independent toggles for the optional overlays
+  // plus a basemap-theme override. Zone colors are NOT here; they're
+  // permanent identifying chrome. Persisted to localStorage so a user's
+  // "minimalist dark map, courts only" preference survives reloads.
+  var [layers,setLayers]=useState(loadLayers);
+  var [layersOpen,setLayersOpen]=useState(false);
+  var layersBtnRef = useRef(null);
+  var layersPanelRef = useRef(null);
   var selectedZone = selected ? ZONE_BY_ID[selected] : null;
   var homeZone = profile && profile.home_zone;
+
+  // Persist + emit analytics whenever a layer flips. One handler covers
+  // all toggles to keep the track payload uniform.
+  function setLayer(key, value){
+    setLayers(function(prev){
+      var next = Object.assign({}, prev);
+      next[key] = value;
+      saveLayers(next);
+      return next;
+    });
+    track("map_layer_toggled", { layer: key, value: value });
+  }
+
+  // Close the layers panel on outside-click / Escape.
+  useEffect(function(){
+    if(!layersOpen) return;
+    function onDoc(e){
+      var b = layersBtnRef.current;
+      var p = layersPanelRef.current;
+      if(b && b.contains(e.target)) return;
+      if(p && p.contains(e.target)) return;
+      setLayersOpen(false);
+    }
+    function onKey(e){ if(e.key === "Escape") setLayersOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return function(){
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  },[layersOpen]);
 
   // Fire-and-forget map_opened once per mount. has_home_zone lets us
   // see whether users open the map because they haven't picked one yet
@@ -96,7 +148,10 @@ export default function MapTab({
         hovered={hovered} selected={selected}
         homeZone={homeZone}
         zoneActivity={zoneActivity}
-        heatVisible={heatVisible}
+        showHomes={layers.homes}
+        showCourts={layers.courts}
+        showActivity={layers.activity}
+        mapThemeOverride={layers.mapTheme}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
@@ -122,27 +177,108 @@ export default function MapTab({
         </div>
       </div>
 
-      {/* Heat-map toggle — top-right. Off = the colored zone fills +
-          flame badges hide so the basemap reads cleanly with just the
-          court markers + your home indicator. */}
+      {/* Map layers control — Nike Run-style. A small layers icon top-
+          right opens a card with independent switches for each optional
+          overlay (homes / courts / activity flames) plus a basemap
+          theme picker (auto/light/dark). Zone colors are NOT a toggle —
+          they're permanent identifying chrome. Preferences persist to
+          localStorage. */}
       <button
-        onClick={function(){ setHeatVisible(function(v){ return !v; }); }}
-        title={heatVisible ? "Hide heat (zone colors + activity)" : "Show heat (zone colors + activity)"}
-        aria-label={heatVisible ? "Hide heat map" : "Show heat map"}
+        ref={layersBtnRef}
+        onClick={function(){
+          setLayersOpen(function(v){
+            var next = !v;
+            if(next) track("map_layers_panel_opened", {});
+            return next;
+          });
+        }}
+        title="Map layers"
+        aria-label="Map layers"
+        aria-expanded={layersOpen}
         style={{
           position:"absolute", top:12, right:12, zIndex:500,
-          background: heatVisible ? t.bgCard : t.text,
-          color: heatVisible ? t.text : t.bg,
-          border:"1px solid "+(heatVisible ? t.border : t.text),
-          borderRadius:8, padding:"8px 12px",
-          fontSize:12, fontWeight:700, letterSpacing:"0.02em",
+          background: layersOpen ? t.text : t.bgCard,
+          color: layersOpen ? t.bg : t.text,
+          border:"1px solid "+(layersOpen ? t.text : t.border),
+          borderRadius:8, padding:"8px 10px",
           cursor:"pointer", boxShadow:"0 1px 4px rgba(0,0,0,0.08)",
-          display:"flex", alignItems:"center", gap:6,
+          display:"flex", alignItems:"center", justifyContent:"center",
           transition:"background 0.15s, color 0.15s",
         }}>
-        <span style={{ fontSize:13, lineHeight:1 }}>🔥</span>
-        <span>{heatVisible ? "Heat on" : "Heat off"}</span>
+        {/* Stacked-squares "layers" SVG — per icon rule, no emoji */}
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
+             stroke="currentColor" strokeWidth="1.5"
+             strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 2 L16 5.5 L9 9 L2 5.5 Z"/>
+          <path d="M2 9 L9 12.5 L16 9"/>
+          <path d="M2 12.5 L9 16 L16 12.5"/>
+        </svg>
       </button>
+
+      {layersOpen && (
+        <div ref={layersPanelRef}
+          style={{
+            position:"absolute", top:54, right:12, zIndex:600,
+            background: t.bgCard, color: t.text,
+            border: "1px solid " + t.border,
+            borderRadius: 12, padding: "12px 14px",
+            minWidth: 240, maxWidth: 280,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+            display:"flex", flexDirection:"column", gap:10,
+          }}>
+          <div style={{
+            fontSize:9, fontWeight:800, letterSpacing:"0.12em",
+            textTransform:"uppercase", color: t.textTertiary,
+          }}>
+            Map layers
+          </div>
+
+          <LayerRow t={t} label="Home indicators"
+            sub="Your home + others' home pins"
+            checked={layers.homes}
+            onChange={function(v){ setLayer("homes", v); }}/>
+          <LayerRow t={t} label="Court markers"
+            sub="Public courts in each zone"
+            checked={layers.courts}
+            onChange={function(v){ setLayer("courts", v); }}/>
+          <LayerRow t={t} label="Activity"
+            sub="Flame badges on busy zones (7d)"
+            checked={layers.activity}
+            onChange={function(v){ setLayer("activity", v); }}/>
+
+          <div style={{ height:1, background: t.border, margin:"4px 0" }}/>
+
+          <div style={{
+            fontSize:9, fontWeight:800, letterSpacing:"0.12em",
+            textTransform:"uppercase", color: t.textTertiary,
+          }}>
+            Map theme
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            {[
+              { id:"auto",  label:"Auto"  },
+              { id:"light", label:"Light" },
+              { id:"dark",  label:"Dark"  },
+            ].map(function(opt){
+              var active = layers.mapTheme === opt.id;
+              return (
+                <button key={opt.id}
+                  onClick={function(){ setLayer("mapTheme", opt.id); }}
+                  style={{
+                    flex:1, padding:"7px 8px", borderRadius:8,
+                    border:"1px solid "+(active ? t.text : t.border),
+                    background: active ? t.text : "transparent",
+                    color: active ? t.bg : t.text,
+                    fontSize:12, fontWeight:700, cursor:"pointer",
+                    transition:"background 0.15s, color 0.15s",
+                  }}>
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Hovered-zone card — promoted from a small chip to a card-style
           element now that the floating zone-name labels are gone. This
@@ -253,5 +389,41 @@ export default function MapTab({
         }}
         onClose={function(){ setSelectedCourt(null); }}/>
     </div>
+  );
+}
+
+// Compact toggle row used inside the layers panel. Whole row is the
+// click target so finger-tap on mobile is forgiving.
+function LayerRow({ t, label, sub, checked, onChange }){
+  return (
+    <button type="button"
+      onClick={function(){ onChange(!checked); }}
+      style={{
+        display:"flex", alignItems:"center", gap:10,
+        padding:"6px 0", background:"transparent",
+        border:"none", cursor:"pointer", textAlign:"left",
+        color: t.text,
+      }}>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:13, fontWeight:600, letterSpacing:"-0.01em" }}>{label}</div>
+        {sub && (
+          <div style={{ fontSize:11, color:t.textTertiary, marginTop:1 }}>{sub}</div>
+        )}
+      </div>
+      <span aria-hidden="true"
+        style={{
+          flex:"0 0 auto",
+          width:34, height:20, borderRadius:12, position:"relative",
+          background: checked ? "#10b981" : t.border,
+          transition:"background 0.15s",
+        }}>
+        <span style={{
+          position:"absolute", top:2, left: checked ? 16 : 2,
+          width:16, height:16, borderRadius:"50%",
+          background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
+          transition:"left 0.15s",
+        }}/>
+      </span>
+    </button>
   );
 }
