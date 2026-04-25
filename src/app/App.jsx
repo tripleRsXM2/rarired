@@ -381,6 +381,40 @@ export default function App(){
   // ComposeMessageModal we render below the routes.
   var [composeTarget,setComposeTarget]=useState(null);
 
+  // Play Match wizard direct-send (Option A — background send).
+  // The wizard already collected partners + venue + when + draft,
+  // so there's nothing for the user to add in a compose modal. Send
+  // each partner the draft as its own 1-on-1 DM, then toast success
+  // and let the user stay on the map. Mirrors ComposeMessageModal's
+  // serial-loop pattern so partial failures are visible.
+  async function onPlayMatchSend(partners, ctx){
+    if(!Array.isArray(partners) || !partners.length || !dms) return;
+    var draft = (ctx && ctx.draft) || "";
+    if(!draft) return;
+    var slot = (ctx && (ctx.venue || ctx.date || ctx.time))
+      ? { venue: ctx.venue, date: ctx.date || "", time: ctx.time || "" }
+      : null;
+    var failed = 0;
+    for(var i = 0; i < partners.length; i++){
+      var p = partners[i];
+      if(!p || !p.id){ failed++; continue; }
+      try {
+        var opened = await dms.openConversationWith(p, { slot: slot, draft: draft });
+        if(opened && opened.error){ failed++; continue; }
+        var sent = await dms.sendMessage(draft);
+        if(sent && sent.error){ failed++; }
+      } catch(_){ failed++; }
+    }
+    var ok = partners.length - failed;
+    if(ok > 0 && failed === 0){
+      toast(ok === 1 ? "Invite sent ✓" : ("Invite sent to " + ok + " players ✓"), "success");
+    } else if(ok > 0 && failed > 0){
+      toast("Sent to " + ok + " · " + failed + " failed", "info");
+    } else {
+      toast("Couldn't send invite — try again", "error");
+    }
+  }
+
   // Notif types that always carry a proposal — stale local match needs a DB refresh.
   var PROPOSAL_NOTIF_TYPES=new Set(['match_disputed','match_correction_requested','match_counter_proposed']);
 
@@ -669,6 +703,7 @@ export default function App(){
               onOpenProfile={openProfile}
               openChallenge={openChallenge}
               blockedUserIds={(social.blockedUsers || []).map(function(b){return b.id;})}
+              onPlayMatchSend={onPlayMatchSend}
               onMessagePlayer={function(partnerOrPartners, slotOpts){
                 // Accepts either a single partner (legacy call path) or
                 // an array of partners (new zone-panel multi-select,

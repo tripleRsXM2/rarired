@@ -54,6 +54,12 @@ export default function MapTab({
   // on a player row. We forward partner + slot to dms.openConversationWith
   // and then switch them to the messages tab. Parent (App.jsx) provides.
   onMessagePlayer,
+  // Play Match wizard direct-send (Option A — stay-on-map flow).
+  // When provided the wizard's "Send invite" closes the wizard and
+  // dispatches the messages in the background via this prop, then
+  // surfaces a toast. Falls back to onMessagePlayer (which opens the
+  // inline compose modal) when not provided.
+  onPlayMatchSend,
   // Asymmetric block — viewer's blocked-user list is threaded through
   // every player-fetch on the map so blocked users never render.
   blockedUserIds,
@@ -505,7 +511,14 @@ export default function MapTab({
         initialZoneId={selected}
         onClose={function(){ setWizardOpen(false); }}
         onSendInvite={function(partners, ctx){
-          if(onMessagePlayer && partners && partners.length){
+          if(!partners || !partners.length){ setWizardOpen(false); return; }
+          // Prefer the background-send path (Option A) when wired —
+          // closes the wizard immediately, sends in the background,
+          // toasts success, user stays on the map. Falls back to
+          // onMessagePlayer (compose modal) for the legacy path.
+          if(onPlayMatchSend){
+            onPlayMatchSend(partners, ctx);
+          } else if(onMessagePlayer){
             onMessagePlayer(partners, ctx);
           }
           setWizardOpen(false);
