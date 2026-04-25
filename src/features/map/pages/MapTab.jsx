@@ -427,22 +427,21 @@ export default function MapTab({
           zIndex: 550,
           // Iconic circle — Strava/Nike/Apple Voice Memos pattern.
           // Flat solid fill, single soft drop shadow, no gradient,
-          // no inner highlights. Big enough to feel primary (80px)
-          // without eating the map. Black instead of orange because
-          // Eastern Suburbs zone is orange — semantic collision. Black
-          // is the unambiguous "action layer" colour against every
-          // zone palette + Apple's iconic primary-button choice.
-          width: 80, height: 80,
+          // no inner highlights. Theme-adaptive: dark CTA on light
+          // basemap, light CTA on dark basemap — so contrast stays
+          // constant and the button never gets lost. Apple's primary-
+          // button pattern.
+          width: 88, height: 88,
           borderRadius: "50%",
           border: "none",
-          background: "#14110f",
-          color: "#fff",
+          background: mapDark ? "#fff" : "#14110f",
+          color: mapDark ? "#14110f" : "#fff",
           fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
           cursor: "pointer",
-          // Single soft shadow for elevation. Subtle warm tint at
-          // the bottom so it doesn't feel like a clinical black puck.
+          // Single soft shadow for elevation. Always neutral dark —
+          // works on either fill colour.
           boxShadow:
-            "0 10px 24px rgba(20,18,17,0.32), " +
+            "0 10px 26px rgba(20,18,17,0.34), " +
             "0 3px 6px rgba(20,18,17,0.20)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",

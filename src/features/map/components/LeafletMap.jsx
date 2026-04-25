@@ -252,18 +252,19 @@ export default function LeafletMap({
       maxClusterRadius: 60,
       iconCreateFunction: function (cluster) {
         var n = cluster.getChildCount();
-        // Modern cluster bubble — solid dark fill, white tabular
-        // number, no border, soft shadow. box-sizing:border-box so
-        // Leaflet's iconSize matches the rendered footprint exactly
-        // (no 1px halo of mis-alignment). Smaller too (28 vs 34) so
-        // mobile doesn't feel cramped.
+        // Cluster bubble — recessive WHITE fill with dark text so
+        // the Play Match CTA stays the only dominant dark element on
+        // the map (proper visual hierarchy: CTA = primary action,
+        // clusters = data labels). 1px hairline ring keeps it
+        // readable on light basemaps. box-sizing:border-box so the
+        // rendered footprint matches Leaflet's iconSize exactly.
         return L.divIcon({
           className: "cs-court-cluster",
           html:
             '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;' +
-              'background:#14110f;color:#fff;' +
+              'background:#fff;color:#14110f;' +
               'display:flex;align-items:center;justify-content:center;' +
-              'box-shadow:0 2px 8px rgba(0,0,0,0.22);' +
+              'box-shadow:0 2px 8px rgba(0,0,0,0.22),0 0 0 1px rgba(20,18,17,0.18);' +
               'font:700 12px/1 ui-sans-serif,system-ui,sans-serif;' +
               'font-variant-numeric:tabular-nums;letter-spacing:-0.02em">' + n + '</div>',
           iconSize: [28, 28], iconAnchor: [14, 14],
