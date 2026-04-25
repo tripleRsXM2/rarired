@@ -93,6 +93,21 @@ export default function Providers({ t, theme, children }){
       ".cs-map-frame{position:relative;overflow:hidden;min-height:360px;isolation:isolate;" +
         "height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))}",
 
+      // Leaflet attribution — small, subtle, mobile-safe. Default
+      // styling is bulky (12px white pill) and on phones it gets
+      // cropped behind the bottom tab bar. Override: small font,
+      // semi-transparent bg, lift it above the iOS safe-area + the
+      // app's bottom nav so it never gets clipped.
+      ".leaflet-control-attribution{font-size:9.5px!important;padding:1px 6px!important;" +
+        "background:rgba(255,255,255,0.72)!important;color:#555!important;" +
+        "letter-spacing:0.01em;line-height:1.4;border-radius:4px 0 0 0;" +
+        "margin:0 0 calc(env(safe-area-inset-bottom,0px) + 4px) 0!important}",
+      ".leaflet-control-attribution a{color:#1f6feb!important;text-decoration:none}",
+      // On mobile (no hover, narrow viewport) the bottom tab bar
+      // sits above the map → push the attribution up clear of it.
+      "@media(max-width:1023px){.leaflet-control-attribution{" +
+        "margin-bottom:calc(env(safe-area-inset-bottom,0px) + 6px)!important}}",
+
       // ── Feed card ─────────────────────────────────────────────────────────
       ".cs-card{transition:border-color 0.15s ease,box-shadow 0.15s ease}",
       "@media(hover:hover){.cs-card:hover{border-color:"+t.borderStrong+"!important}}",
