@@ -682,6 +682,10 @@ export default function TournamentsTab(props) {
             friends={friends}
             openProfile={openProfilePreview}
             toast={props.toast}
+            /* Slice 4 — viewer's history (for league-scoped H2H +
+               next-opponent suggestion) and challenge composer. */
+            history={props.history}
+            openChallenge={props.openChallenge}
           />
         </div>
       )}

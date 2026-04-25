@@ -652,6 +652,10 @@ export default function App(){
               /* Module 7 — simple id→name index for league pills on feed cards */
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
               onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
+              /* Slice 1 (design overhaul) — Home Leagues strip */
+              myLeagues={leagues.leagues}
+              leagueDetailCache={leagues.detailCache}
+              loadLeagueDetail={leagues.loadLeagueDetail}
             />
           )}
           {tab==="map"&&(
@@ -704,6 +708,10 @@ export default function App(){
             openChallenge={openChallenge}
             openConvertToMatch={openConvertToMatch}
             toast={toast}
+            /* Slice 4 (design overhaul) — Leagues retention surfaces
+               (next opponent / rivalry / standings deltas) read the
+               viewer's match history filtered by league_id. */
+            history={matchHistory.history}
           />
         )}
         {tab==="people"&&(
@@ -751,6 +759,9 @@ export default function App(){
             openProfile={openProfile}
             openChallenge={openChallenge}
             myLeagues={leagues.leagues}
+            leagueDetailCache={leagues.detailCache}
+            loadLeagueDetail={leagues.loadLeagueDetail}
+            onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
             onOpenLeagues={function(){navigate("/tournaments/leagues");}}
           />
         )}

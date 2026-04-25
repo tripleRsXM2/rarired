@@ -3,6 +3,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { COURTS } from "../../map/data/courts.js";
 import { fetchOpponentActiveLeagueIds } from "../../leagues/services/leagueService.js";
+import MatchFinishMoment from "./MatchFinishMoment.jsx";
 
 // Sort COURTS so venues in the viewer's own suburb float to the top, then
 // same-zone (implicit "nearby" bucket from the map), then alphabetical. This
@@ -51,6 +52,10 @@ export default function ScoreModal({
   // Retirement / incomplete matches are valid cases where sets don't predict
   // the stored winner — we don't want to hard-block.
   var [mismatchAck,setMismatchAck]=useState(false);
+  // Slice 3 (design overhaul): finish-moment state. When non-null, the
+  // modal swaps the form body for a brief acknowledgment card that
+  // auto-dismisses after ~1.5s. Shape: { status, result, opponentName }.
+  var [finish, setFinish] = useState(null);
 
   // Module 7.5: opponent's active league memberships (subset of viewer's
   // leagues). Refetched whenever the linked opponent changes — used by the
@@ -130,7 +135,13 @@ export default function ScoreModal({
         setSaveError(typeof resubRes.error==='string'?resubRes.error:"Could not resubmit — please try again.");
         return;
       }
-      setScoreModal(null);
+      // Slice 3: resubmit always lands as pending_confirmation — show
+      // the finish moment so the user understands the next step.
+      setFinish({
+        status: "pending_confirmation",
+        result: scoreDraft.result,
+        opponentName: scoreModal.oppName || (scoreModal.match && scoreModal.match.oppName) || "your opponent",
+      });
       return;
     }
 
@@ -160,19 +171,50 @@ export default function ScoreModal({
       recordResult(scoreModal.tournId,scoreModal.roundIdx,scoreModal.matchId,winnerId);
     }
 
+    // Slice 3: pop into the finish moment. The card auto-dismisses
+    // after ~1.5s (handled inside MatchFinishMoment), at which point
+    // closeFromFinish() runs and the modal closes for real.
+    setFinish({
+      status: res && res.status ? res.status : "confirmed",
+      result: scoreDraft.result,
+      opponentName: oppName,
+    });
+  }
+
+  function closeFromFinish() {
+    setFinish(null);
     setScoreModal(null);
     setCasualOppName("");
     setCasualOppId(null);
   }
 
+  // Slice 3: when the finish moment is up we deliberately swallow the
+  // backdrop-click so the auto-dismiss timer is the only path to close.
+  // This keeps the moment from feeling abrupt if the user taps too soon.
+  function backdropClick() {
+    if (finish) return;
+    setScoreModal(null);
+    if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
+  }
+
   return (
     <div
-      onClick={function(){setScoreModal(null);if(!isResubmit){setCasualOppName("");setCasualOppId(null);}}}
+      onClick={backdropClick}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:"0 16px"}}>
       <div
         onClick={function(e){e.stopPropagation();}}
         className="pop"
         style={{background:t.modalBg,border:"1px solid "+t.border,borderRadius:16,padding:"28px 24px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
+        {finish ? (
+          <MatchFinishMoment
+            t={t}
+            status={finish.status}
+            result={finish.result}
+            opponentName={finish.opponentName}
+            onClose={closeFromFinish}
+          />
+        ) : (
+        <>
         <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>{isResubmit?"Edit & Resubmit":"Log Result"}</h2>
 
         {/* Resubmit mode: locked opponent */}
@@ -477,6 +519,8 @@ export default function ScoreModal({
             {saving?"Saving…":isResubmit?"Resubmit for confirmation":(isVerified&&scoreModal.casual?"Submit for confirmation":"Save result")}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

@@ -101,16 +101,18 @@ export function usePacts(opts) {
   // ── Periodic expiry sweep ───────────────────────────────────────────
   useEffect(function () {
     if (!authUser) return;
-    var timer = setInterval(function () {
+    // Run the server-side sweep first (covers every lifecycle stage),
+    // then the client fallback, then re-load. We use async/await rather
+    // than .catch/.finally because the service helpers return raw
+    // Supabase query builders, which are thenable but don't expose
+    // .catch directly — chaining .catch() on them throws TypeError.
+    async function sweep() {
       if (document.hidden) return;
-      // Run the server-side sweep first (covers every lifecycle stage),
-      // then the client fallback, then re-load.
-      P.sweepStalePacts().catch(function(){}).finally(function () {
-        P.expireProposedPacts(authUser.id).then(function () {
-          loadPacts(authUser.id);
-        });
-      });
-    }, 60 * 1000);
+      try { await P.sweepStalePacts(); } catch (e) {}
+      try { await P.expireProposedPacts(authUser.id); } catch (e) {}
+      loadPacts(authUser.id);
+    }
+    var timer = setInterval(sweep, 60 * 1000);
     return function () { clearInterval(timer); };
   }, [authUser && authUser.id, loadPacts]);
 

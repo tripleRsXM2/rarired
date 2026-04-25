@@ -16,6 +16,8 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import CreateLeagueModal from "./CreateLeagueModal.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
+import LeagueNextOpponent from "./LeagueNextOpponent.jsx";
+import LeagueRivalryCallout from "./LeagueRivalryCallout.jsx";
 
 export default function LeaguesPanel({
   t, authUser,
@@ -31,6 +33,10 @@ export default function LeaguesPanel({
   friends,
   openProfile,
   toast,
+  // Slice 4 (design overhaul) — viewer history + challenge composer
+  // for the new retention surfaces inside the league detail view.
+  history,
+  openChallenge,
 }) {
   var [selectedId, setSelectedId]   = useState(null);
   var [showCreate, setShowCreate]   = useState(false);
@@ -86,6 +92,8 @@ export default function LeaguesPanel({
         friends={friends}
         openProfile={openProfile}
         toast={toast}
+        history={history}
+        openChallenge={openChallenge}
       />
     );
   }
@@ -270,6 +278,9 @@ function LeagueDetailView({
   t, authUser, league, detail, profileMap,
   onBack, onInvite, onRemove, onArchive, onRespond,
   friends, openProfile, toast,
+  // Slice 4: viewer's match history + challenge composer for the
+  // new retention surfaces (next opponent / rivalry callout).
+  history, openChallenge,
 }) {
   var [inviteOpen, setInviteOpen] = useState(false);
   var myMembership = (detail && detail.members || []).find(function (m) { return m.user_id === authUser.id; });
@@ -342,8 +353,29 @@ function LeagueDetailView({
         )}
       </div>
 
+      {/* Slice 4 — retention card: most-overdue league opponent */}
+      <LeagueNextOpponent
+        t={t}
+        authUser={authUser}
+        league={league}
+        detail={detail}
+        profileMap={profileMap}
+        history={history}
+        openChallenge={openChallenge}
+      />
+
+      {/* Slice 4 — retention callout: closest H2H rivalry within league */}
+      <LeagueRivalryCallout
+        t={t}
+        authUser={authUser}
+        league={league}
+        profileMap={profileMap}
+        history={history}
+        openChallenge={openChallenge}
+      />
+
       {/* Standings table */}
-      <StandingsTable t={t} detail={detail} profileMap={profileMap} openProfile={openProfile} />
+      <StandingsTable t={t} league={league} detail={detail} profileMap={profileMap} openProfile={openProfile} />
 
       {/* Members list */}
       <MembersList
@@ -380,8 +412,35 @@ function formatTiebreak(tb) {
 }
 
 // ── StandingsTable ────────────────────────────────────────────────────────────
-function StandingsTable({ t, detail, profileMap, openProfile }) {
+// Slice 4: derive points earned per user in the last 7 days from the
+// recent-matches strip we already load for this league. Not a true
+// "rank delta" (that would need a snapshot table — see open question
+// #2 in design-direction.md), but it answers the design intent
+// "who climbed/dropped" by surfacing this-week movement. Falls back
+// to {} when the league hasn't loaded recent yet.
+function weeklyPointsByUser(recent, league) {
+  var out = {};
+  if (!recent || !league) return out;
+  var winPts  = league.win_points  != null ? league.win_points  : 3;
+  var lossPts = league.loss_points != null ? league.loss_points : 0;
+  var oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  recent.forEach(function (m) {
+    if (m.status !== "confirmed") return;
+    var ts = m.confirmed_at ? new Date(m.confirmed_at).getTime() : 0;
+    if (ts < oneWeekAgo) return;
+    var submitterWon = m.result === "win";
+    var winnerId = submitterWon ? m.user_id : m.opponent_id;
+    var loserId  = submitterWon ? m.opponent_id : m.user_id;
+    if (winnerId) out[winnerId] = (out[winnerId] || 0) + winPts;
+    if (loserId)  out[loserId]  = (out[loserId]  || 0) + lossPts;
+  });
+  return out;
+}
+
+function StandingsTable({ t, league, detail, profileMap, openProfile }) {
   var rows = detail && detail.standings || [];
+  var recent = detail && detail.recent || [];
+  var weekly = weeklyPointsByUser(recent, league);
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
@@ -420,9 +479,26 @@ function StandingsTable({ t, detail, profileMap, openProfile }) {
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
                 <PlayerAvatar name={p.name} avatar={p.avatar} profile={p} size={22}/>
-                <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                   {p.name}
                 </span>
+                {/* Slice 4 — "this week" pill: only renders when the
+                    player earned points this past week. Calm hierarchy:
+                    no pill when nothing's happened. */}
+                {weekly[row.user_id] > 0 && (
+                  <span
+                    title={"+" + weekly[row.user_id] + " league points this week"}
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 9, fontWeight: 700,
+                      color: t.green, background: t.greenSubtle,
+                      border: "1px solid " + t.green + "33",
+                      padding: "1px 5px", letterSpacing: "0.04em",
+                      fontVariantNumeric: "tabular-nums",
+                    }}>
+                    +{weekly[row.user_id]}
+                  </span>
+                )}
               </span>
               <span style={{ textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{row.played}</span>
               <span style={{ textAlign: "center", fontVariantNumeric: "tabular-nums" }}>

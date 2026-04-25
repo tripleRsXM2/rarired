@@ -51,14 +51,22 @@ export function computeMostPlayed(history, myId, limit) {
   if (!history || !history.length) return [];
   var buckets = {};
   history.filter(isConfirmed).forEach(function (m) {
-    // Prefer opponent_id (real user) over oppName (freetext); fall back to
-    // a name-based key so freetext opponents still group correctly.
-    var key = m.opponent_id || ("name:" + (m.oppName || "unknown"));
-    if (key === myId) return;
+    // Determine the OTHER side from the viewer's POV. For tagged matches
+    // (m.isTagged) the viewer IS m.opponent_id, so the actual opponent is
+    // the submitter (m.submitterId) and their display name is m.friendName
+    // (loadHistory enriches that field on tagged rows). For own matches
+    // the opponent is m.opponent_id with display m.oppName.
+    var oppId   = m.isTagged ? m.submitterId : m.opponent_id;
+    var oppName = m.isTagged ? (m.friendName || m.oppName || "Opponent") : (m.oppName || "Unknown");
+    // Prefer the real user id over freetext name as the bucket key so two
+    // matches against the same person don't split when one row was logged
+    // before they were linked.
+    var key = oppId || ("name:" + oppName);
+    if (!key || key === myId) return;
     if (!buckets[key]) {
       buckets[key] = {
-        opponentId: m.opponent_id || null,
-        opponentName: m.oppName || "Unknown",
+        opponentId: oppId || null,
+        opponentName: oppName,
         plays: 0, wins: 0, losses: 0,
         lastDate: m.rawDate || null,
       };

@@ -119,6 +119,34 @@ export default function Providers({ t, theme, children }){
       // ── Feed card ─────────────────────────────────────────────────────────
       ".cs-card{transition:border-color 0.15s ease,box-shadow 0.15s ease}",
       "@media(hover:hover){.cs-card:hover{border-color:"+t.borderStrong+"!important}}",
+      // Slice 5 (design overhaul) — feed-card vertical-spacing pass.
+      // Default = mobile = tight (10px between cards, slim header gutter).
+      // Desktop ≥1024px restores the existing rhythm. Inline-style
+      // overrides require !important here.
+      ".cs-feed-card{margin-bottom:10px!important}",
+      // Padding-bottom on the header gives the avatar (34px circle)
+      // breathing room before it meets the scoreboard's borderTop
+      // hairline. Without it, the hairline cuts visually through the
+      // bottom of the avatar circle.
+      ".cs-feed-card .cs-feed-card-header{padding:12px 14px 12px!important}",
+      ".cs-feed-card .cs-feed-card-footer{padding:8px 14px!important}",
+      "@media(min-width:1024px){",
+        ".cs-feed-card{margin-bottom:14px!important}",
+        ".cs-feed-card .cs-feed-card-header{padding:14px 16px 14px!important}",
+        ".cs-feed-card .cs-feed-card-footer{padding:10px 16px!important}",
+      "}",
+      // v2 visual reset — when the full-width-feed wrapper is active
+      // (Home "All activity" expanded), FeedCards on mobile go edge-
+      // to-edge: no border-radius, no left/right border, hairline
+      // between cards instead of a margin gap. Restored to normal
+      // styling at desktop ≥1024px so the constrained center column
+      // keeps its breathing room.
+      ".cs-fullbleed-feed-wrap{padding-left:0!important;padding-right:0!important}",
+      ".cs-fullbleed-feed-wrap .cs-feed-card{border-left:none!important;border-right:none!important;border-radius:0!important;margin-bottom:0!important}",
+      "@media(min-width:1024px){",
+        ".cs-fullbleed-feed-wrap{padding-left:clamp(20px,4vw,32px)!important;padding-right:clamp(20px,4vw,32px)!important}",
+        ".cs-fullbleed-feed-wrap .cs-feed-card{border-left:1px solid "+t.border+"!important;border-right:1px solid "+t.border+"!important;border-radius:10px!important;margin-bottom:14px!important}",
+      "}",
 
       // ── Sidebar nav items ─────────────────────────────────────────────────
       ".cs-nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;",
