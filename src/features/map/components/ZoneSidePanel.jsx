@@ -276,45 +276,35 @@ export default function ZoneSidePanel({
         {courts.length === 0 ? (
           <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:18 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:2, marginBottom:18 }}>
             {courts.map(function (c) {
               var selected = selectedCourt === c.name;
+              // Flat row — no border, no card chrome. Selection state
+              // = soft accent-tinted bg filling the whole row + bolded
+              // accent-coloured text. Booking icon ghost on the right
+              // with no divider line; just whitespace. Spotify x Apple
+              // Maps hybrid. Distinct from the underline-tabs scope
+              // picker so the two controls don't visually merge.
               return (
                 <div key={c.name} style={{
-                  display:"flex", alignItems:"stretch", gap:0,
-                  borderRadius:8,
-                  border:"1px solid "+(selected ? t.accent : t.border),
-                  background: selected ? t.accentSubtle : t.bgTertiary,
-                  overflow:"hidden",
-                  transition:"background 0.15s, border-color 0.15s",
+                  display:"flex", alignItems:"center", gap:0,
+                  borderRadius: 8,
+                  background: selected ? t.accentSubtle : "transparent",
+                  transition:"background 0.15s",
                 }}>
                   <button
                     onClick={function () { toggleCourt(c); }}
                     style={{
                       flex:1, minWidth:0, textAlign:"left",
-                      padding:"9px 11px", background:"transparent", border:"none",
+                      padding:"7px 10px", background:"transparent", border:"none",
                       color: selected ? t.accent : t.text,
-                      fontSize:12, fontWeight: selected ? 700 : 500,
+                      fontSize: 12.5,
+                      fontWeight: selected ? 700 : 500,
+                      letterSpacing: "-0.01em",
                       cursor:"pointer",
-                      display:"flex", alignItems:"center", gap:8,
+                      whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
                     }}>
-                    <span style={{
-                      width:14, height:14, borderRadius:"50%",
-                      border:"1.5px solid "+(selected ? t.accent : t.border),
-                      background: selected ? t.accent : "transparent",
-                      flexShrink:0, position:"relative",
-                    }}>
-                      {selected && (
-                        <span style={{
-                          position:"absolute", inset:0, display:"flex",
-                          alignItems:"center", justifyContent:"center",
-                          color:"#fff", fontSize:10, fontWeight:900, lineHeight:1,
-                        }}>✓</span>
-                      )}
-                    </span>
-                    <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                      {c.name}
-                    </span>
+                    {c.name}
                   </button>
                   {c.bookingUrl && (
                     <a href={c.bookingUrl}
@@ -324,10 +314,15 @@ export default function ZoneSidePanel({
                       title={"Book " + c.name + " (opens in a new tab)"}
                       style={{
                         display:"inline-flex", alignItems:"center", justifyContent:"center",
-                        padding:"0 12px", borderLeft:"1px solid "+t.border,
-                        color:t.accent, textDecoration:"none", flexShrink:0,
-                      }}>
-                      {NAV_ICONS.external(14)}
+                        width: 28, height: 28, marginRight: 4,
+                        color: selected ? t.accent : t.textTertiary,
+                        textDecoration:"none", flexShrink:0,
+                        opacity: selected ? 1 : 0.7,
+                        transition:"opacity 0.15s, color 0.15s",
+                      }}
+                      onMouseEnter={function(e){ e.currentTarget.style.opacity = 1; e.currentTarget.style.color = t.accent; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.opacity = selected ? 1 : 0.7; e.currentTarget.style.color = selected ? t.accent : t.textTertiary; }}>
+                      {NAV_ICONS.external(13)}
                     </a>
                   )}
                 </div>
