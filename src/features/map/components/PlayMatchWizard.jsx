@@ -735,11 +735,19 @@ export default function PlayMatchWizard({
                     </div>
                   )}
 
-                  {/* Time of day — optional cue. Defaults to Anytime
-                      (no time mention in the draft). Always visible
-                      so users notice the affordance without an extra
-                      "advanced options" hop. */}
-                  <div style={{ display:"flex", gap: 6, flexWrap:"wrap", marginTop: 10 }}>
+                  {/* Time of day — sleek iOS-style segmented control.
+                      Track + sliding active card, distinct from the
+                      pill chip row above so the two controls don't
+                      blur into "one big chip wall". Defaults to
+                      Anytime (no time mention in draft). */}
+                  <div style={{
+                    display:"flex",
+                    marginTop: 12,
+                    padding: 3,
+                    borderRadius: 12,
+                    background: hexToRgba(t.text, 0.06),
+                    gap: 2,
+                  }}>
                     {[
                       { id:"anytime",   label:"Anytime"   },
                       { id:"morning",   label:"Morning"   },
@@ -751,13 +759,17 @@ export default function PlayMatchWizard({
                         <button key={opt.id} type="button"
                           onClick={function(){ setTimeOfDay(opt.id); }}
                           style={{
-                            padding: "7px 13px", borderRadius: 999,
-                            background: on ? t.text : hexToRgba(t.bgCard, 0.78),
-                            color: on ? t.bg : t.textSecondary,
+                            flex: 1,
+                            padding: "7px 6px",
+                            borderRadius: 9,
+                            background: on ? t.bgCard : "transparent",
+                            color: on ? t.text : t.textSecondary,
                             border:"none", cursor:"pointer",
-                            fontSize: 11.5, fontWeight: 700,
-                            letterSpacing:"0.01em",
-                            transition: "background 0.15s, color 0.15s",
+                            fontSize: 11.5,
+                            fontWeight: on ? 700 : 500,
+                            letterSpacing:"-0.005em",
+                            boxShadow: on ? "0 1px 2px rgba(20,18,17,0.10), 0 0 0 0.5px rgba(20,18,17,0.05)" : "none",
+                            transition: "background 0.18s, color 0.15s, box-shadow 0.18s, font-weight 0.15s",
                           }}>
                           {opt.label}
                         </button>
