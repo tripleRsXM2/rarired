@@ -132,4 +132,25 @@ export const RATING_INFO_SECTIONS = [
       "Losing to a lower-rated player can cost more than losing to a stronger player. The bigger the upset, the bigger the rating swing.",
     ],
   },
+  {
+    id: "match-format-weight",
+    eyebrow: "11",
+    title: "Match format weight",
+    body: [
+      "Not every ranked match changes your rating equally. A full best-of-3 carries more weight than a single set. One completed set can still count, but at reduced impact. Time-limited or unfinished scores don't affect rating.",
+      [
+        "Best-of-3, finished in 3 sets — full + 10% bonus",
+        "Best-of-3, finished in 2 sets — full weight",
+        "Best-of-3 with match-tiebreak — 85%",
+        "One completed set — 60%",
+        "Time-limited or unfinished — 0% (casual only)",
+      ],
+    ],
+  },
 ];
+
+// Inline hint shown in ScoreModal when the user is logging a one-set
+// ranked match. Centralised here so the copy stays consistent if the
+// reduced-weight rule ever changes.
+export const ONE_SET_RATING_NOTICE =
+  "One-set ranked matches count toward your rating at reduced weight (about 60% of a full best-of-3).";

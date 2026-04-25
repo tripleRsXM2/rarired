@@ -138,6 +138,36 @@ Example at K=24: equal ratings → ±12. 1100 beats 1500 → +21 / -21. 1500 bea
 
 A user picks one of these levels during onboarding. The `initialize_rating(p_skill text)` SECURITY DEFINER RPC validates the choice and writes `starting_skill_level` + `initial_rating` + `ranking_points` + `skill` in one go. Errors with "already initialized" if called twice.
 
+#### Match-format weight (Module 7.7 supplement)
+
+Not every ranked match changes the rating equally. After expected-score and per-player K, a **format weight** is applied:
+
+| Sets played | Format | Weight |
+|---|---|---|
+| 1 | One-set ranked | **0.60** |
+| 2 (one player won both) | Best-of-3, finished in 2 sets | **1.00** |
+| 3 (last set is normal) | Best-of-3, finished in 3 sets | **1.10** |
+| 3 (last set is match-tiebreak: hi ≥ 10, win-by-2) | Best-of-3 with super-tiebreak final | **0.85** |
+| anything incomplete / corrupted | — | **0** (defensive) |
+
+So:
+```
+weightedDelta = round(K * (actual - expected) * weight)
+```
+
+A one-set ranked 6-4 between two 1500-rated players moves both ratings ±7 instead of ±12. A best-of-3 that goes the distance moves them ±13 instead of ±12 (more sets played = more signal). A match-tiebreak final-set is shorter than a normal third set, so it sits at 0.85.
+
+The weight is **inferred** from the sets jsonb, not stored on `match_history` — there's no `match_format` column. The validator already accepts only the four valid completed shapes, so by the time `apply_match_outcome` runs we just classify. Inference logic mirrors between SQL (`_match_format_weight(p_sets jsonb)`) and JS (`getMatchFormatWeight(sets)` in `ratingSystem.js`).
+
+One-set ranked matches still require everything a best-of-3 requires:
+- valid completed set score (6-0..6-4, 7-5, 7-6)
+- both players are real CourtSync users
+- opponent confirmation
+- not disputed / voided / expired
+- not time-limited / retired
+
+The 5-3 path remains **invalid** as a completed ranked match — it can only be saved as casual time-limited (which doesn't affect rating).
+
 #### Casual matches and other exclusions
 
 `apply_match_outcome` only touches rating when **all** of the following are true:
@@ -371,4 +401,5 @@ See `docs/leagues-and-seasons.md` for the full spec.
 - v5 — Match-type separation (2026-04-25). Made the ranked-vs-casual distinction explicit via `match_history.match_type` ('ranked' | 'casual') instead of inferring it from `tourn_name` + `opponent_id`. Server `apply_match_outcome` short-circuits for casual matches — single point of control for "what affects Elo". `validate_match_league` now requires `match_type='ranked'` for league matches. Backfilled every legacy row via the prior heuristic so player Elo / W/L numbers are unchanged.
 - v6 — League mode (2026-04-25). Replaced the hardcoded `match_type='ranked'` requirement on league matches with a per-league `leagues.mode` column (`'ranked'` | `'casual'`). Trigger now compares `match_type` against `league.mode`, allowing casual leagues to host casual matches with their own per-league standings (no global Elo impact). ScoreModal filters its league selector by mode + viewer + opponent membership; CreateLeagueModal exposes the mode choice (locked at creation).
 - v7 — Score validity (2026-04-25, Module 7.6). Added a three-layer score validator: pure client utility (`tennisScoreValidation.js`, 74 unit tests, canonical rules), service-layer guard (`submitMatch` / `resubmitMatch` re-run the validator after match-type clamping), and DB BEFORE-INSERT trigger (`validate_match_score`, mirrors the rules in PL/pgSQL, strict for ranked confirmed/pending, permissive for casual). Introduced explicit `completion_type` UI toggle (Completed / Time-limited / Retired) on casual matches so partial scores can be intentionally logged. Ranked attempts with partial scores surface a "Save as casual time-limited" CTA instead of being silently downgraded or silently rejected. League `match_format` and `tiebreak_format` columns now drive validator behaviour (final-set match-tiebreak gated to `super_tiebreak_final` leagues).
+- v8.1 — Match-format weight (2026-04-27, Module 7.7 supplement). Added explicit format-weight multipliers to rating math: one-set 0.60, best-of-3 in 2 sets 1.00, best-of-3 in 3 sets 1.10, best-of-3 with super-tiebreak final 0.85, incomplete 0. Weight is **inferred** from the sets jsonb (no new column on `match_history`); JS classifier `getMatchFormatWeight(sets)` mirrors SQL `_match_format_weight(p_sets jsonb)`. `apply_match_outcome` applies `round(K * (actual - expected) * weight)`. UI: `ScoreModal` surfaces a "ONE SET" notice with the reduced-weight copy for ranked single-set submissions; `RatingInfoModal` gains an 11th section "Match format weight" with the same table. Docs updated. One-set ranked is now formally valid + rating-eligible; the 5-3 path stays casual-only.
 - v8 — CourtSync Rating foundation (2026-04-27, Module 7.7). Renamed "Ranking points" → "CourtSync Rating" in user-facing copy (NOT UTR / NOT a federation ranking). Replaced the flat 1000-for-everyone initial rating with six per-skill bands (800 / 1000 / 1200 / 1400 / 1600 / 1800). Replaced the 20-match settled period with a 5-match calibration window using a 40 / 32 / 24 K-table (provisional 0–2 / provisional 3–4 / established 5+). Each player still applies their own K, so opponent-strength asymmetry stays intact (upset wins gain more, expected wins gain less, etc). New profile columns: `starting_skill_level` / `initial_rating` / `skill_level_locked` / `skill_level_locked_at` / `rating_status` / `confirmed_ranked_match_count`, all locked from client writes. New `initialize_rating(p_skill text)` SECURITY DEFINER RPC bootstraps a profile from onboarding. `apply_match_outcome` rewritten to read the new K-table, increment `confirmed_ranked_match_count`, flip `rating_status` at 5, auto-lock skill on first confirmed ranked match, and derive the displayed `skill` column from `ranking_points` using the band table + 50-point demotion hysteresis (immediate promotion). Pure-JS mirror in `src/features/rating/utils/ratingSystem.js` (80 unit tests). New `RatingInfoModal` (10 sections including the "Opponent strength" section per supplement) is reachable via a `(i)` icon next to the rating eyebrow on Profile + Home heroes. Onboarding step 1 now drives `initialize_rating`. Settings disables skill editing once locked. Uninitialised profiles never display a fake rating and can't log ranked matches. Deferred follow-ups documented inline: rating-event ledger, recalc-on-rollback, admin reset path.

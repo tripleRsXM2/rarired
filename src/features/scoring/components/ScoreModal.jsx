@@ -5,6 +5,7 @@ import { COURTS } from "../../map/data/courts.js";
 import { fetchOpponentActiveLeagueIds } from "../../leagues/services/leagueService.js";
 import { validateMatchScore, CODES as SCORE_CODES } from "../utils/tennisScoreValidation.js";
 import MatchFinishMoment from "./MatchFinishMoment.jsx";
+import { ONE_SET_RATING_NOTICE } from "../../rating/copy.js";
 
 // Sort COURTS so venues in the viewer's own suburb float to the top, then
 // same-zone (implicit "nearby" bucket from the map), then alphabetical. This
@@ -647,6 +648,41 @@ export default function ScoreModal({
               </span>
             </div>
           )}
+          {/* Module 7.7 supplement: when the validator passes for a
+              ranked one-set match, surface the reduced-weight notice so
+              users know it counts but at less impact than a full BO3. */}
+          {liveValidation && liveValidation.ok
+            && liveValidation.completionStatus !== "partial"
+            && (function () {
+              var clean = (scoreDraft.sets || []).filter(function (s) { return s.you !== "" || s.them !== ""; });
+              if (clean.length !== 1) return null;
+              var matchType = scoreDraft.matchType
+                || ((isResubmit || casualOppId) ? 'ranked' : 'casual');
+              if (matchType === 'ranked' && !casualOppId && !isResubmit) matchType = 'casual';
+              if (matchType !== 'ranked') return null;
+              return (
+                <div style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: "1px solid " + t.border,
+                  display: "flex", gap: 10, alignItems: "baseline",
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 800,
+                    color: t.orange, letterSpacing: "0.16em",
+                    textTransform: "uppercase", flexShrink: 0,
+                  }}>
+                    One set
+                  </span>
+                  <span style={{
+                    fontSize: 12, color: t.textSecondary,
+                    lineHeight: 1.4, letterSpacing: "-0.1px",
+                  }}>
+                    {ONE_SET_RATING_NOTICE}
+                  </span>
+                </div>
+              );
+            })()}
         </div>
 
         {/* Venue + Court

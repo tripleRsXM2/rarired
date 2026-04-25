@@ -20,8 +20,10 @@ import {
   calculateExpectedScore,
   calculateRatingChange,
   calculateMatchRatingChanges,
+  getMatchFormatWeight,
   shouldLockSkillLevel,
   isRatingEligibleMatch,
+  FORMAT_WEIGHTS,
 } from "./ratingSystem.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -210,6 +212,106 @@ describe("calculateMatchRatingChanges", function () {
     );
     expect(r.b.delta).toBe(12);
     expect(r.a.delta).toBe(-12);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// getMatchFormatWeight — sets shape → format weight
+// ─────────────────────────────────────────────────────────────────────
+
+describe("getMatchFormatWeight", function () {
+  it("1 set → 0.60", function () {
+    expect(getMatchFormatWeight([{ you: "6", them: "4" }])).toBe(0.60);
+  });
+  it("2 sets, same winner → 1.00", function () {
+    expect(getMatchFormatWeight([
+      { you: "6", them: "4" },
+      { you: "6", them: "3" },
+    ])).toBe(1.00);
+  });
+  it("2 sets, split winners → incomplete (0) — defensive", function () {
+    // The validator wouldn't accept this as completed best-of-3, but
+    // be defensive in case it ever hit the rating engine.
+    expect(getMatchFormatWeight([
+      { you: "6", them: "4" },
+      { you: "3", them: "6" },
+    ])).toBe(0);
+  });
+  it("3 sets, normal final → 1.10", function () {
+    expect(getMatchFormatWeight([
+      { you: "6", them: "4" },
+      { you: "3", them: "6" },
+      { you: "7", them: "5" },
+    ])).toBe(1.10);
+  });
+  it("3 sets, match-tiebreak final → 0.85", function () {
+    expect(getMatchFormatWeight([
+      { you: "6", them: "4" },
+      { you: "3", them: "6" },
+      { you: "10", them: "8" },
+    ])).toBe(0.85);
+  });
+  it("3 sets, match-tiebreak final 12-10 → 0.85", function () {
+    expect(getMatchFormatWeight([
+      { you: "6", them: "4" },
+      { you: "3", them: "6" },
+      { you: "12", them: "10" },
+    ])).toBe(0.85);
+  });
+  it("empty / null sets → 0", function () {
+    expect(getMatchFormatWeight([])).toBe(0);
+    expect(getMatchFormatWeight(null)).toBe(0);
+    expect(getMatchFormatWeight(undefined)).toBe(0);
+  });
+  it("strips empty rows before classifying", function () {
+    expect(getMatchFormatWeight([
+      { you: "6", them: "4" },
+      { you: "", them: "" },
+    ])).toBe(0.60);
+  });
+  it("non-numeric inputs → incomplete", function () {
+    expect(getMatchFormatWeight([{ you: "abc", them: "4" }])).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// calculateRatingChange + calculateMatchRatingChanges — weight option
+// ─────────────────────────────────────────────────────────────────────
+
+describe("rating change with format weight", function () {
+  it("weight=1.0 matches the unweighted result", function () {
+    var w = calculateRatingChange(1500, 1500, 1, { k: 24, weight: 1.0 });
+    var u = calculateRatingChange(1500, 1500, 1, { k: 24 });
+    expect(w).toBe(u);
+  });
+  it("one-set weight 0.6 → 60% of full delta (rounded)", function () {
+    var full = calculateRatingChange(1500, 1500, 1, { k: 24 });   // +12
+    var oneSet = calculateRatingChange(1500, 1500, 1, { k: 24, weight: 0.6 }); // round(12 * 0.6) = 7
+    expect(full).toBe(12);
+    expect(oneSet).toBe(7);
+  });
+  it("3-set match (1.10) > 2-set match (1.00) > one-set (0.60)", function () {
+    var oneSet = calculateRatingChange(1500, 1500, 1, { k: 24, weight: 0.60 });
+    var twoSet = calculateRatingChange(1500, 1500, 1, { k: 24, weight: 1.00 });
+    var threeSet = calculateRatingChange(1500, 1500, 1, { k: 24, weight: 1.10 });
+    var mtb = calculateRatingChange(1500, 1500, 1, { k: 24, weight: 0.85 });
+    expect(oneSet).toBeLessThan(twoSet);
+    expect(twoSet).toBeLessThan(threeSet);
+    expect(mtb).toBeLessThan(twoSet);
+    expect(mtb).toBeGreaterThan(oneSet);
+  });
+  it("weight=0 → no change", function () {
+    expect(calculateRatingChange(1500, 1500, 1, { k: 24, weight: 0 })).toBe(0);
+  });
+  it("calculateMatchRatingChanges propagates weight to both sides", function () {
+    var r = calculateMatchRatingChanges(
+      { id: "a", rating: 1500, k: 24 },
+      { id: "b", rating: 1500, k: 24 },
+      "a",
+      { weight: 0.60 }
+    );
+    expect(r.a.delta).toBe(7);
+    expect(r.b.delta).toBe(-7);
   });
 });
 

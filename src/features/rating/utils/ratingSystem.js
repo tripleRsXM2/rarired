@@ -25,6 +25,7 @@ import {
   PROVISIONAL_THRESHOLD,
   HYSTERESIS,
   K_FACTORS,
+  FORMAT_WEIGHTS,
   SKILL_LEVELS,
   SKILL_LEVEL_DESCRIPTIONS,
 } from "../constants.js";
@@ -35,6 +36,7 @@ export {
   PROVISIONAL_THRESHOLD,
   HYSTERESIS,
   K_FACTORS,
+  FORMAT_WEIGHTS,
   SKILL_LEVELS,
   SKILL_LEVEL_DESCRIPTIONS,
 };
@@ -123,6 +125,9 @@ export function calculateExpectedScore(playerRating, opponentRating) {
 // Rating delta for one player. `actualResult` is 1 for a win, 0 for a
 // loss. `options.k` is the player's K-factor (callers pass their own
 // so each player applies their own provisional/established K).
+// `options.weight` is the match-format weight (1.0 if omitted), applied
+// AFTER expected-score + K so a one-set win produces 0.6× the movement
+// of an equivalent best-of-3 result.
 //
 // Opponent-strength asymmetry comes for free from the expected-score
 // formula:
@@ -133,13 +138,16 @@ export function calculateExpectedScore(playerRating, opponentRating) {
 export function calculateRatingChange(playerRating, opponentRating, actualResult, options) {
   options = options || {};
   var k = options.k != null ? options.k : K_FACTORS.ESTABLISHED;
+  var weight = options.weight != null ? options.weight : 1;
   var expected = calculateExpectedScore(playerRating, opponentRating);
-  return Math.round(k * (actualResult - expected));
+  return Math.round(k * (actualResult - expected) * weight);
 }
 
 // Convenience: compute both players' new ratings + deltas in one call.
 // Each player passes their own `k` (so a provisional winner moves more
-// than the established loser loses).
+// than the established loser loses). `options.weight` (or `playerA.weight`
+// / `playerB.weight`) applies a match-format multiplier — both players
+// get the same weight on any given match.
 //
 // Returns:
 //   {
@@ -150,14 +158,72 @@ export function calculateMatchRatingChanges(playerA, playerB, winnerId, options)
   options = options || {};
   var aResult = winnerId === playerA.id ? 1 : 0;
   var bResult = 1 - aResult;
-  var aDelta = calculateRatingChange(playerA.rating, playerB.rating, aResult, { k: playerA.k });
-  var bDelta = calculateRatingChange(playerB.rating, playerA.rating, bResult, { k: playerB.k });
+  var weight = options.weight != null ? options.weight : 1;
+  var aDelta = calculateRatingChange(playerA.rating, playerB.rating, aResult, { k: playerA.k, weight: weight });
+  var bDelta = calculateRatingChange(playerB.rating, playerA.rating, bResult, { k: playerB.k, weight: weight });
   // Clamp at 0 — ratings never go negative even after a streak of
   // unexpected losses (mirrors the SQL: greatest(0, ...)).
   var out = {};
   out[playerA.id] = { newRating: Math.max(0, playerA.rating + aDelta), delta: aDelta };
   out[playerB.id] = { newRating: Math.max(0, playerB.rating + bDelta), delta: bDelta };
   return out;
+}
+
+// Infer match-format weight from the played sets. Pure function — no
+// DB dependency. The validator (tennisScoreValidation.js) has already
+// rejected invalid shapes by the time this runs; we only need to
+// classify the four valid completed forms.
+//
+// Returns one of:
+//   FORMAT_WEIGHTS.one_set                    — 1 set
+//   FORMAT_WEIGHTS.best_of_3_2sets            — 2 sets, one player took both
+//   FORMAT_WEIGHTS.best_of_3_3sets            — 3 sets, last set is normal
+//   FORMAT_WEIGHTS.best_of_3_match_tiebreak   — 3 sets, last set is match
+//                                                tiebreak (hi >= 10, lo < 10)
+//   FORMAT_WEIGHTS.incomplete                 — anything else (defensive 0)
+//
+// `sets` is an array of `{ you, them }` strings or numbers. Empty / blank
+// rows are stripped before classification.
+export function getMatchFormatWeight(sets) {
+  if (!Array.isArray(sets) || !sets.length) return FORMAT_WEIGHTS.incomplete;
+  var clean = sets.filter(function (s) {
+    if (!s) return false;
+    var y = s.you, t = s.them;
+    if (y === "" || y == null || t === "" || t == null) return false;
+    return !isNaN(Number(y)) && !isNaN(Number(t));
+  });
+  if (!clean.length) return FORMAT_WEIGHTS.incomplete;
+
+  if (clean.length === 1) return FORMAT_WEIGHTS.one_set;
+
+  if (clean.length === 2) {
+    // Both players need to be valid for "one took both"
+    var s1 = clean[0], s2 = clean[1];
+    var y1 = Number(s1.you), t1 = Number(s1.them);
+    var y2 = Number(s2.you), t2 = Number(s2.them);
+    var s1Winner = y1 > t1 ? "you" : (t1 > y1 ? "them" : null);
+    var s2Winner = y2 > t2 ? "you" : (t2 > y2 ? "them" : null);
+    if (s1Winner && s1Winner === s2Winner) return FORMAT_WEIGHTS.best_of_3_2sets;
+    return FORMAT_WEIGHTS.incomplete;
+  }
+
+  if (clean.length === 3) {
+    var last = clean[2];
+    var ly = Number(last.you), lt = Number(last.them);
+    var hi = Math.max(ly, lt);
+    var lo = Math.min(ly, lt);
+    // Match tiebreak: hi >= 10, win-by-2. A normal set caps at 7
+    // (7-5 / 7-6), so any final-set score with hi >= 10 must be
+    // a match-tiebreak — there's no need to also gate on lo.
+    if (hi >= 10 && (hi - lo) >= 2) {
+      return FORMAT_WEIGHTS.best_of_3_match_tiebreak;
+    }
+    return FORMAT_WEIGHTS.best_of_3_3sets;
+  }
+
+  // > 3 sets shouldn't happen for any current format; mark incomplete
+  // so a corrupted row never gets full rating impact.
+  return FORMAT_WEIGHTS.incomplete;
 }
 
 // ─────────────────────────────────────────────────────────────────────

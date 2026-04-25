@@ -74,3 +74,27 @@ export const K_FACTORS = {
   ESTABLISHED:        24,   // 5+
   HIGHLY_ESTABLISHED: 16,   // future, optional
 };
+
+// Match-format weights (Module 7.7 supplement). Applied AFTER the
+// expected-score Elo calc and AFTER each player's K-factor — so the
+// final delta is `round(K * (actual - expected) * weight)`.
+//
+//   one_set                       0.60   short, less signal
+//   best_of_3 finished in 2 sets  1.00   the canonical match
+//   best_of_3 finished in 3 sets  1.10   tougher, more signal
+//   best_of_3 with match-tiebreak 0.85   final-set super tiebreak
+//                                        is shorter than a normal set
+//   incomplete / time-limited     0      should never reach the rating
+//                                        engine; defensive value only
+//
+// Format is inferred from the sets shape inside getMatchFormatWeight()
+// in ratingSystem.js — there's no need for a `match_format` column on
+// match_history because the validator already accepts only valid
+// completed shapes by the time apply_match_outcome runs.
+export const FORMAT_WEIGHTS = {
+  one_set:                  0.60,
+  best_of_3_2sets:          1.00,
+  best_of_3_3sets:          1.10,
+  best_of_3_match_tiebreak: 0.85,
+  incomplete:               0,
+};
