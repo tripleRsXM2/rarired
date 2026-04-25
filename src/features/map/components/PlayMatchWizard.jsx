@@ -26,7 +26,12 @@ import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "..
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { track } from "../../../lib/analytics.js";
 
-var TOTAL_STEPS = 4;
+// Three steps now: zone → court → player(s). The old step-4 confirm
+// screen was dropped because it just echoed the draft the DM composer
+// already shows. Council call: trust the user; the DM is the natural
+// confirmation. Also harmonises with the side-panel "Message" path
+// which goes straight to the DM with no extra confirm.
+var TOTAL_STEPS = 3;
 var MAX_SELECT  = 3; // viewer + 3 others = doubles
 
 export default function PlayMatchWizard({
@@ -144,16 +149,15 @@ export default function PlayMatchWizard({
       return prev.concat([p.id]);
     });
   }
-  function confirmPlayers(){
-    if(!selectedIds.length) return;
-    track("play_match_player_picked", { player_count: selectedIds.length, scope: scope });
-    go(3);
-  }
   function sendInvite(){
     var partners = selectedIds.map(function(id){
       return players.find(function(p){ return p.id === id; });
     }).filter(Boolean);
     if(!partners.length) return;
+    // Funnel: emit player_picked too so we keep the existing
+    // step-completion event even though the dedicated confirm step
+    // is gone.
+    track("play_match_player_picked", { player_count: partners.length, scope: scope });
     var zone = ZONES.find(function(z){ return z.id === zoneId; });
     var ctx = {
       venue: courtName || (zone && zone.name) || "",
@@ -180,9 +184,6 @@ export default function PlayMatchWizard({
 
   var zone   = zoneId ? ZONES.find(function(z){ return z.id === zoneId; }) : null;
   var courts = zoneId ? courtsInZone(zoneId) : [];
-  var selectedPlayers = selectedIds.map(function(id){
-    return players.find(function(p){ return p.id === id; });
-  }).filter(Boolean);
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Play Match"
@@ -203,15 +204,16 @@ export default function PlayMatchWizard({
       onClick={function(e){ if(e.target === e.currentTarget) cancel(); }}>
       <div style={{
         // Translucent glass card — the boxy bordered modal is gone.
-        // Content is the design; chrome is invisible.
-        background: "rgba(255,255,255,0.96)",
+        // Content is the design; chrome is invisible. Theme-aware
+        // bg so the wizard is readable on any palette (audit fix:
+        // rgba(255,255,255,0.96) was hardcoded white and caused text
+        // to wash out on dark themes).
+        background: hexToRgba(t.bgCard, 0.96),
         WebkitBackdropFilter: "blur(40px) saturate(140%)",
         backdropFilter: "blur(40px) saturate(140%)",
         color: t.text,
         borderRadius: 22,
-        boxShadow:
-          "0 24px 60px rgba(20,18,17,0.28), " +
-          "0 1px 0 rgba(255,255,255,0.6) inset",
+        boxShadow: "0 24px 60px rgba(20,18,17,0.28)",
         width: "100%",
         maxWidth: 460,
         maxHeight: "calc(100dvh - 24px)",
@@ -227,7 +229,7 @@ export default function PlayMatchWizard({
           style={{
             position:"absolute", top: 14, left: 14, zIndex: 2,
             width:36, height:36, borderRadius: "50%",
-            background:"rgba(255,255,255,0.7)",
+            background: hexToRgba(t.bgCard, 0.78),
             WebkitBackdropFilter:"blur(20px)", backdropFilter:"blur(20px)",
             border:"none", cursor:"pointer",
             color: t.text,
@@ -244,7 +246,7 @@ export default function PlayMatchWizard({
           style={{
             position:"absolute", top: 14, right: 14, zIndex: 2,
             width:36, height:36, borderRadius: "50%",
-            background:"rgba(255,255,255,0.7)",
+            background: hexToRgba(t.bgCard, 0.78),
             WebkitBackdropFilter:"blur(20px)", backdropFilter:"blur(20px)",
             border:"none", cursor:"pointer",
             color: t.text,
@@ -263,11 +265,11 @@ export default function PlayMatchWizard({
           padding: "62px 28px 0",
           display:"flex", gap: 5,
         }}>
-          {[0,1,2,3].map(function(i){
+          {[0,1,2].map(function(i){
             return (
               <div key={i} style={{
-                width: 22, height: 3, borderRadius: 2,
-                background: i <= step ? "#14110f" : "rgba(20,18,17,0.12)",
+                width: 28, height: 3, borderRadius: 2,
+                background: i <= step ? t.text : t.border,
                 transition: "background 0.2s",
               }}/>
             );
@@ -279,76 +281,80 @@ export default function PlayMatchWizard({
           <div style={{
             fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
             textTransform: "uppercase",
-            color: "rgba(20,18,17,0.42)", lineHeight: 1,
+            color: t.textTertiary, lineHeight: 1,
           }}>
             Step {step + 1} of {TOTAL_STEPS}
           </div>
           <div style={{
             fontSize: 22, fontWeight: 900,
             letterSpacing: "-0.025em", lineHeight: 1.15,
-            color: "#14110f",
+            color: t.text,
             marginTop: 8,
           }}>
             {step === 0 && "Where do you want to play?"}
             {step === 1 && "Which court?"}
             {step === 2 && "Who do you want to play with?"}
-            {step === 3 && "Send invite"}
           </div>
         </div>
 
         {/* Body */}
         <div style={{ flex:1, overflowY:"auto", padding:"14px 22px 22px" }}>
 
-          {/* Step 0 — pick zone — sleek glass cards, no redundant dots */}
+          {/* Step 0 — pick zone — corner color bloom + bold typography.
+              Each card has a soft radial gradient of the zone colour
+              radiating from its top-right corner — the colour becomes
+              the card's atmosphere instead of a label. Drops the
+              venue count subtitle so the zone name is the only focal
+              point. */}
           {step === 0 && (
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: 10 }}>
               {ZONES.map(function(z){
-                var venueCount = courtsInZone(z.id).length;
                 return (
                   <button key={z.id} type="button"
                     onClick={function(){ pickZone(z); }}
                     style={{
                       textAlign:"left",
-                      padding: "18px 16px",
-                      borderRadius: 16,
+                      padding: "20px 18px 22px",
+                      borderRadius: 18,
                       border: "none",
-                      // Soft glass card. Zone colour shows as a thin
-                      // top-edge accent rule + name highlight on hover.
-                      // No dot — the map already had the zone colours,
-                      // repeating them as dots in the wizard was noise.
-                      background: "rgba(255,255,255,0.78)",
-                      color: t.text, cursor:"pointer",
-                      display:"flex", flexDirection:"column",
-                      gap: 6, minHeight: 86,
+                      background: hexToRgba(t.bgCard, 0.85),
+                      color: t.text,
+                      cursor:"pointer",
+                      display:"flex", alignItems:"flex-end",
+                      minHeight: 110,
                       position:"relative", overflow:"hidden",
-                      boxShadow: "0 1px 0 rgba(20,18,17,0.04)",
-                      transition: "transform 0.12s ease, background 0.15s",
+                      transition: "transform 0.14s ease",
                     }}
                     onMouseEnter={function(e){
-                      e.currentTarget.style.background = "#fff";
-                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      var bloom = e.currentTarget.querySelector(".cs-zone-bloom");
+                      if(bloom) bloom.style.opacity = "1";
                     }}
                     onMouseLeave={function(e){
-                      e.currentTarget.style.background = "rgba(255,255,255,0.78)";
                       e.currentTarget.style.transform = "translateY(0)";
+                      var bloom = e.currentTarget.querySelector(".cs-zone-bloom");
+                      if(bloom) bloom.style.opacity = "0.7";
                     }}>
-                    {/* Thin top accent rule in zone colour */}
-                    <div style={{
-                      position:"absolute", top:0, left:0, right:0,
-                      height: 3, background: z.color,
+                    {/* Corner bloom — radial gradient of zone colour
+                        from the top-right corner. The card's identity
+                        in atmospheric form. */}
+                    <div className="cs-zone-bloom" style={{
+                      position:"absolute", inset:0,
+                      background: "radial-gradient(circle at 100% 0%, " +
+                        hexToRgba(z.color, 0.55) + " 0%, " +
+                        hexToRgba(z.color, 0.18) + " 35%, " +
+                        "transparent 75%)",
+                      opacity: 0.7,
+                      transition: "opacity 0.18s ease",
+                      pointerEvents:"none",
                     }}/>
+                    {/* Big bold zone name — only focal point */}
                     <div style={{
-                      fontSize: 17, fontWeight: 800,
-                      letterSpacing: "-0.02em", lineHeight: 1.15,
-                      color: "#14110f",
-                      marginTop: 4,
+                      position:"relative",
+                      fontSize: 18, fontWeight: 900,
+                      letterSpacing: "-0.025em", lineHeight: 1.1,
+                      color: t.text,
                     }}>{z.name}</div>
-                    <div style={{
-                      fontSize: 11, color: "rgba(20,18,17,0.5)",
-                      fontWeight: 600, letterSpacing: "0.01em",
-                    }}>
-                      {venueCount} {venueCount === 1 ? "venue" : "venues"}
-                    </div>
                   </button>
                 );
               })}
@@ -378,32 +384,31 @@ export default function PlayMatchWizard({
                         textAlign:"left",
                         padding: "14px 16px",
                         borderRadius: 14,
-                        background: "rgba(255,255,255,0.78)",
+                        background: hexToRgba(t.bgCard, 0.78),
                         border: "none",
                         color: t.text,
                         cursor:"pointer",
                         display:"flex", alignItems:"center", justifyContent:"space-between",
                         gap: 12,
-                        boxShadow: "0 1px 0 rgba(20,18,17,0.04)",
                         transition: "transform 0.1s ease, background 0.15s",
                       }}
                       onMouseEnter={function(e){
-                        e.currentTarget.style.background = "#fff";
+                        e.currentTarget.style.background = t.bgCard;
                         e.currentTarget.style.transform = "translateY(-1px)";
                       }}
                       onMouseLeave={function(e){
-                        e.currentTarget.style.background = "rgba(255,255,255,0.78)";
+                        e.currentTarget.style.background = hexToRgba(t.bgCard, 0.78);
                         e.currentTarget.style.transform = "translateY(0)";
                       }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{
                           fontSize: 15, fontWeight: 700,
                           letterSpacing:"-0.015em", lineHeight: 1.25,
-                          color: "#14110f",
+                          color: t.text,
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>{c.name}</div>
                         <div style={{
-                          fontSize: 11, color: "rgba(20,18,17,0.5)",
+                          fontSize: 11, color: t.textSecondary,
                           marginTop: 3, fontWeight: 600, letterSpacing:"0.01em",
                         }}>
                           {c.suburb ? c.suburb + " · " : ""}{c.courts} {c.courts === 1 ? "court" : "courts"}
@@ -412,7 +417,7 @@ export default function PlayMatchWizard({
                       <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
                            stroke="currentColor" strokeWidth="1.7"
                            strokeLinecap="round" strokeLinejoin="round"
-                           style={{ color: "rgba(20,18,17,0.35)", flexShrink: 0 }}>
+                           style={{ color: t.textTertiary, flexShrink: 0 }}>
                         <path d="M7 4l5 5-5 5"/>
                       </svg>
                     </button>
@@ -555,74 +560,12 @@ export default function PlayMatchWizard({
             </div>
           )}
 
-          {/* Step 3 — confirm + send */}
-          {step === 3 && (
-            <div style={{ display:"flex", flexDirection:"column", gap: 14 }}>
-              {/* Venue summary */}
-              <div style={{
-                padding:"12px 14px", borderRadius: 10,
-                background: t.bgTertiary,
-                display:"flex", flexDirection:"column", gap: 6,
-              }}>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                  textTransform:"uppercase", color: t.textTertiary,
-                }}>Venue</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing:"-0.01em" }}>
-                  {courtName || (zone && zone.name)}
-                </div>
-                <div style={{ fontSize: 11, color: t.textSecondary }}>
-                  {zone && zone.name}{courtName ? " · " + courtName : ""}
-                </div>
-              </div>
-
-              {/* Recipients */}
-              <div>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                  textTransform:"uppercase", color: t.textTertiary, marginBottom: 8,
-                }}>
-                  {selectedPlayers.length === 1 ? "Sending to" : "Sending to · group"}
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap: 4 }}>
-                  {selectedPlayers.map(function(p){
-                    return (
-                      <div key={p.id} style={{
-                        display:"flex", alignItems:"center", gap: 10,
-                        padding:"6px 0",
-                      }}>
-                        <PlayerAvatar size={28} profile={p}/>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>
-                          {p.name || p.username || p.full_name || "Player"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Message preview */}
-              <div>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                  textTransform:"uppercase", color: t.textTertiary, marginBottom: 8,
-                }}>Message preview</div>
-                <div style={{
-                  padding:"10px 12px", borderRadius: 10,
-                  background: t.bgTertiary,
-                  fontSize: 13, lineHeight: 1.45, color: t.text,
-                }}>
-                  {previewInviteText({ partners: selectedPlayers, court: courtName, zone: zone })}
-                </div>
-                <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 6 }}>
-                  You can edit before sending.
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Footer — step-dependent action */}
+        {/* Footer — Send invite directly from step 2 (player picker).
+            The old step 3 confirm screen was dropped: the DM composer
+            already shows the same draft in editable form, so an extra
+            preview screen is dead weight. Council call. */}
         {step === 2 && (
           <div style={{
             padding: "12px 16px",
@@ -630,47 +573,23 @@ export default function PlayMatchWizard({
             display:"flex", gap:8, justifyContent:"space-between", alignItems:"center",
           }}>
             <span style={{ fontSize: 11, color: t.textSecondary }}>
-              {selectedIds.length === 0 ? "Pick at least one" : selectedIds.length + " selected"}
+              {selectedIds.length === 0
+                ? "Pick at least one"
+                : (selectedIds.length === 1 ? "1 player selected" : selectedIds.length + " players selected")}
             </span>
-            <button type="button" onClick={confirmPlayers}
+            <button type="button" onClick={sendInvite}
               disabled={selectedIds.length === 0}
               style={{
-                padding:"10px 22px", borderRadius: 10,
-                background: selectedIds.length ? t.text : t.border,
-                color: selectedIds.length ? t.bg : t.textTertiary,
+                padding:"11px 22px", borderRadius: 10,
+                background: selectedIds.length ? t.accent : t.border,
+                color: selectedIds.length ? (t.accentText || "#fff") : t.textTertiary,
                 border:"none",
                 fontSize: 13, fontWeight: 800, letterSpacing:"0.02em",
                 cursor: selectedIds.length ? "pointer" : "not-allowed",
-                transition: "background 0.15s",
+                boxShadow: selectedIds.length ? "0 2px 6px rgba(20,18,17,0.18)" : "none",
+                transition: "background 0.15s, box-shadow 0.15s",
               }}>
-              Continue →
-            </button>
-          </div>
-        )}
-        {step === 3 && (
-          <div style={{
-            padding: "12px 16px",
-            borderTop: "1px solid " + t.border,
-            display:"flex", gap:8, justifyContent:"flex-end",
-          }}>
-            <button type="button" onClick={cancel}
-              style={{
-                padding:"10px 18px", borderRadius: 10,
-                background:"transparent", border:"1px solid "+t.border,
-                color:t.text, fontSize: 13, fontWeight: 700, cursor:"pointer",
-              }}>
-              Cancel
-            </button>
-            <button type="button" onClick={sendInvite}
-              style={{
-                padding:"10px 22px", borderRadius: 10,
-                background: t.accent,
-                color: t.accentText || "#fff", border:"none",
-                fontSize: 13, fontWeight: 800, letterSpacing:"0.02em",
-                cursor:"pointer",
-                boxShadow:"0 2px 6px rgba(20,18,17,0.18)",
-              }}>
-              Send Invite
+              Send invite →
             </button>
           </div>
         )}
