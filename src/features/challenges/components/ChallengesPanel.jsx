@@ -28,48 +28,67 @@ function ChallengeRow({ c, t, partner, openProfile, leftActions, rightActions, r
   function goPartner() { if (openProfile && partner && partner.id) openProfile(partner.id); }
   return (
     <div {...(rowAnchor || {})} style={{
-      background: t.bgCard, border: "1px solid " + t.border, borderRadius: 12,
-      padding: "14px 16px", marginBottom: 8,
+      borderTop: "1px solid " + t.border,
+      paddingTop: 14, paddingBottom: 14,
       display: "flex", flexDirection: "column", gap: 10,
     }}>
       {/* Identity */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div
           onClick={goPartner}
           style={{ flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
           <PlayerAvatar name={partner && partner.name} avatar={partner && partner.avatar} profile={partner} size={38} />
         </div>
         <div onClick={goPartner} style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>
+          <div style={{
+            fontSize: 15, fontWeight: 800, color: t.text,
+            letterSpacing: "-0.2px", lineHeight: 1.1,
+          }}>
             {(partner && partner.name) || "Player"}
           </div>
-          <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 1 }}>
-            {[(partner && partner.suburb), (partner && partner.skill)].filter(Boolean).join(" · ")}
-          </div>
+          {((partner && partner.suburb) || (partner && partner.skill)) && (
+            <div style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+              textTransform: "uppercase", color: t.textTertiary,
+              marginTop: 4,
+            }}>
+              {[(partner && partner.suburb), (partner && partner.skill)].filter(Boolean).join(" · ")}
+            </div>
+          )}
         </div>
         {leftActions}
       </div>
 
-      {/* Proposed details — only render if at least one field has content */}
+      {/* Proposed details — hairline mini-grid, no fill */}
       {(c.proposed_at || c.venue || c.court || c.message) && (
         <div style={{
-          background: t.bgTertiary, borderRadius: 8, padding: "10px 12px",
+          paddingTop: 8,
+          borderTop: "1px solid " + t.border,
           fontSize: 12, color: t.textSecondary, lineHeight: 1.5,
+          letterSpacing: "-0.1px",
         }}>
           {c.proposed_at && (
-            <div style={{ marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>When · </span>
-              {fmtProposedAt(c.proposed_at) || c.proposed_at}
+            <div style={{ marginBottom: 4, display: "flex", gap: 8, alignItems: "baseline" }}>
+              <span style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase", color: t.textTertiary,
+                width: 48, flexShrink: 0,
+              }}>When</span>
+              <span style={{ color: t.text }}>{fmtProposedAt(c.proposed_at) || c.proposed_at}</span>
             </div>
           )}
           {(c.venue || c.court) && (
-            <div style={{ marginBottom: c.message ? 4 : 0 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>Where · </span>
-              {[c.venue, c.court].filter(Boolean).join(" · ")}
+            <div style={{ marginBottom: c.message ? 4 : 0, display: "flex", gap: 8, alignItems: "baseline" }}>
+              <span style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase", color: t.textTertiary,
+                width: 48, flexShrink: 0,
+              }}>Where</span>
+              <span style={{ color: t.text }}>{[c.venue, c.court].filter(Boolean).join(" · ")}</span>
             </div>
           )}
           {c.message && (
-            <div style={{ fontStyle: "italic", marginTop: 4, color: t.text }}>
+            <div style={{ fontStyle: "italic", marginTop: 6, color: t.text, letterSpacing: "-0.1px" }}>
               "{c.message}"
             </div>
           )}
@@ -78,10 +97,32 @@ function ChallengeRow({ c, t, partner, openProfile, leftActions, rightActions, r
 
       {/* Action buttons row */}
       {rightActions && (
-        <div style={{ display: "flex", gap: 6 }}>{rightActions}</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 2 }}>{rightActions}</div>
       )}
     </div>
   );
+}
+
+// Shared button styles for the action row — keeps every row visually tied
+// to the rest of the editorial pass.
+function rowButtonPrimary(t, color, busy) {
+  return {
+    flex: 1, padding: "11px 12px", borderRadius: 8, border: "none",
+    background: color, color: "#fff",
+    fontSize: 11, fontWeight: 800,
+    letterSpacing: "0.12em", textTransform: "uppercase",
+    cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+  };
+}
+function rowButtonSecondary(t, busy) {
+  return {
+    padding: "11px 14px", borderRadius: 8,
+    border: "1px solid " + t.border, background: "transparent",
+    color: t.textSecondary,
+    fontSize: 11, fontWeight: 800,
+    letterSpacing: "0.12em", textTransform: "uppercase",
+    cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+  };
 }
 
 export default function ChallengesPanel({
@@ -139,12 +180,23 @@ export default function ChallengesPanel({
     // No challenges AND no friends → original empty state (nothing to act on).
     if (!friendsList.length || !openChallenge) {
       return (
-        <div style={{ textAlign: "center", padding: "48px 20px" }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🎾</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No challenges yet</div>
-          <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.5, maxWidth: 320, margin: "0 auto" }}>
-            Open a friend's profile and tap <strong>Challenge</strong> to set up a match.
-            You can also rematch from any confirmed match card on the feed.
+        <div style={{ textAlign: "center", padding: "60px 20px" }}>
+          <div style={{ fontSize: 36, marginBottom: 14 }}>🎾</div>
+          <div style={{
+            fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+            textTransform: "uppercase", color: t.textTertiary,
+            marginBottom: 8,
+          }}>No challenges</div>
+          <div style={{
+            fontSize: 22, fontWeight: 800, color: t.text,
+            letterSpacing: "-0.6px", lineHeight: 1.05,
+            marginBottom: 10,
+          }}>Nothing yet.</div>
+          <div style={{
+            fontSize: 13, color: t.textSecondary, lineHeight: 1.5,
+            maxWidth: 320, margin: "0 auto", letterSpacing: "-0.1px",
+          }}>
+            Open a friend's profile and tap <strong>Challenge</strong> to set up a match. You can also rematch from any confirmed match card on the feed.
           </div>
         </div>
       );
@@ -154,32 +206,47 @@ export default function ChallengesPanel({
     // from 3 taps (open People → open profile → tap Challenge) to 1 tap.
     return (
       <div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+        <div style={{
+          fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+          textTransform: "uppercase", color: t.textTertiary,
+          marginBottom: 8,
+        }}>
           Start a challenge
         </div>
-        <div style={{ fontSize: 12, color: t.textSecondary, marginBottom: 14, lineHeight: 1.5 }}>
+        <div style={{
+          fontSize: 13, color: t.textSecondary, marginBottom: 18,
+          lineHeight: 1.5, letterSpacing: "-0.1px",
+        }}>
           No active challenges. Tap a friend below to set up a match.
         </div>
         {friendsList.map(function (f) {
           return (
             <div key={f.id} style={{
-              background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
-              padding: "10px 14px", marginBottom: 8,
-              display: "flex", alignItems: "center", gap: 10,
+              borderTop: "1px solid " + t.border,
+              paddingTop: 12, paddingBottom: 12,
+              display: "flex", alignItems: "center", gap: 12,
             }}>
               <div
                 onClick={function () { if (openProfile) openProfile(f.id); }}
                 style={{ flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
-                <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={34} />
+                <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={36} />
               </div>
               <div
                 onClick={function () { if (openProfile) openProfile(f.id); }}
                 style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "-0.1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{
+                  fontSize: 14, fontWeight: 800, color: t.text,
+                  letterSpacing: "-0.2px",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
                   {f.name || "Player"}
                 </div>
                 {(f.suburb || f.skill) && (
-                  <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 1 }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                    textTransform: "uppercase", color: t.textTertiary,
+                    marginTop: 4,
+                  }}>
                     {[f.suburb, f.skill].filter(Boolean).join(" · ")}
                   </div>
                 )}
@@ -187,9 +254,10 @@ export default function ChallengesPanel({
               <button
                 onClick={function () { openChallenge(f, "profile"); }}
                 style={{
-                  flexShrink: 0, padding: "7px 12px", borderRadius: 0, border: "none",
+                  flexShrink: 0, padding: "9px 14px", borderRadius: 6, border: "none",
                   background: t.accent, color: "#fff",
-                  fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase",
+                  fontSize: 10, fontWeight: 800,
+                  letterSpacing: "0.12em", textTransform: "uppercase",
                   cursor: "pointer",
                 }}>
                 Challenge
@@ -201,13 +269,30 @@ export default function ChallengesPanel({
     );
   }
 
+  // Section eyebrow — strong ALL-CAPS tag + tabular count.
+  function sectionEyebrow(label, count) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "baseline", gap: 8,
+        marginBottom: 4,
+      }}>
+        <span style={{
+          fontSize: 10, fontWeight: 800, letterSpacing: "0.16em",
+          textTransform: "uppercase", color: t.text,
+        }}>{label}</span>
+        <span style={{
+          fontSize: 10, fontWeight: 800, letterSpacing: "0.12em",
+          color: t.textTertiary, fontVariantNumeric: "tabular-nums",
+        }}>· {count}</span>
+      </div>
+    );
+  }
+
   return (
     <div>
       {incoming.length > 0 && (
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>
-            Incoming · {incoming.length}
-          </div>
+        <div style={{ marginBottom: 28 }}>
+          {sectionEyebrow("Incoming", incoming.length)}
           {incoming.map(function (c) {
             var p = partnerOf(c);
             return (
@@ -216,12 +301,12 @@ export default function ChallengesPanel({
                 rightActions={<>
                   <button disabled={busy(c.id)}
                     onClick={async function () { var r = await acceptChallenge(c); if (r && r.error) reportErr(r.error); }}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: t.green, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
+                    style={rowButtonPrimary(t, t.green, busy(c.id))}>
                     Accept
                   </button>
                   <button disabled={busy(c.id)}
                     onClick={async function () { var r = await declineChallenge(c); if (r && r.error) reportErr(r.error); }}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
+                    style={Object.assign({}, rowButtonSecondary(t, busy(c.id)), { flex: 1, padding: "11px 12px" })}>
                     Decline
                   </button>
                 </>}
@@ -232,10 +317,8 @@ export default function ChallengesPanel({
       )}
 
       {accepted.length > 0 && (
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>
-            Ready to play · {accepted.length}
-          </div>
+        <div style={{ marginBottom: 28 }}>
+          {sectionEyebrow("Ready to play", accepted.length)}
           {accepted.map(function (c) {
             var p = partnerOf(c);
             return (
@@ -247,12 +330,12 @@ export default function ChallengesPanel({
                       trio because those choices have already been resolved. */}
                   <button
                     onClick={function () { if (onLogConvertedMatch) onLogConvertedMatch(c, p); }}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    style={rowButtonPrimary(t, t.accent, false)}>
                     Log match info
                   </button>
                   <button disabled={busy(c.id)}
                     onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) reportErr(r.error); } }}
-                    style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
+                    style={rowButtonSecondary(t, busy(c.id))}>
                     Cancel
                   </button>
                 </>}
@@ -264,21 +347,24 @@ export default function ChallengesPanel({
 
       {outgoing.length > 0 && (
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>
-            Sent · {outgoing.length}
-          </div>
+          {sectionEyebrow("Sent", outgoing.length)}
           {outgoing.map(function (c) {
             var p = partnerOf(c);
             return (
               <ChallengeRow
                 key={c.id} c={c} t={t} partner={p} openProfile={openProfile} rowAnchor={deepLink.rowProps(c.id)}
                 rightActions={<>
-                  <span style={{ flex: 1, padding: "10px", textAlign: "center", color: t.textTertiary, fontSize: 12, fontWeight: 500 }}>
+                  <span style={{
+                    flex: 1, padding: "11px 12px", textAlign: "center",
+                    color: t.textTertiary,
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                  }}>
                     Awaiting response
                   </span>
                   <button disabled={busy(c.id)}
                     onClick={async function () { if (window.confirm("Cancel this challenge?")) { var r = await cancelChallenge(c); if (r && r.error) reportErr(r.error); } }}
-                    style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: busy(c.id) ? 0.6 : 1 }}>
+                    style={rowButtonSecondary(t, busy(c.id))}>
                     Cancel
                   </button>
                 </>}
