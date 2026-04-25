@@ -406,10 +406,21 @@ export default function App(){
       } catch(_){ failed++; }
     }
     var ok = partners.length - failed;
+    // Actionable toast: lets the user jump to the conversation if
+    // they want to review what was sent or follow up. Otherwise the
+    // toast self-dismisses and they stay on the map.
+    var viewAction = {
+      label: "View →",
+      onClick: function(){ navigate("/people/messages"); },
+    };
     if(ok > 0 && failed === 0){
-      toast(ok === 1 ? "Invite sent ✓" : ("Invite sent to " + ok + " players ✓"), "success");
+      toast(
+        ok === 1 ? "Invite sent ✓" : ("Invite sent to " + ok + " players ✓"),
+        "success",
+        { action: viewAction }
+      );
     } else if(ok > 0 && failed > 0){
-      toast("Sent to " + ok + " · " + failed + " failed", "info");
+      toast("Sent to " + ok + " · " + failed + " failed", "info", { action: viewAction });
     } else {
       toast("Couldn't send invite — try again", "error");
     }

@@ -25,12 +25,17 @@ export function useToasts() {
     }
   }, []);
 
-  var emit = useCallback(function (message, kind) {
+  var emit = useCallback(function (message, kind, options) {
     if (!message) return;
     var id = nextId++;
     var k = kind || "info";
-    var ttl = k === "error" ? 4000 : 2500;
-    setToasts(function (xs) { return xs.concat([{ id: id, message: message, kind: k }]); });
+    // Actionable toasts get a longer TTL so the user has time to
+    // notice the action AND tap it before it slides away.
+    var action = options && options.action ? options.action : null;
+    var ttl = action ? 6000 : (k === "error" ? 4000 : 2500);
+    setToasts(function (xs) {
+      return xs.concat([{ id: id, message: message, kind: k, action: action }]);
+    });
     timersRef.current[id] = setTimeout(function () { dismiss(id); }, ttl);
     return id;
   }, [dismiss]);
@@ -74,7 +79,7 @@ export function ToastStack({ t, toasts, dismiss }) {
         return (
           <div
             key={toast.id}
-            onClick={function () { dismiss(toast.id); }}
+            onClick={function () { if(!toast.action) dismiss(toast.id); }}
             className="fade-up"
             style={{
               background: bg, color: color,
@@ -83,10 +88,31 @@ export function ToastStack({ t, toasts, dismiss }) {
               fontSize: 13, fontWeight: 500, lineHeight: 1.35,
               boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
               maxWidth: 360,
-              cursor: "pointer", pointerEvents: "auto",
+              cursor: toast.action ? "default" : "pointer",
+              pointerEvents: "auto",
+              display: "flex", alignItems: "center", gap: 12,
             }}
           >
-            {toast.message}
+            <span style={{ flex: 1, minWidth: 0 }}>{toast.message}</span>
+            {toast.action && (
+              <button
+                onClick={function (e) {
+                  e.stopPropagation();
+                  try { toast.action.onClick(); } catch(_){}
+                  dismiss(toast.id);
+                }}
+                style={{
+                  flexShrink: 0,
+                  padding: "4px 10px", borderRadius: 8,
+                  background: color, color: "#fff",
+                  border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 800,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         );
       })}
