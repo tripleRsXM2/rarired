@@ -70,30 +70,46 @@ export function ToastStack({ t, toasts, dismiss }) {
       }}
     >
       {toasts.map(function (toast) {
-        var color = toast.kind === "error" ? t.red
-                  : toast.kind === "success" ? t.green
-                  : t.text;
-        var bg    = toast.kind === "error" ? t.redSubtle
-                  : toast.kind === "success" ? t.greenSubtle
-                  : t.bgCard;
+        // Neutral light card for every kind. The kind only affects a
+        // tiny accent dot (color cue) and the action button color —
+        // not the whole bg. Council pick: full coloured fills (e.g.
+        // greenSubtle) felt heavy and "validation-formy"; users
+        // wanted something cleaner.
+        var dotColor = toast.kind === "error" ? t.red
+                     : toast.kind === "success" ? t.green
+                     : t.accent;
+        var actionBg = toast.kind === "error" ? t.red : t.text;
         return (
           <div
             key={toast.id}
             onClick={function () { if(!toast.action) dismiss(toast.id); }}
             className="fade-up"
             style={{
-              background: bg, color: color,
-              border: "1px solid " + color + "44",
-              padding: "10px 14px", borderRadius: 10,
-              fontSize: 13, fontWeight: 500, lineHeight: 1.35,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-              maxWidth: 360,
+              background: t.bgCard, color: t.text,
+              border: "1px solid " + t.border,
+              // Bigger pill on web (plenty of room) — phones get the
+              // tighter padding via the parent flex layout.
+              padding: "14px 18px",
+              borderRadius: 14,
+              fontSize: 14, fontWeight: 500, lineHeight: 1.35,
+              letterSpacing: "-0.005em",
+              boxShadow:
+                "0 12px 32px rgba(20,18,17,0.12), " +
+                "0 2px 6px rgba(20,18,17,0.06)",
+              maxWidth: 420,
               cursor: toast.action ? "default" : "pointer",
               pointerEvents: "auto",
               display: "flex", alignItems: "center", gap: 12,
             }}
           >
-            <span style={{ flex: 1, minWidth: 0 }}>{toast.message}</span>
+            {/* Tiny accent dot — colour cue without overwhelming
+                the toast surface. */}
+            <span style={{
+              flexShrink: 0,
+              width: 8, height: 8, borderRadius: "50%",
+              background: dotColor,
+            }}/>
+            <span style={{ flex: 1, minWidth: 0, color: t.text }}>{toast.message}</span>
             {toast.action && (
               <button
                 onClick={function (e) {
@@ -103,10 +119,10 @@ export function ToastStack({ t, toasts, dismiss }) {
                 }}
                 style={{
                   flexShrink: 0,
-                  padding: "4px 10px", borderRadius: 8,
-                  background: color, color: "#fff",
+                  padding: "6px 12px", borderRadius: 999,
+                  background: actionBg, color: t.bg,
                   border: "none", cursor: "pointer",
-                  fontSize: 12, fontWeight: 800,
+                  fontSize: 12.5, fontWeight: 800,
                   letterSpacing: "0.02em",
                 }}
               >

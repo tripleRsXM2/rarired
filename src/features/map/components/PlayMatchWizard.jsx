@@ -55,12 +55,18 @@ export default function PlayMatchWizard({
   var [players, setPlayers]     = useState([]);
   var [loading, setLoading]     = useState(false);
   // When? — drives the "this Saturday" / "Sat or Sun" wording in the
-  // pre-filled invite. Three modes:
-  //   "week"     — default, "sometime this week"
-  //   "weekend"  — "this weekend"
-  //   "days"     — pick specific day-of-week chips (multi-select)
+  // pre-filled invite. Modes:
+  //   "week"      — default, "sometime this week"
+  //   "next-week" — "sometime next week"
+  //   "weekend"   — "this weekend"
+  //   "days"      — pick specific day-of-week chips (multi-select)
   var [whenMode, setWhenMode] = useState("week");
   var [pickedDays, setPickedDays] = useState([]); // ["Mon","Tue",...]
+  // Optional time-of-day cue. Defaults to "anytime" which omits any
+  // time mention in the draft (lower friction); other values fold
+  // into the phrase as "in the morning" / "this Saturday afternoon"
+  // / etc.
+  var [timeOfDay, setTimeOfDay] = useState("anytime"); // anytime|morning|afternoon|evening
 
   // Tracks whether a mouse-press started on the backdrop. Used to
   // distinguish "user clicked the dim area" from "user drag-selected
@@ -79,6 +85,7 @@ export default function PlayMatchWizard({
     setScope("zone");
     setWhenMode("week");
     setPickedDays([]);
+    setTimeOfDay("anytime");
     track("play_match_step_entered", { step: startStep });
     if(typeof document !== "undefined"){
       var prev = document.body.style.overflow;
@@ -180,7 +187,7 @@ export default function PlayMatchWizard({
     // is gone.
     track("play_match_player_picked", { player_count: partners.length, scope: scope });
     var zone = ZONES.find(function(z){ return z.id === zoneId; });
-    var when = resolveWhen(whenMode, pickedDays);
+    var when = resolveWhen(whenMode, pickedDays, timeOfDay);
     var ctx = {
       venue: courtName || (zone && zone.name) || "",
       zoneId: zoneId,
@@ -195,6 +202,7 @@ export default function PlayMatchWizard({
       partner_count: partners.length, scope: scope,
       when_mode: whenMode,
       day_count: whenMode === "days" ? pickedDays.length : null,
+      time_of_day: timeOfDay,
     });
     if(onSendInvite) onSendInvite(partners, ctx);
   }
@@ -667,9 +675,10 @@ export default function PlayMatchWizard({
                   </div>
                   <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                     {[
-                      { id:"week",    label:"This week" },
-                      { id:"weekend", label:"Weekend" },
-                      { id:"days",    label:"Pick days" },
+                      { id:"week",      label:"This week" },
+                      { id:"next-week", label:"Next week" },
+                      { id:"weekend",   label:"Weekend" },
+                      { id:"days",      label:"Pick days" },
                     ].map(function(opt){
                       var on = whenMode === opt.id;
                       return (
@@ -725,6 +734,36 @@ export default function PlayMatchWizard({
                       })}
                     </div>
                   )}
+
+                  {/* Time of day — optional cue. Defaults to Anytime
+                      (no time mention in the draft). Always visible
+                      so users notice the affordance without an extra
+                      "advanced options" hop. */}
+                  <div style={{ display:"flex", gap: 6, flexWrap:"wrap", marginTop: 10 }}>
+                    {[
+                      { id:"anytime",   label:"Anytime"   },
+                      { id:"morning",   label:"Morning"   },
+                      { id:"afternoon", label:"Afternoon" },
+                      { id:"evening",   label:"Evening"   },
+                    ].map(function(opt){
+                      var on = timeOfDay === opt.id;
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={function(){ setTimeOfDay(opt.id); }}
+                          style={{
+                            padding: "7px 13px", borderRadius: 999,
+                            background: on ? t.text : hexToRgba(t.bgCard, 0.78),
+                            color: on ? t.bg : t.textSecondary,
+                            border:"none", cursor:"pointer",
+                            fontSize: 11.5, fontWeight: 700,
+                            letterSpacing:"0.01em",
+                            transition: "background 0.15s, color 0.15s",
+                          }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   {/* Booking-link slot — venue is locked in by now
                       so "check times at <venue>" reads naturally and
@@ -798,7 +837,7 @@ export default function PlayMatchWizard({
                           partners: selectedIds.map(function(id){ return players.find(function(p){ return p.id === id; }); }).filter(Boolean),
                           court: courtName,
                           zone: zone,
-                          when: resolveWhen(whenMode, pickedDays),
+                          when: resolveWhen(whenMode, pickedDays, timeOfDay),
                         })}
                       </div>
                       <div style={{
@@ -873,29 +912,60 @@ function buildInviteDraft({ partners, court, zone, when }){
   return previewInviteText({ partners: partners, court: court, zone: zone, when: when });
 }
 
-// Resolve the chip selection into a structured value the rest of the
-// pipeline (draft text, ctx, analytics) can consume.
-function resolveWhen(mode, days){
-  if(mode === "weekend") return { kind: "weekend" };
+// Resolve the chip selections into a structured value the rest of
+// the pipeline (draft text, ctx, analytics) can consume.
+function resolveWhen(mode, days, time){
+  var t = time || "anytime";
+  if(mode === "next-week") return { kind: "next-week", time: t };
+  if(mode === "weekend")   return { kind: "weekend",   time: t };
   if(mode === "days" && Array.isArray(days) && days.length){
-    return { kind: "days", days: days.slice() };
+    return { kind: "days", days: days.slice(), time: t };
   }
-  return { kind: "week" }; // default
+  return { kind: "week", time: t }; // default
 }
 
 // Render a "when" structure into the natural-language phrase that
 // fits inside the invite sentence ("...up for a hit at X <phrase>?").
+//
+// The shape splits into a "when-clause" (week/weekend/days) and an
+// optional "time-clause" (morning/afternoon/evening). Anytime omits
+// the time clause entirely so the message stays casual when the
+// user doesn't care.
 function whenPhrase(when){
-  if(!when || when.kind === "week") return "sometime this week";
-  if(when.kind === "weekend")       return "this weekend";
-  if(when.kind === "days" && when.days && when.days.length){
+  if(!when) return "sometime this week";
+  var time = when.time || "anytime";
+  var dayPart;
+  if(when.kind === "next-week") {
+    dayPart = "next week";
+  } else if(when.kind === "weekend") {
+    dayPart = "this weekend";
+  } else if(when.kind === "days" && when.days && when.days.length){
     var d = sortDaysOfWeek(when.days);
-    if(d.length === 1) return "this " + d[0];
-    if(isContiguous(d)) return d[0] + "–" + d[d.length - 1]; // range
-    if(d.length === 2)  return d[0] + " or " + d[1];
-    return d.slice(0, -1).join(", ") + " or " + d[d.length - 1];
+    if(d.length === 1)        dayPart = "this " + d[0];
+    else if(isContiguous(d))  dayPart = d[0] + "–" + d[d.length - 1];
+    else if(d.length === 2)   dayPart = d[0] + " or " + d[1];
+    else                       dayPart = d.slice(0, -1).join(", ") + " or " + d[d.length - 1];
+  } else {
+    dayPart = "this week";
   }
-  return "sometime this week";
+
+  // Time clause: anytime → omit. Specific day + time → "Saturday
+  // morning" reads more naturally than "Saturday in the morning".
+  // Generic week/weekend + time → "this week in the morning".
+  if(time === "anytime"){
+    // For the abstract "this week" / "next week" / "this weekend" we
+    // prefix with "sometime" to read casually. For day-specific we
+    // keep it tight ("this Saturday").
+    if(when.kind === "week"      ) return "sometime this week";
+    if(when.kind === "next-week" ) return "sometime next week";
+    return dayPart;
+  }
+  // With a time and a specific day → tight: "this Saturday morning"
+  if(when.kind === "days" && when.days && when.days.length === 1){
+    return dayPart + " " + time;
+  }
+  // Otherwise prepend "in the": "this week in the morning"
+  return dayPart + " in the " + time;
 }
 
 function sortDaysOfWeek(arr){
