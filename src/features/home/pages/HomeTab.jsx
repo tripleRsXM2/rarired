@@ -244,21 +244,27 @@ function FeedCard({
     : null;
   var isWin = setsSayViewerWon !== null ? setsSayViewerWon : (m.result === "win");
 
-  // The label in the header subtitle — league name (Module 7) > tournament
-  // > Casual. League takes precedence because it's a more specific identity
-  // than "Ranked" and it's the whole reason the match was logged there.
+  // The CONTEXT label that headlines the card. League takes precedence
+  // (it's a more specific identity than "Ranked"); then a tournament
+  // name; then the basic "Ranked" / "Casual" classification. Used as
+  // the eyebrow at the top of the card.
   var leagueName = m.league_id && leaguesIndex ? (leaguesIndex[m.league_id] || null) : null;
-  var matchKindLabel = leagueName
+  var contextLabel = leagueName
     ? leagueName
     : (m.tournName && m.tournName !== "Casual Match"
         ? m.tournName
-        : "Casual");
+        : (isRanked ? "Ranked" : "Casual"));
 
-  // Strava-style subtitle: "Yesterday · Ranked · Moore Park"
-  var subtitleParts = [m.date];
-  if (matchKindLabel) subtitleParts.push(matchKindLabel);
-  if (m.venue) subtitleParts.push(m.court ? m.venue + " · " + m.court : m.venue);
-  var subtitleText = subtitleParts.filter(Boolean).join(" · ");
+  // Footer metadata text — "Logged by X · date · venue". Replaces the
+  // header subtitle. "you" instead of viewer's name when isOwn so the
+  // card doesn't need to know the viewer's name pattern.
+  var loggerLabel = isOwn ? "you" : pName;
+  var venueText = m.venue ? (m.court ? m.venue + " · " + m.court : m.venue) : null;
+  var footerMetaParts = [
+    "Logged by " + loggerLabel,
+    m.date,
+    venueText,
+  ].filter(Boolean);
 
   // Slice 5 — rivalry flag. True only when (a) the viewer is one of the
   // two players in this match and (b) the viewer has played the OTHER
@@ -330,74 +336,47 @@ function FeedCard({
         opacity: cardOpacity,
       }}
     >
-      {/* ── Header — tightened sizing to feel refined, not chunky.
-            cs-feed-card-header lets slice 5's mobile pass trim the
-            vertical gutter without touching the desktop rhythm. ── */}
-      <div className="cs-feed-card-header" style={{ padding: "14px 16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
-        {/* Poster avatar — real photo if we have one (uploaded avatar_url),
-            else deterministic colour + initials via PlayerAvatar. Clickable
-            when the poster is a linked user. */}
-        <div
-          onClick={posterClickable ? goPoster : undefined}
-          style={{ flexShrink: 0, cursor: posterClickable ? "pointer" : "default" }}>
-          <PlayerAvatar name={pName} avatar={pAvatar} avatarUrl={pAvatarUrl} size={34} />
-        </div>
+      {/* ── Match-first context strip ───────────────────────────────────
+          Replaces the legacy author-avatar header. The card is a match
+          result first, social post second — the participants own the
+          identity (visible in the scoreboard rows below), so the top
+          band is now context + chrome only.
 
-        {/* Name + subtitle */}
+          Left:  uppercase eyebrow with the match's context — league name
+                 if league-tagged (clickable, deep-links to standings),
+                 else tournament name, else "Ranked" / "Casual".
+          Right: status pill + close/lock controls. */}
+      <div className="cs-feed-card-header" style={{
+        padding: "14px 16px 0",
+        display: "flex", gap: 10, alignItems: "center",
+      }}>
+        {/* Eyebrow — the match's context. Clickable when it's a league
+            (deep-links into that league's standings). */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: t.accent, letterSpacing: "-0.1px", lineHeight: 1.2 }}>
-            <span
-              onClick={posterClickable ? goPoster : undefined}
-              style={{ cursor: posterClickable ? "pointer" : "default" }}>
-              {pName}
-            </span>
-            {isOwn && <span style={{ fontSize: 10, color: t.textTertiary, fontWeight: 500 }}> · You</span>}
-          </div>
-          <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-              {subtitleText}
-            </span>
-            {/* Slice 5 — subtle rivalry pill: viewer has played the
-                other side ≥5 confirmed times. Sharp accent pill matches
-                the league pill rhythm; "subtle" per design-direction.md
-                so it reads as flavour, not as a header status. */}
-            {isRivalryMatch && (
-              <span
-                title="Rivalry — you've played this opponent 5+ times"
-                style={{
-                  flexShrink: 0,
-                  fontSize: 9, fontWeight: 700,
-                  color: t.accent, background: t.accentSubtle,
-                  border: "1px solid " + t.accent + "33",
-                  padding: "1px 6px", letterSpacing: "0.07em",
-                  textTransform: "uppercase",
-                }}>
-                Rivalry
-              </span>
-            )}
-          </div>
+          <button
+            onClick={leagueName && onOpenLeague ? function (e) {
+              e.stopPropagation();
+              if (m.league_id) onOpenLeague(m.league_id);
+            } : undefined}
+            title={leagueName ? "Open league · " + leagueName : undefined}
+            style={{
+              background: "transparent", border: "none", padding: 0, margin: 0,
+              cursor: (leagueName && onOpenLeague) ? "pointer" : "default",
+              fontSize: 10, fontWeight: 800,
+              color: leagueName ? t.accent : t.textTertiary,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              textAlign: "left",
+              maxWidth: "100%",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              display: "block",
+            }}>
+            {contextLabel}
+          </button>
         </div>
 
-        {/* Top-right: status pill + close-button (kept minimal) */}
+        {/* Right-side chrome — status pill + close/lock buttons */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-          {/* Module 7: league pill — clickable, deep-links to the league's
-              standings view so users can tap from a feed card straight into
-              the scoreboard context. */}
-          {leagueName && (
-            <button
-              onClick={function (e) {
-                e.stopPropagation();
-                if (onOpenLeague && m.league_id) onOpenLeague(m.league_id);
-              }}
-              title={"Open league · " + leagueName}
-              style={{
-                fontSize: 9, fontWeight: 700, color: t.accent, background: t.accentSubtle,
-                border: "1px solid " + t.accent + "33",
-                padding: "2px 7px", borderRadius: 20, letterSpacing: "0.06em", textTransform: "uppercase",
-                maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                cursor: onOpenLeague ? "pointer" : "default",
-              }}>{leagueName}</button>
-          )}
           {statusPill && (
             <span style={{
               fontSize: 9, fontWeight: 700, color: statusPill.color, background: statusPill.bg,
@@ -448,10 +427,6 @@ function FeedCard({
           )}
         </div>
       </div>
-
-      {/* Title row ("vs Opponent") removed — the scoreboard rows below now
-          carry both players' avatars + names, so this line was pure repeat.
-          Tennis-ball ICON is kept in the ICONS set in case we want it back. */}
 
       {/* Stats strip removed — every value (Result / Sets / Score) was
           already visible in the scoreboard below via arrow + row bolding +
@@ -774,6 +749,39 @@ function FeedCard({
              m.voidedReason === "timeout"       ? "Voided — dispute window expired" :
              "Voided — does not count"}
           </span>
+        </div>
+      )}
+
+      {/* ── Logger / date / venue metadata ─────────────────────────────
+          Replaces the legacy author header. The submitter's identity is
+          surfaced here as quiet meta — secondary to the match itself —
+          along with the date and venue. Rivalry tag is appended inline
+          when applicable so it doesn't need its own row. */}
+      {!demo && (
+        <div style={{
+          padding: "0 16px 6px",
+          fontSize: 11,
+          color: t.textTertiary,
+          letterSpacing: "0.01em",
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+          minWidth: 0,
+        }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+            {footerMetaParts.join("  ·  ")}
+          </span>
+          {isRivalryMatch && (
+            <span
+              title="Rivalry — you've played this opponent 5+ times"
+              style={{
+                flexShrink: 0,
+                fontSize: 9, fontWeight: 800,
+                color: t.accent,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}>
+              · Rivalry
+            </span>
+          )}
         </div>
       )}
 
