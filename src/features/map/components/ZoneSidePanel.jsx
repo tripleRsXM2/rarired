@@ -26,6 +26,7 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone } from "../services/mapService.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import { track } from "../../../lib/analytics.js";
 
 var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
 
@@ -68,6 +69,15 @@ export default function ZoneSidePanel({
   useEffect(function () {
     setSelectedIds([]);
   }, [zone && zone.id]);
+
+  // Long-list collapse — zones with >5 venues (Eastern Suburbs, CBD,
+  // Inner West) feel cramped on mobile when every court renders. By
+  // default show the first 4 + a "Show all N" CTA. Tapping the CTA
+  // expands inline. Re-collapses when zone changes.
+  var COLLAPSE_THRESHOLD = 5;
+  var COLLAPSED_VISIBLE  = 4;
+  var [courtsExpanded, setCourtsExpanded] = useState(false);
+  useEffect(function(){ setCourtsExpanded(false); }, [zone && zone.id]);
 
   // Fetch + rank the player list. Always returns the WHOLE zone roster
   // (by home_zone) so users can reach anyone in their area — even to
@@ -165,6 +175,19 @@ export default function ZoneSidePanel({
 
   var courts = courtsInZone(zone.id);
   var totalCourts = courts.reduce(function(n,c){ return n + c.courts; }, 0);
+  // If the user picks a court via the panel that's beyond the
+  // collapsed slice, auto-expand so the active row stays visible.
+  var collapseActive = courts.length > COLLAPSE_THRESHOLD && !courtsExpanded;
+  var selectedIdx = selectedCourt ? courts.findIndex(function(c){ return c.name === selectedCourt; }) : -1;
+  if (collapseActive && selectedIdx >= COLLAPSED_VISIBLE) {
+    collapseActive = false;
+    // setState in render is fine here because it's idempotent and
+    // the auto-expand only happens when a hidden court gets selected.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    if (!courtsExpanded) setCourtsExpanded(true);
+  }
+  var visibleCourts = collapseActive ? courts.slice(0, COLLAPSED_VISIBLE) : courts;
+  var hiddenCount = courts.length - visibleCourts.length;
   // When a venue is pinned in the panel, the stat-row "Courts" cell
   // switches from the zone total to that venue's own court count
   // (e.g. "6 · Courts here") so the user sees the playable size of
@@ -296,7 +319,7 @@ export default function ZoneSidePanel({
           <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:2, marginBottom:18 }}>
-            {courts.map(function (c) {
+            {visibleCourts.map(function (c) {
               var selected = selectedCourt === c.name;
               // Flat row — no border, no card chrome. Selection state
               // = soft accent-tinted bg filling the whole row + bolded
@@ -347,6 +370,28 @@ export default function ZoneSidePanel({
                 </div>
               );
             })}
+            {courts.length > COLLAPSE_THRESHOLD && (
+              <button type="button"
+                onClick={function(){
+                  var next = !courtsExpanded;
+                  setCourtsExpanded(next);
+                  // Track expansion so we can validate the collapsed
+                  // default — if 80%+ expand we picked the wrong cap;
+                  // if <20% the list past 4 is rarely valued.
+                  if(next) track("map_courts_expanded", { zone_id: zone && zone.id, total: courts.length });
+                }}
+                style={{
+                  marginTop: 4, padding: "8px 10px",
+                  background:"transparent", border:"none",
+                  color: t.textSecondary, fontSize: 11.5,
+                  fontWeight: 600, letterSpacing: "0.02em",
+                  cursor: "pointer", textAlign: "left",
+                }}>
+                {courtsExpanded
+                  ? "Show fewer ↑"
+                  : "Show all " + courts.length + " courts ↓"}
+              </button>
+            )}
           </div>
         )}
 

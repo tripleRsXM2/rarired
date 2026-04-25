@@ -64,6 +64,7 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `challenge_from_map` | User taps "Challenge" on a recent-player row inside `CourtInfoCard` | `target_user_id`, `zone_id`, `source` ("court") |
 | `map_layers_panel_opened` | User taps the layers cog icon on the map | _(none)_ |
 | `map_layer_toggled` | User flips a switch in the layers panel (homes / courts / activity / mapTheme) | `layer` ("homes" \| "courts" \| "activity" \| "mapTheme"), `value` (boolean for toggles, "auto"\|"light"\|"dark" for mapTheme) |
+| `map_courts_expanded` | User taps "Show all N courts ↓" in the zone side panel (zones with >5 venues default to a 4-court collapsed view on mobile) | `zone_id`, `total` (number of courts in the zone) |
 
 ### Reserved (defined but not fired until later modules)
 
