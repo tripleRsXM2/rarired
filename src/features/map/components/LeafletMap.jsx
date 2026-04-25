@@ -36,44 +36,41 @@ var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 // (HOME_SVG retired — the home indicator is now baked directly into
 // the zone-number label as a house-shaped badge. See zoneLabelHtml.)
 
-// Build the HTML for a zone label. User asked to drop the per-zone
-// numbers from the map — they read as clutter once the side panel
-// (and its zone-numbered title) shipped. Map labels now show the
-// zone NAME only.
+// Council decision: drop the floating zone-name labels from the map.
+// They duplicated the bottom-left hover tooltip + the side-panel
+// header, and overlapped court markers. We still want a quick visual
+// for *home* and *active* zones at a glance, so render a minimal
+// centroid badge only when there's something to say. Empty zones
+// are unlabelled — the polygon colour + tooltip carry the rest.
 //
-// `isHome` swaps in a small accent-coloured circle with a house glyph
-// — the only home indicator on the map now that the standalone pin
-// + numbered label badge are both retired.
-function zoneLabelHtml(z, activity, isHome) {
-  var flame = activity && activity.matches_7d > 0
-    ? ('<div style="margin-top:3px;font-size:9.5px;font-weight:700;letter-spacing:0.02em;' +
-        'color:#fff;background:rgba(239,68,68,0.95);padding:1px 6px;border-radius:10px;' +
-        'text-shadow:none;box-shadow:0 1px 2px rgba(0,0,0,0.2)">🔥 ' +
-        activity.matches_7d + ' this week</div>')
-    : '';
-  // Home badge — circle in the zone's accent colour with a small
-  // house glyph centred. Non-home zones render no badge at all (the
-  // colored polygon underneath already conveys identity, the side
-  // panel carries everything else).
-  var badge = isHome
-    ? ('<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';' +
+// Returns null when there's nothing worth painting (saves a marker
+// per zone in the common case).
+function zoneCentroidBadgeHtml(z, activity, isHome) {
+  var hasFlame = activity && activity.matches_7d > 0;
+  if (!isHome && !hasFlame) return null;
+
+  var homeBadge = isHome
+    ? ('<div style="width:32px;height:32px;border-radius:50%;background:' + z.color + ';' +
          'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.92);' +
          'display:flex;align-items:center;justify-content:center">' +
          '<svg width="16" height="16" viewBox="0 0 18 18" fill="none">' +
            '<path d="M3 8l6-5 6 5v6a1 1 0 0 1 -1 1H4a1 1 0 0 1 -1-1V8z" ' +
-                 'stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>' +
+                 'stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>' +
            '<path d="M7 15v-4h4v4" ' +
-                 'stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>' +
+                 'stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>' +
          '</svg>' +
        '</div>')
     : '';
+
+  var flame = hasFlame
+    ? ('<div style="margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.02em;' +
+        'color:#fff;background:rgba(239,68,68,0.95);padding:2px 8px;border-radius:12px;' +
+        'box-shadow:0 1px 2px rgba(0,0,0,0.25)">🔥 ' + activity.matches_7d + '</div>')
+    : '';
+
   return (
-    '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;pointer-events:none">' +
-      badge +
-      '<div style="font-size:11px;font-weight:700;letter-spacing:0.04em;color:#141211;' +
-        'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:140px;line-height:1.2">' +
-        z.name.toUpperCase() + '</div>' +
-      flame +
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:0;pointer-events:none">' +
+      homeBadge + flame +
     '</div>'
   );
 }
@@ -144,16 +141,12 @@ export default function LeafletMap({
       var labelLatLng = [bbCenter.lat, bbCenter.lng];
       zoneCentersRef.current[z.id] = labelLatLng;
 
-      // Number badge + zone name label (+ optional 7-day activity flame).
-      // homeZone passed in via prop — re-rendered when it changes via the
-      // refresh effect below so the house badge appears/disappears live.
-      var html = zoneLabelHtml(z, null, homeZone === z.id);
-      var label = L.marker(labelLatLng, {
-        icon: L.divIcon({ className: "cs-zone-label", html: html, iconSize: [140, 72], iconAnchor: [70, 36] }),
-        interactive: false,
-        zIndexOffset: 500,
-      }).addTo(map);
-      zoneLabelsRef.current[z.id] = label;
+      // Floating zone label retired (council decision — labels duplicated
+      // the bottom-left hover tooltip + the side-panel header, and
+      // overlapped court markers). Centroid markers below render only
+      // when there's a signal worth showing (home + activity), via the
+      // refresh effect downstream.
+      zoneLabelsRef.current[z.id] = null;
     });
 
     // Fit the view to the union of all zone polygons so the zones fill
@@ -249,17 +242,34 @@ export default function LeafletMap({
   // Update zone label HTML when activity streams in — the flame badge is
   // attached to the zone number/name stack so it follows the polygon
   // centre automatically.
+  // Centroid badge — renders ONLY when a zone is the viewer's home
+  // and/or has activity in the last 7 days. Add/remove markers as the
+  // signals change rather than mutating an always-present label. Keeps
+  // the map clean for inactive zones.
   useEffect(function(){
-    if(!mapRef.current) return;
+    var map = mapRef.current;
+    if(!map) return;
     Object.keys(zoneLabelsRef.current).forEach(function(id){
-      var marker = zoneLabelsRef.current[id];
       var z = ZONE_BY_ID[id];
-      if(!marker || !z) return;
-      var html = zoneLabelHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id);
-      marker.setIcon(L.divIcon({
-        className: "cs-zone-label", html: html,
-        iconSize: [140, 72], iconAnchor: [70, 36],
-      }));
+      if(!z) return;
+      var prev = zoneLabelsRef.current[id];
+      if(prev){ map.removeLayer(prev); }
+      var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id);
+      if(!html){
+        zoneLabelsRef.current[id] = null;
+        return;
+      }
+      var center = zoneCentersRef.current[id] || z.center;
+      var marker = L.marker(center, {
+        icon: L.divIcon({
+          className: "cs-zone-centroid",
+          html: html,
+          iconSize: [60, 56], iconAnchor: [30, 28],
+        }),
+        interactive: false,
+        zIndexOffset: 500,
+      }).addTo(map);
+      zoneLabelsRef.current[id] = marker;
     });
   },[zoneActivity, homeZone]);
 

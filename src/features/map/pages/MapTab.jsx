@@ -117,29 +117,58 @@ export default function MapTab({
         </div>
       </div>
 
-      {/* Floating hovered-zone tooltip (bottom-left) */}
+      {/* Hovered-zone card — promoted from a small chip to a card-style
+          element now that the floating zone-name labels are gone. This
+          IS the on-map zone identifier when nothing is selected. Larger
+          type, accent stripe, drop-shadow + slide-in animation. */}
       {hovered && !selected && (function(){
         var h = ZONE_BY_ID[hovered];
         if(!h) return null;
         var a = zoneActivity[hovered];
         return (
-          <div style={{
-            position:"absolute", left:12, bottom:12,
-            background: t.text, color: t.bg,
-            padding:"8px 12px", borderRadius:6,
-            fontSize:12, zIndex:500, pointerEvents:"none",
-            boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-            display:"flex", alignItems:"center", gap:8,
-          }}>
-            <span style={{ fontWeight:700 }}>{h.num}. {h.name}</span>
-            <span style={{ opacity:0.55 }}>·</span>
-            <span style={{ opacity:0.8 }}>{h.blurb.split(",")[0]} area</span>
-            {a && a.matches_7d > 0 && (
-              <>
-                <span style={{ opacity:0.55 }}>·</span>
-                <span style={{ opacity:0.95, fontWeight:600 }}>🔥 {a.matches_7d}</span>
-              </>
-            )}
+          <div className="fade-up"
+            style={{
+              position:"absolute", left:14, bottom:14,
+              background: t.bgCard, color: t.text,
+              border: "1px solid " + t.border,
+              borderLeft: "4px solid " + h.color,
+              padding:"12px 16px", borderRadius:10,
+              minWidth: 240, maxWidth: 320,
+              zIndex:500, pointerEvents:"none",
+              boxShadow:"0 8px 28px rgba(0,0,0,0.18)",
+              display:"flex", flexDirection:"column", gap:4,
+            }}>
+            <div style={{
+              fontSize:9, fontWeight:800, letterSpacing:"0.12em",
+              textTransform:"uppercase", color: h.color,
+            }}>
+              Zone {h.num}
+            </div>
+            <div style={{
+              display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+            }}>
+              <span style={{ fontSize:16, fontWeight:800, color:t.text, letterSpacing:"-0.3px" }}>
+                {h.name}
+              </span>
+              {a && a.matches_7d > 0 && (
+                <span style={{
+                  fontSize:10, fontWeight:800, letterSpacing:"0.04em",
+                  color:"#fff", background:"rgba(239,68,68,0.95)",
+                  padding:"2px 8px", borderRadius:12,
+                }}>
+                  🔥 {a.matches_7d}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize:11.5, color:t.textSecondary, lineHeight:1.4 }}>
+              {h.blurb}
+            </div>
+            <div style={{
+              fontSize:10, color:t.textTertiary, marginTop:4,
+              letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:600,
+            }}>
+              Tap to open zone
+            </div>
           </div>
         );
       })()}
