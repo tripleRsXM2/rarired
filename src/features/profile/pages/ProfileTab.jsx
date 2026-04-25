@@ -13,6 +13,7 @@ import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import ProfileHero from "../components/ProfileHero.jsx";
 import ProfileRivalry from "../components/ProfileRivalry.jsx";
+import ProfileStatsAccordion from "../components/ProfileStatsAccordion.jsx";
 import HomeLeaguesStrip from "../../home/components/HomeLeaguesStrip.jsx";
 
 // ── ProfileMatchRow ──────────────────────────────────────────────────────────
@@ -242,19 +243,21 @@ export default function ProfileTab({
   // cache + per-league deep-link callback.
   leagueDetailCache, loadLeagueDetail, onOpenLeague,
 }) {
-  var wins    = profile.wins         != null ? profile.wins         : history.filter(function(m){return m.result==="win";}).length;
-  var losses  = profile.losses       != null ? profile.losses       : history.length - wins;
-  var played  = profile.matches_played != null ? profile.matches_played : history.length;
-  var winRate = played ? Math.round(wins/played*100) : 0;
-  var rankPts = profile.ranking_points != null ? profile.ranking_points : Math.max(0,1000+wins*15-losses*10);
+  // Wins/played still needed for badge unlock checks. Rank, win-rate,
+  // streak-label, and the loss tally now live inside the Hero +
+  // ProfileStatsAccordion — no need to derive them here.
+  var wins   = profile.wins != null ? profile.wins : history.filter(function(m){return m.result==="win";}).length;
+  var played = profile.matches_played != null ? profile.matches_played : history.length;
 
   var streakCount = profile.streak_count != null ? profile.streak_count : 0;
   var streakType  = profile.streak_type  != null ? profile.streak_type  : null;
-  if(profile.streak_count == null && history.length){
+  if (profile.streak_count == null && history.length) {
     streakType = history[0].result;
-    for(var si=0;si<history.length;si++){if(history[si].result===streakType)streakCount++;else break;}
+    for (var si = 0; si < history.length; si++) {
+      if (history[si].result === streakType) streakCount++;
+      else break;
+    }
   }
-  var streakLabel = streakCount===0 ? "—" : streakCount+(streakType==="win"?" W":" L");
 
   var badges = BADGES.map(function(b){
     return Object.assign({},b,{unlocked:b.check(wins,played,streakCount,streakType)});
@@ -313,39 +316,15 @@ export default function ProfileTab({
         />
       </div>
 
-      {/* Quick stats strip + achievements summary stay until commit 2D
-          replaces them with the deeper-stats accordion. Renders inside
-          the same gutter as the new Hero. */}
+      {/* Stats accordion (slice 2) — replaces the legacy Ranking +
+          Achievements summary card AND the 4-col Quick-stats strip.
+          Default collapsed; expands to a single editorial card with
+          totals, streak, confirmation rate, type/format breakdowns. */}
+      <div style={{padding:"0 20px 14px"}}>
+        <ProfileStatsAccordion t={t} profile={profile} history={history} />
+      </div>
+
       <div style={{padding:"0 20px"}}>
-        <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"12px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Ranking Points</div>
-            <div style={{fontSize:22,fontWeight:800,color:t.text,letterSpacing:"-0.4px",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{rankPts.toLocaleString()}</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Achievements</div>
-            <div style={{fontSize:22,fontWeight:800,color:t.gold,letterSpacing:"-0.4px",lineHeight:1.1}}>
-              {unlockedCount}<span style={{fontSize:12,color:t.textTertiary,fontWeight:500}}>/{badges.length}</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:0,marginBottom:18,background:t.bgCard,border:"1px solid "+t.border}}>
-          {[
-            {l:"Matches",v:history.length,                              c:t.text},
-            {l:"Wins",   v:wins,                                        c:t.green},
-            {l:"Win %",  v:history.length?winRate+"%":"—",              c:t.accent},
-            {l:"Streak", v:streakLabel, c:streakType==="win"?t.green:streakType==="loss"?t.red:t.textTertiary},
-          ].map(function(s,i){
-            return (
-              <div key={s.l} style={{padding:"10px 8px",textAlign:"center",borderLeft:i===0?"none":"1px solid "+t.border}}>
-                <div style={{fontSize:9,color:t.textTertiary,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
-                <div style={{fontSize:14,fontWeight:700,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.2px",lineHeight:1.1}}>{s.v}</div>
-              </div>
-            );
-          })}
-        </div>
-
         {/* Sub-tabs: overview / matches / achievements only */}
         <div style={{display:"flex",borderBottom:"1px solid "+t.border,marginLeft:-20,marginRight:-20,paddingLeft:20}}>
           {["overview","matches","achievements"].map(function(pt){
@@ -370,28 +349,6 @@ export default function ProfileTab({
       {/* ── Overview ─────────────────────────────────────────────────────────── */}
       {profileTab==="overview"&&(
         <div style={{padding:"20px 20px 100px"}} className="fade-up">
-          <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Performance</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,marginBottom:24,background:t.bgCard,border:"1px solid "+t.border}}>
-            {[
-              {l:"Total Played", v:history.length,                                   sub:"all time",                                                        c:t.text},
-              {l:"Total Wins",   v:wins,                                              sub:"all time",                                                        c:t.green},
-              {l:"Total Losses", v:losses,                                            sub:"all time",                                                        c:t.red},
-              {l:"Win Rate",     v:history.length?winRate+"%":"—", sub:history.length?"from "+history.length+" matches":"no matches yet", c:t.accent},
-            ].map(function(s,i){
-              return (
-                <div key={s.l} style={{
-                  padding:"14px 16px",
-                  borderLeft:i%2===1?"1px solid "+t.border:"none",
-                  borderTop:i>=2?"1px solid "+t.border:"none",
-                }}>
-                  <div style={{fontSize:9,color:t.textTertiary,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:4}}>{s.l}</div>
-                  <div style={{fontSize:22,fontWeight:800,color:s.c,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.4px",lineHeight:1.1}}>{s.v}</div>
-                  <div style={{fontSize:10,color:t.textTertiary,marginTop:3,letterSpacing:"0.01em"}}>{s.sub}</div>
-                </div>
-              );
-            })}
-          </div>
-
           {/* Recent matches */}
           <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>Recent Matches</span>
