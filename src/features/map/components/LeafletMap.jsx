@@ -325,7 +325,13 @@ export default function LeafletMap({
           className: "cs-zone-name",
           html: zoneNameLabelHtml(z, isDark),
           iconSize: [140, 16],
-          iconAnchor: [70, 8],
+          // Rule (locked): zone names must never overlap the cluster
+          // number bubbles. Clusters sit AT the centroid (28px tall,
+          // anchored centre → 14px above centroid). Pushing the
+          // label anchor down to 51 (icon height 16 + 35 below)
+          // means the label paints 35px ABOVE the centroid, leaving
+          // ~21px of clearance above any cluster bubble.
+          iconAnchor: [70, 51],
         }),
         interactive: false,
         // Sit above polygons (z 400) but below courts (z 600 via
