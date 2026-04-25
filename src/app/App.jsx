@@ -755,6 +755,9 @@ export default function App(){
             openProfile={openProfile}
             openChallenge={openChallenge}
             myLeagues={leagues.leagues}
+            leagueDetailCache={leagues.detailCache}
+            loadLeagueDetail={leagues.loadLeagueDetail}
+            onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
             onOpenLeagues={function(){navigate("/tournaments/leagues");}}
           />
         )}

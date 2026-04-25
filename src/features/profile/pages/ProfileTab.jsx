@@ -13,6 +13,7 @@ import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import ProfileHero from "../components/ProfileHero.jsx";
 import ProfileRivalry from "../components/ProfileRivalry.jsx";
+import HomeLeaguesStrip from "../../home/components/HomeLeaguesStrip.jsx";
 
 // ── ProfileMatchRow ──────────────────────────────────────────────────────────
 // Compact version of the feed scoreboard for use inside the profile (Recent
@@ -237,6 +238,9 @@ export default function ProfileTab({
   // Leagues sub-tab so the profile page reinforces league identity/retention.
   myLeagues,
   onOpenLeagues,
+  // Slice 2 (design overhaul) — reused HomeLeaguesStrip needs the detail
+  // cache + per-league deep-link callback.
+  leagueDetailCache, loadLeagueDetail, onOpenLeague,
 }) {
   var wins    = profile.wins         != null ? profile.wins         : history.filter(function(m){return m.result==="win";}).length;
   var losses  = profile.losses       != null ? profile.losses       : history.length - wins;
@@ -445,57 +449,20 @@ export default function ProfileTab({
             </div>
           )}
 
-          {/* Your leagues — active private seasons with friends (Module 7).
-              Rank is pulled lazily from league standings in the Leagues tab;
-              on the profile page we just show the league name + tap through. */}
-          {(function(){
-            var activeLeagues = (myLeagues||[]).filter(function(lg){
-              return lg.status === "active" && lg.my_status === "active";
-            });
-            if (!activeLeagues.length) return null;
-            return (
-              <div style={{marginTop:24}}>
-                <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span>Your leagues</span>
-                  {onOpenLeagues&&(
-                    <button onClick={onOpenLeagues} style={{background:"none",border:"none",color:t.accent,fontSize:11,fontWeight:600,cursor:"pointer"}}>
-                      See all
-                    </button>
-                  )}
-                </div>
-                <div style={{background:t.bgCard,border:"1px solid "+t.border}}>
-                  {activeLeagues.slice(0,4).map(function(lg, i){
-                    return (
-                      <div key={lg.id}
-                        onClick={onOpenLeagues||undefined}
-                        style={{
-                          display:"flex",alignItems:"center",gap:10,
-                          padding:"10px 14px",
-                          borderTop: i===0 ? "none" : "1px solid "+t.border,
-                          cursor: onOpenLeagues ? "pointer" : "default",
-                        }}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:700,color:t.text,letterSpacing:"-0.1px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {lg.name}
-                          </div>
-                          <div style={{fontSize:10.5,color:t.textTertiary,marginTop:2,letterSpacing:"0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {(lg.match_format==="one_set"?"One set":"Best of 3")}
-                            {lg.max_matches_per_opponent ? " · max "+lg.max_matches_per_opponent+" vs each" : ""}
-                            {lg.end_date ? " · ends "+lg.end_date : ""}
-                          </div>
-                        </div>
-                        <span style={{color:t.textTertiary,flexShrink:0,display:"flex",alignItems:"center"}}>
-                          <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-                            <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
+          {/* Your leagues (slice 2) — same strip used on Home so the
+              two surfaces feel consistent. Hidden when the viewer has
+              no active leagues. */}
+          <div style={{marginTop:24}}>
+            <HomeLeaguesStrip
+              t={t}
+              authUser={authUser}
+              history={history}
+              myLeagues={myLeagues}
+              leagueDetailCache={leagueDetailCache}
+              loadLeagueDetail={loadLeagueDetail}
+              onOpenLeague={onOpenLeague || onOpenLeagues}
+            />
+          </div>
 
           {/* Achievements preview */}
           {unlockedCount>0&&(
