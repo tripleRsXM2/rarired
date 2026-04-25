@@ -24,6 +24,7 @@ import { ZONES } from "../data/zones.js";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "../services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
 
 // Three steps now: zone → court → player(s). The old step-4 confirm
@@ -378,14 +379,21 @@ export default function PlayMatchWizard({
               <div style={{ display:"flex", flexDirection:"column", gap: 8 }}>
                 {courts.map(function(c){
                   return (
-                    <button key={c.name} type="button"
+                    <div key={c.name}
+                      role="button" tabIndex={0}
                       onClick={function(){ pickCourt(c); }}
+                      onKeyDown={function(e){
+                        if(e.key === "Enter" || e.key === " "){
+                          e.preventDefault();
+                          pickCourt(c);
+                        }
+                      }}
                       style={{
+                        position:"relative",
                         textAlign:"left",
                         padding: "14px 16px",
                         borderRadius: 14,
                         background: hexToRgba(t.bgCard, 0.78),
-                        border: "none",
                         color: t.text,
                         cursor:"pointer",
                         display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -407,20 +415,51 @@ export default function PlayMatchWizard({
                           color: t.text,
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>{c.name}</div>
+                        {/* Description: address if we have it, else
+                            suburb. Address is more specific so it
+                            wins. Then the court count. */}
                         <div style={{
                           fontSize: 11, color: t.textSecondary,
                           marginTop: 3, fontWeight: 600, letterSpacing:"0.01em",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>
-                          {c.suburb ? c.suburb + " · " : ""}{c.courts} {c.courts === 1 ? "court" : "courts"}
+                          {(c.address || c.suburb) ? (c.address || c.suburb) + " · " : ""}
+                          {c.courts} {c.courts === 1 ? "court" : "courts"}
                         </div>
                       </div>
-                      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
-                           stroke="currentColor" strokeWidth="1.7"
-                           strokeLinecap="round" strokeLinejoin="round"
-                           style={{ color: t.textTertiary, flexShrink: 0 }}>
-                        <path d="M7 4l5 5-5 5"/>
-                      </svg>
-                    </button>
+                      {/* Booking link — secondary affordance. Opens in
+                          a new tab without picking the court. Lets
+                          users check availability before committing.
+                          stopPropagation so the row's pickCourt
+                          doesn't also fire. */}
+                      {c.bookingUrl && (
+                        <a href={c.bookingUrl}
+                          target="_blank" rel="noopener noreferrer"
+                          onClick={function(e){ e.stopPropagation(); }}
+                          aria-label={"Check times at " + c.name + " (opens in a new tab)"}
+                          title={"Check times at " + c.name}
+                          style={{
+                            flexShrink: 0,
+                            display:"inline-flex", alignItems:"center", justifyContent:"center",
+                            width: 34, height: 34, borderRadius: 10,
+                            color: t.textTertiary, textDecoration:"none",
+                            opacity: 0.78,
+                            transition: "background 0.15s, opacity 0.15s, color 0.15s",
+                          }}
+                          onMouseEnter={function(e){
+                            e.currentTarget.style.background = hexToRgba(t.text, 0.06);
+                            e.currentTarget.style.color = t.accent;
+                            e.currentTarget.style.opacity = 1;
+                          }}
+                          onMouseLeave={function(e){
+                            e.currentTarget.style.background = "transparent";
+                            e.currentTarget.style.color = t.textTertiary;
+                            e.currentTarget.style.opacity = 0.78;
+                          }}>
+                          {NAV_ICONS.external(15)}
+                        </a>
+                      )}
+                    </div>
                   );
                 })}
               </div>
