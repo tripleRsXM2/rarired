@@ -422,31 +422,52 @@ export default function MapTab({
         style={{
           position:"absolute",
           left:"50%",
-          // Sit above the attribution + iOS home indicator with
-          // proper breathing room. 22px was hugging the home bar.
           bottom: "calc(env(safe-area-inset-bottom, 0px) + 38px)",
           transform:"translateX(-50%)",
           zIndex: 550,
-          minWidth: 220, height: 56,
-          padding: "0 28px",
-          borderRadius: 28,
+          // Slightly larger + more confident than v2.
+          minWidth: 240, height: 60,
+          padding: "0 36px",
+          borderRadius: 30,
           border: "none",
-          background: "#f97316", // orange — action energy, contrasts brand green
+          // Vertical gradient (lighter top → darker bottom) — same
+          // depth trick Apple uses on its primary buttons. Single
+          // flat fill read "basic"; the gradient gives it shape.
+          background: "linear-gradient(180deg, #fb923c 0%, #f97316 60%, #ea580c 100%)",
           color: "#fff",
-          fontSize: 15,
+          // SF Pro / system-ui by default; semibold→heavy on iOS.
+          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Segoe UI', system-ui, sans-serif",
+          fontSize: 14,
           fontWeight: 800,
-          letterSpacing: "0.01em",
+          letterSpacing: "0.14em",   // measured all-caps spacing
+          textTransform: "uppercase",
+          // Soft text shadow for tactile feel.
+          textShadow: "0 1px 0 rgba(20,18,17,0.20)",
           cursor: "pointer",
+          // Layered shadow:
+          //  • warm orange glow in the button's own colour family
+          //  • neutral shadow for elevation
+          //  • inset top hairline + bottom darken for surface depth
           boxShadow:
-            "0 6px 18px rgba(249,115,22,0.42), " +
-            "0 2px 4px rgba(20,18,17,0.18), " +
-            "inset 0 1px 0 rgba(255,255,255,0.18)",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          transition: "transform 0.12s ease, box-shadow 0.18s ease",
+            "0 10px 30px rgba(249,115,22,0.45), " +
+            "0 4px 8px rgba(20,18,17,0.20), " +
+            "inset 0 1px 0 rgba(255,255,255,0.30), " +
+            "inset 0 -1px 0 rgba(20,18,17,0.18)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "transform 0.12s ease, box-shadow 0.18s ease, filter 0.15s ease",
         }}
-        onMouseDown={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(1px) scale(0.98)"; }}
-        onMouseUp={function(e){ e.currentTarget.style.transform = "translateX(-50%)"; }}
-        onMouseLeave={function(e){ e.currentTarget.style.transform = "translateX(-50%)"; }}>
+        onMouseDown={function(e){
+          e.currentTarget.style.transform = "translateX(-50%) translateY(1px) scale(0.985)";
+          e.currentTarget.style.filter = "brightness(0.96)";
+        }}
+        onMouseUp={function(e){
+          e.currentTarget.style.transform = "translateX(-50%)";
+          e.currentTarget.style.filter = "";
+        }}
+        onMouseLeave={function(e){
+          e.currentTarget.style.transform = "translateX(-50%)";
+          e.currentTarget.style.filter = "";
+        }}>
         Play Match
       </button>
 
