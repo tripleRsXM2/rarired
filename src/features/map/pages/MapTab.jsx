@@ -170,6 +170,24 @@ export default function MapTab({
         onCourtSelect={handleCourtSelect}
       />
 
+      {/* Edge-fade overlay — non-interactive presentation polish. Four
+          stacked linear gradients fade the basemap into the frame
+          colour (t.bg) on every side so the hard tile boundary
+          dissolves. Sits ABOVE the map but BELOW all chrome (cog,
+          hover card, side panel, markers stay crisp). pointer-events
+          off so it can never steal clicks. Theme-aware: in dark mode
+          the fade ends in the dark frame, in light mode the light
+          frame — never a fixed colour. */}
+      <div aria-hidden="true"
+        style={{
+          position:"absolute", inset:0, pointerEvents:"none", zIndex:300,
+          background:
+            "linear-gradient(to right,  " + t.bg + ", transparent 36px), " +
+            "linear-gradient(to left,   " + t.bg + ", transparent 36px), " +
+            "linear-gradient(to bottom, " + t.bg + ", transparent 36px), " +
+            "linear-gradient(to top,    " + t.bg + ", transparent 36px)",
+        }}/>
+
       {/* Title pill — sits top-left, shifted right of the Leaflet zoom
           control (+/−) so the two don't stack. */}
       <div style={{
