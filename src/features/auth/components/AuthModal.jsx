@@ -30,12 +30,31 @@ export default function AuthModal({
   return (
     <div
       onClick={function(){if(authStep==="set-password")return;setShowAuth(false);setAuthError("");setAuthFieldErrors({});setAuthStep("choose");}}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
+      style={{
+        position:"fixed",inset:0,
+        background:"rgba(0,0,0,0.4)",
+        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
+        // Centred (not bottom slide-up) per user feedback. Padding caps
+        // edge spacing on small phones; bottom respects the iOS home-
+        // indicator safe area so the card doesn't ride under it.
+        display:"flex",alignItems:"center",justifyContent:"center",
+        padding:"16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+        zIndex:300,
+      }}>
       <div
         onClick={function(e){e.stopPropagation();}}
-        className="slide-up"
-        style={{background:t.modalBg,borderTop:"1px solid "+t.border,borderRadius:"16px 16px 0 0",padding:"28px 24px 48px",width:"100%",maxWidth:480}}>
-        <div style={{width:32,height:3,borderRadius:2,background:t.border,margin:"0 auto 24px"}}/>
+        className="pop"
+        style={{
+          background:t.modalBg,border:"1px solid "+t.border,borderRadius:14,
+          padding:"24px 22px 26px",
+          width:"100%",maxWidth:440,
+          // Cap to viewport so on a 360×640 phone (or with the keyboard
+          // open) the card scrolls inside its own frame instead of
+          // pushing the Continue button off-screen.
+          maxHeight:"calc(100dvh - 32px)",overflowY:"auto",
+          boxShadow:"0 20px 60px rgba(0,0,0,0.35)",
+        }}>
+        {/* Drop the slide-handle bar — it only made sense on a bottom sheet. */}
 
         {authStep!=="forgot-sent"&&authStep!=="set-password"&&(
           <div style={{marginBottom:24}}>

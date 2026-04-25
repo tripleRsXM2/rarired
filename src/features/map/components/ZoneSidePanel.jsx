@@ -283,6 +283,18 @@ export default function ZoneSidePanel({
             </span>
           )}
         </div>
+        {/* Anonymous nudge: signed-out viewers see blurred avatars + names
+            so they can preview that "people are here" but not identify
+            anyone. Surfaces a sign-in CTA below the player list. */}
+        {!authUser && players.length > 0 && (
+          <div style={{
+            fontSize: 11, color: t.textSecondary, lineHeight: 1.5,
+            background: t.accentSubtle, border: "1px solid " + t.accent + "33",
+            borderRadius: 8, padding: "8px 10px", marginBottom: 10,
+          }}>
+            <strong style={{ color: t.text }}>{players.length} {players.length === 1 ? "player" : "players"}</strong> active in this zone — sign in to see who they are and message them.
+          </div>
+        )}
         {loading ? (
           <div style={{ fontSize:12, color:t.textTertiary }}>Loading…</div>
         ) : displayPlayers.length === 0 ? (
@@ -326,10 +338,11 @@ export default function ZoneSidePanel({
                     }}>
                       {selected ? "✓" : ""}
                     </span>
-                    <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30}/>
+                    <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30} blurred={!authUser}/>
                     <div style={{ minWidth:0, flex:1 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
-                        <span style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+                        <span style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0,
+                          filter: !authUser ? "blur(5px)" : "none" }}>
                           {p.name}
                           {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
                         </span>
