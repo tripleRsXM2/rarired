@@ -8,6 +8,7 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 import HomeHero from "../components/HomeHero.jsx";
 import HomeNextAction from "../components/HomeNextAction.jsx";
+import HomeLeaguesStrip from "../components/HomeLeaguesStrip.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 var REASON_LABELS = {
@@ -919,6 +920,8 @@ export default function HomeTab({
   // Module 7 — simple id→name map so league-tagged matches can render a pill,
   // and a callback to deep-link into a specific league's detail view.
   leaguesIndex, onOpenLeague,
+  // Slice 1 (design overhaul) — Home Leagues strip
+  myLeagues, leagueDetailCache, loadLeagueDetail,
 }) {
   // Deep-link: when we arrive from a notification that carries a
   // highlightMatchId in router state, scroll to that FeedCard and pulse it.
@@ -927,6 +930,11 @@ export default function HomeTab({
   // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
   // friend_requests graph as the People tab; no schema change, stays in sync.
   var [feedFilter, setFeedFilter] = useState("everyone");
+
+  // Slice 1 (design overhaul) — Home feed is condensed to 5 cards by default
+  // so it stops behaving like feed-as-home. "See all" expands inline.
+  var [feedExpanded, setFeedExpanded] = useState(false);
+  var FEED_PREVIEW_LIMIT = 5;
 
   // Strava-style Kudos + Comments modal state. Shape: {matchId, tab}.
   var [interactionsModal, setInteractionsModal] = useState(null);
@@ -1049,6 +1057,21 @@ export default function HomeTab({
         />
       </div>
 
+      {/* Slice 1: Your leagues — up to 2 active leagues with rank + last
+          result + member count. Hidden entirely when the viewer has no
+          active leagues (Home stays calm). */}
+      <div style={{ padding: "0 20px 14px" }}>
+        <HomeLeaguesStrip
+          t={t}
+          authUser={authUser}
+          history={history}
+          myLeagues={myLeagues}
+          leagueDetailCache={leagueDetailCache}
+          loadLeagueDetail={loadLeagueDetail}
+          onOpenLeague={onOpenLeague}
+        />
+      </div>
+
       {/* Filter pills — functional. Friends = matches where poster or opponent
           is in the viewer's friends list. */}
       <div style={{ display: "flex", gap: 6, padding: "0 20px 18px", maxWidth: 720 }}>
@@ -1059,7 +1082,7 @@ export default function HomeTab({
           var on = feedFilter === f.id;
           return (
             <button key={f.id}
-              onClick={function () { setFeedFilter(f.id); }}
+              onClick={function () { setFeedFilter(f.id); setFeedExpanded(false); }}
               style={{
                 fontSize: 12, fontWeight: on ? 700 : 500,
                 color: on ? t.accent : t.textTertiary,
@@ -1147,7 +1170,14 @@ export default function HomeTab({
             );
           }
 
-          return filtered.map(function (m) {
+          // Slice 1: Home feed is condensed by default. "See all" toggles to
+          // the full list — same surface, no separate route yet (open question
+          // in docs/design-direction.md → revisit when there's real value in
+          // a dedicated /feed view).
+          var visible = feedExpanded ? filtered : filtered.slice(0, FEED_PREVIEW_LIMIT);
+          var hiddenCount = filtered.length - visible.length;
+
+          var cards = visible.map(function (m) {
             var isOwn = !m.isTagged;
             // pAvatarUrl: poster row avatar. Own match → viewer. Tagged → submitter.
             // oppAvatarUrl: opponent row avatar. Own match → m.opponent_id's profile
@@ -1168,6 +1198,39 @@ export default function HomeTab({
               />
             );
           });
+
+          if (hiddenCount > 0) {
+            cards.push(
+              <button
+                key="cs-see-all"
+                onClick={function () { setFeedExpanded(true); }}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  marginTop: 8,
+                  background: "transparent",
+                  border: "1px solid " + t.border,
+                  borderRadius: 10,
+                  color: t.textSecondary,
+                  fontSize: 12, fontWeight: 600,
+                  letterSpacing: "0.02em",
+                  cursor: "pointer",
+                  transition: "color 0.15s, border-color 0.15s",
+                }}
+                onMouseEnter={function (e) {
+                  e.currentTarget.style.color = t.text;
+                  e.currentTarget.style.borderColor = t.accent + "55";
+                }}
+                onMouseLeave={function (e) {
+                  e.currentTarget.style.color = t.textSecondary;
+                  e.currentTarget.style.borderColor = t.border;
+                }}>
+                See all matches ({hiddenCount} more)
+              </button>
+            );
+          }
+
+          return cards;
         })()}
 
         {/* Live discovery widget — replaces the old "Coming soon" placeholder.

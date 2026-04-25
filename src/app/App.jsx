@@ -652,6 +652,10 @@ export default function App(){
               /* Module 7 — simple id→name index for league pills on feed cards */
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
               onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
+              /* Slice 1 (design overhaul) — Home Leagues strip */
+              myLeagues={leagues.leagues}
+              leagueDetailCache={leagues.detailCache}
+              loadLeagueDetail={leagues.loadLeagueDetail}
             />
           )}
           {tab==="map"&&(
