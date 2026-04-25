@@ -438,19 +438,21 @@ export default function MapTab({
           // no inner highlights. Theme-adaptive: dark CTA on light
           // basemap, light CTA on dark basemap — so contrast stays
           // constant and the button never gets lost. Apple's primary-
-          // button pattern.
-          width: 88, height: 88,
+          // button pattern. 104px reads as confidently primary on
+          // both mobile and desktop without overwhelming the map.
+          width: 104, height: 104,
           borderRadius: "50%",
           border: "none",
           background: mapDark ? "#fff" : "#14110f",
           color: mapDark ? "#14110f" : "#fff",
           fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
           cursor: "pointer",
-          // Single soft shadow for elevation. Always neutral dark —
-          // works on either fill colour.
+          // Layered shadow scaled up with the bigger button — deeper
+          // ambient shadow at the bottom for elevation, tighter
+          // contact shadow underneath.
           boxShadow:
-            "0 10px 26px rgba(20,18,17,0.34), " +
-            "0 3px 6px rgba(20,18,17,0.20)",
+            "0 14px 32px rgba(20,18,17,0.36), " +
+            "0 4px 8px rgba(20,18,17,0.22)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
           gap: 0,
@@ -466,13 +468,13 @@ export default function MapTab({
           e.currentTarget.style.transform = "translateX(-50%)";
         }}>
         <span style={{
-          fontSize: 16, fontWeight: 900,
+          fontSize: 19, fontWeight: 900,
           letterSpacing: "0.10em", lineHeight: 1,
         }}>PLAY</span>
         <span style={{
-          fontSize: 9, fontWeight: 700,
-          letterSpacing: "0.18em", lineHeight: 1,
-          opacity: 0.72, marginTop: 2,
+          fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.20em", lineHeight: 1,
+          opacity: 0.72, marginTop: 3,
         }}>MATCH</span>
       </button>
 
