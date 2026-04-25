@@ -158,6 +158,19 @@ export var NAV_ICONS = {
       </svg>
     );
   },
+  // Info / help glyph — circle + "i" stem. Used for the rating-info
+  // icon next to "COURTSYNC RATING" on hero displays. Line-art per
+  // the icon rule.
+  info: function(size){
+    var s = size || 14;
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="9" cy="5.5" r="0.85" fill="currentColor"/>
+        <path d="M9 8.5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    );
+  },
   // Loop / rematch arrow — used in feed card + any future "repeat this
   // match" affordance. Kept here so it's available outside the feed too.
   rematch: function(size){
