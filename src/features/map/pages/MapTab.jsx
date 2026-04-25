@@ -422,53 +422,48 @@ export default function MapTab({
         style={{
           position:"absolute",
           left:"50%",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 38px)",
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 32px)",
           transform:"translateX(-50%)",
           zIndex: 550,
-          // Slightly larger + more confident than v2.
-          minWidth: 240, height: 60,
-          padding: "0 36px",
-          borderRadius: 30,
+          // Iconic circle — Strava/Nike/Apple Voice Memos pattern.
+          // Flat solid fill, single soft drop shadow, no gradient,
+          // no inner highlights. Big enough to feel primary (80px)
+          // without eating the map.
+          width: 80, height: 80,
+          borderRadius: "50%",
           border: "none",
-          // Vertical gradient (lighter top → darker bottom) — same
-          // depth trick Apple uses on its primary buttons. Single
-          // flat fill read "basic"; the gradient gives it shape.
-          background: "linear-gradient(180deg, #fb923c 0%, #f97316 60%, #ea580c 100%)",
+          background: "#f97316",
           color: "#fff",
-          // SF Pro / system-ui by default; semibold→heavy on iOS.
-          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Segoe UI', system-ui, sans-serif",
-          fontSize: 14,
-          fontWeight: 800,
-          letterSpacing: "0.14em",   // measured all-caps spacing
-          textTransform: "uppercase",
-          // Soft text shadow for tactile feel.
-          textShadow: "0 1px 0 rgba(20,18,17,0.20)",
+          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
           cursor: "pointer",
-          // Layered shadow:
-          //  • warm orange glow in the button's own colour family
-          //  • neutral shadow for elevation
-          //  • inset top hairline + bottom darken for surface depth
+          // Single warm shadow for elevation, in the button's own
+          // colour family. No aura/glow stack.
           boxShadow:
-            "0 10px 30px rgba(249,115,22,0.45), " +
-            "0 4px 8px rgba(20,18,17,0.20), " +
-            "inset 0 1px 0 rgba(255,255,255,0.30), " +
-            "inset 0 -1px 0 rgba(20,18,17,0.18)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "transform 0.12s ease, box-shadow 0.18s ease, filter 0.15s ease",
+            "0 10px 24px rgba(249,115,22,0.40), " +
+            "0 3px 6px rgba(20,18,17,0.18)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 1,
+          transition: "transform 0.12s ease, box-shadow 0.18s ease",
         }}
         onMouseDown={function(e){
-          e.currentTarget.style.transform = "translateX(-50%) translateY(1px) scale(0.985)";
-          e.currentTarget.style.filter = "brightness(0.96)";
+          e.currentTarget.style.transform = "translateX(-50%) scale(0.95)";
         }}
         onMouseUp={function(e){
           e.currentTarget.style.transform = "translateX(-50%)";
-          e.currentTarget.style.filter = "";
         }}
         onMouseLeave={function(e){
           e.currentTarget.style.transform = "translateX(-50%)";
-          e.currentTarget.style.filter = "";
         }}>
-        Play Match
+        <span style={{
+          fontSize: 16, fontWeight: 900,
+          letterSpacing: "0.10em", lineHeight: 1,
+        }}>PLAY</span>
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          letterSpacing: "0.18em", lineHeight: 1,
+          opacity: 0.78, marginTop: 4,
+        }}>MATCH</span>
       </button>
 
       <CourtInfoCard t={t} court={selectedCourt}
