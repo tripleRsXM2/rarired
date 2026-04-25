@@ -10,15 +10,12 @@
 // later modules when we have an RPC for public match data.
 
 import { useEffect, useState } from "react";
-import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
-import { PresenceDot } from "../../people/components/PresenceIndicator.jsx";
 import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
 import {
   computeHeadToHead,
-  formatConfirmedBadge,
-  provisionalLabel,
 } from "../utils/profileStats.js";
 import { track } from "../../../lib/analytics.js";
+import ProfileHero from "../components/ProfileHero.jsx";
 
 export default function PlayerProfileView({
   t, authUser, userId, viewerHistory, onBack, openChallenge, blockUser,
@@ -56,146 +53,61 @@ export default function PlayerProfileView({
   var losses  = profile.losses || 0;
   var played  = profile.matches_played || 0;
   var winRate = played ? Math.round(wins / played * 100) : 0;
-  var rankPts = profile.ranking_points != null ? profile.ranking_points : 1000;
   var streakCount = profile.streak_count || 0;
   var streakType  = profile.streak_type;
   var streakLabel = streakCount === 0 ? "—" : streakCount + (streakType === "win" ? " W" : " L");
-  var confirmedBadge = formatConfirmedBadge(profile);
-  var provLabel = provisionalLabel(profile);
 
   // H2H computed from the viewer's own history (RLS-safe).
   var h2h = computeHeadToHead(viewerHistory || [], authUser && authUser.id, profile.id);
 
+  // Slice 2: ProfileHero handles avatar / name / location / skill / style /
+  // bio / signature metric / single trust pill. Recent-form chips show only
+  // when the viewer has confirmed matches with this player (we don't have
+  // public match history for arbitrary users — RLS), so we hide them here
+  // and surface H2H instead.
+  var challengeBlock = (openChallenge && authUser && profile.id !== authUser.id) ? (
+    <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+      <button
+        onClick={function () { openChallenge(profile, "profile"); }}
+        style={{
+          flex: 1, padding: "12px", borderRadius: 8, border: "none",
+          background: t.accent, color: "#fff",
+          fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase",
+          cursor: "pointer", transition: "opacity 0.15s",
+        }}
+        onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+        onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+      >
+        Challenge {profile.name ? profile.name.split(" ")[0] : "player"}
+      </button>
+      {blockUser && (
+        <ProfileOverflowMenu t={t} profile={profile} blockUser={blockUser} />
+      )}
+    </div>
+  ) : null;
+
   return (
     <Shell t={t} onBack={onBack}>
-      {/* Hero */}
-      <div style={{ padding: "28px 20px 0", background: t.bg }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 18 }}>
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            {(function(){
-              var url = avatarUrl(profile);
-              if(url){
-                return (
-                  <img src={url} alt={profile.name||"player"}
-                    style={{
-                      width:72, height:72, borderRadius:"50%", objectFit:"cover",
-                      boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
-                      background:"#eee",
-                    }}/>
-                );
-              }
-              return (
-                <div style={{
-                  width: 72, height: 72, borderRadius: "50%",
-                  background: avColor(profile.name),
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 24, fontWeight: 800, color: "#fff",
-                  boxShadow: "0 0 0 3px " + t.bg + ", 0 0 0 5px " + avColor(profile.name) + "44",
-                }}>
-                  {profile.avatar || (profile.name || "?").slice(0, 2).toUpperCase()}
-                </div>
-              );
-            })()}
-            {/* Public presence — respects the other user's privacy
-                (show_online_status / show_last_seen settings). */}
-            <PresenceDot profile={profile} t={t} size={16} />
-          </div>
-          <div style={{ flex: 1, paddingTop: 4, minWidth: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: "-0.5px", lineHeight: 1.1 }}>
-              {profile.name || "Unnamed player"}
-            </div>
-            {displayLocation(profile) && (
-              <div style={{ fontSize: 13, color: t.textSecondary, marginTop: 3 }}>{displayLocation(profile)}</div>
-            )}
-            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-              {profile.skill && (
-                <span style={{ fontSize: 11, fontWeight: 700, color: t.accent, background: t.accentSubtle, padding: "3px 9px", borderRadius: 20, letterSpacing: "0.02em" }}>
-                  {profile.skill}
-                </span>
-              )}
-              {profile.style && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: t.green, background: t.greenSubtle, padding: "3px 9px", borderRadius: 20 }}>
-                  {profile.style}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Hero (slice 2) */}
+      <div style={{ padding: "20px 20px 14px" }}>
+        <ProfileHero
+          t={t}
+          profile={profile}
+          viewerIsSelf={false}
+          recentFormHistory={null}
+          belowIdentitySlot={challengeBlock}
+        />
+      </div>
 
-        {profile.bio && (
-          <p style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.6, marginBottom: 14, marginTop: -4 }}>
-            {profile.bio}
-          </p>
-        )}
-
-        {/* Trust + rating-state pills row (Modules 1 + 5) */}
-        {(confirmedBadge || provLabel) && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-            {confirmedBadge && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "5px 10px", borderRadius: 20,
-                background: t.greenSubtle, color: t.green,
-                border: "1px solid " + t.green + "33",
-                fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
-              }}>
-                <span>✓</span><span>{confirmedBadge}</span>
-              </span>
-            )}
-            {provLabel && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "5px 10px", borderRadius: 20,
-                background: t.orangeSubtle, color: t.orange,
-                border: "1px solid " + t.orange + "33",
-                fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
-              }}>
-                <span>⚖</span><span>{provLabel}</span>
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Module 4: primary action on a public profile is "Challenge".
-            Hidden when the viewer isn't signed in or is somehow viewing
-            themselves (route should redirect, but guard anyway).
-            Sharp-cornered accent block to match the rest of the chrome. */}
-        {openChallenge && authUser && profile.id !== authUser.id && (
-          <div style={{ display:"flex", gap:6, alignItems:"stretch", marginBottom: 14 }}>
-            <button
-              onClick={function () { openChallenge(profile, "profile"); }}
-              style={{
-                flex: 1, padding: "12px", borderRadius: 0, border: "none",
-                background: t.accent, color: "#fff",
-                fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase",
-                cursor: "pointer", transition: "opacity 0.15s",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >
-              Challenge {profile.name ? profile.name.split(" ")[0] : "player"}
-            </button>
-            {blockUser && (
-              <ProfileOverflowMenu t={t} profile={profile} blockUser={blockUser}/>
-            )}
-          </div>
-        )}
-
-        {/* Ranking card — sharp, same rhythm as ProfileTab */}
-        <div style={{
-          background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
-          padding: "12px 14px", marginBottom: 12,
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
-              Ranking Points
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: "-0.4px", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
-              {rankPts.toLocaleString()}
-            </div>
-          </div>
-          {streakCount > 0 && (
+      <div style={{ padding: "0 20px" }}>
+        {/* Streak summary — kept until commit 2D folds it into the
+            stats accordion. Ranking already lives in the Hero. */}
+        {streakCount > 0 && (
+          <div style={{
+            background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0,
+            padding: "12px 14px", marginBottom: 12,
+            display: "flex", justifyContent: "flex-end", alignItems: "center",
+          }}>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
                 Current streak
@@ -208,8 +120,8 @@ export default function PlayerProfileView({
                 {streakLabel}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Stats strip — 4-col, shared outer border, uppercase caps labels */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, marginBottom: 18, background: t.bgCard, border: "1px solid " + t.border }}>

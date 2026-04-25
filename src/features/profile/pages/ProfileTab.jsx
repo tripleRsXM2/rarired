@@ -4,18 +4,14 @@
 // Settings have been moved to SettingsScreen (accessible via top-bar avatar).
 
 import { useEffect } from "react";
-import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
-import { PresenceDot } from "../../people/components/PresenceIndicator.jsx";
+import { avColor } from "../../../lib/utils/avatar.js";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
 import {
-  computeRecentForm,
   computeMostPlayed,
-  formatConfirmedBadge,
-  provisionalLabel,
-  computeConfirmationRate,
 } from "../utils/profileStats.js";
 import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
+import ProfileHero from "../components/ProfileHero.jsx";
 
 // ── ProfileMatchRow ──────────────────────────────────────────────────────────
 // Compact version of the feed scoreboard for use inside the profile (Recent
@@ -260,14 +256,11 @@ export default function ProfileTab({
   });
   var unlockedCount = badges.filter(function(b){return b.unlocked;}).length;
 
-  // Module 1 additions — derived identity signals.
-  var recentForm = computeRecentForm(history, 5);
+  // Module 1 additions — derived identity signals. (Hero pulls its own
+  // recentForm / trust-pill state from profileStats — kept as a slim
+  // myId/mostPlayed pair here for the "Most played" tile below.)
   var myId = authUser && authUser.id;
   var mostPlayed = computeMostPlayed(history, myId, 5);
-  var confirmedBadge = formatConfirmedBadge(profile);
-  // Module 5 additions — provisional rating + confirmation-rate trust signal.
-  var provLabel = provisionalLabel(profile);
-  var confRate = computeConfirmationRate(history);
 
   // Module 3.5: self-view analytics. Fires once per profile-id load.
   useEffect(function () {
@@ -278,125 +271,35 @@ export default function ProfileTab({
   return (
     <div style={{maxWidth:680,margin:"0 auto"}}>
 
-      {/* ── Hero header ──────────────────────────────────────────────────────── */}
-      <div style={{padding:"28px 20px 0",background:t.bg}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:16,marginBottom:20}}>
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            {(function(){
-              var url = avatarUrl(profile);
-              if(url){
-                return (
-                  <img src={url} alt={profile.name}
-                    style={{
-                      width:72,height:72,borderRadius:"50%",objectFit:"cover",
-                      boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
-                      background:"#eee",
-                    }}/>
-                );
-              }
-              return (
-                <div style={{
-                  width:72,height:72,borderRadius:"50%",
-                  background:avColor(profile.name),
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:24,fontWeight:800,color:"#fff",
-                  boxShadow:"0 0 0 3px "+t.bg+", 0 0 0 5px "+avColor(profile.name)+"44",
-                }}>{profile.avatar}</div>
-              );
-            })()}
-            {/* Own presence — bypass privacy so the user always sees
-                their own "online" dot regardless of visibility settings. */}
-            <PresenceDot profile={profile} t={t} viewerIsSelf={true} size={16} />
-          </div>
-          <div style={{flex:1,paddingTop:4}}>
-            <div style={{fontSize:22,fontWeight:800,color:t.text,letterSpacing:"-0.5px",lineHeight:1.1}}>{profile.name}</div>
-            {displayLocation(profile)&&<div style={{fontSize:13,color:t.textSecondary,marginTop:3}}>{displayLocation(profile)}</div>}
-            <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,fontWeight:700,color:t.accent,background:t.accentSubtle,padding:"3px 9px",borderRadius:20,letterSpacing:"0.02em"}}>{profile.skill}</span>
-              <span style={{fontSize:11,fontWeight:600,color:t.green,background:t.greenSubtle,padding:"3px 9px",borderRadius:20}}>{profile.style}</span>
-            </div>
-          </div>
-          {/* "Edit profile" shortcut — opens Settings. Transparent chrome, SVG icon. */}
-          {authUser&&(
+      {/* ── Hero (slice 2) ─────────────────────────────────────────────────── */}
+      <div style={{padding:"20px 20px 14px"}}>
+        <ProfileHero
+          t={t}
+          profile={profile}
+          viewerIsSelf={true}
+          recentFormHistory={history}
+          actionSlot={authUser && (
             <button
               onClick={onOpenSettings}
               title="Edit profile"
               style={{
                 padding:"6px 10px",
-                border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,
-                fontSize:12,fontWeight:600,flexShrink:0,marginTop:4,
-                display:"inline-flex",alignItems:"center",gap:6,
+                border:"1px solid "+t.border, background:"transparent", color:t.textSecondary,
+                fontSize:12, fontWeight:600,
+                display:"inline-flex", alignItems:"center", gap:6,
                 cursor:"pointer",
               }}>
               <span style={{display:"flex",alignItems:"center"}}>{NAV_ICONS.edit(13)}</span>
               Edit
             </button>
           )}
-        </div>
-        {profile.bio&&<p style={{fontSize:13,color:t.textSecondary,lineHeight:1.6,marginBottom:16,marginTop:-8}}>{profile.bio}</p>}
+        />
+      </div>
 
-        {/* Trust + rating-state pills row (Modules 1 + 5 stack here) */}
-        {(confirmedBadge||provLabel||confRate)&&(
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
-            {confirmedBadge&&(
-              <span style={{
-                display:"inline-flex",alignItems:"center",gap:6,
-                padding:"5px 10px",borderRadius:20,
-                background:t.greenSubtle,color:t.green,
-                border:"1px solid "+t.green+"33",
-                fontSize:11,fontWeight:700,letterSpacing:"0.02em",
-              }}>
-                <span>✓</span><span>{confirmedBadge}</span>
-              </span>
-            )}
-            {provLabel&&(
-              <span style={{
-                display:"inline-flex",alignItems:"center",gap:6,
-                padding:"5px 10px",borderRadius:20,
-                background:t.orangeSubtle,color:t.orange,
-                border:"1px solid "+t.orange+"33",
-                fontSize:11,fontWeight:700,letterSpacing:"0.02em",
-              }}>
-                <span>⚖</span><span>{provLabel}</span>
-              </span>
-            )}
-            {confRate&&(
-              <span style={{
-                display:"inline-flex",alignItems:"center",gap:6,
-                padding:"5px 10px",borderRadius:20,
-                background:t.bgTertiary,color:t.textSecondary,
-                border:"1px solid "+t.border,
-                fontSize:11,fontWeight:700,letterSpacing:"0.02em",
-              }}
-              title={confRate.total + " ranked matches resolved (confirmed + voided + expired)"}>
-                <span>{confRate.pct}%</span><span style={{fontWeight:500}}>confirmed</span>
-              </span>
-            )}
-          </div>
-        )}
-        {/* Recent form chips — sharp squares to match feed chrome */}
-        {recentForm.length>0&&(
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-            <span style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em"}}>Recent form</span>
-            <div style={{display:"flex",gap:3}}>
-              {recentForm.map(function(r,i){
-                var isW=r==="W";
-                return (
-                  <span key={i} style={{
-                    width:18,height:18,borderRadius:0,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:10,fontWeight:700,
-                    color:isW?t.green:t.red,
-                    background:isW?t.greenSubtle:t.redSubtle,
-                    border:"1px solid "+(isW?t.green:t.red)+"33",
-                  }}>{r}</span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Rank + achievements summary — sharp corners, tighter typography */}
+      {/* Quick stats strip + achievements summary stay until commit 2D
+          replaces them with the deeper-stats accordion. Renders inside
+          the same gutter as the new Hero. */}
+      <div style={{padding:"0 20px"}}>
         <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:0,padding:"12px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontSize:9,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Ranking Points</div>
@@ -410,7 +313,6 @@ export default function ProfileTab({
           </div>
         </div>
 
-        {/* Quick stats strip — 4-col, sharp corners, Strava label/value rhythm */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:0,marginBottom:18,background:t.bgCard,border:"1px solid "+t.border}}>
           {[
             {l:"Matches",v:history.length,                              c:t.text},
