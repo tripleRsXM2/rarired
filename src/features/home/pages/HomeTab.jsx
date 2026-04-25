@@ -475,10 +475,13 @@ function FeedCard({
           because the outer border tint, share-sheet text, and scoreboard
           row derivation all depend on them. */}
 
-      {/* ── Scoreboard — compact ATP-style typography ── */}
+      {/* ── Scoreboard — compact ATP-style typography ──
+            v2: no border between header and scoreboard, no border between
+            player rows. Whitespace + the avatar/name column carry the
+            visual structure. Only the social footer earns a hairline,
+            because that's a passive→active section change. */}
       <div style={{
-        margin: "0 0 4px",
-        borderTop: "1px solid " + t.border,
+        margin: "8px 0 4px",
       }}>
         {/* Column-label strip — smaller, subtler, right-aligned. No visual weight. */}
         {(m.sets || []).length > 0 && (
@@ -545,8 +548,7 @@ function FeedCard({
           return (
             <div key={ri} style={{
               display: "flex", alignItems: "center",
-              padding: "7px 16px",
-              borderTop: "1px solid " + t.border,
+              padding: "6px 16px",
             }}>
               {/* Tiny avatar next to the name — makes the scoreboard identify
                   each row visually without needing the old "vs X" title row. */}
@@ -800,7 +802,7 @@ function FeedCard({
           when applicable so it doesn't need its own row. */}
       {!demo && (
         <div style={{
-          padding: "0 16px 6px",
+          padding: "8px 16px 12px",
           fontSize: 11,
           color: t.textTertiary,
           letterSpacing: "0.01em",
