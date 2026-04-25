@@ -735,19 +735,11 @@ export default function PlayMatchWizard({
                     </div>
                   )}
 
-                  {/* Time of day — sleek iOS-style segmented control.
-                      Track + sliding active card, distinct from the
-                      pill chip row above so the two controls don't
-                      blur into "one big chip wall". Defaults to
-                      Anytime (no time mention in draft). */}
-                  <div style={{
-                    display:"flex",
-                    marginTop: 12,
-                    padding: 3,
-                    borderRadius: 12,
-                    background: hexToRgba(t.text, 0.06),
-                    gap: 2,
-                  }}>
+                  {/* Time of day — underline tabs (same language as
+                      In zone/Everywhere on the side panel). No track,
+                      no bg, just text with a 2px underline under the
+                      active option. Reads quietly — text leads. */}
+                  <div style={{ display:"flex", gap: 18, marginTop: 12, paddingBottom: 2 }}>
                     {[
                       { id:"anytime",   label:"Anytime"   },
                       { id:"morning",   label:"Morning"   },
@@ -757,19 +749,18 @@ export default function PlayMatchWizard({
                       var on = timeOfDay === opt.id;
                       return (
                         <button key={opt.id} type="button"
-                          onClick={function(){ setTimeOfDay(opt.id); }}
+                          onClick={function(){ if(!on) setTimeOfDay(opt.id); }}
                           style={{
-                            flex: 1,
-                            padding: "7px 6px",
-                            borderRadius: 9,
-                            background: on ? t.bgCard : "transparent",
-                            color: on ? t.text : t.textSecondary,
-                            border:"none", cursor:"pointer",
-                            fontSize: 11.5,
+                            padding:"4px 0",
+                            background:"transparent",
+                            border:"none",
+                            borderBottom: "2px solid " + (on ? t.text : "transparent"),
+                            color: on ? t.text : t.textTertiary,
+                            fontSize: 12,
                             fontWeight: on ? 700 : 500,
-                            letterSpacing:"-0.005em",
-                            boxShadow: on ? "0 1px 2px rgba(20,18,17,0.10), 0 0 0 0.5px rgba(20,18,17,0.05)" : "none",
-                            transition: "background 0.18s, color 0.15s, box-shadow 0.18s, font-weight 0.15s",
+                            letterSpacing:"0.01em",
+                            cursor: on ? "default" : "pointer",
+                            transition:"color 0.15s, border-color 0.15s",
                           }}>
                           {opt.label}
                         </button>
