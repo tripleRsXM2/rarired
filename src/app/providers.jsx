@@ -101,11 +101,15 @@ export default function Providers({ t, theme, children }){
       // Desktop ≥1024px restores the existing rhythm. Inline-style
       // overrides require !important here.
       ".cs-feed-card{margin-bottom:10px!important}",
-      ".cs-feed-card .cs-feed-card-header{padding:12px 14px 0!important}",
+      // Padding-bottom on the header gives the avatar (34px circle)
+      // breathing room before it meets the scoreboard's borderTop
+      // hairline. Without it, the hairline cuts visually through the
+      // bottom of the avatar circle.
+      ".cs-feed-card .cs-feed-card-header{padding:12px 14px 12px!important}",
       ".cs-feed-card .cs-feed-card-footer{padding:8px 14px!important}",
       "@media(min-width:1024px){",
         ".cs-feed-card{margin-bottom:14px!important}",
-        ".cs-feed-card .cs-feed-card-header{padding:14px 16px 0!important}",
+        ".cs-feed-card .cs-feed-card-header{padding:14px 16px 14px!important}",
         ".cs-feed-card .cs-feed-card-footer{padding:10px 16px!important}",
       "}",
       // v2 visual reset — when the full-width-feed wrapper is active
