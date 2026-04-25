@@ -492,15 +492,24 @@ export default function MapTab({
         }}
         onClose={function(){ setSelectedCourt(null); }}/>
 
-      {/* Play Match wizard — phase 2 of the CTA. Opens guided
-          zone → court → player → invite flow. Respects any zone
-          already selected on the map (skips step 1 if so). */}
+      {/* Play Match wizard — guided zone → court → player → invite
+          flow. Respects any zone already selected on the map (skips
+          step 1 if so). On Send Invite, fans the picked partners
+          out via the existing onMessagePlayer pipeline so the DM
+          opens with the venue context pre-filled. */}
       <PlayMatchWizard
         t={t}
         open={wizardOpen}
+        authUser={authUser}
+        blockedUserIds={blockedUserIds}
         initialZoneId={selected}
         onClose={function(){ setWizardOpen(false); }}
-        onComplete={function(){ setWizardOpen(false); }}
+        onSendInvite={function(partners, ctx){
+          if(onMessagePlayer && partners && partners.length){
+            onMessagePlayer(partners, ctx);
+          }
+          setWizardOpen(false);
+        }}
       />
     </div>
   );

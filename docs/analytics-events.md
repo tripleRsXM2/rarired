@@ -69,6 +69,8 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `play_match_step_entered` | Wizard advances to a step (incl. initial open) | `step` (0=zone, 1=court, 2=player, 3=confirm) |
 | `play_match_zone_picked` | User picks a zone in step 1 | `zone_id` |
 | `play_match_court_picked` | User picks a court in step 2 | `zone_id`, `court_name` |
+| `play_match_player_picked` | User taps "Continue" on the player picker (step 3) | `player_count`, `scope` ("zone"\|"everywhere") |
+| `play_match_invite_sent` | User taps "Send Invite" on step 4 | `zone_id`, `court_name`, `partner_count`, `scope` |
 | `play_match_cancelled` | User dismisses the wizard via close, back, or backdrop | `step` (current), `last_completed` (step − 1) |
 
 ### Reserved (defined but not fired until later modules)
