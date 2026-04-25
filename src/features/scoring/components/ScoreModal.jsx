@@ -3,6 +3,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import { COURTS } from "../../map/data/courts.js";
 import { fetchOpponentActiveLeagueIds } from "../../leagues/services/leagueService.js";
+import { validateMatchScore, CODES as SCORE_CODES } from "../utils/tennisScoreValidation.js";
 import MatchFinishMoment from "./MatchFinishMoment.jsx";
 
 // Sort COURTS so venues in the viewer's own suburb float to the top, then
@@ -56,6 +57,11 @@ export default function ScoreModal({
   // modal swaps the form body for a brief acknowledgment card that
   // auto-dismisses after ~1.5s. Shape: { status, result, opponentName }.
   var [finish, setFinish] = useState(null);
+  // Tennis-score-validation slice B: when ranked validation fails but
+  // a casual time-limited save would pass, we hold the score-validator
+  // diagnostic here so the user can tap "Save as casual time-limited"
+  // explicitly. Shape: { code, message } | null.
+  var [casualFallbackOffer, setCasualFallbackOffer] = useState(null);
 
   // Module 7.5: opponent's active league memberships (subset of viewer's
   // leagues). Refetched whenever the linked opponent changes — used by the
@@ -107,10 +113,74 @@ export default function ScoreModal({
     return ys>ts ? "win" : "loss";
   }
 
-  async function handleSave(){
+  // Build validator options from scoreDraft + scoreModal context.
+  // `forceCasual` is set by the "Save as casual time-limited" CTA so
+  // the explicit user-consent path shifts matchType + completionType
+  // for THIS attempt only.
+  function buildValidatorOptions(forceCasual) {
+    var explicitMatchType = scoreDraft.matchType;
+    var defaultMatchType  = (isVerified) ? 'ranked' : 'casual';
+    var matchType = forceCasual ? 'casual' : (explicitMatchType || defaultMatchType);
+    if (matchType === 'ranked' && !isVerified) matchType = 'casual';
+    var leagueId = scoreDraft.leagueId || null;
+    var league = leagueId
+      ? (myLeagues || []).find(function (lg) { return lg.id === leagueId; })
+      : null;
+    return {
+      matchType: matchType,
+      completionType: forceCasual ? 'time_limited' : 'completed',
+      // ScoreModal supports up to 5 sets in the UI today. Best-of-3 is
+      // the dominant amateur format and matches the Elo + league
+      // pipeline. When a league is tagged, defer to its match_format.
+      matchFormat: (league && league.match_format) || 'best_of_3',
+      finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
+        ? 'match_tiebreak' : 'normal_set',
+      allowPartialScores: !!forceCasual,
+      requireTiebreakDetails: false,
+      leagueMode: league ? league.mode : null,
+      leagueAllowPartial: false, // no league flag exists yet — open question in docs
+    };
+  }
+
+  // Run the central validator + react accordingly. Returns true on pass.
+  function runScoreValidation(forceCasual) {
+    var clean = scoreDraft.sets.filter(function (s) { return s.you !== "" || s.them !== ""; });
+    var ranked = buildValidatorOptions(false);
+    var attempt = forceCasual ? buildValidatorOptions(true) : ranked;
+    var rankedResult = validateMatchScore(clean, ranked);
+    var attemptResult = forceCasual ? validateMatchScore(clean, attempt) : rankedResult;
+
+    // Reset the casual-fallback offer at the start of each fresh attempt.
+    setCasualFallbackOffer(null);
+
+    if (attemptResult.ok) return true;
+
+    // If we're attempting ranked and only the "ranked requires completed"
+    // gate is failing, offer the explicit casual fallback path. Only
+    // surfaces when matchType resolves to ranked AND the score would
+    // pass under casual time-limited rules.
+    if (!forceCasual && rankedResult.code === SCORE_CODES.RANKED_REQUIRES_COMPLETED) {
+      var casualOpts = buildValidatorOptions(true);
+      var casualResult = validateMatchScore(clean, casualOpts);
+      if (casualResult.ok) {
+        setCasualFallbackOffer({ code: rankedResult.code, message: rankedResult.message });
+        setSaveError(rankedResult.message);
+        return false;
+      }
+    }
+    setSaveError(attemptResult.message);
+    return false;
+  }
+
+  async function handleSave(opts){
+    var forceCasual = !!(opts && opts.forceCasual);
     setSaveError("");
     var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
     if(!clean.length){setSaveError("Add at least one set score.");return;}
+
+    // Tennis score validation (slice B) — runs before the legacy
+    // winnerBySets sanity check so format-level errors surface first.
+    if (!runScoreValidation(forceCasual)) return;
 
     // Result-vs-sets sanity check. If the set scores clearly say the opposite
     // of what the user picked, warn once — they can correct it or tap Save
@@ -148,9 +218,18 @@ export default function ScoreModal({
     var oppName=scoreModal.casual?(casualOppName.trim()||"Unknown"):scoreModal.oppName;
     var opponentId=scoreModal.casual?casualOppId:(scoreModal.opponentId||null);
 
+    // If the user chose the "Save as casual time-limited" path, force
+    // matchType=casual on this submission so it doesn't try to count
+    // toward Elo / can't accidentally pick up a ranked league tag.
+    // submitMatch already demotes ranked-without-opponent to casual,
+    // so we just override the explicit field on the draft for this call.
+    var draftForSubmit = forceCasual
+      ? Object.assign({}, scoreDraft, { matchType: 'casual', leagueId: null })
+      : scoreDraft;
+
     var res=await submitMatch({
       scoreModal,
-      scoreDraft,
+      scoreDraft: draftForSubmit,
       oppName,
       opponentId,
     });
@@ -505,6 +584,24 @@ export default function ScoreModal({
           </div>
         )}
 
+        {/* Casual fallback — explicit user-consent path when ranked
+            validation fails because the score is partial / time-limited
+            but would pass under casual rules. NEVER auto-converts;
+            user must tap to opt in. */}
+        {casualFallbackOffer && (
+          <div style={{marginBottom:12,padding:"10px 14px",borderRadius:8,background:t.orangeSubtle,border:"1px solid "+t.orange+"44",fontSize:12,color:t.text,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+            <span style={{flex:1,minWidth:140}}>
+              You can save this as a casual time-limited result instead. It won't affect rating.
+            </span>
+            <button
+              onClick={function(){ setSaveError(""); setCasualFallbackOffer(null); handleSave({forceCasual: true}); }}
+              disabled={saving}
+              style={{flexShrink:0,padding:"7px 12px",borderRadius:6,border:"none",background:t.text,color:t.bg,fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"}}>
+              Save as casual
+            </button>
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{display:"flex",gap:8}}>
           <button
@@ -513,7 +610,7 @@ export default function ScoreModal({
             Cancel
           </button>
           <button
-            onClick={handleSave}
+            onClick={function(){ handleSave(); }}
             disabled={saving}
             style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:saving?t.border:t.accent,color:"#fff",fontSize:13,fontWeight:600,opacity:saving?0.7:1}}>
             {saving?"Saving…":isResubmit?"Resubmit for confirmation":(isVerified&&scoreModal.casual?"Submit for confirmation":"Save result")}
