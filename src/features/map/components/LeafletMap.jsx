@@ -236,23 +236,36 @@ export default function LeafletMap({
       maxClusterRadius: 60,
       iconCreateFunction: function (cluster) {
         var n = cluster.getChildCount();
+        // Modern cluster bubble — solid dark fill, white tabular
+        // number, no border, soft shadow. box-sizing:border-box so
+        // Leaflet's iconSize matches the rendered footprint exactly
+        // (no 1px halo of mis-alignment). Smaller too (28 vs 34) so
+        // mobile doesn't feel cramped.
         return L.divIcon({
           className: "cs-court-cluster",
           html:
-            '<div style="width:34px;height:34px;border-radius:50%;background:#fff;' +
-              'border:1.5px solid rgba(20,18,17,0.9);' +
+            '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;' +
+              'background:#14110f;color:#fff;' +
               'display:flex;align-items:center;justify-content:center;' +
-              'box-shadow:0 2px 6px rgba(0,0,0,0.18);color:#14110f;' +
-              'font:700 13px/1 system-ui,sans-serif">' + n + '</div>',
-          iconSize: [34, 34], iconAnchor: [17, 17],
+              'box-shadow:0 2px 8px rgba(0,0,0,0.22);' +
+              'font:700 12px/1 ui-sans-serif,system-ui,sans-serif;' +
+              'font-variant-numeric:tabular-nums;letter-spacing:-0.02em">' + n + '</div>',
+          iconSize: [28, 28], iconAnchor: [14, 14],
         });
       },
     });
     COURTS.forEach(function(c){
+      // Default court marker — flat white pill, no border, soft
+      // shadow for elevation. box-sizing:border-box so the rendered
+      // footprint is exactly iconSize (no 1.5px border halo making
+      // it feel off-centre). Smaller SVG slot (12px in a 22px pill)
+      // gives the icon proper breathing room.
       var html =
-        '<div style="width:22px;height:22px;border-radius:50%;background:#fff;border:1.5px solid rgba(20,18,17,0.9);' +
-          'display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,0.15);color:#14110f;cursor:pointer">' +
-          '<div style="width:13px;height:13px">' + COURT_SVG + '</div>' +
+        '<div style="box-sizing:border-box;width:22px;height:22px;border-radius:50%;background:#fff;' +
+          'display:flex;align-items:center;justify-content:center;' +
+          'box-shadow:0 1px 3px rgba(0,0,0,0.18),0 0 0 1px rgba(20,18,17,0.08);' +
+          'color:#14110f;cursor:pointer">' +
+          '<div style="width:12px;height:12px;display:flex;align-items:center;justify-content:center">' + COURT_SVG + '</div>' +
         '</div>';
       var m = L.marker([c.lat, c.lng], {
         icon: L.divIcon({ className: "", html: html, iconSize: [22,22], iconAnchor: [11,11] }),
@@ -359,17 +372,20 @@ export default function LeafletMap({
     if(showSolo){
       var c = COURTS.find(function(x){ return x.name === focusedCourtName; });
       if(c){
+        // Focused marker — same shape language as the default, just
+        // inverted (dark fill + white icon) and slightly bigger.
+        // Single visual change = clean signal. No stacked rings, no
+        // halo, no busy chrome. Council pick over the previous
+        // 3-ring design which read as 1990s skeuomorphism.
         var html =
-          '<div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center">' +
-            '<div style="position:absolute;inset:0;border-radius:50%;border:2px solid rgba(20,18,17,0.92);' +
-              'box-shadow:0 2px 8px rgba(0,0,0,0.22),0 0 0 3px rgba(255,255,255,0.95)"></div>' +
-            '<div style="position:relative;width:26px;height:26px;border-radius:50%;background:#fff;' +
-              'display:flex;align-items:center;justify-content:center;color:#14110f">' +
-              '<div style="width:15px;height:15px">' + COURT_SVG + '</div>' +
-            '</div>' +
+          '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;background:#14110f;' +
+            'display:flex;align-items:center;justify-content:center;' +
+            'box-shadow:0 3px 10px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
+            'color:#fff;cursor:pointer">' +
+            '<div style="width:14px;height:14px;display:flex;align-items:center;justify-content:center">' + COURT_SVG + '</div>' +
           '</div>';
         var m = L.marker([c.lat, c.lng], {
-          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[34,34], iconAnchor:[17,17] }),
+          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[28,28], iconAnchor:[14,14] }),
           zIndexOffset: 2000,
           interactive: true,
         });
