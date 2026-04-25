@@ -9,6 +9,25 @@
          the "have to resize the window" experience the user reported). -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>CourtSync</title>
+
+    <!-- Favicon (browser tab) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- PWA manifest — lets Android Chrome offer "Add to Home Screen"
+         and lets iOS install with the right name/icon. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Theme + iOS PWA chrome. apple-touch-icon is what iOS actually
+         uses for the Home Screen icon (manifest icons are ignored by
+         iOS Safari for installation). apple-mobile-web-app-capable +
+         status-bar-style let the standalone PWA paint into the notch
+         area like a native app. -->
+    <meta name="theme-color" content="#0c1124" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CourtSync" />
+    <meta name="mobile-web-app-capable" content="yes" />
   </head>
   <body>
     <div id="root"></div>
