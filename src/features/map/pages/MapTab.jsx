@@ -133,12 +133,8 @@ export default function MapTab({
   if(layers.mapTheme === "light") mapDark = false;
   else if(layers.mapTheme === "dark") mapDark = true;
   else mapDark = theme === "hard-court" || theme === "night-court";
-  // Tones picked to be CLOSE to but not identical to the CARTO
-  // basemap. Identical match would make the dissolve invisible
-  // (no contrast at the edge = no perceptible fade). Slightly off
-  // = the corners visibly soften without looking like a wrong
-  // colour. Pure white/black on dark mode for max polish.
-  var frameBg = mapDark ? "#000000" : "#ffffff";
+  // Tones picked to match CARTO's nolabels basemap tiles.
+  var frameBg = mapDark ? "#1a1c20" : "#f8f8f5";
 
   // Wrap setters so we can emit analytics at selection time. Zone props
   // include the activity snapshot so funnel queries don't need a join.
@@ -184,8 +180,8 @@ export default function MapTab({
           corner. WebkitMaskImage + maskImage for cross-browser. */}
       <div style={{
         position:"absolute", inset:0,
-        WebkitMaskImage: "radial-gradient(ellipse 95% 95% at 50% 50%, #000 50%, transparent 100%)",
-        maskImage:       "radial-gradient(ellipse 95% 95% at 50% 50%, #000 50%, transparent 100%)",
+        WebkitMaskImage: "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
+        maskImage:       "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
       }}>
         <LeafletMap
           t={t} theme={theme}
