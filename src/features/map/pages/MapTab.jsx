@@ -200,10 +200,10 @@ export default function MapTab({
           dissolve effect at the basemap pixel level, which is what
           v1-v6 were all approximating with overlays.) */}
 
-      {/* Title pill — sits top-left, shifted right of the Leaflet zoom
-          control (+/−) so the two don't stack. */}
+      {/* Title pill — sits top-left. Leaflet zoom control retired
+          so we sit flush to the left edge. */}
       <div style={{
-        position:"absolute", top:12, left:56, zIndex:500,
+        position:"absolute", top:12, left:12, zIndex:500,
         background: t.bgCard, border:"1px solid "+t.border,
         borderRadius:8, padding:"8px 14px",
         display:"flex", alignItems:"center", gap:10,

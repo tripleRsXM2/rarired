@@ -150,7 +150,10 @@ export default function LeafletMap({
   useEffect(function(){
     if(!elRef.current || mapRef.current) return;
     var map = L.map(elRef.current, {
-      zoomControl: true,
+      // Zoom +/- buttons retired — users still get pinch + scroll
+      // zoom; the chrome was just visual noise top-left and
+      // competed with the title pill.
+      zoomControl: false,
       attributionControl: true,
       preferCanvas: true,
     });
