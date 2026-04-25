@@ -172,47 +172,48 @@ export default function ProfileRivalry({
           </div>
         </div>
 
-        {/* Last result + rematch CTA — single line of text + ink CTA */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {lastMatch && (
-            <span style={{
-              fontSize: 12,
-              color: t.textSecondary,
-              letterSpacing: "0.01em",
-            }}>
-              Last match · <span style={{
-                color: lastWasWin ? t.green : t.red,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}>{lastWasWin ? "Won" : "Lost"}</span>
-              {lastMatch.date && (
-                <span style={{ color: t.textTertiary, marginLeft: 6 }}>· {lastMatch.date}</span>
-              )}
-            </span>
-          )}
-          <div style={{ flex: 1 }} />
-          {openChallenge && (
-            <button
-              onClick={onRematch}
-              style={{
-                flexShrink: 0,
-                padding: "12px 22px",
-                background: t.text,
-                color: t.bg,
-                border: "none",
-                fontSize: 12, fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-                transition: "opacity 0.15s",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
-              Rematch
-            </button>
-          )}
-        </div>
+        {/* Last result — single line of meta */}
+        {lastMatch && (
+          <div style={{
+            fontSize: 12,
+            color: t.textSecondary,
+            letterSpacing: "0.01em",
+          }}>
+            Last match · <span style={{
+              color: lastWasWin ? t.green : t.red,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}>{lastWasWin ? "Won" : "Lost"}</span>
+            {lastMatch.date && (
+              <span style={{ color: t.textTertiary, marginLeft: 6 }}>· {lastMatch.date}</span>
+            )}
+          </div>
+        )}
+
+        {/* Rematch CTA — full-width primary block (mirrors Home's
+            LOG A MATCH treatment). Generous tap target on mobile. */}
+        {openChallenge && (
+          <button
+            onClick={onRematch}
+            style={{
+              width: "100%",
+              padding: "16px 22px",
+              background: t.text,
+              color: t.bg,
+              border: "none",
+              borderRadius: 10,
+              fontSize: 13, fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
+            Rematch
+          </button>
+        )}
       </div>
     </div>
   );

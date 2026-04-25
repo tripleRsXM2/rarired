@@ -1259,12 +1259,16 @@ export default function HomeTab({
         </div>
       )}
 
-      {/* Full FeedCard list — only when expanded. */}
-      <div style={{
-        display: feedExpanded ? "block" : "none",
-        maxWidth: 720, margin: "0 auto",
-        padding: "0 clamp(20px, 4vw, 32px) 40px",
-      }}>
+      {/* Full FeedCard list — only when expanded. v2: cs-fullbleed-feed-wrap
+          drops horizontal padding on mobile so cards go edge-to-edge
+          (Facebook-style); desktop restores the constrained gutter. */}
+      <div
+        className="cs-fullbleed-feed-wrap"
+        style={{
+          display: feedExpanded ? "block" : "none",
+          maxWidth: 720, margin: "0 auto",
+          padding: "0 clamp(20px, 4vw, 32px) 40px",
+        }}>
         {(function () {
           // Apply feed filter once, render the chosen slice.
           var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));

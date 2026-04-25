@@ -129,6 +129,7 @@ function PrimaryCTA({ t, label, onClick }) {
         background: t.text,
         color: t.bg,
         border: "none",
+        borderRadius: 10,
         padding: "16px 28px",
         fontSize: 14,
         fontWeight: 700,
