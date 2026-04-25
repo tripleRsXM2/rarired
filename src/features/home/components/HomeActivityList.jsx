@@ -31,19 +31,22 @@ function shortScore(sets) {
   }).filter(Boolean).join(" ");
 }
 
-function ActivityRow({ t, m, isLast, onTap }) {
+function ActivityRow({ t, m, isLast, onTap, profile }) {
   var isOwn = !m.isTagged;
-  var posterName = isOwn ? m.playerName : m.playerName; // FeedCard logic — same source either way
+  // For own matches the poster IS the viewer; for tagged matches the
+  // poster is the friend who logged it (m.friendName per the
+  // loadHistory enrichment). m.playerName isn't a field on real
+  // history rows — it only exists on the unauth DEMO_FEED.
+  var posterName = isOwn ? (profile && profile.name) || "You" : (m.friendName || m.oppName || "Player");
   var oppDisplay = m.isTagged
-    ? (m.friendName || m.oppName || "Opponent")
+    ? (profile && profile.name) || "You"  // viewer is the opponent on tagged rows
     : (m.oppName || "Opponent");
   var iWon = m.result === "win";
   var score = shortScore(m.sets);
 
-  // Avatar source — for own rows, the viewer's photo; for tagged
-  // rows, the submitter's photo. The FeedCard plumbing already gives
-  // us posterAvatarUrl / m.posterAvatarUrl on tagged rows.
-  var avatarUrl = isOwn ? null : (m.posterAvatarUrl || null);
+  // Avatar source — own match → viewer's photo; tagged → submitter's
+  // photo (m.posterAvatarUrl populated by loadHistory enrichment).
+  var avatarUrl = isOwn ? (profile && profile.avatar_url) || null : (m.posterAvatarUrl || null);
 
   return (
     <div
@@ -107,6 +110,7 @@ export default function HomeActivityList({
   t,
   history,
   authUser,
+  profile,
   onSeeAll,        // callback for "See all activity" — deep-link
   onTapMatch,      // (matchId) => void; scrolls to the FeedCard for that match
 }) {
@@ -160,6 +164,7 @@ export default function HomeActivityList({
               key={m.id}
               t={t}
               m={m}
+              profile={profile}
               isLast={i === rows.length - 1}
               onTap={onTapMatch ? function () { onTapMatch(m.id); } : undefined}
             />

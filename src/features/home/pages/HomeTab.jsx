@@ -1188,6 +1188,7 @@ export default function HomeTab({
         <HomeActivityList
           t={t}
           authUser={authUser}
+          profile={profile}
           history={history}
           onSeeAll={function () { setFeedExpanded(true); }}
           onTapMatch={tapActivityRow}
