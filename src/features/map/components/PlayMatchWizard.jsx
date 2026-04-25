@@ -203,15 +203,16 @@ export default function PlayMatchWizard({
       onClick={function(e){ if(e.target === e.currentTarget) cancel(); }}>
       <div style={{
         // Translucent glass card — the boxy bordered modal is gone.
-        // Content is the design; chrome is invisible.
-        background: "rgba(255,255,255,0.96)",
+        // Content is the design; chrome is invisible. Theme-aware
+        // bg so the wizard is readable on any palette (audit fix:
+        // rgba(255,255,255,0.96) was hardcoded white and caused text
+        // to wash out on dark themes).
+        background: hexToRgba(t.bgCard, 0.96),
         WebkitBackdropFilter: "blur(40px) saturate(140%)",
         backdropFilter: "blur(40px) saturate(140%)",
         color: t.text,
         borderRadius: 22,
-        boxShadow:
-          "0 24px 60px rgba(20,18,17,0.28), " +
-          "0 1px 0 rgba(255,255,255,0.6) inset",
+        boxShadow: "0 24px 60px rgba(20,18,17,0.28)",
         width: "100%",
         maxWidth: 460,
         maxHeight: "calc(100dvh - 24px)",
@@ -227,7 +228,7 @@ export default function PlayMatchWizard({
           style={{
             position:"absolute", top: 14, left: 14, zIndex: 2,
             width:36, height:36, borderRadius: "50%",
-            background:"rgba(255,255,255,0.7)",
+            background: hexToRgba(t.bgCard, 0.78),
             WebkitBackdropFilter:"blur(20px)", backdropFilter:"blur(20px)",
             border:"none", cursor:"pointer",
             color: t.text,
@@ -244,7 +245,7 @@ export default function PlayMatchWizard({
           style={{
             position:"absolute", top: 14, right: 14, zIndex: 2,
             width:36, height:36, borderRadius: "50%",
-            background:"rgba(255,255,255,0.7)",
+            background: hexToRgba(t.bgCard, 0.78),
             WebkitBackdropFilter:"blur(20px)", backdropFilter:"blur(20px)",
             border:"none", cursor:"pointer",
             color: t.text,
@@ -267,7 +268,7 @@ export default function PlayMatchWizard({
             return (
               <div key={i} style={{
                 width: 22, height: 3, borderRadius: 2,
-                background: i <= step ? "#14110f" : "rgba(20,18,17,0.12)",
+                background: i <= step ? t.text : t.border,
                 transition: "background 0.2s",
               }}/>
             );
@@ -279,14 +280,14 @@ export default function PlayMatchWizard({
           <div style={{
             fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
             textTransform: "uppercase",
-            color: "rgba(20,18,17,0.42)", lineHeight: 1,
+            color: t.textTertiary, lineHeight: 1,
           }}>
             Step {step + 1} of {TOTAL_STEPS}
           </div>
           <div style={{
             fontSize: 22, fontWeight: 900,
             letterSpacing: "-0.025em", lineHeight: 1.15,
-            color: "#14110f",
+            color: t.text,
             marginTop: 8,
           }}>
             {step === 0 && "Where do you want to play?"}
@@ -299,56 +300,61 @@ export default function PlayMatchWizard({
         {/* Body */}
         <div style={{ flex:1, overflowY:"auto", padding:"14px 22px 22px" }}>
 
-          {/* Step 0 — pick zone — sleek glass cards, no redundant dots */}
+          {/* Step 0 — pick zone — corner color bloom + bold typography.
+              Each card has a soft radial gradient of the zone colour
+              radiating from its top-right corner — the colour becomes
+              the card's atmosphere instead of a label. Drops the
+              venue count subtitle so the zone name is the only focal
+              point. */}
           {step === 0 && (
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: 10 }}>
               {ZONES.map(function(z){
-                var venueCount = courtsInZone(z.id).length;
                 return (
                   <button key={z.id} type="button"
                     onClick={function(){ pickZone(z); }}
                     style={{
                       textAlign:"left",
-                      padding: "18px 16px",
-                      borderRadius: 16,
+                      padding: "20px 18px 22px",
+                      borderRadius: 18,
                       border: "none",
-                      // Soft glass card. Zone colour shows as a thin
-                      // top-edge accent rule + name highlight on hover.
-                      // No dot — the map already had the zone colours,
-                      // repeating them as dots in the wizard was noise.
-                      background: "rgba(255,255,255,0.78)",
-                      color: t.text, cursor:"pointer",
-                      display:"flex", flexDirection:"column",
-                      gap: 6, minHeight: 86,
+                      background: hexToRgba(t.bgCard, 0.85),
+                      color: t.text,
+                      cursor:"pointer",
+                      display:"flex", alignItems:"flex-end",
+                      minHeight: 110,
                       position:"relative", overflow:"hidden",
-                      boxShadow: "0 1px 0 rgba(20,18,17,0.04)",
-                      transition: "transform 0.12s ease, background 0.15s",
+                      transition: "transform 0.14s ease",
                     }}
                     onMouseEnter={function(e){
-                      e.currentTarget.style.background = "#fff";
-                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      var bloom = e.currentTarget.querySelector(".cs-zone-bloom");
+                      if(bloom) bloom.style.opacity = "1";
                     }}
                     onMouseLeave={function(e){
-                      e.currentTarget.style.background = "rgba(255,255,255,0.78)";
                       e.currentTarget.style.transform = "translateY(0)";
+                      var bloom = e.currentTarget.querySelector(".cs-zone-bloom");
+                      if(bloom) bloom.style.opacity = "0.7";
                     }}>
-                    {/* Thin top accent rule in zone colour */}
-                    <div style={{
-                      position:"absolute", top:0, left:0, right:0,
-                      height: 3, background: z.color,
+                    {/* Corner bloom — radial gradient of zone colour
+                        from the top-right corner. The card's identity
+                        in atmospheric form. */}
+                    <div className="cs-zone-bloom" style={{
+                      position:"absolute", inset:0,
+                      background: "radial-gradient(circle at 100% 0%, " +
+                        hexToRgba(z.color, 0.55) + " 0%, " +
+                        hexToRgba(z.color, 0.18) + " 35%, " +
+                        "transparent 75%)",
+                      opacity: 0.7,
+                      transition: "opacity 0.18s ease",
+                      pointerEvents:"none",
                     }}/>
+                    {/* Big bold zone name — only focal point */}
                     <div style={{
-                      fontSize: 17, fontWeight: 800,
-                      letterSpacing: "-0.02em", lineHeight: 1.15,
-                      color: "#14110f",
-                      marginTop: 4,
+                      position:"relative",
+                      fontSize: 18, fontWeight: 900,
+                      letterSpacing: "-0.025em", lineHeight: 1.1,
+                      color: t.text,
                     }}>{z.name}</div>
-                    <div style={{
-                      fontSize: 11, color: "rgba(20,18,17,0.5)",
-                      fontWeight: 600, letterSpacing: "0.01em",
-                    }}>
-                      {venueCount} {venueCount === 1 ? "venue" : "venues"}
-                    </div>
                   </button>
                 );
               })}
@@ -378,32 +384,31 @@ export default function PlayMatchWizard({
                         textAlign:"left",
                         padding: "14px 16px",
                         borderRadius: 14,
-                        background: "rgba(255,255,255,0.78)",
+                        background: hexToRgba(t.bgCard, 0.78),
                         border: "none",
                         color: t.text,
                         cursor:"pointer",
                         display:"flex", alignItems:"center", justifyContent:"space-between",
                         gap: 12,
-                        boxShadow: "0 1px 0 rgba(20,18,17,0.04)",
                         transition: "transform 0.1s ease, background 0.15s",
                       }}
                       onMouseEnter={function(e){
-                        e.currentTarget.style.background = "#fff";
+                        e.currentTarget.style.background = t.bgCard;
                         e.currentTarget.style.transform = "translateY(-1px)";
                       }}
                       onMouseLeave={function(e){
-                        e.currentTarget.style.background = "rgba(255,255,255,0.78)";
+                        e.currentTarget.style.background = hexToRgba(t.bgCard, 0.78);
                         e.currentTarget.style.transform = "translateY(0)";
                       }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{
                           fontSize: 15, fontWeight: 700,
                           letterSpacing:"-0.015em", lineHeight: 1.25,
-                          color: "#14110f",
+                          color: t.text,
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>{c.name}</div>
                         <div style={{
-                          fontSize: 11, color: "rgba(20,18,17,0.5)",
+                          fontSize: 11, color: t.textSecondary,
                           marginTop: 3, fontWeight: 600, letterSpacing:"0.01em",
                         }}>
                           {c.suburb ? c.suburb + " · " : ""}{c.courts} {c.courts === 1 ? "court" : "courts"}
@@ -412,7 +417,7 @@ export default function PlayMatchWizard({
                       <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
                            stroke="currentColor" strokeWidth="1.7"
                            strokeLinecap="round" strokeLinejoin="round"
-                           style={{ color: "rgba(20,18,17,0.35)", flexShrink: 0 }}>
+                           style={{ color: t.textTertiary, flexShrink: 0 }}>
                         <path d="M7 4l5 5-5 5"/>
                       </svg>
                     </button>
