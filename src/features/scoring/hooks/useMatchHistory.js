@@ -66,15 +66,31 @@ export function useMatchHistory(opts){
     await M.expireDisputedMatches(userId);
     var hr=await M.fetchOwnMatches(userId);
     var or=await M.fetchOpponentMatches(userId);
-    var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false);});
-    var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true);});
-    var normalized=ownNorm.concat(oppNorm).sort(function(a,b){return b.date<a.date?-1:1;});
+    // Friends-of-the-viewer matches the viewer is NOT a party to.
+    // Server-side RPC (fetch_friends_matches) bypasses match_history RLS
+    // safely — it only returns confirmed rows where at least one party is
+    // an accepted friend of the caller. Failure is non-fatal: if the RPC
+    // is unavailable for any reason (older DB, transient error) the feed
+    // simply falls back to the viewer's own + tagged matches.
+    var fr={ data: [], error: null };
+    try { fr = await M.fetchFriendsMatches(userId, 50); } catch (e) {
+      console.warn('[loadHistory] fetchFriendsMatches failed:', e);
+    }
+    if (fr && fr.error) {
+      console.warn('[loadHistory] fetchFriendsMatches error:', fr.error);
+    }
+    var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false,false);});
+    var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true,false);});
+    var thirdNorm=((fr && fr.data)||[]).map(function(m){return normalizeMatch(m,false,true);});
+    var normalized=ownNorm.concat(oppNorm).concat(thirdNorm).sort(function(a,b){return b.date<a.date?-1:1;});
 
     // ── Enrich matches with participant profile data (name + avatar) ───────
     // For isTagged=true rows, m.opp_name is the current user's own name
     // (it's what the submitter typed for their opponent). The real
     // "opponent" from the tagged user's view is the submitter.
     // For isTagged=false (own) rows the opponent is m.opponent_id.
+    // For isThirdParty=true rows, BOTH sides are non-viewer participants
+    // — we fetch both to render avatars + display names in the scoreboard.
     //
     // We fetch every referenced participant once and attach BOTH the
     // poster's avatar (posterAvatarUrl, already used by the feed card
@@ -84,6 +100,7 @@ export function useMatchHistory(opts){
     normalized.forEach(function (m) {
       if (m.isTagged && m.submitterId) participantIds.add(m.submitterId);
       if (!m.isTagged && m.opponent_id) participantIds.add(m.opponent_id);
+      if (m.isThirdParty && m.submitterId) participantIds.add(m.submitterId);
     });
     participantIds.delete(userId); // own profile is loaded separately
     if (participantIds.size > 0) {
@@ -110,6 +127,21 @@ export function useMatchHistory(opts){
           var op = pMap[m.opponent_id];
           if (op) {
             patch.oppAvatarUrl = op.avatar_url || null;
+            // Third-party: prefer the linked opponent's actual display
+            // name over the freetext opp_name typed by the submitter.
+            // (For own matches we leave oppName alone — the user typed
+            // it themselves and may have used a nickname.)
+            if (m.isThirdParty && sp /* unused */, op && op.name) patch.oppName = op.name;
+          }
+        }
+        if (m.isThirdParty && m.submitterId) {
+          var tp = pMap[m.submitterId];
+          if (tp) {
+            // For third-party rows we surface the submitter as the
+            // "poster" identity. Reuse the friendName + posterAvatarUrl
+            // fields the FeedCard already consumes for tagged rows.
+            patch.friendName      = tp.name || m.friendName;
+            patch.posterAvatarUrl = tp.avatar_url || null;
           }
         }
         return Object.keys(patch).length ? Object.assign({}, m, patch) : m;

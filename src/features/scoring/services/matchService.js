@@ -9,6 +9,19 @@ export function fetchOpponentMatches(userId){
   return supabase.from('match_history').select('*').eq('opponent_id',userId)
     .in('status',['pending_confirmation','confirmed','disputed','pending_reconfirmation','voided']).order('created_at',{ascending:false});
 }
+// Confirmed matches between two of the viewer's accepted friends, where
+// the viewer is NOT a party. Server-side RPC bypasses match_history RLS
+// (which otherwise restricts reads to user_id = me OR opponent_id = me)
+// and enforces the friend-graph + caller=viewer rules itself. Used by the
+// Home "All activity" feed to surface friends-of-the-viewer activity.
+// See supabase/migrations/20260425_fetch_friends_matches.sql.
+export function fetchFriendsMatches(viewerId, limit, beforeTs){
+  return supabase.rpc('fetch_friends_matches', {
+    p_user_id: viewerId,
+    p_limit:   limit  || 50,
+    p_before:  beforeTs || null,
+  });
+}
 export function fetchFeedLikes(userId, matchIds){
   return supabase.from('feed_likes').select('match_id').eq('user_id',userId).in('match_id',matchIds);
 }

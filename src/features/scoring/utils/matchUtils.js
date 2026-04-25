@@ -8,7 +8,12 @@ export function computeMatchHash(uid1, uid2, date, sets){
   return ids+'|'+date+'|'+score;
 }
 
-export function normalizeMatch(m, isTagged){
+// `isTagged` — viewer is the tagged opponent of this match. Result is
+// flipped to viewer-frame (submitter's win = viewer's loss).
+// `isThirdParty` — viewer is NEITHER party (a friend's match seen via
+// fetch_friends_matches). Result stays in the submitter's frame; the
+// scoreboard renders both participants as non-viewer identities.
+export function normalizeMatch(m, isTagged, isThirdParty){
   var ownerResult=m.result||"loss";
   // Map legacy tag_status to new status if status column not yet populated
   var status=m.status||(m.tag_status==='accepted'?'confirmed':m.tag_status==='pending'?'pending_confirmation':'confirmed');
@@ -27,6 +32,9 @@ export function normalizeMatch(m, isTagged){
     date:m.match_date?new Date(m.match_date).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"",
     rawDate:m.match_date?m.match_date.slice(0,10):"",
     sets:m.sets||[],
+    // Result frame:
+    //   own / third-party → submitter's POV (m.result as stored)
+    //   tagged            → flipped to viewer's POV
     result:isTagged?(ownerResult==="win"?"loss":"win"):ownerResult,
     notes:m.notes||"",
     status:status,
@@ -34,7 +42,8 @@ export function normalizeMatch(m, isTagged){
     opponent_id:m.opponent_id||m.tagged_user_id||null,
     tagged_user_id:m.tagged_user_id||null,
     tag_status:m.tag_status||null,
-    isTagged:isTagged,
+    isTagged:!!isTagged,
+    isThirdParty:!!isThirdParty,
     expiresAt:m.expires_at||null,
     venue:m.venue||"",
     court:m.court||"",
@@ -63,5 +72,8 @@ export function normalizeMatch(m, isTagged){
         ? 'ranked'
         : 'casual'
     ),
+    // Confirmed-at timestamp — used by the friends-feed pagination cursor
+    // and as a tiebreaker when sorting third-party rows alongside own/tagged.
+    confirmedAt: m.confirmed_at || null,
   };
 }

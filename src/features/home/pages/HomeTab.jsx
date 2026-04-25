@@ -131,12 +131,22 @@ function FeedCard({
   // this match is between the viewer and a rival.
   viewerRivalsSet,
 }) {
-  // Identity resolvers — who is the "poster" and who is the "opponent" from
-  // the viewer's POV, so the right user IDs get wired into the profile links.
-  // For tagged matches, the poster (pName) is the submitter; for own matches
-  // the poster is the viewer themselves.
-  var posterUserId   = m.isTagged ? (m.submitterId || null) : (authUser && authUser.id) || null;
-  var opponentUserId = m.isTagged ? (authUser && authUser.id) || null : (m.opponent_id || null);
+  // Identity resolvers — who is the "poster" and who is the "opponent"
+  // for profile-link wiring. Three cases:
+  //   own         — viewer logged it.        poster=viewer, opp=opponent_id
+  //   tagged      — viewer is the opponent.  poster=submitter, opp=viewer
+  //   third-party — viewer in neither side.  poster=submitter, opp=opponent_id
+  var posterUserId, opponentUserId;
+  if (m.isThirdParty) {
+    posterUserId   = m.submitterId || null;
+    opponentUserId = m.opponent_id || null;
+  } else if (m.isTagged) {
+    posterUserId   = m.submitterId || null;
+    opponentUserId = (authUser && authUser.id) || null;
+  } else {
+    posterUserId   = (authUser && authUser.id) || null;
+    opponentUserId = m.opponent_id || null;
+  }
   function goPoster()   { if (openProfile && posterUserId)   openProfile(posterUserId); }
   function goOpponent() { if (openProfile && opponentUserId) openProfile(opponentUserId); }
   var posterClickable   = !demo && !!posterUserId   && (!authUser || posterUserId   !== authUser.id) && !!openProfile;
@@ -229,20 +239,29 @@ function FeedCard({
   })();
 
   // ── Self-healing winner ──────────────────────────────────────────────────
-  // ys/ts are in the SUBMITTER'S frame. When the viewer is the submitter
-  // (isOwn), viewer-won === (ys > ts). When the viewer is tagged as the
-  // opponent, viewer-won === (ts > ys).
+  // ys/ts are in the SUBMITTER'S frame. We derive a single canonical
+  // "submitter won" boolean and project it into viewer-frame as needed
+  // for the three card types (own / tagged / third-party).
   //
   // If the sets unambiguously pick a winner, trust them — this heals the
   // classic "tapped the wrong Win/Loss button but entered winning sets"
   // data-entry bug without rewriting the DB row. If the sets are tied
   // or every set was incomplete (all skipped), fall back to the stored
-  // result field (already in viewer's frame via normalizeMatch).
-  var setsSayViewerWon = (setWinCounts.ys !== setWinCounts.ts)
-    ? (isOwn ? setWinCounts.ys > setWinCounts.ts
-             : setWinCounts.ts > setWinCounts.ys)
-    : null;
-  var isWin = setsSayViewerWon !== null ? setsSayViewerWon : (m.result === "win");
+  // result field. m.result is in the SUBMITTER's POV for own + third-
+  // party rows (normalizeMatch leaves it untouched) and FLIPPED to the
+  // viewer's POV for tagged rows — so we flip back here for tagged so
+  // `submitterWon` is consistent across all three.
+  var submitterWonStored = m.isTagged ? (m.result === "loss") : (m.result === "win");
+  var submitterWon = (setWinCounts.ys !== setWinCounts.ts)
+    ? (setWinCounts.ys > setWinCounts.ts)
+    : submitterWonStored;
+  // viewerWon — meaningful only when the viewer is in the match. For
+  // third-party rows we don't use it for anything viewer-centric (no
+  // win/loss tint on the card border, no viewer-claim share text).
+  var viewerWon = m.isTagged ? !submitterWon : submitterWon;
+  // Preserve the legacy `isWin` symbol for callers below (share text,
+  // etc.) — equivalent to viewerWon, semantically "did the viewer win".
+  var isWin = viewerWon;
 
   // The CONTEXT label that headlines the card. League takes precedence
   // (it's a more specific identity than "Ranked"); then a tournament
@@ -472,14 +491,16 @@ function FeedCard({
             fall back to the stored `result` via `isWin` in the original
             tagged-frame logic. */}
         {(function() {
-          // Reuse the top-level setWinCounts (already skips blank/NaN/tied
-          // sets) instead of recomputing with the legacy 6-vs-0-from-"" bug.
-          var ys = setWinCounts.ys, ts = setWinCounts.ts;
-          // s.you is always the submitter's score in the DB, and pName is
-          // always the submitter (own or tagged). So ys > ts means pName won.
-          // Fallback: if sets are inconclusive, trust the stored result (in
-          // viewer's frame), inverting it when the viewer isn't the poster.
-          var posterWins = ys !== ts ? (ys > ts) : (isOwn ? isWin : !isWin);
+          // Row 1's player is the POSTER from the viewer's POV:
+          //   own         — poster = viewer (pName = profile.name)
+          //   tagged      — poster = submitter (pName = friendName)
+          //   third-party — poster = submitter (pName = friendName)
+          //
+          // For own rows the poster is the viewer, so posterWins = viewerWon.
+          // For tagged + third-party the poster is the submitter, so
+          // posterWins = submitterWon. The canonical submitterWon was
+          // derived above and folds in the unambiguous-sets self-heal.
+          var posterWins = isOwn ? viewerWon : submitterWon;
           return [
             {
               name: pName,
@@ -1326,16 +1347,39 @@ export default function HomeTab({
           var hiddenCount = filtered.length - visible.length;
 
           var cards = visible.map(function (m) {
-            var isOwn = !m.isTagged;
-            // pAvatarUrl: poster row avatar. Own match → viewer. Tagged → submitter.
-            // oppAvatarUrl: opponent row avatar. Own match → m.opponent_id's profile
-            // (fetched in useMatchHistory). Tagged → viewer (we ARE the opponent).
-            var posterAvatarUrl = isOwn ? (profile && profile.avatar_url) : (m.posterAvatarUrl || null);
-            var oppAvatarUrl    = isOwn ? (m.oppAvatarUrl || null)       : (profile && profile.avatar_url);
+            // isOwn semantically means "viewer is the poster". A third-
+            // party row (friend's match the viewer wasn't in) is NOT
+            // tagged AND NOT own — both flags must be false.
+            var isOwn = !m.isTagged && !m.isThirdParty;
+            // Avatars per scoreboard row. Three cases mirror the FeedCard
+            // identity resolver:
+            //   own         — poster=viewer (profile.avatar_url),
+            //                 opp=m.oppAvatarUrl (loaded in useMatchHistory)
+            //   tagged      — poster=m.posterAvatarUrl (submitter),
+            //                 opp=viewer (profile.avatar_url)
+            //   third-party — poster=m.posterAvatarUrl (submitter),
+            //                 opp=m.oppAvatarUrl (linked opponent if any)
+            var posterAvatarUrl, oppAvatarUrl;
+            if (m.isThirdParty) {
+              posterAvatarUrl = m.posterAvatarUrl || null;
+              oppAvatarUrl    = m.oppAvatarUrl   || null;
+            } else if (m.isTagged) {
+              posterAvatarUrl = m.posterAvatarUrl || null;
+              oppAvatarUrl    = profile && profile.avatar_url;
+            } else {
+              posterAvatarUrl = profile && profile.avatar_url;
+              oppAvatarUrl    = m.oppAvatarUrl || null;
+            }
+            // Poster display name — friendName is the enriched submitter
+            // name (set for both tagged and third-party rows). Falls back
+            // to oppName for legacy rows that lack the enriched field.
+            var pName = isOwn
+              ? profile.name
+              : (m.friendName || m.oppName);
             return (
               <FeedCard
                 key={m.id} m={m} isOwn={isOwn} demo={false}
-                pName={isOwn ? profile.name : (m.friendName || m.oppName)}
+                pName={pName}
                 pAvatar={isOwn ? profile.avatar : ""}
                 pAvatarUrl={posterAvatarUrl}
                 oppAvatarUrl={oppAvatarUrl}
