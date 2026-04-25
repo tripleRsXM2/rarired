@@ -5,10 +5,16 @@ import {
   isCompletedSet,
   isPartialSet,
   isValidTiebreakScore,
+  validateTiebreakScore,
   validateSetScore,
   validateMatchScore,
   deriveMatchWinner,
   getScoreValidationMessage,
+  formatSetScore,
+  formatMatchScore,
+  normalizeSetFromDb,
+  serializeSetForDb,
+  isTiebreakSet,
 } from "./tennisScoreValidation.js";
 
 describe("isCompletedSet — normal sets", () => {
@@ -393,5 +399,145 @@ describe("getScoreValidationMessage — sanity", () => {
 
   it("LEAGUE_DISALLOWS_PARTIAL is league-aware", () => {
     expect(getScoreValidationMessage(CODES.LEAGUE_DISALLOWS_PARTIAL)).toMatch(/league/i);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// V1.2: tiebreak winner-consistency + new helpers
+// ─────────────────────────────────────────────────────────────────────
+
+describe("validateTiebreakScore — winner consistency", () => {
+  it("7-6 set, inner 7-4 with set winner 'you' → ok", () => {
+    expect(
+      validateTiebreakScore({ you: 7, them: 4 }, { expectedWinner: "you" }).ok
+    ).toBe(true);
+  });
+  it("7-6 set, inner 7-5 with set winner 'them' → mismatch", () => {
+    var r = validateTiebreakScore({ you: 7, them: 5 }, { expectedWinner: "them" });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe(CODES.TIEBREAK_WINNER_MISMATCH);
+  });
+  it("inner 7-6 (not won by 2) → invalid (not mismatch)", () => {
+    var r = validateTiebreakScore({ you: 7, them: 6 }, { expectedWinner: "you" });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe(CODES.INVALID_TIEBREAK_DETAILS);
+  });
+  it("inner 5-3 (didn't reach 7) → invalid", () => {
+    var r = validateTiebreakScore({ you: 5, them: 3 }, { expectedWinner: "you" });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe(CODES.INVALID_TIEBREAK_DETAILS);
+  });
+  it("missing tieBreak → required", () => {
+    var r = validateTiebreakScore(null, { expectedWinner: "you" });
+    expect(r.code).toBe(CODES.TIEBREAK_DETAILS_REQUIRED);
+  });
+  it("no expectedWinner provided → only checks shape", () => {
+    expect(validateTiebreakScore({ you: 7, them: 5 }).ok).toBe(true);
+  });
+});
+
+describe("isCompletedSet / validateSetScore — tiebreak winner mismatch", () => {
+  it("7-6 with inner won by them (5-7) → not completed", () => {
+    expect(isCompletedSet({ you: 7, them: 6, tieBreak: { you: 5, them: 7 } })).toBe(false);
+  });
+  it("6-7 with inner won by you (7-5) → not completed", () => {
+    expect(isCompletedSet({ you: 6, them: 7, tieBreak: { you: 7, them: 5 } })).toBe(false);
+  });
+  it("7-6 with inner won by you (7-4) → completed", () => {
+    expect(isCompletedSet({ you: 7, them: 6, tieBreak: { you: 7, them: 4 } })).toBe(true);
+  });
+  it("6-7 with inner won by them (3-7) → completed", () => {
+    expect(isCompletedSet({ you: 6, them: 7, tieBreak: { you: 3, them: 7 } })).toBe(true);
+  });
+  it("validateSetScore surfaces the mismatch code", () => {
+    var r = validateSetScore({ you: 7, them: 6, tieBreak: { you: 5, them: 7 } });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe(CODES.TIEBREAK_WINNER_MISMATCH);
+  });
+  it("8-6 inner with set winner 'you' (7-6 games) still passes", () => {
+    // Existing behaviour: 8-6 is win-by-2 ≥7. Winner 'you' on both
+    // games (7-6) and inner (8-6) — should remain valid.
+    expect(isCompletedSet({ you: 7, them: 6, tieBreak: { you: 8, them: 6 } })).toBe(true);
+  });
+});
+
+describe("isTiebreakSet", () => {
+  it("7-6 → true", () => { expect(isTiebreakSet({ you: 7, them: 6 })).toBe(true); });
+  it("6-7 → true", () => { expect(isTiebreakSet({ you: 6, them: 7 })).toBe(true); });
+  it("6-3 → false", () => { expect(isTiebreakSet({ you: 6, them: 3 })).toBe(false); });
+  it("10-8 (match-tiebreak) → false", () => { expect(isTiebreakSet({ you: 10, them: 8 })).toBe(false); });
+  it("empty → false", () => { expect(isTiebreakSet({ you: "", them: "" })).toBe(false); });
+});
+
+describe("formatSetScore", () => {
+  it("6-3 (no tiebreak)", () => {
+    expect(formatSetScore({ you: 6, them: 3 })).toBe("6-3");
+  });
+  it("7-6 with valid tiebreak details renders winner-first", () => {
+    expect(formatSetScore({ you: 7, them: 6, tieBreak: { you: 7, them: 4 } })).toBe("7-6 (7-4)");
+  });
+  it("6-7 with valid tiebreak renders winner-first", () => {
+    expect(formatSetScore({ you: 6, them: 7, tieBreak: { you: 4, them: 7 } })).toBe("6-7 (7-4)");
+  });
+  it("7-6 without tiebreak details just renders the games", () => {
+    expect(formatSetScore({ you: 7, them: 6 })).toBe("7-6");
+  });
+  it("10-8 final set match-tiebreak (no inner tieBreak field)", () => {
+    expect(formatSetScore({ you: 10, them: 8 })).toBe("10-8");
+  });
+  it("missing one side renders an em-dash", () => {
+    expect(formatSetScore({ you: 6, them: "" })).toBe("6-—");
+    expect(formatSetScore({ you: "", them: 4 })).toBe("—-4");
+  });
+  it("both empty → empty string", () => {
+    expect(formatSetScore({ you: "", them: "" })).toBe("");
+  });
+  it("null set → empty", () => {
+    expect(formatSetScore(null)).toBe("");
+  });
+  it("invalid tiebreak (incomplete) renders the games only", () => {
+    expect(formatSetScore({ you: 7, them: 6, tieBreak: { you: "", them: "" } })).toBe("7-6");
+  });
+});
+
+describe("formatMatchScore", () => {
+  it("joins set strings with ', '", () => {
+    expect(formatMatchScore([
+      { you: 6, them: 3 },
+      { you: 7, them: 6, tieBreak: { you: 7, them: 4 } },
+    ])).toBe("6-3, 7-6 (7-4)");
+  });
+  it("ignores empty trailing rows", () => {
+    expect(formatMatchScore([
+      { you: 6, them: 3 },
+      { you: "", them: "" },
+    ])).toBe("6-3");
+  });
+  it("non-array → empty", () => { expect(formatMatchScore(null)).toBe(""); });
+});
+
+describe("normalizeSetFromDb / serializeSetForDb round-trip", () => {
+  it("game-only set survives round-trip", () => {
+    var n = normalizeSetFromDb({ you: 6, them: 3 });
+    expect(serializeSetForDb(n)).toEqual({ you: 6, them: 3 });
+  });
+  it("tiebreak set survives round-trip", () => {
+    var n = normalizeSetFromDb({ you: 7, them: 6, tieBreak: { you: 7, them: 4 } });
+    expect(serializeSetForDb(n)).toEqual({ you: 7, them: 6, tieBreak: { you: 7, them: 4 } });
+  });
+  it("serialize strips half-filled tieBreak", () => {
+    expect(serializeSetForDb({ you: 7, them: 6, tieBreak: { you: 7, them: "" } }))
+      .toEqual({ you: 7, them: 6 });
+  });
+  it("serialize strips empty tieBreak object", () => {
+    expect(serializeSetForDb({ you: 6, them: 3, tieBreak: { you: "", them: "" } }))
+      .toEqual({ you: 6, them: 3 });
+  });
+  it("serialize coerces string tiebreak halves to numbers", () => {
+    expect(serializeSetForDb({ you: 7, them: 6, tieBreak: { you: "7", them: "4" } }))
+      .toEqual({ you: 7, them: 6, tieBreak: { you: 7, them: 4 } });
+  });
+  it("normalize on missing input returns empty shape", () => {
+    expect(normalizeSetFromDb(null)).toEqual({ you: "", them: "" });
   });
 });

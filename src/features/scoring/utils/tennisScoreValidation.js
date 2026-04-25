@@ -57,6 +57,12 @@ export var CODES = {
   LEAGUE_DISALLOWS_MATCH_TYPE: "LEAGUE_DISALLOWS_MATCH_TYPE",
 };
 
+// New error code for the V1.2 winner-consistency check (the
+// inner-tiebreak winner must match the games winner of a 7-6 set).
+// Added inside the existing CODES object via mutation so we don't
+// reorder the export.
+CODES.TIEBREAK_WINNER_MISMATCH = "TIEBREAK_WINNER_MISMATCH";
+
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 function toNum(v) {
@@ -99,17 +105,32 @@ function classifyNormalSet(y, t) {
 
 // Tiebreak inner-score validity. pointsToWin = 7 for a set tiebreak,
 // 10 for a match tiebreak. Winner needs >= pointsToWin AND margin >= 2.
-function tiebreakOk(tb, pointsToWin) {
-  if (!tb) return false;
+//
+// If `expectedWinner` is supplied ('you' | 'them' | null), the inner
+// tiebreak winner is also checked against the games winner — i.e. a
+// 7-6 set must have its inner tiebreak won by the same side that won
+// the games. Returns a discriminated string code so callers can
+// surface the right error message:
+//
+//   "ok"               — valid + (if checked) winner matches
+//   "invalid"          — inner pair fails the 7+ win-by-2 rule
+//   "winner_mismatch"  — inner pair is valid but won by the wrong side
+function tiebreakOk(tb, pointsToWin, expectedWinner) {
+  if (!tb) return "invalid";
   var ay = toNum(tb.you);
   var at = toNum(tb.them);
-  if (!ay.ok || !at.ok) return false;
+  if (!ay.ok || !at.ok) return "invalid";
+  if (ay.n === at.n) return "invalid";
   var hi = Math.max(ay.n, at.n);
   var lo = Math.min(ay.n, at.n);
-  if (ay.n === at.n) return false;
-  if (hi < pointsToWin) return false;
-  if (hi - lo < 2) return false;
-  return true;
+  if (hi < pointsToWin) return "invalid";
+  if (hi - lo < 2) return "invalid";
+
+  if (expectedWinner === "you" || expectedWinner === "them") {
+    var innerWinner = ay.n > at.n ? "you" : "them";
+    if (innerWinner !== expectedWinner) return "winner_mismatch";
+  }
+  return "ok";
 }
 
 // Match-tiebreak set: stored shape today is `{you, them}` where the
@@ -137,10 +158,11 @@ export function isCompletedSet(set, options) {
   var kind = classifyNormalSet(y.n, t.n);
   if (kind === null) return false;
   if (kind === "tiebreak_7_6") {
-    if (options.requireTiebreakDetails) return tiebreakOk(set.tieBreak, 7);
+    var setWinner = y.n > t.n ? "you" : "them";
+    if (options.requireTiebreakDetails) return tiebreakOk(set.tieBreak, 7, setWinner) === "ok";
     // Tolerant default: 7-6 alone is treated as completed; if tiebreak
-    // details are present they MUST be valid.
-    if (set.tieBreak) return tiebreakOk(set.tieBreak, 7);
+    // details are present they MUST be valid (incl. winner consistency).
+    if (set.tieBreak) return tiebreakOk(set.tieBreak, 7, setWinner) === "ok";
     return true;
   }
   return true;
@@ -159,7 +181,26 @@ export function isPartialSet(set, options) {
 export function isValidTiebreakScore(tieBreak, options) {
   options = options || {};
   var pointsToWin = options.pointsToWin || 7;
-  return tiebreakOk(tieBreak, pointsToWin);
+  return tiebreakOk(tieBreak, pointsToWin, options.expectedWinner || null) === "ok";
+}
+
+// Public tiebreak validator — returns the same { ok, code, message }
+// shape as validateSetScore so the UI can surface errors uniformly.
+// `expectedWinner` is 'you' / 'them' / null. When provided, the
+// inner tiebreak winner must match.
+export function validateTiebreakScore(tieBreak, options) {
+  options = options || {};
+  var pointsToWin = options.pointsToWin || 7;
+  var expectedWinner = options.expectedWinner || null;
+  if (!tieBreak) {
+    return { ok: false, code: CODES.TIEBREAK_DETAILS_REQUIRED, message: getScoreValidationMessage(CODES.TIEBREAK_DETAILS_REQUIRED) };
+  }
+  var status = tiebreakOk(tieBreak, pointsToWin, expectedWinner);
+  if (status === "ok") return { ok: true, code: CODES.OK, message: "" };
+  if (status === "winner_mismatch") {
+    return { ok: false, code: CODES.TIEBREAK_WINNER_MISMATCH, message: getScoreValidationMessage(CODES.TIEBREAK_WINNER_MISMATCH) };
+  }
+  return { ok: false, code: CODES.INVALID_TIEBREAK_DETAILS, message: getScoreValidationMessage(CODES.INVALID_TIEBREAK_DETAILS) };
 }
 
 // ── Public: validateSetScore ────────────────────────────────────────────────
@@ -186,11 +227,18 @@ export function validateSetScore(set, options) {
     return { ok: false, code: CODES.INVALID_NORMAL_SET, message: getScoreValidationMessage(CODES.INVALID_NORMAL_SET, { you: y.n, them: t.n }) };
   }
   if (kind === "tiebreak_7_6") {
+    var setWinner = y.n > t.n ? "you" : "them";
     if (options.requireTiebreakDetails && !set.tieBreak) {
       return { ok: false, code: CODES.TIEBREAK_DETAILS_REQUIRED, message: getScoreValidationMessage(CODES.TIEBREAK_DETAILS_REQUIRED) };
     }
-    if (set.tieBreak && !tiebreakOk(set.tieBreak, 7)) {
-      return { ok: false, code: CODES.INVALID_TIEBREAK_DETAILS, message: getScoreValidationMessage(CODES.INVALID_TIEBREAK_DETAILS) };
+    if (set.tieBreak) {
+      var status = tiebreakOk(set.tieBreak, 7, setWinner);
+      if (status === "winner_mismatch") {
+        return { ok: false, code: CODES.TIEBREAK_WINNER_MISMATCH, message: getScoreValidationMessage(CODES.TIEBREAK_WINNER_MISMATCH) };
+      }
+      if (status !== "ok") {
+        return { ok: false, code: CODES.INVALID_TIEBREAK_DETAILS, message: getScoreValidationMessage(CODES.INVALID_TIEBREAK_DETAILS) };
+      }
     }
   }
   return { ok: true, code: CODES.OK, message: "" };
@@ -437,6 +485,8 @@ export function getScoreValidationMessage(code, ctx) {
       return "A 7-6 set needs a valid tiebreak score.";
     case CODES.INVALID_TIEBREAK_DETAILS:
       return "Tiebreak score must reach 7 with a 2-point lead (e.g. 7-4, 9-7).";
+    case CODES.TIEBREAK_WINNER_MISMATCH:
+      return "Tiebreak winner must match the set winner. If the set was 7-6, the side with 7 games must also win the tiebreak.";
     case CODES.INVALID_MATCH_TIEBREAK:
       return "Match tiebreak must reach 10 with a 2-point lead (e.g. 10-6, 12-10).";
     case CODES.PARTIAL_SET_IN_COMPLETED:
@@ -459,4 +509,127 @@ export function getScoreValidationMessage(code, ctx) {
     default:
       return "Score is invalid.";
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Display + serialisation helpers
+// ──────────────────────────────────────────────────────────────────────
+//
+// Centralised so feed cards, profile history, the dispute drawer, the
+// notification tray, and share-text builders all render set scores
+// the same way (and stay in sync if the format ever changes).
+//
+// formatSetScore({ you: 7, them: 6, tieBreak: { you: 7, them: 4 } })
+//   → "7-6 (7-4)"
+//
+// formatSetScore({ you: 6, them: 3 })
+//   → "6-3"
+//
+// formatSetScore({ you: 10, them: 8 })  // match-tiebreak final set
+//   → "10-8"
+//
+// Old rows missing tieBreak render without the parenthesis chunk.
+
+function isFiniteNumberLike(v) {
+  if (v === null || v === undefined || v === "") return false;
+  if (typeof v === "number") return Number.isFinite(v);
+  return /^-?\d+(\.\d+)?$/.test(String(v).trim());
+}
+
+export function formatSetScore(set) {
+  if (!set) return "";
+  var y = set.you;
+  var t = set.them;
+  if (!isFiniteNumberLike(y) && !isFiniteNumberLike(t)) return "";
+  var hasY = isFiniteNumberLike(y);
+  var hasT = isFiniteNumberLike(t);
+  // En-dash, not hyphen, matches the rest of the editorial vocabulary
+  // ("vs" / "·" already use Unicode separators in the redesign).
+  var games = (hasY ? y : "—") + "-" + (hasT ? t : "—");
+
+  // Render inner tiebreak only on a finished 7-6 / 6-7 set with a
+  // valid pair. Showing "(0-0)" on an incomplete tiebreak would be
+  // worse than showing nothing.
+  var tb = set.tieBreak;
+  if (tb && hasY && hasT) {
+    var hi = Math.max(Number(y), Number(t));
+    var lo = Math.min(Number(y), Number(t));
+    var isTiebreakSet = hi === 7 && lo === 6;
+    var tbHasY = isFiniteNumberLike(tb.you);
+    var tbHasT = isFiniteNumberLike(tb.them);
+    if (isTiebreakSet && tbHasY && tbHasT) {
+      // Show in set-winner-first order even if the stored tieBreak is
+      // {you:5, them:7} — a 6-7 set should render its tiebreak from the
+      // winner's perspective ("(7-5)") for natural reading.
+      var tbY = Number(tb.you);
+      var tbT = Number(tb.them);
+      var setWinnerWasYou = Number(y) > Number(t);
+      var winnerScore = setWinnerWasYou ? Math.max(tbY, tbT) : Math.max(tbY, tbT);
+      var loserScore  = setWinnerWasYou ? Math.min(tbY, tbT) : Math.min(tbY, tbT);
+      // Always render the tiebreak's loser score after the winner's.
+      games += " (" + winnerScore + "-" + loserScore + ")";
+    }
+  }
+  return games;
+}
+
+// Concatenate the per-set strings with ", " — used by share text,
+// match cards, and the dispute drawer's diff comparison.
+export function formatMatchScore(sets) {
+  if (!Array.isArray(sets)) return "";
+  return sets
+    .filter(function (s) { return s && (isFiniteNumberLike(s.you) || isFiniteNumberLike(s.them)); })
+    .map(formatSetScore)
+    .filter(Boolean)
+    .join(", ");
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// DB <-> client normalisation
+// ──────────────────────────────────────────────────────────────────────
+//
+// Single chokepoints for any future score-schema migration. Today the
+// shape is `{you, them, tieBreak?: {you, them}}` on both sides, so
+// these are essentially identity functions — but routing every reader
+// through them means a future schema bump only has to change two
+// helpers, not every component.
+
+export function normalizeSetFromDb(set) {
+  if (!set || typeof set !== "object") return { you: "", them: "" };
+  var out = { you: set.you, them: set.them };
+  if (set.tieBreak && typeof set.tieBreak === "object") {
+    out.tieBreak = { you: set.tieBreak.you, them: set.tieBreak.them };
+  }
+  return out;
+}
+
+// Strips empty / null / non-numeric tiebreak halves before persisting
+// so we never store half-filled garbage. If both halves are absent
+// or invalid, the tieBreak field is dropped entirely (rather than
+// stored as {you:"", them:""}).
+export function serializeSetForDb(set) {
+  if (!set || typeof set !== "object") return null;
+  var out = { you: set.you, them: set.them };
+  var tb = set.tieBreak;
+  if (tb && typeof tb === "object") {
+    var tby = isFiniteNumberLike(tb.you) ? Number(tb.you) : null;
+    var tbt = isFiniteNumberLike(tb.them) ? Number(tb.them) : null;
+    if (tby !== null && tbt !== null) {
+      out.tieBreak = { you: tby, them: tbt };
+    }
+  }
+  return out;
+}
+
+// Convenience: did this set get logged with tiebreak metadata?
+// Used by FeedCard / ProfileTab to opt the cell into the small-text
+// "(7-4)" suffix render.
+export function isTiebreakSet(set) {
+  if (!set) return false;
+  var y = Number(set.you);
+  var t = Number(set.them);
+  if (!Number.isFinite(y) || !Number.isFinite(t)) return false;
+  var hi = Math.max(y, t);
+  var lo = Math.min(y, t);
+  return hi === 7 && lo === 6;
 }
