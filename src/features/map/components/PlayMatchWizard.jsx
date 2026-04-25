@@ -19,11 +19,12 @@
 //   play_match_invite_sent     { zone_id, court_name, partner_count, scope }
 //   play_match_cancelled       { step, last_completed }
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ZONES } from "../data/zones.js";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "../services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
 
 // Three steps now: zone → court → player(s). The old step-4 confirm
@@ -32,6 +33,11 @@ import { track } from "../../../lib/analytics.js";
 // confirmation. Also harmonises with the side-panel "Message" path
 // which goes straight to the DM with no extra confirm.
 var TOTAL_STEPS = 3;
+
+// Day-of-week chip labels — Mon-Sun. Match what people actually
+// type when planning ("Sat" not "Saturday") so the rendered draft
+// reads naturally.
+var DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 var MAX_SELECT  = 3; // viewer + 3 others = doubles
 
 export default function PlayMatchWizard({
@@ -48,6 +54,25 @@ export default function PlayMatchWizard({
   var [selectedIds, setSelectedIds] = useState([]);
   var [players, setPlayers]     = useState([]);
   var [loading, setLoading]     = useState(false);
+  // When? — drives the "this Saturday" / "Sat or Sun" wording in the
+  // pre-filled invite. Modes:
+  //   "week"      — default, "sometime this week"
+  //   "next-week" — "sometime next week"
+  //   "weekend"   — "this weekend"
+  //   "days"      — pick specific day-of-week chips (multi-select)
+  var [whenMode, setWhenMode] = useState("week");
+  var [pickedDays, setPickedDays] = useState([]); // ["Mon","Tue",...]
+  // Optional time-of-day cue. Defaults to "anytime" which omits any
+  // time mention in the draft (lower friction); other values fold
+  // into the phrase as "in the morning" / "this Saturday afternoon"
+  // / etc.
+  var [timeOfDay, setTimeOfDay] = useState("anytime"); // anytime|morning|afternoon|evening
+
+  // Tracks whether a mouse-press started on the backdrop. Used to
+  // distinguish "user clicked the dim area" from "user drag-selected
+  // text inside the modal and overshot". See backdrop onMouseDown +
+  // onClick below.
+  var backdropDownRef = useRef(false);
 
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
@@ -58,6 +83,9 @@ export default function PlayMatchWizard({
     setCourtName(null);
     setSelectedIds([]);
     setScope("zone");
+    setWhenMode("week");
+    setPickedDays([]);
+    setTimeOfDay("anytime");
     track("play_match_step_entered", { step: startStep });
     if(typeof document !== "undefined"){
       var prev = document.body.style.overflow;
@@ -159,17 +187,22 @@ export default function PlayMatchWizard({
     // is gone.
     track("play_match_player_picked", { player_count: partners.length, scope: scope });
     var zone = ZONES.find(function(z){ return z.id === zoneId; });
+    var when = resolveWhen(whenMode, pickedDays, timeOfDay);
     var ctx = {
       venue: courtName || (zone && zone.name) || "",
       zoneId: zoneId,
       courtName: courtName,
+      when: when, // structured for downstream consumers
       // Friendly pre-filled draft. The DM hook accepts a `draft` and
       // pre-populates the composer.
-      draft: buildInviteDraft({ partners: partners, court: courtName, zone: zone }),
+      draft: buildInviteDraft({ partners: partners, court: courtName, zone: zone, when: when }),
     };
     track("play_match_invite_sent", {
       zone_id: zoneId, court_name: courtName,
       partner_count: partners.length, scope: scope,
+      when_mode: whenMode,
+      day_count: whenMode === "days" ? pickedDays.length : null,
+      time_of_day: timeOfDay,
     });
     if(onSendInvite) onSendInvite(partners, ctx);
   }
@@ -184,6 +217,7 @@ export default function PlayMatchWizard({
 
   var zone   = zoneId ? ZONES.find(function(z){ return z.id === zoneId; }) : null;
   var courts = zoneId ? courtsInZone(zoneId) : [];
+  var pickedCourt = courtName ? courts.find(function(c){ return c.name === courtName; }) : null;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Play Match"
@@ -201,7 +235,18 @@ export default function PlayMatchWizard({
         display:"flex", alignItems:"center", justifyContent:"center",
         padding: 12,
       }}
-      onClick={function(e){ if(e.target === e.currentTarget) cancel(); }}>
+      // Backdrop dismiss — track that the mousedown started on the
+      // backdrop too, otherwise drag-selecting text inside the modal
+      // and releasing on the backdrop fires a click event on the
+      // common ancestor (this backdrop) and dismisses the wizard.
+      // The bug: user drags to highlight text, overshoots, modal
+      // disappears with their work. Fix: only close if the click
+      // genuinely STARTED on the backdrop.
+      onMouseDown={function(e){ backdropDownRef.current = e.target === e.currentTarget; }}
+      onClick={function(e){
+        if(backdropDownRef.current && e.target === e.currentTarget) cancel();
+        backdropDownRef.current = false;
+      }}>
       <div style={{
         // Translucent glass card — the boxy bordered modal is gone.
         // Content is the design; chrome is invisible. Theme-aware
@@ -314,14 +359,14 @@ export default function PlayMatchWizard({
                     onClick={function(){ pickZone(z); }}
                     style={{
                       textAlign:"left",
-                      padding: "20px 18px 22px",
-                      borderRadius: 18,
+                      padding: "14px 14px 16px",
+                      borderRadius: 16,
                       border: "none",
                       background: hexToRgba(t.bgCard, 0.85),
                       color: t.text,
                       cursor:"pointer",
-                      display:"flex", alignItems:"flex-end",
-                      minHeight: 110,
+                      display:"flex", alignItems:"center",
+                      minHeight: 78,
                       position:"relative", overflow:"hidden",
                       transition: "transform 0.14s ease",
                     }}
@@ -351,8 +396,8 @@ export default function PlayMatchWizard({
                     {/* Big bold zone name — only focal point */}
                     <div style={{
                       position:"relative",
-                      fontSize: 18, fontWeight: 900,
-                      letterSpacing: "-0.025em", lineHeight: 1.1,
+                      fontSize: 16, fontWeight: 900,
+                      letterSpacing: "-0.02em", lineHeight: 1.1,
                       color: t.text,
                     }}>{z.name}</div>
                   </button>
@@ -365,7 +410,7 @@ export default function PlayMatchWizard({
           {step === 1 && zone && (
             <div>
               <div style={{
-                fontSize: 11, color: t.textSecondary, marginBottom: 12,
+                fontSize: 11, color: t.textSecondary, marginBottom: 4,
                 display:"flex", alignItems:"center", gap: 6,
               }}>
                 <div style={{
@@ -375,17 +420,27 @@ export default function PlayMatchWizard({
                 <span style={{ color: t.textTertiary }}>·</span>
                 <span>{courts.length} {courts.length === 1 ? "venue" : "venues"}</span>
               </div>
+              {/* (Booking-link affordance moved to step 3 — by then
+                  the user has chosen a venue and the "check times"
+                  context is meaningful. In step 2 it was premature.) */}
               <div style={{ display:"flex", flexDirection:"column", gap: 8 }}>
                 {courts.map(function(c){
                   return (
-                    <button key={c.name} type="button"
+                    <div key={c.name}
+                      role="button" tabIndex={0}
                       onClick={function(){ pickCourt(c); }}
+                      onKeyDown={function(e){
+                        if(e.key === "Enter" || e.key === " "){
+                          e.preventDefault();
+                          pickCourt(c);
+                        }
+                      }}
                       style={{
+                        position:"relative",
                         textAlign:"left",
                         padding: "14px 16px",
                         borderRadius: 14,
                         background: hexToRgba(t.bgCard, 0.78),
-                        border: "none",
                         color: t.text,
                         cursor:"pointer",
                         display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -407,20 +462,34 @@ export default function PlayMatchWizard({
                           color: t.text,
                           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>{c.name}</div>
+                        {/* Description: ALWAYS show suburb + court
+                            count for consistent scanability. All 52
+                            courts have a suburb; only ~half had an
+                            address, which made the list jagged
+                            ("Beaconsfield · 4 courts" next to "Cnr
+                            Cleveland St & Chalmers St · 6 courts"
+                            felt inconsistent). Address still wins
+                            for the Google Maps URL helper in
+                            courts.js where specificity matters. */}
                         <div style={{
                           fontSize: 11, color: t.textSecondary,
                           marginTop: 3, fontWeight: 600, letterSpacing:"0.01em",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                         }}>
-                          {c.suburb ? c.suburb + " · " : ""}{c.courts} {c.courts === 1 ? "court" : "courts"}
+                          {c.suburb ? c.suburb + " · " : ""}
+                          {c.courts} {c.courts === 1 ? "court" : "courts"}
                         </div>
                       </div>
+                      {/* Subtle right-pointing chevron — visual cue
+                          that the row advances. Booking link moved to
+                          step 3 where venue context exists. */}
                       <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
                            stroke="currentColor" strokeWidth="1.7"
                            strokeLinecap="round" strokeLinejoin="round"
                            style={{ color: t.textTertiary, flexShrink: 0 }}>
                         <path d="M7 4l5 5-5 5"/>
                       </svg>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -484,7 +553,22 @@ export default function PlayMatchWizard({
                   )}
                 </div>
               ) : (
-                <div style={{ display:"flex", flexDirection:"column", gap: 6 }}>
+                // Horizontal scrolling carousel of profile cards.
+                // Each card: 80px circle avatar (with accent ring on
+                // select), name + skill below. Scroll-snap + mouse
+                // drag friendly. Big tap target on mobile.
+                <>
+                <div style={{
+                  display: "flex",
+                  gap: 10,
+                  overflowX: "auto",
+                  overflowY: "hidden",
+                  paddingBottom: 6,
+                  scrollSnapType: "x mandatory",
+                  WebkitOverflowScrolling: "touch",
+                  // Hide scrollbar but keep functionality.
+                  scrollbarWidth: "thin",
+                }}>
                   {players.map(function(p){
                     var isSel = selectedIds.indexOf(p.id) !== -1;
                     var disabled = !isSel && selectedIds.length >= MAX_SELECT;
@@ -493,26 +577,28 @@ export default function PlayMatchWizard({
                         onClick={function(){ togglePlayer(p); }}
                         disabled={disabled}
                         style={{
-                          textAlign:"left",
-                          padding:"10px 14px",
+                          flexShrink: 0,
+                          scrollSnapAlign: "start",
+                          width: 88,
+                          padding: "8px 4px 10px",
                           borderRadius: 14,
-                          background: isSel ? t.accentSubtle : t.bgTertiary,
-                          border:"none",
+                          background: isSel ? hexToRgba(t.accent, 0.12) : "transparent",
+                          border: "none",
                           cursor: disabled ? "not-allowed" : "pointer",
-                          opacity: disabled ? 0.45 : 1,
-                          display:"flex", alignItems:"center", gap: 12,
-                          transition: "background 0.15s, transform 0.1s",
+                          opacity: disabled ? 0.4 : 1,
+                          display:"flex", flexDirection:"column",
+                          alignItems:"center", gap: 6,
+                          transition: "background 0.15s",
                         }}>
-                        {/* Avatar with selection ring (instead of a
-                            separate checkbox — selection transforms
-                            the avatar itself). */}
+                        {/* Avatar with selection ring */}
                         <div style={{
-                          width: 48, height: 48,
-                          padding: 3,
+                          position:"relative",
+                          width: 60, height: 60,
+                          padding: isSel ? 3 : 0,
                           borderRadius:"50%",
                           background: isSel ? t.accent : "transparent",
                           flexShrink: 0,
-                          transition: "background 0.15s",
+                          transition: "background 0.15s, padding 0.15s",
                         }}>
                           <div style={{
                             width:"100%", height:"100%",
@@ -521,40 +607,256 @@ export default function PlayMatchWizard({
                             background: t.bgCard,
                             display:"flex", alignItems:"center", justifyContent:"center",
                           }}>
-                            <PlayerAvatar size={42} profile={p}/>
+                            <PlayerAvatar size={isSel ? 54 : 60} profile={p}/>
                           </div>
+                          {isSel && (
+                            <div style={{
+                              position:"absolute", bottom: -2, right: -2,
+                              width: 20, height: 20, borderRadius: "50%",
+                              background: t.accent, color: t.accentText || "#fff",
+                              border: "2px solid " + t.bgCard,
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              fontSize: 10, fontWeight: 900,
+                            }}>✓</div>
+                          )}
                         </div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{
-                            fontSize: 14, fontWeight: 700,
-                            color: t.text,
-                            letterSpacing:"-0.01em", lineHeight: 1.2,
-                            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                          }}>{p.name || p.username || p.full_name || "Player"}</div>
-                          <div style={{
-                            fontSize: 11, color: t.textSecondary,
-                            marginTop: 4,
-                            display:"flex", gap: 6, alignItems:"center", flexWrap:"wrap",
+                        {/* Name */}
+                        <div style={{
+                          width: "100%",
+                          fontSize: 11, fontWeight: 700,
+                          color: t.text, letterSpacing:"-0.01em",
+                          lineHeight: 1.15,
+                          textAlign:"center",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                          padding: "0 2px",
+                        }}>
+                          {firstName(p.name || p.username || p.full_name || "Player")}
+                        </div>
+                        {/* Skill pill */}
+                        {(p.skill || p.skill_level) ? (
+                          <span style={{
+                            padding: "1px 6px", borderRadius: 999,
+                            background: hexToRgba(t.bgCard, 0.78),
+                            color: t.textSecondary,
+                            fontSize: 8.5, fontWeight: 800,
+                            letterSpacing:"0.04em",
+                            textTransform:"uppercase",
                           }}>
-                            {(p.skill || p.skill_level) && (
-                              <span style={{
-                                padding: "1px 7px", borderRadius: 8,
-                                background: t.bg, color: t.textSecondary,
-                                fontSize: 10, fontWeight: 700, letterSpacing:"0.02em",
-                              }}>{p.skill || p.skill_level}</span>
-                            )}
-                            {p.playsHere && (
-                              <span style={{
-                                fontSize: 9, fontWeight:800, color: t.accent,
-                                letterSpacing:"0.06em",
-                                textTransform:"uppercase",
-                              }}>· Plays here</span>
-                            )}
-                          </div>
-                        </div>
+                            {p.skill || p.skill_level}
+                          </span>
+                        ) : (
+                          <span style={{ height: 14 }}/>
+                        )}
                       </button>
                     );
                   })}
+                </div>
+                <div style={{
+                  fontSize: 10.5, color: t.textTertiary,
+                  marginTop: 4, letterSpacing: "0.02em",
+                  display: "flex", alignItems: "center", gap: 4,
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+                       stroke="currentColor" strokeWidth="1.6"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 9h12M11 5l4 4-4 4"/>
+                  </svg>
+                  <span>Slide for more players</span>
+                </div>
+                </>
+              )}
+
+              {/* When? — chip group for the day/range, drives the
+                  pre-filled draft wording. Optional; defaults to
+                  "this week". Three modes: week / weekend / pick days.
+                  "Pick days" expands a Mon-Sun multi-select. */}
+              {!loading && players.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
+                    textTransform: "uppercase", color: t.textTertiary,
+                    marginBottom: 8,
+                  }}>
+                    When?
+                  </div>
+                  <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
+                    {[
+                      { id:"week",      label:"This week" },
+                      { id:"next-week", label:"Next week" },
+                      { id:"weekend",   label:"Weekend" },
+                      { id:"days",      label:"Pick days" },
+                    ].map(function(opt){
+                      var on = whenMode === opt.id;
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={function(){
+                            setWhenMode(opt.id);
+                            if(opt.id !== "days") setPickedDays([]);
+                          }}
+                          style={{
+                            padding: "8px 14px", borderRadius: 999,
+                            background: on ? t.text : hexToRgba(t.bgCard, 0.78),
+                            color: on ? t.bg : t.textSecondary,
+                            border:"none", cursor:"pointer",
+                            fontSize: 12, fontWeight: 700,
+                            letterSpacing:"0.01em",
+                            transition: "background 0.15s, color 0.15s",
+                          }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {whenMode === "days" && (
+                    <div style={{
+                      display:"flex", gap: 5, flexWrap:"wrap",
+                      marginTop: 10,
+                    }}>
+                      {DAYS.map(function(d){
+                        var on = pickedDays.indexOf(d) !== -1;
+                        return (
+                          <button key={d} type="button"
+                            onClick={function(){
+                              setPickedDays(function(prev){
+                                return prev.indexOf(d) !== -1
+                                  ? prev.filter(function(x){ return x !== d; })
+                                  : prev.concat([d]);
+                              });
+                            }}
+                            style={{
+                              minWidth: 38,
+                              padding: "7px 0", borderRadius: 10,
+                              background: on ? t.accent : hexToRgba(t.bgCard, 0.78),
+                              color: on ? (t.accentText || "#fff") : t.textSecondary,
+                              border:"none", cursor:"pointer",
+                              fontSize: 11, fontWeight: 800,
+                              letterSpacing:"0.04em",
+                              transition: "background 0.15s, color 0.15s",
+                            }}>
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Time of day — underline tabs (same language as
+                      In zone/Everywhere on the side panel). No track,
+                      no bg, just text with a 2px underline under the
+                      active option. Reads quietly — text leads. */}
+                  <div style={{ display:"flex", gap: 18, marginTop: 12, paddingBottom: 2 }}>
+                    {[
+                      { id:"anytime",   label:"Anytime"   },
+                      { id:"morning",   label:"Morning"   },
+                      { id:"afternoon", label:"Afternoon" },
+                      { id:"evening",   label:"Evening"   },
+                    ].map(function(opt){
+                      var on = timeOfDay === opt.id;
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={function(){ if(!on) setTimeOfDay(opt.id); }}
+                          style={{
+                            padding:"4px 0",
+                            background:"transparent",
+                            border:"none",
+                            borderBottom: "2px solid " + (on ? t.text : "transparent"),
+                            color: on ? t.text : t.textTertiary,
+                            fontSize: 12,
+                            fontWeight: on ? 700 : 500,
+                            letterSpacing:"0.01em",
+                            cursor: on ? "default" : "pointer",
+                            transition:"color 0.15s, border-color 0.15s",
+                          }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Booking-link slot — venue is locked in by now
+                      so "check times at <venue>" reads naturally and
+                      can directly inform the day choice above. */}
+                  {pickedCourt && pickedCourt.bookingUrl && (
+                    <a href={pickedCourt.bookingUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        marginTop: 12,
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        background: hexToRgba(t.bgCard, 0.78),
+                        color: t.text, textDecoration:"none",
+                        display:"flex", alignItems:"center", gap: 10,
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background = t.bgCard; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = hexToRgba(t.bgCard, 0.78); }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 10,
+                        background: hexToRgba(t.accent, 0.14),
+                        color: t.accent, flexShrink: 0,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                      }}>
+                        <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                             stroke="currentColor" strokeWidth="1.8"
+                             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M11 4h3v3M14 4l-6 6M8 5H5v8h8v-3"/>
+                        </svg>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{
+                          fontSize: 12.5, fontWeight: 700, color: t.text,
+                          letterSpacing: "-0.01em",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        }}>
+                          Check times at {pickedCourt.name}
+                        </div>
+                        <div style={{
+                          fontSize: 10, color: t.textTertiary, marginTop: 2,
+                          letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:700,
+                        }}>
+                          Opens venue's booking site
+                        </div>
+                      </div>
+                    </a>
+                  )}
+
+                  {/* Live draft preview — message-bubble style so the
+                      user sees EXACTLY what lands in the DM. Updates
+                      as they tweak partners / when. */}
+                  {selectedIds.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
+                        textTransform: "uppercase", color: t.textTertiary,
+                        marginBottom: 6,
+                      }}>
+                        Message preview
+                      </div>
+                      <div style={{
+                        padding: "12px 14px",
+                        borderRadius: "16px 16px 16px 4px",
+                        background: hexToRgba(t.accent, 0.10),
+                        color: t.text,
+                        fontSize: 13.5, lineHeight: 1.45,
+                        letterSpacing: "-0.005em",
+                        maxWidth: "95%",
+                      }}>
+                        {previewInviteText({
+                          partners: selectedIds.map(function(id){ return players.find(function(p){ return p.id === id; }); }).filter(Boolean),
+                          court: courtName,
+                          zone: zone,
+                          when: resolveWhen(whenMode, pickedDays, timeOfDay),
+                        })}
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: t.textTertiary,
+                        marginTop: 6, letterSpacing:"0.02em",
+                      }}>
+                        This sends as a direct message to each player.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -600,22 +902,93 @@ export default function PlayMatchWizard({
 
 // ── helpers ──────────────────────────────────────────────────────────
 
-function previewInviteText({ partners, court, zone }){
+function previewInviteText({ partners, court, zone, when }){
   if(!partners || !partners.length) return "";
   var venue = court || (zone && zone.name) || "";
+  var phrase = whenPhrase(when);
   if(partners.length === 1){
     var who = partners[0].name || partners[0].username || partners[0].full_name || "there";
-    return "Hey " + firstName(who) + ", up for a hit at " + venue + " sometime this week?";
+    return "Hey " + firstName(who) + ", up for a hit at " + venue + " " + phrase + "?";
   }
   var names = partners.map(function(p){ return firstName(p.name || p.username || p.full_name || "there"); });
   var joined = names.length === 2
     ? names.join(" and ")
     : names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
-  return "Hey " + joined + " — keen for doubles at " + venue + " sometime this week?";
+  return "Hey " + joined + " — keen for doubles at " + venue + " " + phrase + "?";
 }
 
-function buildInviteDraft({ partners, court, zone }){
-  return previewInviteText({ partners: partners, court: court, zone: zone });
+function buildInviteDraft({ partners, court, zone, when }){
+  return previewInviteText({ partners: partners, court: court, zone: zone, when: when });
+}
+
+// Resolve the chip selections into a structured value the rest of
+// the pipeline (draft text, ctx, analytics) can consume.
+function resolveWhen(mode, days, time){
+  var t = time || "anytime";
+  if(mode === "next-week") return { kind: "next-week", time: t };
+  if(mode === "weekend")   return { kind: "weekend",   time: t };
+  if(mode === "days" && Array.isArray(days) && days.length){
+    return { kind: "days", days: days.slice(), time: t };
+  }
+  return { kind: "week", time: t }; // default
+}
+
+// Render a "when" structure into the natural-language phrase that
+// fits inside the invite sentence ("...up for a hit at X <phrase>?").
+//
+// The shape splits into a "when-clause" (week/weekend/days) and an
+// optional "time-clause" (morning/afternoon/evening). Anytime omits
+// the time clause entirely so the message stays casual when the
+// user doesn't care.
+function whenPhrase(when){
+  if(!when) return "sometime this week";
+  var time = when.time || "anytime";
+  var dayPart;
+  if(when.kind === "next-week") {
+    dayPart = "next week";
+  } else if(when.kind === "weekend") {
+    dayPart = "this weekend";
+  } else if(when.kind === "days" && when.days && when.days.length){
+    var d = sortDaysOfWeek(when.days);
+    if(d.length === 1)        dayPart = "this " + d[0];
+    else if(isContiguous(d))  dayPart = d[0] + "–" + d[d.length - 1];
+    else if(d.length === 2)   dayPart = d[0] + " or " + d[1];
+    else                       dayPart = d.slice(0, -1).join(", ") + " or " + d[d.length - 1];
+  } else {
+    dayPart = "this week";
+  }
+
+  // Time clause: anytime → omit. Specific day + time → "Saturday
+  // morning" reads more naturally than "Saturday in the morning".
+  // Generic week/weekend + time → "this week in the morning".
+  if(time === "anytime"){
+    // For the abstract "this week" / "next week" / "this weekend" we
+    // prefix with "sometime" to read casually. For day-specific we
+    // keep it tight ("this Saturday").
+    if(when.kind === "week"      ) return "sometime this week";
+    if(when.kind === "next-week" ) return "sometime next week";
+    return dayPart;
+  }
+  // With a time and a specific day → tight: "this Saturday morning"
+  if(when.kind === "days" && when.days && when.days.length === 1){
+    return dayPart + " " + time;
+  }
+  // Otherwise prepend "in the": "this week in the morning"
+  return dayPart + " in the " + time;
+}
+
+function sortDaysOfWeek(arr){
+  var order = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 };
+  return arr.slice().sort(function(a, b){ return (order[a]||0) - (order[b]||0); });
+}
+
+function isContiguous(sortedDays){
+  if(sortedDays.length < 3) return false; // 1-2 days don't read as a "range"
+  var order = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 };
+  for(var i = 1; i < sortedDays.length; i++){
+    if(order[sortedDays[i]] !== order[sortedDays[i-1]] + 1) return false;
+  }
+  return true;
 }
 
 function firstName(name){

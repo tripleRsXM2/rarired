@@ -14,7 +14,7 @@
 //
 // No new DB shape — we're reusing the DM composer contracts from Phase 1b.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import {
   DM_TEMPLATES,
@@ -114,8 +114,21 @@ export default function ComposeMessageModal({
     fontSize: 13, fontWeight: 500, boxSizing: "border-box",
   };
 
+  // Backdrop dismiss — track that the mousedown started on the
+  // backdrop too, otherwise drag-selecting text inside the textarea
+  // and releasing on the backdrop fires a click on the common
+  // ancestor (this backdrop) → onClose runs → user's typed message
+  // disappears. Only close if the click genuinely started on the
+  // dim area.
+  var backdropDownRef = useRef(false);
+
   return (
-    <div onClick={onClose}
+    <div
+      onMouseDown={function(e){ backdropDownRef.current = e.target === e.currentTarget; }}
+      onClick={function(e){
+        if(backdropDownRef.current && e.target === e.currentTarget) onClose();
+        backdropDownRef.current = false;
+      }}
       style={{
         position: "fixed", inset: 0, zIndex: 800,
         background: "rgba(0,0,0,0.5)",
