@@ -4,7 +4,7 @@ import { supabase } from "../../../lib/supabase.js";
 import * as M from "../services/matchService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
-import { validateMatchScore } from "../utils/tennisScoreValidation.js";
+import { validateMatchScore, serializeSetForDb } from "../utils/tennisScoreValidation.js";
 import { track } from "../../../lib/analytics.js";
 
 // Translate a Supabase/Postgres error into a user-facing string. We prefer
@@ -313,7 +313,10 @@ export function useMatchHistory(opts){
       matchFormat: scoreDraft.matchFormat || 'best_of_3',
       finalSetFormat: scoreDraft.finalSetFormat || 'normal_set',
       allowPartialScores: !!scoreDraft.allowPartialScores,
-      requireTiebreakDetails: false,
+      // Service-layer mirror of the ScoreModal liveValidation rule:
+      // ranked + completed 7-6 / 6-7 sets must carry valid tiebreak
+      // details. Casual + time_limited / retired are tolerant.
+      requireTiebreakDetails: matchType === 'ranked' && (scoreDraft.completionType || 'completed') === 'completed',
       leagueMode: null,
       leagueAllowPartial: false,
     });
@@ -340,11 +343,17 @@ export function useMatchHistory(opts){
     // logging the same match twice). Casual matches don't need it.
     if (needsConfirmation) hash = computeMatchHash(authUser.id, opponentId, matchDate, clean);
 
+    // Strip any half-filled tiebreak halves before we persist or
+    // mirror to the optimistic local row. Centralised here so every
+    // call site (insert / dispute proposal / resubmit) uses the same
+    // canonical serialised shape.
+    var cleanForDb = clean.map(serializeSetForDb).filter(Boolean);
+
     var localId='local-'+Date.now();
     var nm={
       id:localId, oppName, tournName,
       date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
-      sets:clean, result:scoreDraft.result, notes:'',
+      sets:cleanForDb, result:scoreDraft.result, notes:'',
       venue:scoreDraft.venue||'', court:scoreDraft.court||'',
       status, opponent_id:opponentId, submitterId:authUser.id, isTagged:false,
       // Module 7 — preserve the league tag on the local row so the feed
@@ -361,7 +370,7 @@ export function useMatchHistory(opts){
 
     var payload={
       user_id:authUser.id, opp_name:oppName, tourn_name:tournName,
-      sets:clean, result:scoreDraft.result, notes:'', match_date:matchDate,
+      sets:cleanForDb, result:scoreDraft.result, notes:'', match_date:matchDate,
       status:status, submitted_at:new Date().toISOString(),
       venue:scoreDraft.venue||null, court:scoreDraft.court||null,
       match_type: matchType,
@@ -442,7 +451,12 @@ export function useMatchHistory(opts){
     var storedResult=isOpponentView
       ?(formProposal.result==='win'?'loss':'win')
       :formProposal.result;
-    var cleanSets=(formProposal.sets||[]).filter(function(s){return s.you!==''||s.them!=='';});
+    var cleanSets=(formProposal.sets||[])
+      .filter(function(s){return s.you!==''||s.them!=='';})
+      // Strip half-filled tiebreak halves before persisting the
+      // proposal jsonb so the recipient's review drawer sees a
+      // canonical shape (no {tieBreak:{you:'7', them:''}}).
+      .map(serializeSetForDb).filter(Boolean);
     var proposal={
       result:storedResult,
       sets:cleanSets,
@@ -597,6 +611,9 @@ export function useMatchHistory(opts){
       matchFormat: 'best_of_3',
       finalSetFormat: 'normal_set',
       allowPartialScores: false,
+      // Resubmission is always ranked+completed → tiebreak details
+      // are mandatory on any 7-6/6-7 set.
+      requireTiebreakDetails: true,
     });
     if (!resubVal.ok) {
       return { error: 'invalid_score', code: resubVal.code, message: resubVal.message };
@@ -604,13 +621,14 @@ export function useMatchHistory(opts){
 
     var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
     var newExpiresAt=new Date(Date.now()+72*60*60*1000).toISOString();
+    var cleanForDb = clean.map(serializeSetForDb).filter(Boolean);
     var payload={
-      sets:clean, result:scoreDraft.result, match_date:matchDate,
+      sets:cleanForDb, result:scoreDraft.result, match_date:matchDate,
       venue:scoreDraft.venue||null, court:scoreDraft.court||null,
       expires_at:newExpiresAt,
       status:'pending_confirmation',
     };
-    if(match.opponent_id) payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, clean);
+    if(match.opponent_id) payload.match_hash=computeMatchHash(authUser.id, match.opponent_id, matchDate, cleanForDb);
     var r=await M.updateMatch(match.id, payload);
     if(r.error){
       console.error('[resubmitMatch]',r.error);
@@ -620,7 +638,7 @@ export function useMatchHistory(opts){
       return h.map(function(m){
         if(m.id!==match.id) return m;
         return Object.assign({},m,{
-          sets:clean, result:scoreDraft.result,
+          sets:cleanForDb, result:scoreDraft.result,
           date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
           venue:scoreDraft.venue||'', court:scoreDraft.court||'',
           expiresAt:newExpiresAt, status:'pending_confirmation',

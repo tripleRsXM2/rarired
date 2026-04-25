@@ -86,7 +86,11 @@ export default function ScoreModal({
       finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
         ? 'match_tiebreak' : 'normal_set',
       allowPartialScores: allowPartial,
-      requireTiebreakDetails: false,
+      // Module 7.6 supplement: ranked + completed 7-6/6-7 sets need
+      // valid tiebreak details. Casual / time-limited rows stay
+      // tolerant — users can record a 7-6 tiebreak result casually
+      // without being forced to type the inner score.
+      requireTiebreakDetails: matchType === 'ranked' && completionType === 'completed',
       leagueMode: league ? league.mode : null,
       leagueAllowPartial: false,
     });
@@ -173,7 +177,11 @@ export default function ScoreModal({
       finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
         ? 'match_tiebreak' : 'normal_set',
       allowPartialScores: !!forceCasual,
-      requireTiebreakDetails: false,
+      // Tiebreak details required only for the ranked + completed
+      // path. forceCasual lands here as casual + time_limited so it
+      // bypasses the requirement (matches the "save as casual" CTA
+      // semantics — partial submissions don't have to itemise tb pts).
+      requireTiebreakDetails: !forceCasual && matchType === 'ranked',
       leagueMode: league ? league.mode : null,
       leagueAllowPartial: false, // no league flag exists yet — open question in docs
     };
@@ -583,20 +591,96 @@ export default function ScoreModal({
             )}
           </div>
           {scoreDraft.sets.map(function(set,si){
+            // Tiebreak reveal — a 7-6 / 6-7 set gets an inline sub-row
+            // for the inner tiebreak points. Hidden the moment the set
+            // score moves away from a tiebreak shape; the tieBreak field
+            // is dropped from the row at the same time so we never
+            // persist stale data.
+            var yNum = Number(String(set.you ?? "").trim());
+            var tNum = Number(String(set.them ?? "").trim());
+            var isTbShape = Number.isFinite(yNum) && Number.isFinite(tNum)
+              && ((yNum === 7 && tNum === 6) || (yNum === 6 && tNum === 7));
             return (
-              <div key={si} style={{display:"grid",gridTemplateColumns:"60px 1fr 1fr 24px",gap:8,marginBottom:8,alignItems:"center"}}>
-                <span style={{fontSize:12,fontWeight:500,color:t.textSecondary}}>Set {si+1}</span>
-                {["you","them"].map(function(who){
-                  return (
-                    <input key={who} type="number" min="0" value={set[who]} placeholder="0"
-                      onChange={function(e){var v=e.target.value;setScoreDraft(function(d){var ns=d.sets.map(function(ss,idx){return idx!==si?ss:Object.assign({},ss,{[who]:v});});return Object.assign({},d,{sets:ns});});}}
-                      style={{padding:"10px 0",textAlign:"center",borderRadius:8,border:"1px solid "+t.border,background:t.inputBg,color:t.text,fontSize:20,fontWeight:700,width:"100%",fontVariantNumeric:"tabular-nums"}}/>
-                  );
-                })}
-                {scoreDraft.sets.length>1
-                  ?<button onClick={function(){setScoreDraft(function(d){return Object.assign({},d,{sets:d.sets.filter(function(_,idx){return idx!==si;})});});}} style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:0}}>×</button>
-                  :<div/>
-                }
+              <div key={si} style={{ marginBottom: 8 }}>
+                <div style={{display:"grid",gridTemplateColumns:"60px 1fr 1fr 24px",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:12,fontWeight:500,color:t.textSecondary}}>Set {si+1}</span>
+                  {["you","them"].map(function(who){
+                    return (
+                      <input key={who} type="number" inputMode="numeric" pattern="[0-9]*" min="0" value={set[who]} placeholder="0"
+                        onChange={function(e){
+                          var v=e.target.value;
+                          setScoreDraft(function(d){
+                            var ns=d.sets.map(function(ss,idx){
+                              if (idx!==si) return ss;
+                              var next = Object.assign({}, ss, { [who]: v });
+                              // If this edit moves the set away from a
+                              // 7-6 / 6-7 shape, drop any stale tieBreak
+                              // field so we don't persist it.
+                              var ny = Number(String(next.you ?? "").trim());
+                              var nt = Number(String(next.them ?? "").trim());
+                              var stillTb = Number.isFinite(ny) && Number.isFinite(nt)
+                                && ((ny === 7 && nt === 6) || (ny === 6 && nt === 7));
+                              if (!stillTb && next.tieBreak) {
+                                next = Object.assign({}, next);
+                                delete next.tieBreak;
+                              }
+                              return next;
+                            });
+                            return Object.assign({},d,{sets:ns});
+                          });
+                        }}
+                        style={{padding:"10px 0",textAlign:"center",borderRadius:8,border:"1px solid "+t.border,background:t.inputBg,color:t.text,fontSize:20,fontWeight:700,width:"100%",fontVariantNumeric:"tabular-nums"}}/>
+                    );
+                  })}
+                  {scoreDraft.sets.length>1
+                    ?<button onClick={function(){setScoreDraft(function(d){return Object.assign({},d,{sets:d.sets.filter(function(_,idx){return idx!==si;})});});}} style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:0}}>×</button>
+                    :<div/>
+                  }
+                </div>
+
+                {/* Tiebreak sub-row — same column layout, smaller inputs.
+                    Renders only when the set score is 7-6 or 6-7. */}
+                {isTbShape && (
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "60px 1fr 1fr 24px",
+                    gap: 8, marginTop: 6, alignItems: "center",
+                  }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                      textTransform: "uppercase", color: t.textTertiary,
+                    }}>Tiebreak</span>
+                    {["you","them"].map(function(who){
+                      var tbVal = (set.tieBreak && set.tieBreak[who] != null) ? set.tieBreak[who] : "";
+                      return (
+                        <input key={who} type="number" inputMode="numeric" pattern="[0-9]*" min="0"
+                          value={tbVal}
+                          placeholder={who === (yNum === 7 ? "you" : "them") ? "7" : "0-5"}
+                          onChange={function(e){
+                            var v = e.target.value;
+                            setScoreDraft(function(d){
+                              var ns = d.sets.map(function(ss, idx){
+                                if (idx !== si) return ss;
+                                var nextTb = Object.assign({}, ss.tieBreak || {});
+                                nextTb[who] = v;
+                                return Object.assign({}, ss, { tieBreak: nextTb });
+                              });
+                              return Object.assign({}, d, { sets: ns });
+                            });
+                          }}
+                          style={{
+                            padding: "7px 0", textAlign: "center",
+                            borderRadius: 6,
+                            border: "1px solid " + t.border,
+                            background: t.inputBg, color: t.text,
+                            fontSize: 14, fontWeight: 600,
+                            width: "100%", fontVariantNumeric: "tabular-nums",
+                          }}/>
+                      );
+                    })}
+                    <div/>
+                  </div>
+                )}
               </div>
             );
           })}
