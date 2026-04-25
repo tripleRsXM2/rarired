@@ -65,7 +65,11 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `map_layers_panel_opened` | User taps the layers cog icon on the map | _(none)_ |
 | `map_layer_toggled` | User flips a switch in the layers panel (homes / courts / activity / mapTheme) | `layer` ("homes" \| "courts" \| "activity" \| "mapTheme"), `value` (boolean for toggles, "auto"\|"light"\|"dark" for mapTheme) |
 | `map_courts_expanded` | User taps "Show all N courts ↓" in the zone side panel (zones with >5 venues default to a 4-court collapsed view on mobile) | `zone_id`, `total` (number of courts in the zone) |
-| `play_match_cta_tapped` | User taps the orange "Play match" CTA at the bottom of the map. Phase 1 fires telemetry only (the wizard ships in phase 2). Lets us measure interest before building the flow. | `has_zone` (whether a zone is already selected), `has_court` (whether a venue is already pinned in the side panel) |
+| `play_match_cta_tapped` | User taps the "Play Match" CTA at the bottom of the map. Opens the wizard. | `has_zone`, `has_court` |
+| `play_match_step_entered` | Wizard advances to a step (incl. initial open) | `step` (0=zone, 1=court, 2=player, 3=confirm) |
+| `play_match_zone_picked` | User picks a zone in step 1 | `zone_id` |
+| `play_match_court_picked` | User picks a court in step 2 | `zone_id`, `court_name` |
+| `play_match_cancelled` | User dismisses the wizard via close, back, or backdrop | `step` (current), `last_completed` (step − 1) |
 
 ### Reserved (defined but not fired until later modules)
 

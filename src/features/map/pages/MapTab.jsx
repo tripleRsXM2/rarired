@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import LeafletMap from "../components/LeafletMap.jsx";
 import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
 import CourtInfoCard from "../components/CourtInfoCard.jsx";
+import PlayMatchWizard from "../components/PlayMatchWizard.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
 import { fetchZoneActivity } from "../services/mapService.js";
 import { track } from "../../../lib/analytics.js";
@@ -67,6 +68,10 @@ export default function MapTab({
   // mode: cluster hidden, only that one venue's marker shown — and
   // the side panel header switches "Courts in zone" → "Courts here".
   var [panelCourtName,setPanelCourtName]=useState(null);
+  // Phase 2: Play Match wizard. Opens from the orange CTA. Walks the
+  // user through zone → court → player(s) → send invite. Respects
+  // any zone already selected on the map (skips step 1 if so).
+  var [wizardOpen,setWizardOpen]=useState(false);
   // When the zone changes, drop any panel-court selection so we don't
   // leak a stale venue name into a different zone's panel.
   useEffect(function(){ setPanelCourtName(null); },[selected]);
@@ -405,10 +410,7 @@ export default function MapTab({
             has_zone: !!selected,
             has_court: !!panelCourtName,
           });
-          // Placeholder until phase 2 ships the wizard.
-          if(typeof window !== "undefined" && window.alert){
-            window.alert("Play Match flow — coming soon. We'll wrap a guided wizard around the existing zone → court → player picker.");
-          }
+          setWizardOpen(true);
         }}
         aria-label="Play Match"
         style={{
@@ -489,6 +491,17 @@ export default function MapTab({
           setSelectedCourt(null); // close the modal; we navigate away
         }}
         onClose={function(){ setSelectedCourt(null); }}/>
+
+      {/* Play Match wizard — phase 2 of the CTA. Opens guided
+          zone → court → player → invite flow. Respects any zone
+          already selected on the map (skips step 1 if so). */}
+      <PlayMatchWizard
+        t={t}
+        open={wizardOpen}
+        initialZoneId={selected}
+        onClose={function(){ setWizardOpen(false); }}
+        onComplete={function(){ setWizardOpen(false); }}
+      />
     </div>
   );
 }
