@@ -1023,8 +1023,12 @@ export default function HomeTab({
   // highlightMatchId in router state, scroll to that FeedCard and pulse it.
   var matchDeepLink = useDeepLinkHighlight("highlightMatchId");
 
-  // Feed filter — "Everyone" vs "Friends". Friends filter uses the same
-  // friend_requests graph as the People tab; no schema change, stays in sync.
+  // Feed filter — "Everyone" vs "Me". The Me filter shows only matches
+  // the viewer actually played in (own submissions + tagged matches the
+  // viewer was the opponent in). Third-party friends-vs-friends rows
+  // surfaced by the friends-feed RPC are excluded. Replaces the old
+  // "Friends" filter (which surfaced their friends' matches) — users
+  // wanted a way to see just their own activity, not the social feed.
   var [feedFilter, setFeedFilter] = useState("everyone");
 
   // Slice 1 (design overhaul) — Home feed is condensed to 5 cards by default
@@ -1293,7 +1297,7 @@ export default function HomeTab({
         }}>
           {[
             { id: "everyone", label: "Everyone" },
-            { id: "friends",  label: "Friends"  },
+            { id: "me",       label: "Me"       },
           ].map(function (f) {
             var on = feedFilter === f.id;
             return (
@@ -1326,15 +1330,13 @@ export default function HomeTab({
         }}>
         {(function () {
           // Apply feed filter once, render the chosen slice.
-          var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));
+          //   "everyone" — full history (own + tagged + third-party friends)
+          //   "me"       — only matches the viewer played in. Third-party
+          //                rows (friend-vs-friend, viewer wasn't on court)
+          //                are excluded; own + tagged stay.
           var filtered = history;
-          if (feedFilter === "friends") {
-            filtered = history.filter(function (m) {
-              var posterId = m.isTagged ? m.submitterId : (authUser && authUser.id);
-              var oppId    = m.opponent_id;
-              return (posterId && friendIdSet.has(posterId)) ||
-                     (oppId    && friendIdSet.has(oppId));
-            });
+          if (feedFilter === "me") {
+            filtered = history.filter(function (m) { return !m.isThirdParty; });
           }
 
           if (history.length === 0) {
@@ -1348,19 +1350,17 @@ export default function HomeTab({
             );
           }
 
-          if (feedFilter === "friends" && filtered.length === 0) {
+          if (feedFilter === "me" && filtered.length === 0) {
             return (
               <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🫱🏼‍🫲🏽</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No matches from friends yet</div>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🎾</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>You haven't played any matches yet</div>
                 <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.6, marginBottom: 20, maxWidth: 280, margin: "0 auto 20px" }}>
-                  Once you add friends, their matches will appear here.
+                  Log a match and it'll show up here.
                 </div>
-                {onGoToDiscover && (
-                  <button onClick={onGoToDiscover} style={{ padding: "11px 22px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700 }}>
-                    Find players
-                  </button>
-                )}
+                <button onClick={openLogMatch} style={{ padding: "11px 22px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700 }}>
+                  Log a match
+                </button>
               </div>
             );
           }
