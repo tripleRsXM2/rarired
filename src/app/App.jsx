@@ -145,7 +145,11 @@ export default function App(){
   });
   var social=useSocialGraph({ authUser:auth.authUser });
   // Pass friends list so DM logic can bypass the request gate for friends.
-  var dms=useDMs({ authUser:auth.authUser, friends:social.friends });
+  var dms=useDMs({
+    authUser:auth.authUser,
+    friends:social.friends,
+    blockedUserIds: (social.blockedUsers || []).map(function(b){return b.id;}),
+  });
   usePresenceHeartbeat(auth.authUser);
   var notifications=useNotifications({
     authUser:auth.authUser,
@@ -659,6 +663,7 @@ export default function App(){
               onClearHomeZone={clearHomeZone}
               onOpenProfile={openProfile}
               openChallenge={openChallenge}
+              blockedUserIds={(social.blockedUsers || []).map(function(b){return b.id;})}
               onMessagePlayer={function(partnerOrPartners, slotOpts){
                 // Accepts either a single partner (legacy call path) or
                 // an array of partners (new zone-panel multi-select,
@@ -734,6 +739,7 @@ export default function App(){
             viewerHistory={matchHistory.history}
             onBack={function(){navigate(-1);}}
             openChallenge={openChallenge}
+            blockUser={social.blockUser}
           />
         )}
         {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(

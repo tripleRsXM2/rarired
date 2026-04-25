@@ -27,6 +27,12 @@ var PARTNER_FIELDS = "id,name,avatar,avatar_url,skill,suburb,home_zone,last_acti
 export function useDMs(opts) {
   var authUser = (opts && opts.authUser) || null;
   var friends = (opts && opts.friends) || [];
+  // Asymmetric block (council decision): blocked users are invisible
+  // to the viewer's DM list. Their existing thread is hidden, their
+  // new messages don't surface, and they can't be opened as a draft.
+  // The opposite direction (their view of you) is intentionally
+  // unchanged — block is one-way, not a mutual ghost.
+  var blockedUserIds = (opts && opts.blockedUserIds) || [];
 
   var [conversations, setConversations] = useState([]);  // accepted + pending-outgoing
   var [requests, setRequests] = useState([]);             // pending incoming
@@ -1067,7 +1073,15 @@ export function useDMs(opts) {
   }
 
   return {
-    conversations: conversations, requests: requests, conversationsLoaded: conversationsLoaded,
+    // Filter blocked partners out of the visible lists. Asymmetric
+    // block — the row stays in the DB, we just don't render it.
+    conversations: blockedUserIds.length
+      ? conversations.filter(function (c) { return !c.partner || blockedUserIds.indexOf(c.partner.id) < 0; })
+      : conversations,
+    requests: blockedUserIds.length
+      ? requests.filter(function (r) { return !r.partner || blockedUserIds.indexOf(r.partner.id) < 0; })
+      : requests,
+    conversationsLoaded: conversationsLoaded,
     activeConv: activeConv,
     threadMessages: threadMessages, reactions: reactions,
     threadLoading: threadLoading, msgDraft: msgDraft, setMsgDraft: setMsgDraft, sending: sending,

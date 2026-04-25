@@ -122,10 +122,15 @@ export function scorePlayerForCourt(viewer, candidate, playsHere) {
 //     if the user never self-reported)
 // Then scores each candidate against the viewer and sorts best first.
 //
+// `excludeIds` (optional) — viewer's blocked-user list, dropped from
+// every candidate set before scoring. Asymmetric block: blocked users
+// never appear in viewer's map.
+//
 // Returns { data: [ { ...profile, playsHere: bool, score: number } ], error }
-export async function fetchPlayersAtCourt(courtName, viewer, limit) {
+export async function fetchPlayersAtCourt(courtName, viewer, limit, excludeIds) {
   var lim = limit || 12;
   var viewerId = viewer && viewer.id;
+  var blockSet = new Set(excludeIds || []);
   // Resolve canonical + aliases so legacy venue strings still match.
   var court = COURTS.find(function (c) {
     return c.name === courtName
@@ -155,8 +160,10 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit) {
 
   // Build the candidate set. "playsHere" is TRUE for both self-reporters
   // AND anyone surfaced from match_history — the two signals merge.
+  // Blocked users are dropped at every entry to the candidate map.
   var byId = {};
   (selfRes.data || []).forEach(function (p) {
+    if (blockSet.has(p.id)) return;
     byId[p.id] = Object.assign({}, p, { playsHere: true });
   });
 
@@ -166,6 +173,7 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit) {
       [m.user_id, m.opponent_id, m.tagged_user_id].forEach(function (uid) {
         if (!uid) return;
         if (viewerId && uid === viewerId) return;
+        if (blockSet.has(uid)) return; // never surface blocked users
         if (byId[uid]) return; // already in set
         derivedIds.add(uid);
       });
@@ -177,6 +185,7 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit) {
         .in("id", idList);
       if (!pRes.error) {
         (pRes.data || []).forEach(function (p) {
+          if (blockSet.has(p.id)) return;
           byId[p.id] = Object.assign({}, p, { playsHere: true });
         });
       }
@@ -256,13 +265,17 @@ export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
 
 // Fetch all players in a given zone — the source for the side-panel
 // "Players here" list. Anyone whose profile.home_zone matches is returned.
-export function fetchPlayersInZone(zoneId, limit){
+// `excludeIds` (optional) filters out specific user ids — used by the
+// caller to drop blocked users before they ever render.
+export function fetchPlayersInZone(zoneId, limit, excludeIds){
   var l = limit || 20;
-  return supabase.from("profiles")
+  var q = supabase.from("profiles")
     .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone")
-    .eq("home_zone", zoneId)
-    .order("last_active", { ascending: false, nullsFirst: false })
-    .limit(l);
+    .eq("home_zone", zoneId);
+  if (excludeIds && excludeIds.length) {
+    q = q.not("id", "in", "(" + excludeIds.join(",") + ")");
+  }
+  return q.order("last_active", { ascending: false, nullsFirst: false }).limit(l);
 }
 
 // Anonymous-friendly count of public players in a zone. RLS blocks anon

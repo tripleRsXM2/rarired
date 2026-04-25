@@ -30,6 +30,9 @@ export default function CourtInfoCard({
   // Phase 2: fires dms.openConversationWith + navigates to /people/messages.
   // Shape: onMessagePlayer(partner, { venue, date, time, draft })
   onMessagePlayer,
+  // Asymmetric block — viewer's blocked-user list is filtered out of
+  // the ranked candidate set in fetchPlayersAtCourt.
+  blockedUserIds,
 }){
   var [players, setPlayers] = useState([]);
   var [loading, setLoading] = useState(false);
@@ -40,7 +43,7 @@ export default function CourtInfoCard({
   useEffect(function(){
     if(!court) { setPlayers([]); return; }
     setLoading(true);
-    fetchPlayersAtCourt(court.name, viewerProfile || { id: authUser && authUser.id }, 12).then(function(r){
+    fetchPlayersAtCourt(court.name, viewerProfile || { id: authUser && authUser.id }, 12, blockedUserIds || []).then(function(r){
       if(r.error){ console.warn("[CourtInfoCard] players:", r.error); setPlayers([]); }
       else setPlayers(r.data || []);
       setLoading(false);

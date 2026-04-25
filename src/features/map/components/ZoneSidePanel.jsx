@@ -35,6 +35,10 @@ export default function ZoneSidePanel({
   onOpenProfile, activity,
   // onMessageSelected(partners[], slotHints) — array, supports doubles.
   onMessageSelected,
+  // Asymmetric block — viewer's blocked-user list is forwarded into
+  // the player-fetch services so blocked users are dropped before
+  // they ever render.
+  blockedUserIds,
 }){
   var [players,setPlayers]=useState([]);
   var [loading,setLoading]=useState(false);
@@ -83,9 +87,10 @@ export default function ZoneSidePanel({
       return;
     }
     var viewer = (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id };
-    var zoneReq = fetchPlayersInZone(zone.id, 40);
+    var blocked = blockedUserIds || [];
+    var zoneReq = fetchPlayersInZone(zone.id, 40, blocked);
     var courtReq = selectedCourt
-      ? fetchPlayersAtCourt(selectedCourt, viewer, 40)
+      ? fetchPlayersAtCourt(selectedCourt, viewer, 40, blocked)
       : Promise.resolve({ data: [] });
     Promise.all([zoneReq, courtReq]).then(function (arr) {
       var zr = arr[0]; var cr = arr[1];

@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { inputStyle } from "../../../lib/theme.js";
 import Messages from "../components/Messages.jsx";
@@ -23,8 +23,16 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
   onMessage, openProfile, openChallenge}) {
   var rel=friendRelationLabel(u.id), loading=!!socialLoading[u.id];
   var wr=u.matches_played?Math.round((u.wins||0)/u.matches_played*100):null;
+  var [menuOpen, setMenuOpen] = useState(false);
   function goToProfile(){ if(openProfile) openProfile(u.id); }
   var clickable=!!openProfile;
+
+  // Council decision: on the Friends list, "Friends ✓" is redundant
+  // (the user is looking AT the friends tab) and Block doesn't belong
+  // staring at the user when they're scrolling friends. Both move into
+  // an overflow ⋯ menu surfaced only for actual friends. For non-
+  // friend rows (search / suggested / discover), Block stays visible
+  // but small — it's the only safety affordance there.
   return (
     <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
       <div
@@ -47,7 +55,7 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
         </div>
         {u.ranking_points!=null&&<div style={{fontSize:10,color:t.textTertiary,marginTop:1}}>{u.ranking_points} pts · {u.matches_played||0} matches</div>}
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+      <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0,position:"relative"}}>
         {onMessage&&(
           <button onClick={function(){onMessage(u);}}
             style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+t.accent,background:"transparent",color:t.accent,fontSize:12,fontWeight:600}}>
@@ -85,16 +93,53 @@ function PlayerCard({u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
             Challenge
           </button>
         )}
-        {rel==="friends"&&(
-          <button disabled={loading} onClick={function(){if(window.confirm("Unfriend "+u.name+"?"))unfriend(u);}}
-            style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.textSecondary,fontSize:12,fontWeight:500,opacity:loading?0.6:1}}>
-            {loading?"…":"Friends ✓"}
+        {/* Friends row gets an overflow ⋯ for the destructive actions
+            (Unfriend, Block). Non-friend rows still expose Block as a
+            small text link for safety. */}
+        {rel==="friends" ? (
+          <div style={{position:"relative",alignSelf:"flex-end"}}>
+            <button onClick={function(e){ e.stopPropagation(); setMenuOpen(!menuOpen); }}
+              aria-label="More actions"
+              title="More actions"
+              style={{width:28,height:28,padding:0,borderRadius:7,border:"1px solid "+t.border,background:"transparent",color:t.textTertiary,fontSize:14,fontWeight:700,lineHeight:1,cursor:"pointer"}}>
+              ⋯
+            </button>
+            {menuOpen && (
+              <>
+                <div onClick={function(){ setMenuOpen(false); }}
+                  style={{position:"fixed",inset:0,zIndex:50}}/>
+                <div style={{
+                  position:"absolute",right:0,top:32,minWidth:140,
+                  background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,
+                  boxShadow:"0 8px 24px rgba(0,0,0,0.15)",overflow:"hidden",
+                  zIndex:60,
+                }}>
+                  <button disabled={loading}
+                    onClick={function(){
+                      setMenuOpen(false);
+                      if(window.confirm("Unfriend "+u.name+"?")) unfriend(u);
+                    }}
+                    style={{display:"block",width:"100%",padding:"10px 14px",border:"none",borderBottom:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:12,fontWeight:500,textAlign:"left",cursor:"pointer"}}>
+                    Unfriend
+                  </button>
+                  <button disabled={loading}
+                    onClick={function(){
+                      setMenuOpen(false);
+                      if(window.confirm("Block "+u.name+"? They won't be able to message you and will disappear from your map and discovery surfaces.")) blockUser(u);
+                    }}
+                    style={{display:"block",width:"100%",padding:"10px 14px",border:"none",background:"transparent",color:t.red,fontSize:12,fontWeight:500,textAlign:"left",cursor:"pointer"}}>
+                    Block
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <button onClick={function(){blockUser(u);}}
+            style={{padding:"4px 10px",borderRadius:7,border:"1px solid "+t.border,background:"transparent",color:t.textTertiary,fontSize:10,fontWeight:500,cursor:"pointer"}}>
+            Block
           </button>
         )}
-        <button onClick={function(){blockUser(u);}}
-          style={{padding:"4px 10px",borderRadius:7,border:"1px solid "+t.border,background:"transparent",color:t.textTertiary,fontSize:10,fontWeight:500}}>
-          Block
-        </button>
       </div>
     </div>
   );

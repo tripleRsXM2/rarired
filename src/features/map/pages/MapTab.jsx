@@ -24,6 +24,9 @@ export default function MapTab({
   // on a player row. We forward partner + slot to dms.openConversationWith
   // and then switch them to the messages tab. Parent (App.jsx) provides.
   onMessagePlayer,
+  // Asymmetric block — viewer's blocked-user list is threaded through
+  // every player-fetch on the map so blocked users never render.
+  blockedUserIds,
 }){
   var [hovered,setHovered]=useState(null);
   var [selected,setSelected]=useState(null);
@@ -149,6 +152,7 @@ export default function MapTab({
         authUser={authUser} profile={profile}
         homeZone={homeZone}
         activity={selectedZone ? zoneActivity[selectedZone.id] : null}
+        blockedUserIds={blockedUserIds}
         onSetHome={handleSetHome}
         onClearHome={handleClearHome}
         onOpenProfile={function(uid){
@@ -168,6 +172,7 @@ export default function MapTab({
       <CourtInfoCard t={t} court={selectedCourt}
         authUser={authUser}
         viewerProfile={profile}
+        blockedUserIds={blockedUserIds}
         openChallenge={openChallenge}
         onOpenProfile={function(uid){
           if(!uid) return;

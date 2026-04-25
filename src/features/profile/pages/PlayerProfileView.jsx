@@ -9,7 +9,7 @@
 // no match history for the subject (RLS-restricted). Those surfaces are for
 // later modules when we have an RPC for public match data.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { avColor, avatarUrl, displayLocation } from "../../../lib/utils/avatar.js";
 import { PresenceDot } from "../../people/components/PresenceIndicator.jsx";
 import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
@@ -21,7 +21,7 @@ import {
 import { track } from "../../../lib/analytics.js";
 
 export default function PlayerProfileView({
-  t, authUser, userId, viewerHistory, onBack, openChallenge,
+  t, authUser, userId, viewerHistory, onBack, openChallenge, blockUser,
 }) {
   var state = usePlayerProfile(userId);
   var profile = state.profile;
@@ -161,19 +161,24 @@ export default function PlayerProfileView({
             themselves (route should redirect, but guard anyway).
             Sharp-cornered accent block to match the rest of the chrome. */}
         {openChallenge && authUser && profile.id !== authUser.id && (
-          <button
-            onClick={function () { openChallenge(profile, "profile"); }}
-            style={{
-              width: "100%", padding: "12px", borderRadius: 0, border: "none",
-              background: t.accent, color: "#fff",
-              fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase",
-              cursor: "pointer", transition: "opacity 0.15s", marginBottom: 14,
-            }}
-            onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-            onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-          >
-            Challenge {profile.name ? profile.name.split(" ")[0] : "player"}
-          </button>
+          <div style={{ display:"flex", gap:6, alignItems:"stretch", marginBottom: 14 }}>
+            <button
+              onClick={function () { openChallenge(profile, "profile"); }}
+              style={{
+                flex: 1, padding: "12px", borderRadius: 0, border: "none",
+                background: t.accent, color: "#fff",
+                fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase",
+                cursor: "pointer", transition: "opacity 0.15s",
+              }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+            >
+              Challenge {profile.name ? profile.name.split(" ")[0] : "player"}
+            </button>
+            {blockUser && (
+              <ProfileOverflowMenu t={t} profile={profile} blockUser={blockUser}/>
+            )}
+          </div>
         )}
 
         {/* Ranking card — sharp, same rhythm as ProfileTab */}
@@ -276,6 +281,56 @@ export default function PlayerProfileView({
 // ──────────────────────────────────────────────────────────────────────────
 // Shell / loading / empty helpers — kept in-file because they're specific
 // to this view's layout; promoting them would be premature generalisation.
+
+// Overflow menu next to the Challenge CTA on a public profile. Houses
+// the destructive actions (Block, future Report) so they're always one
+// click away but never primary chrome. Asymmetric block (council
+// decision): blocked users go invisible to the viewer; viewer remains
+// neutrally visible to them — no notification fires.
+function ProfileOverflowMenu({ t, profile, blockUser }) {
+  var [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button onClick={function () { setOpen(!open); }}
+        aria-label="More actions"
+        title="More actions"
+        style={{
+          width: 44, height: "100%", padding: 0,
+          borderRadius: 0, border: "none",
+          background: t.bgTertiary, color: t.textSecondary,
+          fontSize: 18, fontWeight: 700, lineHeight: 1, cursor: "pointer",
+        }}>⋯</button>
+      {open && (
+        <>
+          <div onClick={function () { setOpen(false); }}
+            style={{ position: "fixed", inset: 0, zIndex: 50 }}/>
+          <div style={{
+            position: "absolute", right: 0, top: "calc(100% + 4px)",
+            minWidth: 160, background: t.bgCard, border: "1px solid " + t.border,
+            borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+            overflow: "hidden", zIndex: 60,
+          }}>
+            <button
+              onClick={function () {
+                setOpen(false);
+                if (window.confirm("Block " + profile.name + "? They won't be able to message you and will disappear from your map and discovery surfaces.")) {
+                  blockUser(profile);
+                }
+              }}
+              style={{
+                display: "block", width: "100%", padding: "12px 16px",
+                border: "none", background: "transparent",
+                color: t.red, fontSize: 13, fontWeight: 600,
+                textAlign: "left", cursor: "pointer",
+              }}>
+              Block
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Shell({ t, onBack, children }) {
   return (
