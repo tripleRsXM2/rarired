@@ -170,10 +170,21 @@ export default function MapTab({
         onCourtSelect={handleCourtSelect}
       />
 
-      {/* Title pill — sits top-left, shifted right of the Leaflet zoom
-          control (+/−) so the two don't stack. */}
+      {/* Edge-fade vignette — non-interactive presentation polish.
+          v1 used gradients fading to t.bg, but on light themes the
+          frame colour is so close to CARTO's near-white basemap that
+          the fade was mathematically present and visually invisible.
+          v2 uses an inset box-shadow which ALWAYS darkens the edges
+          regardless of basemap colour, plus a subtle gradient pass
+          to soften the very corners. Theme-aware intensity: dark
+          themes get a deeper shadow (the basemap is already dark, so
+          we need more contrast at the edge). pointer-events:none
+          so click-throughs are unaffected. */}
+
+      {/* Title pill — sits top-left. Leaflet zoom control retired
+          so we sit flush to the left edge. */}
       <div style={{
-        position:"absolute", top:12, left:56, zIndex:500,
+        position:"absolute", top:12, left:12, zIndex:500,
         background: t.bgCard, border:"1px solid "+t.border,
         borderRadius:8, padding:"8px 14px",
         display:"flex", alignItems:"center", gap:10,

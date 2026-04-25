@@ -150,13 +150,24 @@ export default function LeafletMap({
   useEffect(function(){
     if(!elRef.current || mapRef.current) return;
     var map = L.map(elRef.current, {
-      zoomControl: true,
-      attributionControl: true,
+      // Zoom +/- buttons retired — users still get pinch + scroll
+      // zoom; the chrome was just visual noise top-left and
+      // competed with the title pill.
+      zoomControl: false,
+      // Custom attribution config — drops the default "Leaflet"
+      // prefix (legally optional, visually noisy) and keeps only
+      // the OSM/CARTO licence-required attribution. Styled small
+      // via CSS in providers.jsx.
+      attributionControl: false,
       preferCanvas: true,
     });
+    L.control.attribution({
+      prefix: false, // drop the "Leaflet" word
+      position: "bottomright",
+    }).addTo(map);
 
     var base = L.tileLayer(tileUrlFor(theme, mapThemeOverride), {
-      attribution: "© OpenStreetMap · © CARTO",
+      attribution: "© OSM · © CARTO",
       subdomains: "abcd",
       maxZoom: 19,
     }).addTo(map);
@@ -266,7 +277,7 @@ export default function LeafletMap({
     if(!map || !tileLayersRef.current.base) return;
     map.removeLayer(tileLayersRef.current.base);
     var base = L.tileLayer(tileUrlFor(theme, mapThemeOverride), {
-      attribution: "© OpenStreetMap · © CARTO",
+      attribution: "© OSM · © CARTO",
       subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
     tileLayersRef.current.base = base;
