@@ -205,22 +205,54 @@ export default function ScoreModal({
               })()}
             </div>
 
-            {/* Verification mode indicator */}
-            {casualOppName.trim()&&(
-              <div style={{marginTop:8,padding:"8px 12px",borderRadius:8,border:"1px solid "+(isVerified?t.accent:t.border),background:isVerified?t.accentSubtle:t.bgTertiary,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:13}}>{isVerified?"✓":"○"}</span>
-                <div>
-                  <div style={{fontSize:11,fontWeight:700,color:isVerified?t.accent:t.textSecondary}}>
-                    {isVerified?"Ranked match":"Casual match"}
+            {/* Match-type toggle — explicit user control over ranked vs casual.
+                Default state derives from whether the opponent is linked
+                (linked → ranked, freetext → casual). User can override to
+                Casual at any time. Ranked is disabled when no linked
+                opponent because Elo math needs both sides to be real users. */}
+            {casualOppName.trim() && (function(){
+              var effectiveMatchType = scoreDraft.matchType || (isVerified ? 'ranked' : 'casual');
+              var rankedAllowed = isVerified;
+              function pick(mt){
+                if (mt === 'ranked' && !rankedAllowed) return;
+                setScoreDraft(function(d){ return Object.assign({}, d, { matchType: mt }); });
+              }
+              var btn = function(mt, label, glyph){
+                var on = effectiveMatchType === mt;
+                var disabled = mt === 'ranked' && !rankedAllowed;
+                var color = on
+                  ? (mt === 'ranked' ? t.accent : t.textSecondary)
+                  : (disabled ? t.textTertiary : t.textSecondary);
+                var bg = on
+                  ? (mt === 'ranked' ? t.accentSubtle : t.bgTertiary)
+                  : 'transparent';
+                var borderC = on
+                  ? (mt === 'ranked' ? t.accent : t.border)
+                  : t.border;
+                return (
+                  <button key={mt} type="button" onClick={function(){pick(mt);}} disabled={disabled}
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + borderC, background: bg, color: color, fontSize: 12, fontWeight: on ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.55 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <span>{glyph}</span><span>{label}</span>
+                  </button>
+                );
+              };
+              return (
+                <div style={{marginTop: 10}}>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: 'block', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Match type</label>
+                  <div style={{display:'flex',gap:8}}>
+                    {btn('ranked', 'Ranked', '✓')}
+                    {btn('casual', 'Casual', '○')}
                   </div>
-                  <div style={{fontSize:10,color:t.textTertiary,marginTop:1}}>
-                    {isVerified
-                      ?"Counts toward ELO — opponent will confirm to lock it in"
-                      :"Logged for records only — no ELO or W/L impact"}
+                  <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 6, lineHeight: 1.4 }}>
+                    {effectiveMatchType === 'ranked'
+                      ? 'Counts toward ELO — opponent will confirm to lock it in.'
+                      : (rankedAllowed
+                          ? 'Logged for records only — no ELO or W/L impact.'
+                          : 'Pick a linked opponent above to log a ranked match. Freetext opponents can only be casual.')}
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
           :(!isResubmit&&<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>)
         }

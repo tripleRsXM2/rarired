@@ -233,21 +233,28 @@ export function useMatchHistory(opts){
     var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
     var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
     var isVerified=!!opponentId;
-    var status=isVerified?'pending_confirmation':'confirmed';
-    // Casual flow: ranked when a real opponent is linked, casual otherwise.
-    // Tournament flow: always use the tournament's own name.
-    var tournName=scoreModal.casual
-      ?(isVerified?'Ranked':'Casual Match')
-      :(scoreModal.tournName||'Casual Match');
-    // Core product rule (2026-04-25): match_type drives Elo/leaderboard
-    // impact. Linked-opponent + tournament flows are 'ranked'; freetext-
-    // opponent submissions are 'casual'. Server's apply_match_outcome
-    // gates Elo on this column, and the DB default is 'casual' so a
-    // missing-tag insert is automatically safe.
-    var matchType = isVerified ? 'ranked' : 'casual';
+    // Core product rule (2026-04-25): match_type drives Elo + lifecycle.
+    // Default derives from opponent linkage (linked → 'ranked', freetext
+    // → 'casual'); ScoreModal lets the user explicitly override to
+    // 'casual' even when the opponent is linked. Defensive clamp:
+    // 'ranked' with no opponent can't actually affect Elo, so demote.
+    var matchType = scoreDraft.matchType || (isVerified ? 'ranked' : 'casual');
+    if (matchType === 'ranked' && !opponentId) matchType = 'casual';
+    // Confirmation is only needed for ranked matches (something to verify
+    // / dispute). Casual matches go straight to confirmed regardless of
+    // opponent linkage — there's no Elo to argue about.
+    var needsConfirmation = isVerified && matchType === 'ranked';
+    var status = needsConfirmation ? 'pending_confirmation' : 'confirmed';
+    // Tournament flow: tournament name takes precedence. Casual flow:
+    // tourn_name is the human display label and tracks match_type.
+    var tournName = scoreModal.casual
+      ? (matchType === 'ranked' ? 'Ranked' : 'Casual Match')
+      : (scoreModal.tournName || 'Casual Match');
 
-    var hash=null;
-    if(isVerified) hash=computeMatchHash(authUser.id, opponentId, matchDate, clean);
+    var hash = null;
+    // Match-hash dedupe is a ranked-flow feature (prevents both sides
+    // logging the same match twice). Casual matches don't need it.
+    if (needsConfirmation) hash = computeMatchHash(authUser.id, opponentId, matchDate, clean);
 
     var localId='local-'+Date.now();
     var nm={
@@ -277,11 +284,14 @@ export function useMatchHistory(opts){
     };
     if(opponentId) payload.opponent_id=opponentId;
     if(hash) payload.match_hash=hash;
-    if(isVerified) payload.expires_at=new Date(Date.now()+72*60*60*1000).toISOString();
+    // 72h expiry only on rows that need confirmation — confirmed-immediately
+    // casual matches have nothing to expire.
+    if(needsConfirmation) payload.expires_at=new Date(Date.now()+72*60*60*1000).toISOString();
     // Module 7 — optional league tag. Server trigger (validate_match_league)
-    // enforces the hard rules (both players are active members, league is
-    // active, max_matches_per_opponent not exceeded); client just forwards.
-    if(isVerified && scoreDraft.leagueId) payload.league_id=scoreDraft.leagueId;
+    // enforces the hard rules (both players active members, league active,
+    // max_matches_per_opponent not exceeded, match_type='ranked' required).
+    // Client just forwards.
+    if(needsConfirmation && scoreDraft.leagueId) payload.league_id=scoreDraft.leagueId;
 
     var ins=await M.insertMatch(payload);
     if(ins.error){
@@ -292,10 +302,14 @@ export function useMatchHistory(opts){
 
     var matchId=ins.data.id;
     setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
-    if(isVerified&&sendNotification){
+    // Only ranked matches need confirmation, so only ranked matches fire
+    // match_tag (the "X logged a match with you — confirm or dispute" nag).
+    // Casual matches with linked opponents are auto-confirmed; the opponent
+    // can still see them in the feed but doesn't need to act.
+    if(needsConfirmation&&sendNotification){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
-    track("match_logged",{match_id:matchId,is_ranked:isVerified,has_opponent_linked:!!opponentId,sets:clean.length,result:scoreDraft.result});
+    track("match_logged",{match_id:matchId,is_ranked:matchType==='ranked',match_type:matchType,has_opponent_linked:!!opponentId,sets:clean.length,result:scoreDraft.result});
     // Module 4: convert accepted challenge → completed when this match was
     // logged via the "Log result" CTA on an accepted challenge.
     if(scoreModal.sourceChallengeId && onMatchLoggedFromChallenge){
