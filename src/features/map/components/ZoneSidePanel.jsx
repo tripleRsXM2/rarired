@@ -70,14 +70,30 @@ export default function ZoneSidePanel({
     setSelectedIds([]);
   }, [zone && zone.id]);
 
-  // Long-list collapse — zones with >5 venues (Eastern Suburbs, CBD,
-  // Inner West) feel cramped on mobile when every court renders. By
-  // default show the first 4 + a "Show all N" CTA. Tapping the CTA
-  // expands inline. Re-collapses when zone changes.
+  // Long-list collapse — zones with >5 venues feel cramped on mobile
+  // when every court renders. Council call: collapse only on mobile;
+  // desktop has ample vertical room and the full list reads fine. The
+  // clutter complaint was mobile-only.
   var COLLAPSE_THRESHOLD = 5;
   var COLLAPSED_VISIBLE  = 4;
   var [courtsExpanded, setCourtsExpanded] = useState(false);
   useEffect(function(){ setCourtsExpanded(false); }, [zone && zone.id]);
+  // Track viewport — collapse only applies under 768px. Re-evaluates
+  // on resize so a phone-rotation widening past breakpoint expands.
+  var [isNarrow, setIsNarrow] = useState(function(){
+    return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+  });
+  useEffect(function(){
+    if(typeof window === "undefined") return;
+    var mq = window.matchMedia("(max-width: 767px)");
+    function onChange(e){ setIsNarrow(e.matches); }
+    if(mq.addEventListener) mq.addEventListener("change", onChange);
+    else mq.addListener(onChange);
+    return function(){
+      if(mq.removeEventListener) mq.removeEventListener("change", onChange);
+      else mq.removeListener(onChange);
+    };
+  },[]);
 
   // Fetch + rank the player list. Always returns the WHOLE zone roster
   // (by home_zone) so users can reach anyone in their area — even to
@@ -177,7 +193,7 @@ export default function ZoneSidePanel({
   var totalCourts = courts.reduce(function(n,c){ return n + c.courts; }, 0);
   // If the user picks a court via the panel that's beyond the
   // collapsed slice, auto-expand so the active row stays visible.
-  var collapseActive = courts.length > COLLAPSE_THRESHOLD && !courtsExpanded;
+  var collapseActive = isNarrow && courts.length > COLLAPSE_THRESHOLD && !courtsExpanded;
   var selectedIdx = selectedCourt ? courts.findIndex(function(c){ return c.name === selectedCourt; }) : -1;
   if (collapseActive && selectedIdx >= COLLAPSED_VISIBLE) {
     collapseActive = false;
@@ -370,7 +386,7 @@ export default function ZoneSidePanel({
                 </div>
               );
             })}
-            {courts.length > COLLAPSE_THRESHOLD && (
+            {isNarrow && courts.length > COLLAPSE_THRESHOLD && (
               <button type="button"
                 onClick={function(){
                   var next = !courtsExpanded;
@@ -381,15 +397,26 @@ export default function ZoneSidePanel({
                   if(next) track("map_courts_expanded", { zone_id: zone && zone.id, total: courts.length });
                 }}
                 style={{
-                  marginTop: 4, padding: "8px 10px",
-                  background:"transparent", border:"none",
-                  color: t.textSecondary, fontSize: 11.5,
-                  fontWeight: 600, letterSpacing: "0.02em",
-                  cursor: "pointer", textAlign: "left",
+                  marginTop: 6, padding: "10px 12px",
+                  background: t.accentSubtle,
+                  border: "1px solid " + t.border,
+                  borderRadius: 8,
+                  color: t.accent, fontSize: 12.5,
+                  fontWeight: 700, letterSpacing: "0.01em",
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  transition: "background 0.15s",
                 }}>
-                {courtsExpanded
-                  ? "Show fewer ↑"
-                  : "Show all " + courts.length + " courts ↓"}
+                <span>{courtsExpanded ? "Show fewer" : "Show all " + courts.length + " courts"}</span>
+                <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                     stroke="currentColor" strokeWidth="2"
+                     strokeLinecap="round" strokeLinejoin="round"
+                     style={{
+                       transform: courtsExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                       transition: "transform 0.18s ease",
+                     }}>
+                  <path d="M4 7l5 5 5-5"/>
+                </svg>
               </button>
             )}
           </div>
