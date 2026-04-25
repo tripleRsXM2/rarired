@@ -517,28 +517,46 @@ export default function ScoreModal({
             be casual (no linked opponent OR explicitly downgraded). For
             ranked matches the "completed" rule is non-negotiable; the
             casual-fallback affordance below the error block handles the
-            partial-score path explicitly. */}
+            partial-score path explicitly.
+            Editorial styling: flat segmented control — no fill on
+            active, hairline borders, 800-weight typography to match
+            the rest of the redesign. */}
         {(scoreDraft.matchType === 'casual' || (!casualOppId && !isResubmit)) && (
-          <div style={{marginBottom:14}}>
-            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,letterSpacing:"0.06em",textTransform:"uppercase",display:"block",marginBottom:6}}>How did it end?</label>
-            <div style={{display:"flex",gap:6}}>
+          <div style={{marginBottom:16}}>
+            <label style={{fontSize:10,fontWeight:800,color:t.textSecondary,letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:8}}>How it ended</label>
+            <div style={{display:"flex",gap:0,borderTop:"1px solid "+t.border,borderBottom:"1px solid "+t.border}}>
               {[
-                { id: 'completed',    label: 'Completed' },
+                { id: 'completed',    label: 'Completed'    },
                 { id: 'time_limited', label: 'Time-limited' },
-                { id: 'retired',      label: 'Retired' },
-              ].map(function (c) {
+                { id: 'retired',      label: 'Retired'      },
+              ].map(function (c, i) {
                 var on = (scoreDraft.completionType || 'completed') === c.id;
                 return (
                   <button key={c.id}
                     onClick={function () { setScoreDraft(function (d) { return Object.assign({}, d, { completionType: c.id }); }); }}
                     style={{
-                      flex: 1, padding: "8px 10px", borderRadius: 8,
-                      background: on ? t.accentSubtle : "transparent",
-                      border: "1px solid " + (on ? t.accent : t.border),
-                      color: on ? t.accent : t.textSecondary,
-                      fontSize: 12, fontWeight: on ? 700 : 500, cursor: "pointer",
+                      flex: 1,
+                      padding: "10px 6px",
+                      borderRadius: 0,
+                      background: "transparent",
+                      border: "none",
+                      borderLeft: i === 0 ? "none" : "1px solid " + t.border,
+                      color: on ? t.text : t.textTertiary,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      position: "relative",
                     }}>
                     {c.label}
+                    {on && (
+                      <span style={{
+                        position: "absolute",
+                        left: 0, right: 0, bottom: -1, height: 2,
+                        background: t.text,
+                      }}/>
+                    )}
                   </button>
                 );
               })}
@@ -576,33 +594,52 @@ export default function ScoreModal({
               </div>
             );
           })}
-          {/* Slice E: live validation caption — quiet, non-blocking. */}
+          {/* Slice E: live validation caption — editorial hairline
+              strip with a tiny ALL-CAPS tag + body message. Errors
+              tag in red, partial-pass tag muted. No fill, no radius. */}
           {liveValidation && !liveValidation.ok && (
             <div style={{
-              marginTop: 6,
-              padding: "8px 10px",
-              borderRadius: 6,
-              fontSize: 11,
-              color: t.textSecondary,
-              background: t.bgTertiary,
-              border: "1px solid " + t.border,
-              lineHeight: 1.4,
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: "1px solid " + t.border,
+              display: "flex", gap: 10, alignItems: "baseline",
             }}>
-              {liveValidation.message}
+              <span style={{
+                fontSize: 9, fontWeight: 800,
+                color: t.red, letterSpacing: "0.16em",
+                textTransform: "uppercase", flexShrink: 0,
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                Invalid
+              </span>
+              <span style={{
+                fontSize: 12, color: t.textSecondary,
+                lineHeight: 1.4, letterSpacing: "-0.1px",
+              }}>
+                {liveValidation.message}
+              </span>
             </div>
           )}
           {liveValidation && liveValidation.ok && liveValidation.completionStatus === "partial" && (
             <div style={{
-              marginTop: 6,
-              padding: "8px 10px",
-              borderRadius: 6,
-              fontSize: 11,
-              color: t.textSecondary,
-              background: t.bgTertiary,
-              border: "1px solid " + t.border,
-              lineHeight: 1.4,
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: "1px solid " + t.border,
+              display: "flex", gap: 10, alignItems: "baseline",
             }}>
-              Saving as a casual {scoreDraft.completionType === 'retired' ? 'retired' : 'time-limited'} result. Won't affect rating.
+              <span style={{
+                fontSize: 9, fontWeight: 800,
+                color: t.textTertiary, letterSpacing: "0.16em",
+                textTransform: "uppercase", flexShrink: 0,
+              }}>
+                {scoreDraft.completionType === 'retired' ? 'Retired' : 'Time-limited'}
+              </span>
+              <span style={{
+                fontSize: 12, color: t.textSecondary,
+                lineHeight: 1.4, letterSpacing: "-0.1px",
+              }}>
+                Saved as casual. Won't affect rating.
+              </span>
             </div>
           )}
         </div>
@@ -675,27 +712,80 @@ export default function ScoreModal({
           );
         })()}
 
-        {/* Error */}
+        {/* Error — editorial hairline strip. Matches the live-validation
+            caption + casual-fallback pattern so the stack reads as one
+            voice when ranked validation fails and we offer the casual
+            escape hatch directly underneath. */}
         {saveError&&(
-          <div style={{marginBottom:12,padding:"10px 14px",borderRadius:8,background:t.redSubtle,border:"1px solid "+t.red+"44",fontSize:12,color:t.red,fontWeight:500}}>
-            {saveError}
+          <div style={{
+            marginBottom: 12,
+            paddingTop: 10, paddingBottom: 10,
+            borderTop: "1px solid " + t.border,
+            display: "flex", gap: 10, alignItems: "baseline",
+          }}>
+            <span style={{
+              fontSize: 9, fontWeight: 800,
+              color: t.red, letterSpacing: "0.16em",
+              textTransform: "uppercase", flexShrink: 0,
+            }}>
+              Can't save
+            </span>
+            <span style={{
+              fontSize: 12, color: t.text,
+              lineHeight: 1.4, letterSpacing: "-0.1px",
+            }}>
+              {saveError}
+            </span>
           </div>
         )}
 
         {/* Casual fallback — explicit user-consent path when ranked
             validation fails because the score is partial / time-limited
             but would pass under casual rules. NEVER auto-converts;
-            user must tap to opt in. */}
+            user must tap to opt in.
+            Editorial styling: hairline strip, no fill / no radius.
+            Orange survives only as a thin accent on the eyebrow tag
+            so the CTA still draws the eye in a form full of greys. */}
         {casualFallbackOffer && (
-          <div style={{marginBottom:12,padding:"10px 14px",borderRadius:8,background:t.orangeSubtle,border:"1px solid "+t.orange+"44",fontSize:12,color:t.text,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-            <span style={{flex:1,minWidth:140}}>
-              You can save this as a casual time-limited result instead. It won't affect rating.
+          <div style={{
+            marginBottom: 14,
+            paddingTop: 12,
+            paddingBottom: 12,
+            borderTop: "1px solid " + t.border,
+            borderBottom: "1px solid " + t.border,
+            display: "flex", flexDirection: "column", gap: 8,
+          }}>
+            <span style={{
+              fontSize: 9, fontWeight: 800,
+              color: t.orange, letterSpacing: "0.16em",
+              textTransform: "uppercase",
+            }}>
+              Partial score
+            </span>
+            <span style={{
+              fontSize: 13, color: t.text,
+              lineHeight: 1.35, letterSpacing: "-0.1px",
+            }}>
+              This score isn't a completed match, so it can't affect rating. Save as casual time-limited instead?
             </span>
             <button
               onClick={function(){ setSaveError(""); setCasualFallbackOffer(null); handleSave({forceCasual: true}); }}
               disabled={saving}
-              style={{flexShrink:0,padding:"7px 12px",borderRadius:6,border:"none",background:t.text,color:t.bg,fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"}}>
-              Save as casual
+              style={{
+                alignSelf: "flex-start",
+                marginTop: 2,
+                padding: "0 0 2px 0",
+                background: "transparent",
+                border: "none",
+                borderBottom: "1px solid " + t.text,
+                color: t.text,
+                fontSize: 11, fontWeight: 800,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                opacity: saving ? 0.5 : 1,
+              }}>
+              Save as casual →
             </button>
           </div>
         )}
