@@ -165,6 +165,83 @@ A player's **"N confirmed matches"** badge (green tick, shown on own and public 
 
 6. **Stats are bumped, not recomputed.** The `bump_stats_for_match` RPC increments `wins` / `losses` / `matches_played` / `ranking_points` in place. Total recomputation from scratch is not supported; if counters drift, we fix server-side.
 
+## Score validity (Module 7.6, 2026-04-25)
+
+> **Casual is the place for messy reality. Ranked is the place for completed tennis.**
+
+The log-match form now validates set scores against real tennis rules before they reach the database, with three defensive layers so a forced REST POST can't bypass the UI gate.
+
+### What counts as a valid completed set
+
+A *completed* set must match one of these patterns (`hi` = the higher score, `lo` = the lower):
+
+| Pattern | Allowed | Notes |
+|---|---|---|
+| `hi=6`, `lo` in `0..4` | ✅ | Standard set won at 6 |
+| `hi=7`, `lo=5` | ✅ | Set won 7-5 (no tiebreak) |
+| `hi=7`, `lo=6` | ✅ | Set won via tiebreak. Tiebreak details (e.g. 7-3) are optional metadata only — not required for a valid score |
+| `hi≥10`, `hi-lo≥2` | ✅ **only as the final set** of a `best_of_3` decider when prior sets are 1-1 | Match-tiebreak (super tiebreak). Replaces the third regular set when a league's `tiebreak_format='super_tiebreak_final'` |
+
+Anything else is **not a valid completed set**. Common rejected examples:
+- `6-5` — must continue to 7-5 or 7-6
+- `5-3`, `3-2` — partial / unfinished, only valid as casual time-limited
+- `8-6` — ATP-style "long" set, not a recognised completion in current rules
+- `10-8` as a regular set (not the final decider in a 1-1 match) — match-tiebreak only goes in the final set slot
+- negative numbers, non-integers, strings — rejected at all layers
+
+### What counts as a complete *match*
+
+After every set passes the per-set check, the match must have a clear winner:
+
+| Format | Rule |
+|---|---|
+| `one_set` | exactly 1 completed set with one player ahead |
+| `best_of_3` (default) | one player won ≥2 sets and outscored the other in set count |
+| `custom` (no league) | falls back to `best_of_3` rule |
+
+### Completion type — the casual escape hatch
+
+Casual matches expose a completion-type toggle on the score form:
+
+| Completion type | Set rules | Effect |
+|---|---|---|
+| `completed` | full validity check (above) | Default. The match is treated as a completed casual game; appears on profile and feed |
+| `time_limited` | per-set non-negative integers only; no winner check | "We played for an hour, ran out of time at 5-3 / 4-2." Saved as casual; never affects Elo (already true for all casual matches) |
+| `retired` | per-set non-negative integers only; no winner check | "Opponent twisted an ankle mid-set." Saved as casual; never affects Elo |
+
+Ranked matches **cannot** be saved as `time_limited` or `retired`. The flow:
+1. The user enters partial scores under a ranked submission
+2. The validator fails at save with a tennis-specific message ("A completed set can't end 6-5…")
+3. An orange "Save as casual time-limited" CTA appears below the error
+4. Tapping it overrides `match_type → casual` and `league_id → null` on insert and re-runs the validator under casual rules
+
+This makes the ranked vs casual choice explicit at the moment a partial score is submitted, instead of silently downgrading or silently rejecting.
+
+### Three-layer enforcement
+
+1. **Client validator** — `src/features/scoring/utils/tennisScoreValidation.js` is the canonical rules engine. Pure functions, 74 unit tests, returns a discriminated `{ ok, code, message, perSet, winner, completionStatus, invalidIndex }` shape. The `CODES` constant is the stable contract for callers.
+2. **Service-layer guard** — `useMatchHistory.submitMatch` and `resubmitMatch` re-run the validator after the match-type has been clamped, so the submission is rejected with a `{ error: 'invalid_score', code, message }` even if the modal's gate was bypassed.
+3. **DB trigger** — `validate_match_score` BEFORE-INSERT trigger on `match_history` (migration `20260425_validate_match_score.sql`) mirrors the same rules in PL/pgSQL. Strict for `match_type='ranked' AND status IN ('confirmed','pending_confirmation')`; permissive (only non-negative integers) for casual + pending non-confirmed states. A forced REST POST with garbage scores is rejected by the database itself.
+
+The three layers share one set of rules — the client validator is canonical; service-layer and trigger mirror it. If the rules change, all three layers move together.
+
+### League interaction
+
+Leagues participate via two existing knobs (no new schema):
+
+- `leagues.match_format` (`one_set` | `best_of_3`) — picked up by the validator's match-winner check. The trigger reads it directly via `SELECT match_format FROM leagues WHERE id = NEW.league_id`. Default if no league: `best_of_3`.
+- `leagues.tiebreak_format` (`standard` | `super_tiebreak_final`) — when `super_tiebreak_final`, the validator allows a match-tiebreak as the final set of a 1-1 best-of-3 decider. Otherwise the final set must be a normal set.
+
+A league does **not** change the per-set patterns themselves (6-0..6-4, 7-5, 7-6 are universal); it only narrows which match-shape and final-set type are accepted.
+
+### What still affects Elo
+
+Unchanged: only `match_type='ranked' AND status='confirmed'` matches feed `apply_match_outcome`. The score validator is upstream of Elo — it controls *whether the row gets inserted at all* — but it doesn't introduce any new "this affected Elo / this didn't" branching. Casual matches with partial scores never affect Elo because casual matches never affect Elo.
+
+### Why this matters
+
+Without server-side validation, a determined user (or a bug in a future client) could insert `5-3 5-3` as a "ranked confirmed" match and silently corrupt their own Elo + a league's standings. The trigger closes that hole at the lowest layer; the modal gate makes the rules visible at the highest.
+
 ## Anti-abuse assumptions (current)
 
 - **Symmetric match hash.** A `match_hash` (sorted user ids + date + score) prevents both sides accidentally logging the same match twice. The `23505` unique-violation surfaces to the user as "This match is already logged."
@@ -224,3 +301,4 @@ See `docs/leagues-and-seasons.md` for the full spec.
 - v4 — Module 7 (leagues V1 schema). Added `match_history.league_id` nullable column + persisted `league_standings` as read-side lens. No change to match truth flow, global ELO, confirmation, dispute, or void rules.
 - v5 — Match-type separation (2026-04-25). Made the ranked-vs-casual distinction explicit via `match_history.match_type` ('ranked' | 'casual') instead of inferring it from `tourn_name` + `opponent_id`. Server `apply_match_outcome` short-circuits for casual matches — single point of control for "what affects Elo". `validate_match_league` now requires `match_type='ranked'` for league matches. Backfilled every legacy row via the prior heuristic so player Elo / W/L numbers are unchanged.
 - v6 — League mode (2026-04-25). Replaced the hardcoded `match_type='ranked'` requirement on league matches with a per-league `leagues.mode` column (`'ranked'` | `'casual'`). Trigger now compares `match_type` against `league.mode`, allowing casual leagues to host casual matches with their own per-league standings (no global Elo impact). ScoreModal filters its league selector by mode + viewer + opponent membership; CreateLeagueModal exposes the mode choice (locked at creation).
+- v7 — Score validity (2026-04-25, Module 7.6). Added a three-layer score validator: pure client utility (`tennisScoreValidation.js`, 74 unit tests, canonical rules), service-layer guard (`submitMatch` / `resubmitMatch` re-run the validator after match-type clamping), and DB BEFORE-INSERT trigger (`validate_match_score`, mirrors the rules in PL/pgSQL, strict for ranked confirmed/pending, permissive for casual). Introduced explicit `completion_type` UI toggle (Completed / Time-limited / Retired) on casual matches so partial scores can be intentionally logged. Ranked attempts with partial scores surface a "Save as casual time-limited" CTA instead of being silently downgraded or silently rejected. League `match_format` and `tiebreak_format` columns now drive validator behaviour (final-set match-tiebreak gated to `super_tiebreak_final` leagues).

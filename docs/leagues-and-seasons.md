@@ -113,6 +113,7 @@ Per-match contributions:
   - The league exists and is `active`
   - Both submitter and opponent are `active` members
   - The `max_matches_per_opponent` cap is not exceeded (counts all non-voided matches between the pair, both directions)
+- A match with `match_type='ranked'` and confirmed/pending status is also subject to the `validate_match_score` BEFORE-INSERT trigger, which rejects invalid set patterns and incomplete matches per the league's `match_format` + `tiebreak_format`. See [Score validity in `trust-and-ranking-rules.md`](./trust-and-ranking-rules.md#score-validity-module-76-2026-04-25) for the full rule set.
 - Direct writes to `league_members` and `league_standings` are denied by RLS. All member mutations go through `invite_to_league` / `respond_to_league_invite` / `remove_league_member`. Standings are written only by the `recalculate_league_standings` SECURITY DEFINER function.
 
 ### Confirmation / dispute / void / expiry flow is unchanged
@@ -208,3 +209,4 @@ None of these RPCs were modified. The league standings simply observe the outcom
 
 - Module 7 — Leagues V1 (schema foundation, 2026-04-26).
 - Module 7.5 — League mode (2026-04-25). New `leagues.mode` column (`'ranked'` | `'casual'`, locked at creation). `validate_match_league` trigger now compares `match_type` against `league.mode` per league instead of hardcoding `'ranked'`. CreateLeagueModal exposes the choice; ScoreModal filters its league selector by mode + viewer membership + opponent membership. Casual leagues have their own per-league standings (computed by the existing `recalculate_league_standings` function — unchanged) but never affect global Elo (the `match_type='casual'` short-circuit in `apply_match_outcome` still applies).
+- Module 7.6 — Score validity (2026-04-25). League's `match_format` and `tiebreak_format` columns are now read by the new `validate_match_score` trigger to enforce real tennis rules at insert time on ranked confirmed/pending matches. No new columns; no change to standings math. See `trust-and-ranking-rules.md` v7.
