@@ -12,6 +12,7 @@ import {
 import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import ProfileHero from "../components/ProfileHero.jsx";
+import ProfileRivalry from "../components/ProfileRivalry.jsx";
 
 // ── ProfileMatchRow ──────────────────────────────────────────────────────────
 // Compact version of the feed scoreboard for use inside the profile (Recent
@@ -293,6 +294,18 @@ export default function ProfileTab({
               Edit
             </button>
           )}
+        />
+      </div>
+
+      {/* Rivalry highlight (slice 2). Only renders when the viewer has
+          a real H2H opponent — see ProfileRivalry for the threshold. */}
+      <div style={{padding:"0 20px 14px"}}>
+        <ProfileRivalry
+          t={t}
+          authUser={authUser}
+          history={history}
+          openProfile={openProfile}
+          openChallenge={openChallenge}
         />
       </div>
 
