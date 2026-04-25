@@ -1179,8 +1179,10 @@ export default function HomeTab({
         onOpenLeague={onOpenLeague}
       />
 
-      {/* ACTIVITY LIST — 3-row borderless preview. "See all" toggles the
-          full feed (FeedCards) below. */}
+      {/* ACTIVITY LIST — owns the section header "Recent activity / All
+          activity" + the toggle (chevron rotates ↓ ↔ ↑). Renders the
+          3-row preview when collapsed; when expanded, just the header
+          stays visible (the full feed below carries the rich list). */}
       <section style={{
         maxWidth: 720, margin: "0 auto",
         padding: "clamp(40px, 5vw, 64px) clamp(20px, 4vw, 32px) clamp(24px, 3vw, 32px)",
@@ -1190,7 +1192,8 @@ export default function HomeTab({
           authUser={authUser}
           profile={profile}
           history={history}
-          onSeeAll={function () { setFeedExpanded(true); }}
+          expanded={feedExpanded}
+          onToggle={function () { setFeedExpanded(function (v) { return !v; }); }}
           onTapMatch={tapActivityRow}
         />
       </section>

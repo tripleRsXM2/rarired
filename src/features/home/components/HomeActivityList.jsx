@@ -106,30 +106,72 @@ function ActivityRow({ t, m, isLast, onTap, profile }) {
   );
 }
 
+// Toggle button used in both collapsed + expanded states. Single source of
+// truth for the chevron direction so the visual cue ("more below" vs "collapse
+// up") stays consistent.
+function ToggleButton({ t, expanded, totalCount, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        fontSize: 11,
+        fontWeight: 700,
+        color: t.textSecondary,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
+      onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; }}>
+      <span>
+        {expanded
+          ? "Show less"
+          : "Show all" + (totalCount ? " (" + totalCount + ")" : "")}
+      </span>
+      <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+        style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+        <path d="M4 7l5 5 5-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </button>
+  );
+}
+
 export default function HomeActivityList({
   t,
   history,
   authUser,
   profile,
-  onSeeAll,        // callback for "See all activity" — deep-link
+  expanded,        // when true, the 3-row preview is hidden — just the
+                   // section header with a "Show less ↑" toggle renders
+  onToggle,        // () => void; flips the expanded state in HomeTab
   onTapMatch,      // (matchId) => void; scrolls to the FeedCard for that match
 }) {
   if (!authUser) return null;
 
-  // Confirmed matches only. Cap at 3.
-  var rows = (history || [])
-    .filter(function (m) { return m.status === "confirmed"; })
-    .slice(0, 3);
+  // Total count drives the toggle label ("Show all (8)") so the user knows
+  // how many more matches are hidden behind the toggle.
+  var allConfirmed = (history || []).filter(function (m) { return m.status === "confirmed"; });
+  var totalCount = allConfirmed.length;
+  var rows = allConfirmed.slice(0, 3);
 
   if (!rows.length) return null;
 
+  // When expanded, render ONLY the section header — the 3-row preview is
+  // hidden because the full feed below carries the same matches in richer
+  // form. Avoids two stacked lists of the same data.
   return (
     <div className="cs-home-activity">
       <div style={{
         display: "flex",
         alignItems: "baseline",
         justifyContent: "space-between",
-        marginBottom: 8,
+        marginBottom: expanded ? 0 : 8,
       }}>
         <div style={{
           fontSize: "clamp(20px, 3vw, 24px)",
@@ -137,40 +179,28 @@ export default function HomeActivityList({
           color: t.text,
           letterSpacing: "-0.02em",
         }}>
-          Recent activity
+          {expanded ? "All activity" : "Recent activity"}
         </div>
-        {onSeeAll && (
-          <button
-            onClick={onSeeAll}
-            style={{
-              background: "transparent",
-              border: "none",
-              padding: 0,
-              fontSize: 11,
-              fontWeight: 700,
-              color: t.textSecondary,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}>
-            See all →
-          </button>
+        {onToggle && totalCount > 3 && (
+          <ToggleButton t={t} expanded={!!expanded} totalCount={totalCount} onClick={onToggle} />
         )}
       </div>
-      <div>
-        {rows.map(function (m, i) {
-          return (
-            <ActivityRow
-              key={m.id}
-              t={t}
-              m={m}
-              profile={profile}
-              isLast={i === rows.length - 1}
-              onTap={onTapMatch ? function () { onTapMatch(m.id); } : undefined}
-            />
-          );
-        })}
-      </div>
+      {!expanded && (
+        <div>
+          {rows.map(function (m, i) {
+            return (
+              <ActivityRow
+                key={m.id}
+                t={t}
+                m={m}
+                profile={profile}
+                isLast={i === rows.length - 1}
+                onTap={onTapMatch ? function () { onTapMatch(m.id); } : undefined}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
