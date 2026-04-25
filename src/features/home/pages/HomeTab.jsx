@@ -7,6 +7,7 @@ import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import FeedInteractionsModal from "../components/FeedInteractionsModal.jsx";
 import NextChallengeBanner from "../../challenges/components/NextChallengeBanner.jsx";
+import HomeHero from "../components/HomeHero.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 var REASON_LABELS = {
@@ -1022,59 +1023,26 @@ export default function HomeTab({
   // ── Authenticated feed ─────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
-      {/* Page header */}
-      <div style={{ padding: "28px 20px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18, maxWidth: 720 }}>
-        <div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: t.text, letterSpacing: "-0.6px", lineHeight: 1.1 }}>Feed</div>
-          <div style={{ fontSize: 12, color: t.textTertiary, marginTop: 3 }}>
-            {history.length} match{history.length !== 1 ? "es" : ""} logged
-          </div>
-        </div>
-        {/* Hidden at ≥1440px because RightPanel's Quick Actions already has
-            a "Log match" button — showing both is duplicated chrome. */}
+      {/* Slice 1 of design overhaul: Hero replaces the old "Feed" page-header.
+          Establishes identity (avatar + name) and the signature metric
+          (ranking points) before any list of activity. Pulse one-liner is
+          folded into Hero — it no longer renders as a standalone strip. */}
+      <div style={{ padding: "20px 20px 14px" }}>
+        <HomeHero t={t} profile={profile} history={history} friends={friends} />
+      </div>
+
+      {/* Temporary slim CTA — bridges the gap until commit C replaces this
+          with the contextual Next Action card. Hidden at ≥1440px because
+          RightPanel's Quick Actions already has a "Log match" button. */}
+      <div style={{ padding: "0 20px 14px" }}>
         <button
           onClick={openLogMatch}
           className="cs-hide-at-rightpanel"
-          style={{ padding: "10px 18px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, flexShrink: 0, letterSpacing: "-0.1px", transition: "opacity 0.15s" }}
+          style={{ padding: "10px 18px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, letterSpacing: "-0.1px", transition: "opacity 0.15s" }}
           onMouseEnter={function(e){e.currentTarget.style.opacity="0.85";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
           + Log match
         </button>
       </div>
-
-      {/* Module 6: community-pulse one-liner. Compact stats from the user's
-          existing local data (history + friends list) — no extra query. Gives
-          a reason to glance at the feed on a no-match day. */}
-      {(function () {
-        if (!history || !history.length) return null;
-        var friendIdSet = new Set((friends || []).map(function (f) { return f.id; }));
-        var oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        var thisWeek = history.filter(function (m) {
-          if (m.status !== "confirmed") return false;
-          var d = m.rawDate ? new Date(m.rawDate).getTime() : 0;
-          return d >= oneWeekAgo;
-        });
-        var friendsThisWeek = thisWeek.filter(function (m) {
-          var poster = m.isTagged ? m.submitterId : (authUser && authUser.id);
-          var opp    = m.opponent_id;
-          return (poster && friendIdSet.has(poster)) || (opp && friendIdSet.has(opp));
-        });
-        if (!thisWeek.length) return null;
-        var msg = friendsThisWeek.length > 0
-          ? friendsThisWeek.length + " friend match" + (friendsThisWeek.length !== 1 ? "es" : "") + " this week · " + thisWeek.length + " in your feed"
-          : thisWeek.length + " confirmed match" + (thisWeek.length !== 1 ? "es" : "") + " this week";
-        return (
-          <div style={{
-            padding: "0 20px 12px", maxWidth: 720,
-            fontSize: 11, color: t.textTertiary,
-            display: "flex", alignItems: "center", gap: 6,
-            letterSpacing: "0.02em",
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
-            <span style={{ fontWeight: 600 }}>This week:</span>
-            <span>{msg}</span>
-          </div>
-        );
-      })()}
 
       {/* Next-challenge banner — single lean card for the most-imminent
           accepted challenge. Full list lives in People → Challenges. */}
