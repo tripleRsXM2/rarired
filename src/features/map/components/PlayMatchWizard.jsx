@@ -539,10 +539,11 @@ export default function PlayMatchWizard({
                   )}
                 </div>
               ) : (
-                {/* Horizontal scrolling carousel of profile cards.
-                    Each card: 80px circle avatar (with accent ring on
-                    select), name + skill below. Scroll-snap + mouse
-                    drag friendly. Big tap target on mobile. */}
+                // Horizontal scrolling carousel of profile cards.
+                // Each card: 80px circle avatar (with accent ring on
+                // select), name + skill below. Scroll-snap + mouse
+                // drag friendly. Big tap target on mobile.
+                <>
                 <div style={{
                   display: "flex",
                   gap: 10,
@@ -654,6 +655,7 @@ export default function PlayMatchWizard({
                   </svg>
                   <span>Slide for more players</span>
                 </div>
+                </>
               )}
 
               {/* When? — chip group for the day/range, drives the
