@@ -265,6 +265,18 @@ export function fetchPlayersInZone(zoneId, limit){
     .limit(l);
 }
 
+// Anonymous-friendly count of public players in a zone. RLS blocks anon
+// SELECT on profiles entirely, so for the signed-out map preview we
+// route through a SECURITY DEFINER RPC that returns just the integer.
+// No PII leaves the DB; the side panel renders that many blurred
+// shapes + a sign-in nudge.
+export async function fetchPublicPlayersCountInZone(zoneId) {
+  if (!zoneId) return { data: 0, error: null };
+  var r = await supabase.rpc("count_public_players_in_zone", { p_zone_id: zoneId });
+  if (r.error) return { data: 0, error: r.error };
+  return { data: r.data || 0, error: null };
+}
+
 // Group counts — one row per zone — for the map surface itself.
 // Cheap: six buckets max.
 export async function fetchZonePlayerCounts(){

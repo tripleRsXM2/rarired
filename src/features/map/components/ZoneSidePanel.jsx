@@ -24,7 +24,7 @@
 import { useEffect, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
-import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "../services/mapService.js";
+import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone } from "../services/mapService.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 
 var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
@@ -60,6 +60,28 @@ export default function ZoneSidePanel({
   useEffect(function(){
     if (!zone) return;
     setLoading(true);
+    // Anonymous viewers can't SELECT profiles via RLS. Fetch just the
+    // count via SECURITY DEFINER RPC and render N blurred placeholder
+    // rows + a sign-in nudge. No PII leaves the DB.
+    if (!authUser) {
+      fetchPublicPlayersCountInZone(zone.id).then(function (r) {
+        var n = (r && r.data) || 0;
+        // Build N anonymous placeholder rows so the blurred-avatar list
+        // has something to render.
+        var stubs = [];
+        for (var i = 0; i < n; i++) {
+          stubs.push({
+            id: "anon-" + zone.id + "-" + i,
+            name: "Player",
+            avatar: "?", avatar_url: null, skill: "",
+            playsHere: false,
+          });
+        }
+        setPlayers(stubs);
+        setLoading(false);
+      });
+      return;
+    }
     var viewer = (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id };
     var zoneReq = fetchPlayersInZone(zone.id, 40);
     var courtReq = selectedCourt
