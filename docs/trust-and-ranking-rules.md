@@ -166,6 +166,83 @@ One-set ranked matches still require everything a best-of-3 requires:
 - not disputed / voided / expired
 - not time-limited / retired
 
+#### Set tie-breaks (Module 7.8 — V1)
+
+A normal set ending **7-6** or **6-7** must record the inner tie-break score for ranked + completed submissions. The tie-break input row reveals inline beneath the set score in the log-match flow whenever the games resolve to 7-6 / 6-7, and clears + drops its data the moment the set score moves away.
+
+Validity rules for the inner tie-break (set tie-breaks, 7-point game):
+- Winner reaches **at least 7** points
+- Winner leads by **at least 2** points
+- Tie-break winner **must match** the games winner — a 7-6 set must be won on the tie-break by the side with 7 games
+
+Examples:
+- ✅ 7-6 (7-4) — valid
+- ✅ 7-6 (8-6) — valid (win-by-2 ≥ 7)
+- ✅ 7-6 (10-8) — valid
+- ✅ 6-7 (4-7) — valid
+- ❌ 7-6 (7-6) — not won by 2
+- ❌ 7-6 (5-3) — winner didn't reach 7
+- ❌ 7-6 (6-4) — winner didn't reach 7
+- ❌ 6-7 (7-4) — inner winner mismatches games winner
+
+| Path | Tie-break details |
+|---|---|
+| Ranked + Completed 7-6 / 6-7 | **required** — submit blocked otherwise (`TIEBREAK_DETAILS_REQUIRED`) |
+| Ranked + Time-limited / Retired | tolerated — partial scores are casual-only anyway |
+| Casual + any | optional — users may enter tie-break detail but aren't forced |
+| Resubmit (after dispute) | always required (resubmit lands as ranked+completed) |
+| Counter-proposal (DisputeModal) | tie-break inputs revealed; round-trips through `current_proposal` jsonb verbatim |
+
+#### Storage shape
+
+`match_history.sets jsonb` is **additively** extended:
+
+```jsonc
+// Pre-V1 row — still valid, renders as "7-6" (no parenthesis)
+{ "you": 7, "them": 6 }
+
+// V1+ row — renders as "7-6 (7-4)"
+{ "you": 7, "them": 6, "tieBreak": { "you": 7, "them": 4 } }
+
+// Match-tiebreak final set — unchanged from before; the games column
+// itself carries the match-tiebreak points (e.g. 10-8 stored as you:10).
+{ "you": 10, "them": 8 }
+```
+
+No `match_format` column, no `score_schema_version`, no migration. Rows missing `tieBreak` render cleanly everywhere.
+
+`serializeSetForDb(set)` is the single chokepoint for all writes — strips half-filled or non-numeric `tieBreak` halves so `{tieBreak: {you:'7', them:''}}` never reaches the DB. `normalizeSetFromDb(set)` is the single chokepoint for all reads (identity today; gives us a place to live-migrate later if the shape ever changes).
+
+#### Stats / standings impact
+
+Tie-break **points** are NOT added to `games_won` / `games_lost` / `set_difference` / `game_difference`. League standings treat a 7-6 (7-4) set the same as any 7-6 — `games += 7` for the winner, `games += 6` for the loser, regardless of inner tie-break score. `recalculate_league_standings` reads `s.you` / `s.them` only.
+
+#### Centralised utility
+
+All tie-break logic lives in `src/features/scoring/utils/tennisScoreValidation.js`:
+- `validateTiebreakScore(tieBreak, { pointsToWin, expectedWinner })` → `{ ok, code, message }`
+- `validateSetScore(set, { requireTiebreakDetails })` — re-runs the tie-break check on a 7-6/6-7 set; surfaces `TIEBREAK_DETAILS_REQUIRED` / `INVALID_TIEBREAK_DETAILS` / `TIEBREAK_WINNER_MISMATCH` codes
+- `validateMatchScore(sets, { matchType, completionType, requireTiebreakDetails, ... })` — top-level validator the UI + service-layer both call
+- `formatSetScore(set)` / `formatMatchScore(sets)` — display formatters routed by every UI surface (feed cards, profile, dispute drawer, notifications, share text)
+- `isTiebreakSet(set)` — UI predicate to decide when to reveal the inline tiebreak input row
+- `serializeSetForDb` / `normalizeSetFromDb` — DB chokepoints
+
+#### DB-layer note + follow-up
+
+The `validate_match_score` BEFORE-INSERT trigger validates **games patterns only** (6-0..6-4 / 7-5 / 7-6 / 10-8 final). It doesn't re-check inner tie-break scores. The JS validator + service-layer guard remain canonical for tie-break details — sufficient for V1 because every legitimate insert path (ScoreModal, DisputeModal, resubmit) routes through them. **Follow-up (V1.1):** harden the trigger to verify `set.tieBreak` shape on ranked confirmed/pending rows so a forced REST POST can't sneak a malformed inner pair past.
+
+#### Out of scope for V1
+
+Intentionally not implemented:
+- no-ad scoring
+- Fast4
+- 8-game pro sets
+- advantage / 9-7 sets
+- doubles-specific scoring
+- point-by-point capture
+- per-tournament custom formats beyond `match_format` + `tiebreak_format` already supported by leagues
+
+
 The 5-3 path remains **invalid** as a completed ranked match — it can only be saved as casual time-limited (which doesn't affect rating).
 
 #### Casual matches and other exclusions
@@ -401,5 +478,6 @@ See `docs/leagues-and-seasons.md` for the full spec.
 - v5 — Match-type separation (2026-04-25). Made the ranked-vs-casual distinction explicit via `match_history.match_type` ('ranked' | 'casual') instead of inferring it from `tourn_name` + `opponent_id`. Server `apply_match_outcome` short-circuits for casual matches — single point of control for "what affects Elo". `validate_match_league` now requires `match_type='ranked'` for league matches. Backfilled every legacy row via the prior heuristic so player Elo / W/L numbers are unchanged.
 - v6 — League mode (2026-04-25). Replaced the hardcoded `match_type='ranked'` requirement on league matches with a per-league `leagues.mode` column (`'ranked'` | `'casual'`). Trigger now compares `match_type` against `league.mode`, allowing casual leagues to host casual matches with their own per-league standings (no global Elo impact). ScoreModal filters its league selector by mode + viewer + opponent membership; CreateLeagueModal exposes the mode choice (locked at creation).
 - v7 — Score validity (2026-04-25, Module 7.6). Added a three-layer score validator: pure client utility (`tennisScoreValidation.js`, 74 unit tests, canonical rules), service-layer guard (`submitMatch` / `resubmitMatch` re-run the validator after match-type clamping), and DB BEFORE-INSERT trigger (`validate_match_score`, mirrors the rules in PL/pgSQL, strict for ranked confirmed/pending, permissive for casual). Introduced explicit `completion_type` UI toggle (Completed / Time-limited / Retired) on casual matches so partial scores can be intentionally logged. Ranked attempts with partial scores surface a "Save as casual time-limited" CTA instead of being silently downgraded or silently rejected. League `match_format` and `tiebreak_format` columns now drive validator behaviour (final-set match-tiebreak gated to `super_tiebreak_final` leagues).
+- v8.2 — Set tie-breaks (2026-04-27, Module 7.8). 7-6 / 6-7 sets now collect the inner tie-break score inline in ScoreModal + DisputeModal (revealed on the set's games shape, dropped automatically when the score moves away). Validator hardening: new `TIEBREAK_WINNER_MISMATCH` code rejects a 7-6 set whose inner pair was won by the wrong side; new public `validateTiebreakScore`, `formatSetScore`, `formatMatchScore`, `normalizeSetFromDb`, `serializeSetForDb`, `isTiebreakSet` helpers. Display: every set-score surface (feed scoreboard cells, dispute drawer, notification scorecard, recent-activity preview, share text) now routes through `formatSetScore` / `formatMatchScore`, so a 7-6 (7-4) set renders consistently with a small superscript on the loser's cell. Storage stays jsonb-additive — old rows without `tieBreak` render as `7-6`. No DB migration; `validate_match_score` trigger continues to validate games only (V1.1 follow-up). Tie-break points do not inflate `games_won` / `set_difference`. 109 score tests + 246 total passing.
 - v8.1 — Match-format weight (2026-04-27, Module 7.7 supplement). Added explicit format-weight multipliers to rating math: one-set 0.60, best-of-3 in 2 sets 1.00, best-of-3 in 3 sets 1.10, best-of-3 with super-tiebreak final 0.85, incomplete 0. Weight is **inferred** from the sets jsonb (no new column on `match_history`); JS classifier `getMatchFormatWeight(sets)` mirrors SQL `_match_format_weight(p_sets jsonb)`. `apply_match_outcome` applies `round(K * (actual - expected) * weight)`. UI: `ScoreModal` surfaces a "ONE SET" notice with the reduced-weight copy for ranked single-set submissions; `RatingInfoModal` gains an 11th section "Match format weight" with the same table. Docs updated. One-set ranked is now formally valid + rating-eligible; the 5-3 path stays casual-only.
 - v8 — CourtSync Rating foundation (2026-04-27, Module 7.7). Renamed "Ranking points" → "CourtSync Rating" in user-facing copy (NOT UTR / NOT a federation ranking). Replaced the flat 1000-for-everyone initial rating with six per-skill bands (800 / 1000 / 1200 / 1400 / 1600 / 1800). Replaced the 20-match settled period with a 5-match calibration window using a 40 / 32 / 24 K-table (provisional 0–2 / provisional 3–4 / established 5+). Each player still applies their own K, so opponent-strength asymmetry stays intact (upset wins gain more, expected wins gain less, etc). New profile columns: `starting_skill_level` / `initial_rating` / `skill_level_locked` / `skill_level_locked_at` / `rating_status` / `confirmed_ranked_match_count`, all locked from client writes. New `initialize_rating(p_skill text)` SECURITY DEFINER RPC bootstraps a profile from onboarding. `apply_match_outcome` rewritten to read the new K-table, increment `confirmed_ranked_match_count`, flip `rating_status` at 5, auto-lock skill on first confirmed ranked match, and derive the displayed `skill` column from `ranking_points` using the band table + 50-point demotion hysteresis (immediate promotion). Pure-JS mirror in `src/features/rating/utils/ratingSystem.js` (80 unit tests). New `RatingInfoModal` (10 sections including the "Opponent strength" section per supplement) is reachable via a `(i)` icon next to the rating eyebrow on Profile + Home heroes. Onboarding step 1 now drives `initialize_rating`. Settings disables skill editing once locked. Uninitialised profiles never display a fake rating and can't log ranked matches. Deferred follow-ups documented inline: rating-event ledger, recalc-on-rollback, admin reset path.
