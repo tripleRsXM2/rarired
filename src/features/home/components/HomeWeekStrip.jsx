@@ -26,15 +26,32 @@ function thisWeek(history) {
   });
 }
 
-function Stat({ t, value, label, isLast, color }) {
+// One stat cell. When onClick is provided, the cell renders as a
+// pointer-cursor button-ish wrapper so the loud number reads as
+// tappable. We don't paint a hover background — the underline on the
+// label is the only affordance. Same visual weight as the static
+// version, just interactive.
+function Stat({ t, value, label, isLast, color, onClick, ariaLabel }) {
+  var clickable = typeof onClick === "function";
+  var handleKey = clickable
+    ? function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }
+    : undefined;
   return (
-    <div style={{
-      flex: 1,
-      minWidth: 0,
-      padding: "0 4px",
-      borderRight: isLast ? "none" : "1px solid " + t.border,
-      textAlign: "center",
-    }}>
+    <div
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={handleKey}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? (ariaLabel || label) : undefined}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        padding: "0 4px",
+        borderRight: isLast ? "none" : "1px solid " + t.border,
+        textAlign: "center",
+        cursor: clickable ? "pointer" : "default",
+        outline: "none",
+      }}>
       <div style={{
         fontSize: "clamp(34px, 5.5vw, 48px)",
         fontWeight: 800,
@@ -52,6 +69,13 @@ function Stat({ t, value, label, isLast, color }) {
         color: t.textTertiary,
         letterSpacing: "0.12em",
         textTransform: "uppercase",
+        // Subtle underline-on-hover via dotted text-decoration when
+        // clickable — keeps the resting state clean but signals
+        // affordance on hover.
+        textDecoration: clickable ? "underline" : "none",
+        textDecorationColor: clickable ? t.border : undefined,
+        textDecorationThickness: "1px",
+        textUnderlineOffset: "3px",
       }}>
         {label}
       </div>
@@ -59,7 +83,7 @@ function Stat({ t, value, label, isLast, color }) {
   );
 }
 
-export default function HomeWeekStrip({ t, history }) {
+export default function HomeWeekStrip({ t, history, onPlayedClick }) {
   var rows = thisWeek(history);
   if (!rows.length) return null;
 
@@ -77,7 +101,11 @@ export default function HomeWeekStrip({ t, history }) {
       alignItems: "stretch",
       paddingTop: 4,
     }}>
-      <Stat t={t} value={played} label="Played" />
+      <Stat
+        t={t} value={played} label="Played"
+        onClick={onPlayedClick}
+        ariaLabel={"View " + played + " matches you played this week"}
+      />
       <Stat t={t} value={wins}   label="Wins" color={t.text} />
       <Stat t={t} value={deltaLabel} label="Form" color={deltaColor} isLast />
     </div>

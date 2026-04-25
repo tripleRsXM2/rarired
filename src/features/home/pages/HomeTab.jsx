@@ -1217,12 +1217,32 @@ export default function HomeTab({
       </div>
 
       {/* WEEK STRIP — three numbers separated by hairlines, no card. Only
-          renders when there's been activity in the last 7 days. */}
+          renders when there's been activity in the last 7 days. The
+          "Played" cell is a button: tapping it opens All activity with
+          the Me filter applied so the user can see exactly the matches
+          that contributed to the count. */}
       <section style={{
         maxWidth: 720, margin: "0 auto",
         padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) clamp(28px, 4vw, 40px)",
       }}>
-        <HomeWeekStrip t={t} history={history} />
+        <HomeWeekStrip
+          t={t}
+          history={history}
+          onPlayedClick={function () {
+            setFeedFilter("me");
+            setFeedExpanded(true);
+            // Wait for the expanded feed to render, then scroll the
+            // user to it. matchMedia prefers-reduced-motion is
+            // respected by smooth scrolling on modern browsers.
+            setTimeout(function () {
+              if (typeof document === "undefined") return;
+              var el = document.querySelector(".cs-fullbleed-feed-wrap");
+              if (el && el.scrollIntoView) {
+                el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }, 80);
+          }}
+        />
       </section>
 
       {/* LEAGUE BAND — full-bleed near-black moment. Escapes the 720px rail
