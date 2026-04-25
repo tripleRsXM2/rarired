@@ -70,12 +70,19 @@ export default function PlayMatchWizard({
     if(step !== 2 || !zoneId) return;
     var cancelled = false;
     setLoading(true);
-    var viewer  = authUser && authUser.id ? authUser.id : null;
-    var blocked = Array.isArray(blockedUserIds) ? blockedUserIds : [];
-    var zoneArg = scope === "everywhere" ? null : zoneId;
-    var zoneReq = fetchPlayersInZone(zoneArg, viewer, 60, blocked);
-    var courtReq = courtName
-      ? fetchPlayersAtCourt(courtName, viewer, 40, blocked)
+    var viewerId = authUser && authUser.id ? authUser.id : null;
+    var blocked  = Array.isArray(blockedUserIds) ? blockedUserIds : [];
+    // Always exclude the viewer themselves — you don't invite
+    // yourself to a match. fetchPlayersInZone takes (zoneId, limit,
+    // excludeIds); fetchPlayersAtCourt takes (courtName, viewer,
+    // limit, excludeIds) — different shapes, mind the params.
+    var excludeForZone  = viewerId ? blocked.concat([viewerId]) : blocked;
+    var zoneArg         = scope === "everywhere" ? null : zoneId;
+    var zoneReq         = fetchPlayersInZone(zoneArg, 60, excludeForZone);
+    // fetchPlayersAtCourt extracts .id from its viewer arg, so pass
+    // the whole authUser object (not just the id string).
+    var courtReq        = courtName
+      ? fetchPlayersAtCourt(courtName, authUser || null, 40, blocked)
       : Promise.resolve({ data: [], error: null });
     Promise.all([zoneReq, courtReq]).then(function(arr){
       if(cancelled) return;
@@ -95,7 +102,11 @@ export default function PlayMatchWizard({
       Object.keys(courtMap).forEach(function(id){
         if(!byId[id]) byId[id] = Object.assign({}, courtMap[id], { playsHere: true });
       });
-      var arr2 = Object.values(byId);
+      // Defensive: drop the viewer in case either service slips them
+      // through. You should never see yourself in your own invite list.
+      var arr2 = Object.values(byId).filter(function(p){
+        return !viewerId || p.id !== viewerId;
+      });
       // Rank: plays-here first, then mapService.scorePlayerForCourt.
       arr2.sort(function(a, b){
         return scorePlayerForCourt(b, courtName, zoneId) - scorePlayerForCourt(a, courtName, zoneId);
