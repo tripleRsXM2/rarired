@@ -1,5 +1,5 @@
 // src/features/home/pages/HomeTab.jsx
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
@@ -124,6 +124,10 @@ function FeedCard({
   // Deep-link anchor: { ref, className } from useDeepLinkHighlight.rowProps.
   // Spread onto the outer card div so scroll-to + pulse target this row.
   rowAnchor,
+  // Slice 5 — set of user_ids the viewer has played ≥5 confirmed
+  // matches against. Used to render a subtle "Rivalry" pill when
+  // this match is between the viewer and a rival.
+  viewerRivalsSet,
 }) {
   // Identity resolvers — who is the "poster" and who is the "opponent" from
   // the viewer's POV, so the right user IDs get wired into the profile links.
@@ -254,6 +258,19 @@ function FeedCard({
   if (m.venue) subtitleParts.push(m.court ? m.venue + " · " + m.court : m.venue);
   var subtitleText = subtitleParts.filter(Boolean).join(" · ");
 
+  // Slice 5 — rivalry flag. True only when (a) the viewer is one of the
+  // two players in this match and (b) the viewer has played the OTHER
+  // side ≥5 confirmed times. Third-party matches in friends' feed don't
+  // qualify because we don't have their shared history.
+  var isRivalryMatch = (function () {
+    if (!viewerRivalsSet || !authUser) return false;
+    var posterId   = m.isTagged ? m.submitterId : (authUser && authUser.id);
+    var opponentId = m.isTagged ? (authUser && authUser.id) : m.opponent_id;
+    if (posterId !== authUser.id && opponentId !== authUser.id) return false;
+    var otherSide = posterId === authUser.id ? opponentId : posterId;
+    return !!otherSide && viewerRivalsSet.has(otherSide);
+  })();
+
   // Compact status pill shown in the header top-right.
   var statusPill = isPending && !isOpponentView ? { label: "Pending",    color: t.orange,       bg: t.orangeSubtle }
                   : isDisputed                  ? { label: "Disputed",   color: t.red,          bg: t.redSubtle }
@@ -334,8 +351,28 @@ function FeedCard({
             </span>
             {isOwn && <span style={{ fontSize: 10, color: t.textTertiary, fontWeight: 500 }}> · You</span>}
           </div>
-          <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {subtitleText}
+          <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 2, letterSpacing: "0.01em", display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              {subtitleText}
+            </span>
+            {/* Slice 5 — subtle rivalry pill: viewer has played the
+                other side ≥5 confirmed times. Sharp accent pill matches
+                the league pill rhythm; "subtle" per design-direction.md
+                so it reads as flavour, not as a header status. */}
+            {isRivalryMatch && (
+              <span
+                title="Rivalry — you've played this opponent 5+ times"
+                style={{
+                  flexShrink: 0,
+                  fontSize: 9, fontWeight: 700,
+                  color: t.accent, background: t.accentSubtle,
+                  border: "1px solid " + t.accent + "33",
+                  padding: "1px 6px", letterSpacing: "0.07em",
+                  textTransform: "uppercase",
+                }}>
+                Rivalry
+              </span>
+            )}
           </div>
         </div>
 
@@ -971,6 +1008,28 @@ export default function HomeTab({
     { id: "demo-3", oppName: "Morgan Davis",  tournName: "Moore Park Open",   date: "Mon",       sets: [{ you: 7, them: 5 }, { you: 6, them: 3 }], result: "win",  playerName: "Casey Moore",  playerAvatar: "CM", isOwn: false, status: "confirmed" },
   ];
 
+  // Slice 5 (design overhaul) — derive the viewer's "rivals" set: linked
+  // opponents the viewer has played ≥5 confirmed matches against. Drives
+  // the subtle "Rivalry" pill on FeedCards. Computed at HomeTab so each
+  // card doesn't re-walk history. Only useful for matches the viewer is
+  // a participant in — third-party feed cards can't be classified
+  // because we don't have those players' shared history client-side.
+  var viewerRivalsSet = useMemo(function () {
+    if (!authUser) return new Set();
+    var counts = {};
+    (history || []).forEach(function (m) {
+      if (m.status !== "confirmed") return;
+      var oppId = m.isTagged ? m.submitterId : m.opponent_id;
+      if (!oppId || oppId === authUser.id) return;
+      counts[oppId] = (counts[oppId] || 0) + 1;
+    });
+    var s = new Set();
+    Object.keys(counts).forEach(function (id) {
+      if (counts[id] >= 5) s.add(id);
+    });
+    return s;
+  }, [history, authUser && authUser.id]);
+
   var feedCardProps = {
     t, authUser, feedLikes, feedLikeCounts, feedComments,
     setFeedLikes, setFeedLikeCounts, setCommentModal, setCommentDraft,
@@ -981,6 +1040,7 @@ export default function HomeTab({
     onOpenInteractions: openInteractions,
     leaguesIndex: leaguesIndex || {},
     onOpenLeague: onOpenLeague,
+    viewerRivalsSet: viewerRivalsSet,
   };
 
   function openLogMatch() {
