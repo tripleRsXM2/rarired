@@ -315,14 +315,14 @@ export default function PlayMatchWizard({
                     onClick={function(){ pickZone(z); }}
                     style={{
                       textAlign:"left",
-                      padding: "20px 18px 22px",
-                      borderRadius: 18,
+                      padding: "14px 14px 16px",
+                      borderRadius: 16,
                       border: "none",
                       background: hexToRgba(t.bgCard, 0.85),
                       color: t.text,
                       cursor:"pointer",
-                      display:"flex", alignItems:"flex-end",
-                      minHeight: 110,
+                      display:"flex", alignItems:"center",
+                      minHeight: 78,
                       position:"relative", overflow:"hidden",
                       transition: "transform 0.14s ease",
                     }}
@@ -352,8 +352,8 @@ export default function PlayMatchWizard({
                     {/* Big bold zone name — only focal point */}
                     <div style={{
                       position:"relative",
-                      fontSize: 18, fontWeight: 900,
-                      letterSpacing: "-0.025em", lineHeight: 1.1,
+                      fontSize: 16, fontWeight: 900,
+                      letterSpacing: "-0.02em", lineHeight: 1.1,
                       color: t.text,
                     }}>{z.name}</div>
                   </button>
@@ -366,7 +366,7 @@ export default function PlayMatchWizard({
           {step === 1 && zone && (
             <div>
               <div style={{
-                fontSize: 11, color: t.textSecondary, marginBottom: 12,
+                fontSize: 11, color: t.textSecondary, marginBottom: 4,
                 display:"flex", alignItems:"center", gap: 6,
               }}>
                 <div style={{
@@ -375,6 +375,20 @@ export default function PlayMatchWizard({
                 <span>{zone.name}</span>
                 <span style={{ color: t.textTertiary }}>·</span>
                 <span>{courts.length} {courts.length === 1 ? "venue" : "venues"}</span>
+              </div>
+              {/* Helpful nudge so users discover the booking-link
+                  affordance — tap-to-pick is the primary action,
+                  the booking icon is secondary and easy to miss. */}
+              <div style={{
+                fontSize: 10.5, color: t.textTertiary,
+                marginBottom: 12, display:"flex", alignItems:"center", gap: 5,
+              }}>
+                <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+                     stroke="currentColor" strokeWidth="1.6"
+                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M11 4h3v3M14 4l-6 6M8 5H5v8h8v-3"/>
+                </svg>
+                <span>Tap the link icon to check times on the venue's site</span>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap: 8 }}>
                 {courts.map(function(c){
