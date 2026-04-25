@@ -791,6 +791,7 @@ export default function App(){
           theme={theme} setTheme={applyTheme}
           profile={currentUser.profile} setProfile={currentUser.setProfile}
           profileDraft={currentUser.profileDraft} setProfileDraft={currentUser.setProfileDraft}
+          profileLoaded={currentUser.profileLoaded}
           editingAvail={currentUser.editingAvail} setEditingAvail={currentUser.setEditingAvail}
           availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
           receivedRequests={social.receivedRequests}

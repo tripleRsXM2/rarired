@@ -20,17 +20,36 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUpload.js";
 import { THEME_OPTIONS } from "../../../lib/theme.js";
 import { track } from "../../../lib/analytics.js";
+import { useEffect } from "react";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
   theme, setTheme,
   profileDraft, setProfileDraft,
+  // profileLoaded — has loadProfile() resolved with real data?
+  // Save is gated on this so a stale draft (sourced from
+  // INITIAL_PROFILE while fetchProfile is still in flight) can never
+  // overwrite populated DB columns. See useCurrentUser.profileLoaded
+  // for the post-mortem on why this guard exists.
+  profileLoaded,
   editingAvail, setEditingAvail,
   availDraft, setAvailDraft,
   receivedRequests,
   onClose,
 }) {
   var navigate=useNavigate();
+
+  // Late-arrival fix: if the user opened Settings before fetchProfile
+  // resolved, profileDraft was snapshotted from INITIAL_PROFILE. Once
+  // the real profile arrives, re-snapshot it into the draft as long as
+  // the user hasn't started editing. We detect "user started editing"
+  // by checking whether the draft already matches the live profile by
+  // identity — if it differs, leave it alone (the user typed something).
+  useEffect(function () {
+    if (!profileLoaded || !profile || !profile.id) return;
+    if (profileDraft && profileDraft.id === profile.id) return;
+    setProfileDraft(profile);
+  }, [profileLoaded, profile && profile.id]);
   var iStyle = inputStyle(t);
 
   // ── Avatar upload state ────────────────────────────────────────────────────
@@ -227,8 +246,10 @@ export default function SettingsScreen({
               <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase"}}>Home zone</label>
               <div style={{position:"relative"}}>
                 <select
+                  disabled={!profileLoaded}
                   value={profile.home_zone||""}
                   onChange={async function(e){
+                    if(!profileLoaded) return; // guard against stale write
                     var nextVal = e.target.value || null;
                     var prev = profile.home_zone||null;
                     if(nextVal===prev) return;
@@ -339,7 +360,12 @@ export default function SettingsScreen({
                 onChange={function(next){setProfileDraft(function(d){return Object.assign({},d,{played_courts:next});});}}/>
             </div>
             <button
+              disabled={!profileLoaded}
+              title={!profileLoaded ? "Loading your profile — try again in a moment" : ""}
               onClick={async function(){
+                // Hard guard against the stale-draft stomp: never write
+                // when the live profile hasn't finished loading.
+                if (!profileLoaded) return;
                 var init2=initials(profileDraft.name||"YN");
                 // Merge order matters. Start from the CURRENT profile
                 // (which holds the live presence toggles + home_zone +
@@ -385,8 +411,14 @@ export default function SettingsScreen({
                   else if(nd.payment_handle) track("payment_handle_added", { method: nd.payment_method || "unknown" });
                 }
               }}
-              style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600,marginTop:4}}>
-              Save changes
+              style={{
+                width:"100%",padding:"12px",borderRadius:8,border:"none",
+                background: profileLoaded ? t.accent : t.border,
+                color:"#fff",fontSize:13,fontWeight:600,marginTop:4,
+                cursor: profileLoaded ? "pointer" : "not-allowed",
+                opacity: profileLoaded ? 1 : 0.65,
+              }}>
+              {profileLoaded ? "Save changes" : "Loading…"}
             </button>
           </div>
         )}
@@ -412,7 +444,9 @@ export default function SettingsScreen({
                 initiallyExpanded={true}
                 onChange={setAvailDraft}/>
               <button
+                disabled={!profileLoaded}
                 onClick={async function(){
+                  if(!profileLoaded) return;
                   setProfile(function(p){return Object.assign({},p,{availability:availDraft});});
                   setEditingAvail(false);
                   if(authUser){
@@ -420,8 +454,14 @@ export default function SettingsScreen({
                     if(res.error)console.error("Availability save error:",res.error);
                   }
                 }}
-                style={{width:"100%",marginTop:14,padding:"12px",borderRadius:8,border:"none",background:t.accent,color:"#fff",fontSize:13,fontWeight:600}}>
-                Save availability
+                style={{
+                  width:"100%",marginTop:14,padding:"12px",borderRadius:8,border:"none",
+                  background: profileLoaded ? t.accent : t.border,
+                  color:"#fff",fontSize:13,fontWeight:600,
+                  cursor: profileLoaded ? "pointer" : "not-allowed",
+                  opacity: profileLoaded ? 1 : 0.65,
+                }}>
+                {profileLoaded ? "Save availability" : "Loading…"}
               </button>
             </div>
           ):(
