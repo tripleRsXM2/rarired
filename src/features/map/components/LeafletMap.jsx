@@ -11,6 +11,12 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+// Marker clustering — at city zoom we have ~52 court markers crammed
+// into a small frame which read as visual noise. The cluster plugin
+// merges nearby markers into a count badge until the user zooms in.
+import "leaflet.markercluster";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { ZONES, ZONE_BY_ID } from "../data/zones.js";
 import { COURTS } from "../data/courts.js";
 
@@ -30,15 +36,14 @@ var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 // (HOME_SVG retired — the home indicator is now baked directly into
 // the zone-number label as a house-shaped badge. See zoneLabelHtml.)
 
-// Build the HTML for a zone label. Broken out so the mount effect and
-// the activity-refresh effect can produce the same markup — keeps the
-// "🔥 N this week" badge in sync with zoneActivity as it streams in.
+// Build the HTML for a zone label. User asked to drop the per-zone
+// numbers from the map — they read as clutter once the side panel
+// (and its zone-numbered title) shipped. Map labels now show the
+// zone NAME only.
 //
-// `isHome` flips the label badge from a plain colored circle to a
-// house-shaped tile (still showing the zone number) so the viewer's
-// home zone reads at a glance — replaces the standalone home pin
-// that used to float above the same number, which was visually
-// distracting (council fix).
+// `isHome` swaps in a small accent-coloured circle with a house glyph
+// — the only home indicator on the map now that the standalone pin
+// + numbered label badge are both retired.
 function zoneLabelHtml(z, activity, isHome) {
   var flame = activity && activity.matches_7d > 0
     ? ('<div style="margin-top:3px;font-size:9.5px;font-weight:700;letter-spacing:0.02em;' +
@@ -46,27 +51,27 @@ function zoneLabelHtml(z, activity, isHome) {
         'text-shadow:none;box-shadow:0 1px 2px rgba(0,0,0,0.2)">🔥 ' +
         activity.matches_7d + ' this week</div>')
     : '';
-  // House-shaped badge: 36×36 svg with a roof + body, the zone number
-  // overlaid in the centre. Plain circle for non-home zones (existing
-  // look). Both keep the same outer ring + drop-shadow so size stays
-  // consistent on the map.
+  // Home badge — circle in the zone's accent colour with a small
+  // house glyph centred. Non-home zones render no badge at all (the
+  // colored polygon underneath already conveys identity, the side
+  // panel carries everything else).
   var badge = isHome
-    ? ('<div style="position:relative;width:36px;height:36px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.25))">' +
-         '<svg width="36" height="36" viewBox="0 0 36 36" fill="none">' +
-           '<path d="M18 4 L31 15 V31 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 V15 Z" ' +
-                 'fill="' + z.color + '" stroke="rgba(255,255,255,0.92)" stroke-width="2.5" stroke-linejoin="round"/>' +
+    ? ('<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';' +
+         'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.92);' +
+         'display:flex;align-items:center;justify-content:center">' +
+         '<svg width="16" height="16" viewBox="0 0 18 18" fill="none">' +
+           '<path d="M3 8l6-5 6 5v6a1 1 0 0 1 -1 1H4a1 1 0 0 1 -1-1V8z" ' +
+                 'stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>' +
+           '<path d="M7 15v-4h4v4" ' +
+                 'stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>' +
          '</svg>' +
-         '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
-                     'padding-top:4px;color:#fff;font-weight:800;font-size:13px;line-height:1">' + z.num + '</div>' +
        '</div>')
-    : ('<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';color:#fff;' +
-         'font-weight:700;font-size:14px;line-height:30px;text-align:center;' +
-         'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.85)">' + z.num + '</div>');
+    : '';
   return (
     '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;pointer-events:none">' +
       badge +
-      '<div style="font-size:10px;font-weight:700;letter-spacing:0.04em;color:#141211;' +
-        'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:130px;line-height:1.15">' +
+      '<div style="font-size:11px;font-weight:700;letter-spacing:0.04em;color:#141211;' +
+        'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:140px;line-height:1.2">' +
         z.name.toUpperCase() + '</div>' +
       flame +
     '</div>'
@@ -158,7 +163,33 @@ export default function LeafletMap({
       map.fitBounds(group.getBounds(), { padding: [24, 24] });
     }
 
-    // Court markers — tap opens CourtInfoCard via the onCourtSelect ref.
+    // Court markers — clustered at low zoom so the city view doesn't
+    // drown in 50+ overlapping pins. Each cluster paints a count badge
+    // ("12") and expands when the user zooms in or taps. Individual
+    // markers behave the same as before (tap opens CourtInfoCard via
+    // onCourtSelect).
+    var clusterGroup = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      // Cluster aggressively at city zoom, ease off as the user
+      // zooms in. spiderfy lets a tight cluster expand into a
+      // halo on tap rather than forcing another zoom-in.
+      spiderfyOnMaxZoom: true,
+      disableClusteringAtZoom: 15,
+      maxClusterRadius: 60,
+      iconCreateFunction: function (cluster) {
+        var n = cluster.getChildCount();
+        return L.divIcon({
+          className: "cs-court-cluster",
+          html:
+            '<div style="width:34px;height:34px;border-radius:50%;background:#fff;' +
+              'border:1.5px solid rgba(20,18,17,0.9);' +
+              'display:flex;align-items:center;justify-content:center;' +
+              'box-shadow:0 2px 6px rgba(0,0,0,0.18);color:#14110f;' +
+              'font:700 13px/1 system-ui,sans-serif">' + n + '</div>',
+          iconSize: [34, 34], iconAnchor: [17, 17],
+        });
+      },
+    });
     COURTS.forEach(function(c){
       var html =
         '<div style="width:22px;height:22px;border-radius:50%;background:#fff;border:1.5px solid rgba(20,18,17,0.9);' +
@@ -168,7 +199,7 @@ export default function LeafletMap({
       var m = L.marker([c.lat, c.lng], {
         icon: L.divIcon({ className: "", html: html, iconSize: [22,22], iconAnchor: [11,11] }),
         zIndexOffset: 1000,
-      }).addTo(map);
+      });
       m.bindTooltip(
         '<div style="font:500 11px/1.3 system-ui,sans-serif"><b>' + c.name + '</b></div>',
         { direction: "top", offset: [0,-10], opacity: 1 }
@@ -176,7 +207,9 @@ export default function LeafletMap({
       m.on("click", function(){
         if(courtSelectRef.current) courtSelectRef.current(c);
       });
+      clusterGroup.addLayer(m);
     });
+    map.addLayer(clusterGroup);
 
     mapRef.current = map;
     return function(){ map.remove(); mapRef.current = null; };
