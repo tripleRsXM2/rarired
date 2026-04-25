@@ -88,24 +88,24 @@ function MatchScoreCard({ t, n, viewerId }) {
 
   return (
     <div style={{
-      marginTop: 8, padding: "8px 10px",
-      background: t.bgTertiary,
-      border: "1px solid " + t.border,
-      borderLeft: "3px solid " + pillColor,
-      borderRadius: 6,
+      marginTop: 8,
+      paddingTop: 8, paddingBottom: 8, paddingLeft: 10,
+      borderTop: "1px solid " + t.border,
+      borderBottom: "1px solid " + t.border,
+      borderLeft: "2px solid " + pillColor,
       display: "flex", alignItems: "center", gap: 10,
     }}>
       <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
         textTransform: "uppercase", color: pillColor,
-        background: pillColor + "18",
-        padding: "2px 7px", borderRadius: 20, flexShrink: 0,
+        flexShrink: 0,
       }}>{pillLabel}</span>
 
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         fontVariantNumeric: "tabular-nums",
-        fontSize: 13, fontWeight: 700, color: t.text,
+        fontSize: 13, fontWeight: 800, color: t.text,
+        letterSpacing: "-0.1px",
         flex: 1, minWidth: 0, overflow: "hidden",
       }}>
         {viewerSets.length === 0 ? (
@@ -118,7 +118,7 @@ function MatchScoreCard({ t, n, viewerId }) {
           return (
             <span key={i} style={{
               color: wonSet ? t.text : t.textTertiary,
-              fontWeight: wonSet ? 700 : 500,
+              fontWeight: wonSet ? 800 : 500,
             }}>
               {s.you}-{s.them}{i < viewerSets.length - 1 ? "," : ""}
             </span>
@@ -128,29 +128,62 @@ function MatchScoreCard({ t, n, viewerId }) {
 
       {m.tourn_name && m.tourn_name !== "Casual Match" && (
         <span style={{
-          fontSize: 10, color: t.textTertiary, flexShrink: 0,
+          fontSize: 9, fontWeight: 800, letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: t.textTertiary, flexShrink: 0,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          maxWidth: 80,
+          maxWidth: 100,
+          paddingRight: 10,
         }}>{m.tourn_name}</span>
       )}
     </div>
   );
 }
 
+// Editorial text-button — underline + ALL-CAPS uppercase label.
+// `color` only colors the text + underline; no fill, no rounded chrome.
+// Used for secondary / tertiary inline CTAs across all notif row types.
 function ctaButton(t, color, subtle, label, onClick) {
   return (
     <button
       onClick={function (e) { e.stopPropagation(); onClick(e); }}
       style={{
         display: "inline-block",
-        marginTop: 8, padding: "5px 13px",
-        borderRadius: 6,
-        border: "1px solid " + color + "55",
-        background: subtle ? color + "18" : "transparent",
-        color: color, fontSize: 11, fontWeight: 600,
+        marginTop: 8,
+        padding: "0 0 2px 0",
+        borderRadius: 0,
+        background: "transparent",
+        border: "none",
+        borderBottom: "1px solid " + color,
+        color: color,
+        fontSize: 10, fontWeight: 800,
+        letterSpacing: "0.12em", textTransform: "uppercase",
         cursor: "pointer", transition: "opacity 0.13s",
       }}
-      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.75"; }}
+      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
+      onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+    >{label}</button>
+  );
+}
+
+// Editorial primary action button — used for the inline "Review →"
+// "Open challenge →" "Review pact →" CTAs that drive critical actions.
+// Filled rectangle, ALL-CAPS, retains accent fill so it draws the eye
+// in a list of muted text-button CTAs.
+function primaryCta(t, color, label, onClick) {
+  return (
+    <button
+      onClick={function (e) { e.stopPropagation(); onClick(e); }}
+      style={{
+        display: "inline-block", marginTop: 8,
+        padding: "7px 14px", borderRadius: 6,
+        border: "none",
+        background: color, color: "#fff",
+        fontSize: 10, fontWeight: 800,
+        letterSpacing: "0.12em", textTransform: "uppercase",
+        cursor: "pointer", transition: "opacity 0.13s",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
       onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
     >{label}</button>
   );
@@ -193,8 +226,8 @@ function DismissBtn({ t, onDismiss }) {
 function SectionLabel({ label, t }) {
   return (
     <div style={{
-      padding: "9px 16px 6px",
-      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+      padding: "12px 16px 8px",
+      fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
       textTransform: "uppercase", color: t.textTertiary,
       background: t.bg, borderBottom: "1px solid " + t.border,
     }}>{label}</div>
@@ -433,60 +466,57 @@ function NotifRow({
               Opens ActionReviewDrawer which shows the match details and lets
               the recipient Confirm / Dispute / Mark "not my match" in one
               place — same flow as every other review-worthy notification. */}
-          {n.type === "match_tag" && !n.tag_status && (
-            <button
-              onClick={function (e) {
-                e.stopPropagation();
-                if (!n.read) onRead(n.id);
-                if (onReviewMatch) onReviewMatch(n);
-              }}
-              style={{
-                display: "inline-block", marginTop: 8,
-                padding: "5px 14px", borderRadius: 6,
-                border: "none",
-                background: t.accent, color: "#fff",
-                fontSize: 11, fontWeight: 700,
-                cursor: "pointer", transition: "opacity 0.13s",
-                letterSpacing: "0.01em",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >Review →</button>
-          )}
+          {n.type === "match_tag" && !n.tag_status && primaryCta(t, t.accent, "Review →", function (e) {
+            if (!n.read) onRead(n.id);
+            if (onReviewMatch) onReviewMatch(n);
+          })}
           {n.type === "match_tag" && n.tag_status === "accepted" && (
-            <div style={{ fontSize: 11, color: t.green, marginTop: 5, fontWeight: 600 }}>✓ Confirmed</div>
+            <div style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+              textTransform: "uppercase", color: t.green,
+              marginTop: 6,
+            }}>Confirmed</div>
           )}
           {n.type === "match_tag" && n.tag_status === "declined" && (
-            <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 5 }}>Declined</div>
+            <div style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+              textTransform: "uppercase", color: t.textTertiary,
+              marginTop: 6,
+            }}>Declined</div>
           )}
 
           {/* friend_request — inline accept/decline if handlers provided */}
           {n.type === "friend_request" && (
-            <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 9, alignItems: "center" }}>
               {onAcceptFriendRequest
                 ? <button
                     onMouseDown={function (e) { e.stopPropagation(); onAcceptFriendRequest(n); }}
                     style={{
-                      padding: "5px 14px", borderRadius: 6, border: "none",
+                      padding: "7px 14px", borderRadius: 6, border: "none",
                       background: t.accent, color: "#fff",
-                      fontSize: 12, fontWeight: 600, cursor: "pointer",
-                      transition: "opacity 0.15s",
+                      fontSize: 10, fontWeight: 800,
+                      letterSpacing: "0.12em", textTransform: "uppercase",
+                      cursor: "pointer", transition: "opacity 0.15s",
                     }}
                     onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
                     onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
                   >Accept</button>
-                : ctaButton(t, t.accent, false, "View requests →", function () { navigate("/people/requests"); setShowNotifications(false); })
+                : ctaButton(t, t.text, false, "View requests →", function () { navigate("/people/requests"); setShowNotifications(false); })
               }
               {onDeclineFriendRequest && (
                 <button
                   onMouseDown={function (e) { e.stopPropagation(); onDeclineFriendRequest(n); }}
                   style={{
-                    padding: "5px 12px", borderRadius: 6,
-                    border: "1px solid " + t.border, background: "transparent",
-                    color: t.textSecondary, fontSize: 12, fontWeight: 500,
+                    padding: "0 0 2px 0",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: "1px solid " + t.textTertiary,
+                    color: t.textTertiary,
+                    fontSize: 10, fontWeight: 800,
+                    letterSpacing: "0.12em", textTransform: "uppercase",
                     cursor: "pointer", transition: "opacity 0.15s",
                   }}
-                  onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.7"; }}
+                  onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
                   onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
                 >Decline</button>
               )}
@@ -502,26 +532,10 @@ function NotifRow({
           {n.type === "match_reminder" && ctaButton(t, t.orange, true, "View in feed →", goFeed)}
 
           {/* dispute / correction — opens in-context review drawer, no navigation */}
-          {(n.type === "match_disputed" || n.type === "match_correction_requested" || n.type === "match_counter_proposed") && (
-            <button
-              onClick={function (e) {
-                e.stopPropagation();
-                if (!n.read) onRead(n.id);
-                if (onReviewMatch) onReviewMatch(n);
-              }}
-              style={{
-                display: "inline-block", marginTop: 8,
-                padding: "5px 14px", borderRadius: 6,
-                border: "none",
-                background: t.accent, color: "#fff",
-                fontSize: 11, fontWeight: 700,
-                cursor: "pointer", transition: "opacity 0.13s",
-                letterSpacing: "0.01em",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >Review →</button>
-          )}
+          {(n.type === "match_disputed" || n.type === "match_correction_requested" || n.type === "match_counter_proposed") && primaryCta(t, t.orange, "Review →", function (e) {
+            if (!n.read) onRead(n.id);
+            if (onReviewMatch) onReviewMatch(n);
+          })}
 
           {/* voided / demoted — soft CTA */}
           {(n.type === "match_voided" || n._demoted) && (
@@ -531,9 +545,11 @@ function NotifRow({
           {/* match_confirmed: positive feedback + deep-link */}
           {n.type === "match_confirmed" && (
             <>
-              <div style={{ fontSize: 11, color: t.green, marginTop: 5, fontWeight: 600 }}>
-                Stats updated ✓
-              </div>
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase", color: t.green,
+                marginTop: 6,
+              }}>Stats updated</div>
               {ctaButton(t, t.green, true, "View in feed →", goFeed)}
             </>
           )}
@@ -556,24 +572,10 @@ function NotifRow({
           {/* Module 4: challenge notifications all land in the Challenges
               sub-tab where the right action lives. challenge_received is
               "action" so it gets primary styling. */}
-          {n.type === "challenge_received" && (
-            <button
-              onClick={function (e) {
-                e.stopPropagation();
-                if (!n.read) onRead(n.id);
-                goChallenges(e);
-              }}
-              style={{
-                display: "inline-block", marginTop: 8,
-                padding: "5px 14px", borderRadius: 6,
-                border: "none", background: t.accent, color: "#fff",
-                fontSize: 11, fontWeight: 700, cursor: "pointer",
-                transition: "opacity 0.13s", letterSpacing: "0.01em",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >Open challenge →</button>
-          )}
+          {n.type === "challenge_received" && primaryCta(t, t.accent, "Open challenge →", function (e) {
+            if (!n.read) onRead(n.id);
+            goChallenges(e);
+          })}
           {n.type === "challenge_accepted" && (
             ctaButton(t, t.green, true, "Log result →", goChallenges)
           )}
@@ -596,20 +598,10 @@ function NotifRow({
           {/* Tindis — pact deep-links. pact_proposed is "action" so it gets
               primary styling; the other pact_* are "important" with more
               muted CTAs. All of them carry entity_id = pact id in state. */}
-          {n.type === "pact_proposed" && (
-            <button
-              onClick={function (e) { e.stopPropagation(); if (!n.read) onRead(n.id); goTindis(e); }}
-              style={{
-                display: "inline-block", marginTop: 8,
-                padding: "5px 14px", borderRadius: 6,
-                border: "none", background: t.accent, color: "#fff",
-                fontSize: 11, fontWeight: 700, cursor: "pointer",
-                transition: "opacity 0.13s", letterSpacing: "0.01em",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >Review pact →</button>
-          )}
+          {n.type === "pact_proposed" && primaryCta(t, t.accent, "Review pact →", function (e) {
+            if (!n.read) onRead(n.id);
+            goTindis(e);
+          })}
           {n.type === "pact_claimed" && (
             ctaButton(t, t.accent, true, "Re-affirm →", goTindis)
           )}
@@ -750,10 +742,11 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
                     if (onReviewMatch) onReviewMatch(primary);
                   }}
                   style={{
-                    padding: "5px 14px", borderRadius: 6,
+                    padding: "7px 14px", borderRadius: 6,
                     border: "none",
                     background: accent, color: "#fff",
-                    fontSize: 11, fontWeight: 700,
+                    fontSize: 10, fontWeight: 800,
+                    letterSpacing: "0.12em", textTransform: "uppercase",
                     cursor: "pointer", transition: "opacity 0.13s",
                   }}
                   onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
@@ -998,12 +991,15 @@ export default function NotificationsPanel({
       >
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div style={{
-          padding: "16px 16px 13px",
+          padding: "18px 16px 14px",
           borderBottom: "1px solid " + t.border,
-          display: "flex", justifyContent: "space-between", alignItems: "center",
+          display: "flex", justifyContent: "space-between", alignItems: "baseline",
           flexShrink: 0,
         }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.2px" }}>
+          <span style={{
+            fontSize: 18, fontWeight: 800, color: t.text,
+            letterSpacing: "-0.4px", lineHeight: 1,
+          }}>
             Notifications
           </span>
           {hasMarkable && (
@@ -1011,11 +1007,13 @@ export default function NotificationsPanel({
               onClick={_markAllRead}
               style={{
                 background: "none", border: "none",
-                color: t.accent, fontSize: 12, fontWeight: 600,
-                cursor: "pointer", padding: "2px 0",
+                color: t.text, fontSize: 10, fontWeight: 800,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                borderBottom: "1px solid " + t.text,
+                cursor: "pointer", padding: "0 0 2px 0",
                 transition: "opacity 0.13s",
               }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.7"; }}
+              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
               onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
             >Mark all read</button>
           )}
@@ -1027,11 +1025,24 @@ export default function NotificationsPanel({
             <div style={{
               display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center",
-              padding: "52px 24px", gap: 10,
+              padding: "60px 24px", gap: 12,
             }}>
-              <div style={{ fontSize: 28, lineHeight: 1 }}>🎾</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>You're all caught up.</div>
-              <div style={{ fontSize: 12, color: t.textTertiary, textAlign: "center", maxWidth: 200 }}>
+              <div style={{ fontSize: 32, lineHeight: 1 }}>🎾</div>
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                textTransform: "uppercase", color: t.textTertiary,
+                marginTop: 4,
+              }}>All caught up</div>
+              <div style={{
+                fontSize: 18, fontWeight: 800, color: t.text,
+                letterSpacing: "-0.4px", lineHeight: 1.1,
+                textAlign: "center",
+              }}>You're clear.</div>
+              <div style={{
+                fontSize: 12, color: t.textSecondary,
+                textAlign: "center", maxWidth: 220, lineHeight: 1.5,
+                letterSpacing: "-0.1px",
+              }}>
                 New activity, match results, and requests will show up here.
               </div>
             </div>
