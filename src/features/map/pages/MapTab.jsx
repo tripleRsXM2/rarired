@@ -154,36 +154,21 @@ export default function MapTab({
   return (
     <div className="cs-map-frame" style={{ width:"100%", background: t.bg }}>
 
-      {/* The map — wrapped in a CSS-mask container so the basemap
-          PIXELS dissolve to transparent at the edges (rather than
-          painting darkness over them, which v1-v6 tried with limited
-          success). The mask cuts the corners of the Leaflet view so
-          the page background shows through, producing the Apple Maps
-          / Strava "map fades into the frame" feel.
-
-          Mask is radial: full-opaque from centre out to 60% radius,
-          then a 35%-wide feather to fully transparent at the very
-          corner. WebkitMaskImage + maskImage for cross-browser. */}
-      <div style={{
-        position:"absolute", inset:0,
-        WebkitMaskImage: "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
-        maskImage:       "radial-gradient(ellipse 92% 92% at 50% 50%, #000 60%, transparent 96%)",
-      }}>
-        <LeafletMap
-          t={t} theme={theme}
-          hovered={hovered} selected={selected}
-          homeZone={homeZone}
-          zoneActivity={zoneActivity}
-          showHomes={layers.homes}
-          showCourts={layers.courts}
-          showActivity={layers.activity}
-          showZoneNames={layers.zoneNames}
-          mapThemeOverride={layers.mapTheme}
-          onHover={setHovered}
-          onSelect={handleSelect}
-          onCourtSelect={handleCourtSelect}
-        />
-      </div>
+      {/* The map */}
+      <LeafletMap
+        t={t} theme={theme}
+        hovered={hovered} selected={selected}
+        homeZone={homeZone}
+        zoneActivity={zoneActivity}
+        showHomes={layers.homes}
+        showCourts={layers.courts}
+        showActivity={layers.activity}
+        showZoneNames={layers.zoneNames}
+        mapThemeOverride={layers.mapTheme}
+        onHover={setHovered}
+        onSelect={handleSelect}
+        onCourtSelect={handleCourtSelect}
+      />
 
       {/* Edge-fade vignette — non-interactive presentation polish.
           v1 used gradients fading to t.bg, but on light themes the
@@ -195,10 +180,6 @@ export default function MapTab({
           themes get a deeper shadow (the basemap is already dark, so
           we need more contrast at the edge). pointer-events:none
           so click-throughs are unaffected. */}
-      {/* (v6 four-edge gradient divs retired — replaced by the CSS
-          mask on the LeafletMap wrapper above. Mask provides a real
-          dissolve effect at the basemap pixel level, which is what
-          v1-v6 were all approximating with overlays.) */}
 
       {/* Title pill — sits top-left. Leaflet zoom control retired
           so we sit flush to the left edge. */}
