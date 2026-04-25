@@ -418,12 +418,13 @@ export default function MapTab({
             window.alert("Play Match flow — coming soon. We'll wrap a guided wizard around the existing zone → court → player picker.");
           }
         }}
-        aria-label="Play match"
+        aria-label="Play Match"
         style={{
           position:"absolute",
           left:"50%",
-          // Sit above the attribution + iOS safe-area.
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 22px)",
+          // Sit above the attribution + iOS home indicator with
+          // proper breathing room. 22px was hugging the home bar.
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 38px)",
           transform:"translateX(-50%)",
           zIndex: 550,
           minWidth: 220, height: 56,
@@ -446,16 +447,7 @@ export default function MapTab({
         onMouseDown={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(1px) scale(0.98)"; }}
         onMouseUp={function(e){ e.currentTarget.style.transform = "translateX(-50%)"; }}
         onMouseLeave={function(e){ e.currentTarget.style.transform = "translateX(-50%)"; }}>
-        {/* Tennis-ball glyph — small, decorative, line-art consistent
-            with the rest of the icon system (no emoji per CLAUDE.md). */}
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
-             stroke="currentColor" strokeWidth="1.6"
-             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="9" cy="9" r="6.5"/>
-          <path d="M3 6.5 c2.5 1 5 3 6.5 6.5"/>
-          <path d="M15 6.5 c-2.5 1 -5 3 -6.5 6.5"/>
-        </svg>
-        <span>Play match</span>
+        Play Match
       </button>
 
       <CourtInfoCard t={t} court={selectedCourt}
