@@ -539,7 +539,21 @@ export default function PlayMatchWizard({
                   )}
                 </div>
               ) : (
-                <div style={{ display:"flex", flexDirection:"column", gap: 6 }}>
+                {/* Horizontal scrolling carousel of profile cards.
+                    Each card: 80px circle avatar (with accent ring on
+                    select), name + skill below. Scroll-snap + mouse
+                    drag friendly. Big tap target on mobile. */}
+                <div style={{
+                  display: "flex",
+                  gap: 10,
+                  overflowX: "auto",
+                  overflowY: "hidden",
+                  paddingBottom: 6,
+                  scrollSnapType: "x mandatory",
+                  WebkitOverflowScrolling: "touch",
+                  // Hide scrollbar but keep functionality.
+                  scrollbarWidth: "thin",
+                }}>
                   {players.map(function(p){
                     var isSel = selectedIds.indexOf(p.id) !== -1;
                     var disabled = !isSel && selectedIds.length >= MAX_SELECT;
@@ -548,26 +562,28 @@ export default function PlayMatchWizard({
                         onClick={function(){ togglePlayer(p); }}
                         disabled={disabled}
                         style={{
-                          textAlign:"left",
-                          padding:"10px 14px",
-                          borderRadius: 14,
-                          background: isSel ? t.accentSubtle : t.bgTertiary,
-                          border:"none",
+                          flexShrink: 0,
+                          scrollSnapAlign: "start",
+                          width: 112,
+                          padding: "10px 6px 12px",
+                          borderRadius: 16,
+                          background: isSel ? hexToRgba(t.accent, 0.12) : "transparent",
+                          border: "none",
                           cursor: disabled ? "not-allowed" : "pointer",
-                          opacity: disabled ? 0.45 : 1,
-                          display:"flex", alignItems:"center", gap: 12,
-                          transition: "background 0.15s, transform 0.1s",
+                          opacity: disabled ? 0.4 : 1,
+                          display:"flex", flexDirection:"column",
+                          alignItems:"center", gap: 8,
+                          transition: "background 0.15s",
                         }}>
-                        {/* Avatar with selection ring (instead of a
-                            separate checkbox — selection transforms
-                            the avatar itself). */}
+                        {/* Avatar with selection ring */}
                         <div style={{
-                          width: 48, height: 48,
-                          padding: 3,
+                          position:"relative",
+                          width: 80, height: 80,
+                          padding: isSel ? 4 : 0,
                           borderRadius:"50%",
                           background: isSel ? t.accent : "transparent",
                           flexShrink: 0,
-                          transition: "background 0.15s",
+                          transition: "background 0.15s, padding 0.15s",
                         }}>
                           <div style={{
                             width:"100%", height:"100%",
@@ -576,40 +592,67 @@ export default function PlayMatchWizard({
                             background: t.bgCard,
                             display:"flex", alignItems:"center", justifyContent:"center",
                           }}>
-                            <PlayerAvatar size={42} profile={p}/>
+                            <PlayerAvatar size={isSel ? 72 : 80} profile={p}/>
                           </div>
+                          {isSel && (
+                            <div style={{
+                              position:"absolute", bottom: 0, right: 0,
+                              width: 24, height: 24, borderRadius: "50%",
+                              background: t.accent, color: t.accentText || "#fff",
+                              border: "2px solid " + t.bgCard,
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              fontSize: 12, fontWeight: 900,
+                            }}>✓</div>
+                          )}
                         </div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{
-                            fontSize: 14, fontWeight: 700,
-                            color: t.text,
-                            letterSpacing:"-0.01em", lineHeight: 1.2,
-                            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                          }}>{p.name || p.username || p.full_name || "Player"}</div>
-                          <div style={{
-                            fontSize: 11, color: t.textSecondary,
-                            marginTop: 4,
-                            display:"flex", gap: 6, alignItems:"center", flexWrap:"wrap",
+                        {/* Name */}
+                        <div style={{
+                          width: "100%",
+                          fontSize: 12, fontWeight: 700,
+                          color: t.text, letterSpacing:"-0.01em",
+                          lineHeight: 1.2,
+                          textAlign:"center",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                          padding: "0 4px",
+                        }}>
+                          {firstName(p.name || p.username || p.full_name || "Player")}
+                        </div>
+                        {/* Skill pill */}
+                        {(p.skill || p.skill_level) ? (
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 999,
+                            background: hexToRgba(t.bgCard, 0.78),
+                            color: t.textSecondary,
+                            fontSize: 9.5, fontWeight: 800,
+                            letterSpacing:"0.04em",
+                            textTransform:"uppercase",
                           }}>
-                            {(p.skill || p.skill_level) && (
-                              <span style={{
-                                padding: "1px 7px", borderRadius: 8,
-                                background: t.bg, color: t.textSecondary,
-                                fontSize: 10, fontWeight: 700, letterSpacing:"0.02em",
-                              }}>{p.skill || p.skill_level}</span>
-                            )}
-                            {p.playsHere && (
-                              <span style={{
-                                fontSize: 9, fontWeight:800, color: t.accent,
-                                letterSpacing:"0.06em",
-                                textTransform:"uppercase",
-                              }}>· Plays here</span>
-                            )}
-                          </div>
-                        </div>
+                            {p.skill || p.skill_level}
+                          </span>
+                        ) : (
+                          <span style={{ height: 18 }}/>
+                        )}
+                        {p.playsHere && (
+                          <span style={{
+                            fontSize: 8.5, fontWeight: 800, color: t.accent,
+                            letterSpacing: "0.08em", textTransform:"uppercase",
+                          }}>· Plays here</span>
+                        )}
                       </button>
                     );
                   })}
+                </div>
+                <div style={{
+                  fontSize: 10.5, color: t.textTertiary,
+                  marginTop: 4, letterSpacing: "0.02em",
+                  display: "flex", alignItems: "center", gap: 4,
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+                       stroke="currentColor" strokeWidth="1.6"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 9h12M11 5l4 4-4 4"/>
+                  </svg>
+                  <span>Slide for more players</span>
                 </div>
               )}
 
