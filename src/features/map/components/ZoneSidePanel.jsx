@@ -48,6 +48,10 @@ export default function ZoneSidePanel({
   // the user's mental model of "this is my current workspace".
   var [selectedCourt, setSelectedCourt] = useState(null);
   var [selectedIds, setSelectedIds]     = useState([]);
+  // Player list scope: "zone" (default, home_zone match in this zone)
+  // or "everywhere" (whole user base, ranked the same way). Lets the
+  // viewer pitch a match at a court to someone who isn't a local.
+  var [scope, setScope] = useState("zone");
 
   // Clear selection whenever the panel closes / switches zones.
   useEffect(function () {
@@ -88,7 +92,13 @@ export default function ZoneSidePanel({
     }
     var viewer = (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id };
     var blocked = blockedUserIds || [];
-    var zoneReq = fetchPlayersInZone(zone.id, 40, blocked);
+    // Scope = "everywhere" widens the roster to all users (not zone-
+    // filtered). Lets the viewer pitch a match at a court to someone
+    // who isn't a local. Pass null zoneId to fetchPlayersInZone — it
+    // skips the home_zone filter when zoneId is falsy.
+    var zoneReq = scope === "everywhere"
+      ? fetchPlayersInZone(null, 80, blocked.concat(authUser && authUser.id ? [authUser.id] : []))
+      : fetchPlayersInZone(zone.id, 40, blocked);
     var courtReq = selectedCourt
       ? fetchPlayersAtCourt(selectedCourt, viewer, 40, blocked)
       : Promise.resolve({ data: [] });
@@ -124,7 +134,7 @@ export default function ZoneSidePanel({
       setPlayers(scored);
       setLoading(false);
     });
-  },[zone && zone.id, selectedCourt, homeZone, authUser && authUser.id]);
+  },[zone && zone.id, selectedCourt, homeZone, authUser && authUser.id, scope]);
 
   // Same optimistic-you-are-home hack as before — preserves the UX
   // where setting home immediately lists you in the zone.
@@ -181,7 +191,11 @@ export default function ZoneSidePanel({
       boxShadow:"-8px 0 32px rgba(0,0,0,0.06)",
     }}>
 
-      {/* Header */}
+      {/* Header — inline home-toggle next to the title (council fix:
+          the old "Set as home / Clear" footer button was too prominent
+          for what's a one-tap toggle). Same icon doubles as indicator
+          and action: filled-accent when this zone is the viewer's home,
+          outlined neutral otherwise. */}
       <div style={{ padding:"20px 20px 16px", borderBottom:"1px solid "+t.border }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
           <div style={{ display:"flex", gap:12, alignItems:"center", flex:1, minWidth:0 }}>
@@ -191,9 +205,33 @@ export default function ZoneSidePanel({
               color:"#fff", fontWeight:700, fontSize:16, flexShrink:0,
               boxShadow:"0 0 0 3px "+t.bgCard,
             }}>{zone.num}</div>
-            <div style={{ minWidth:0 }}>
+            <div style={{ minWidth:0, flex:1 }}>
               <div style={{ fontSize:10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom:2 }}>Zone {zone.num}</div>
-              <div style={{ fontSize:18, fontWeight:700, color:t.text, letterSpacing:"-0.02em", lineHeight:1.15 }}>{zone.name}</div>
+              <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+                <div style={{ fontSize:18, fontWeight:700, color:t.text, letterSpacing:"-0.02em", lineHeight:1.15, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+                  {zone.name}
+                </div>
+                {canSetHome && (
+                  <button
+                    onClick={function(){
+                      if(isHome) onClearHome && onClearHome();
+                      else onSetHome && onSetHome(zone.id);
+                    }}
+                    aria-label={isHome ? "Clear home zone" : "Set as home zone"}
+                    title={isHome ? "Your home zone — tap to clear" : "Tap to set as your home zone"}
+                    style={{
+                      width:28, height:28, padding:0, flexShrink:0,
+                      borderRadius:"50%",
+                      border:"1px solid "+(isHome ? t.accent : t.border),
+                      background: isHome ? t.accent : "transparent",
+                      color: isHome ? t.accentText : t.textTertiary,
+                      display:"inline-flex", alignItems:"center", justifyContent:"center",
+                      cursor:"pointer", transition:"background 0.12s, color 0.12s, border-color 0.12s",
+                    }}>
+                    {NAV_ICONS.homeCourt(14)}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -298,17 +336,40 @@ export default function ZoneSidePanel({
           </div>
         )}
 
-        {/* Players — always the full zone roster. When a court is
-            selected, home-court players float to the top with a small
-            house icon; everyone else stays below so users can still
-            pitch a match at that court to someone new. */}
-        <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-          <span>{selectedCourt ? "Players in this zone · home first" : "Players in this zone"}</span>
+        {/* Players list — scope toggle: "In zone" (default, home_zone match)
+            vs "Everywhere" (whole user base). User feedback: sometimes
+            you want to pitch a match at a court to someone who isn't a
+            local. Court selection still floats home-court players to the
+            top via the score function. */}
+        <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+          <span>Players</span>
           {selectedCount > 0 && (
             <span style={{ fontSize:10, fontWeight:700, color:t.accent, textTransform:"none", letterSpacing:0 }}>
               {selectedCount} / {MAX_SELECT} selected
             </span>
           )}
+        </div>
+        <div style={{ display:"flex", gap:5, marginBottom:8 }}>
+          {[
+            { id:"zone",       label:"In zone" },
+            { id:"everywhere", label:"Everywhere" },
+          ].map(function(s){
+            var on = scope === s.id;
+            return (
+              <button key={s.id}
+                onClick={function(){ setScope(s.id); setSelectedIds([]); }}
+                style={{
+                  flex:1, padding:"6px 10px", borderRadius:7,
+                  border:"1px solid "+(on ? t.accent : t.border),
+                  background: on ? t.accentSubtle : "transparent",
+                  color: on ? t.accent : t.textSecondary,
+                  fontSize:11, fontWeight: on ? 700 : 500,
+                  cursor:"pointer",
+                }}>
+                {s.label}
+              </button>
+            );
+          })}
         </div>
         {/* Anonymous nudge: signed-out viewers see blurred avatars + names
             so they can preview that "people are here" but not identify
@@ -326,9 +387,11 @@ export default function ZoneSidePanel({
           <div style={{ fontSize:12, color:t.textTertiary }}>Loading…</div>
         ) : displayPlayers.length === 0 ? (
           <div style={{ fontSize:12, color:t.textTertiary, lineHeight:1.45 }}>
-            {selectedCourt
-              ? "No one has tagged this court yet. Log a match here to change that."
-              : ("No one has set this as their home yet." + (canSetHome && !isHome ? " Be the first." : ""))}
+            {scope === "everywhere"
+              ? "No players found yet. Try inviting friends to join."
+              : selectedCourt
+                ? "No one has tagged this court yet. Log a match here to change that."
+                : ("No one has set this as their home yet." + (canSetHome && !isHome ? " Be the first." : ""))}
           </div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
@@ -413,27 +476,8 @@ export default function ZoneSidePanel({
         )}
       </div>
 
-      {/* Footer — home toggle always present; action bar layered on top
-          when there's a selection. */}
-      <div style={{ padding:"12px 20px", borderTop:"1px solid "+t.border }}>
-        <button
-          onClick={function(){
-            if(!canSetHome) return;
-            if(isHome) onClearHome && onClearHome();
-            else onSetHome && onSetHome(zone.id);
-          }}
-          disabled={!canSetHome}
-          style={{
-            width:"100%", padding:"10px",
-            background: isHome ? "transparent" : t.accent,
-            color: isHome ? t.accent : t.accentText,
-            border: isHome ? ("1px solid "+t.accent) : "none",
-            borderRadius:8, cursor: canSetHome ? "pointer" : "not-allowed",
-            fontSize:12, fontWeight:700, opacity: canSetHome ? 1 : 0.5,
-          }}>
-          {isHome ? "✓ Your home area · Clear" : "Set as home area"}
-        </button>
-      </div>
+      {/* (Home toggle now lives inline next to the zone title, see
+          header above — no footer button.) */}
 
       {/* Sticky action bar — visible once a player is selected. The
           single Message CTA covers doubles (≥1 recipient) and lets the

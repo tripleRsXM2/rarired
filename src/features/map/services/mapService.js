@@ -267,11 +267,14 @@ export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
 // "Players here" list. Anyone whose profile.home_zone matches is returned.
 // `excludeIds` (optional) filters out specific user ids — used by the
 // caller to drop blocked users before they ever render.
+// `zoneId` null = no zone filter (used for the "Everywhere" toggle in
+// ZoneSidePanel, which widens the roster to anyone with a home_zone).
 export function fetchPlayersInZone(zoneId, limit, excludeIds){
   var l = limit || 20;
   var q = supabase.from("profiles")
-    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone")
-    .eq("home_zone", zoneId);
+    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone");
+  if (zoneId) q = q.eq("home_zone", zoneId);
+  else        q = q.not("home_zone", "is", null); // "Everywhere" still requires a zone — skip ghosts
   if (excludeIds && excludeIds.length) {
     q = q.not("id", "in", "(" + excludeIds.join(",") + ")");
   }

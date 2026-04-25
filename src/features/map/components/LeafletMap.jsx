@@ -27,23 +27,44 @@ function tileUrlFor(theme){
 
 var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="17" y1="9" x2="17" y2="15"/></svg>';
 
-var HOME_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"/></svg>';
+// (HOME_SVG retired — the home indicator is now baked directly into
+// the zone-number label as a house-shaped badge. See zoneLabelHtml.)
 
 // Build the HTML for a zone label. Broken out so the mount effect and
 // the activity-refresh effect can produce the same markup — keeps the
 // "🔥 N this week" badge in sync with zoneActivity as it streams in.
-function zoneLabelHtml(z, activity) {
+//
+// `isHome` flips the label badge from a plain colored circle to a
+// house-shaped tile (still showing the zone number) so the viewer's
+// home zone reads at a glance — replaces the standalone home pin
+// that used to float above the same number, which was visually
+// distracting (council fix).
+function zoneLabelHtml(z, activity, isHome) {
   var flame = activity && activity.matches_7d > 0
     ? ('<div style="margin-top:3px;font-size:9.5px;font-weight:700;letter-spacing:0.02em;' +
         'color:#fff;background:rgba(239,68,68,0.95);padding:1px 6px;border-radius:10px;' +
         'text-shadow:none;box-shadow:0 1px 2px rgba(0,0,0,0.2)">🔥 ' +
         activity.matches_7d + ' this week</div>')
     : '';
+  // House-shaped badge: 36×36 svg with a roof + body, the zone number
+  // overlaid in the centre. Plain circle for non-home zones (existing
+  // look). Both keep the same outer ring + drop-shadow so size stays
+  // consistent on the map.
+  var badge = isHome
+    ? ('<div style="position:relative;width:36px;height:36px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.25))">' +
+         '<svg width="36" height="36" viewBox="0 0 36 36" fill="none">' +
+           '<path d="M18 4 L31 15 V31 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 V15 Z" ' +
+                 'fill="' + z.color + '" stroke="rgba(255,255,255,0.92)" stroke-width="2.5" stroke-linejoin="round"/>' +
+         '</svg>' +
+         '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+                     'padding-top:4px;color:#fff;font-weight:800;font-size:13px;line-height:1">' + z.num + '</div>' +
+       '</div>')
+    : ('<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';color:#fff;' +
+         'font-weight:700;font-size:14px;line-height:30px;text-align:center;' +
+         'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.85)">' + z.num + '</div>');
   return (
     '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;pointer-events:none">' +
-      '<div style="width:30px;height:30px;border-radius:50%;background:' + z.color + ';color:#fff;' +
-        'font-weight:700;font-size:14px;line-height:30px;text-align:center;' +
-        'box-shadow:0 1px 3px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.85)">' + z.num + '</div>' +
+      badge +
       '<div style="font-size:10px;font-weight:700;letter-spacing:0.04em;color:#141211;' +
         'text-shadow:0 0 3px #fff,0 0 6px #fff;max-width:130px;line-height:1.15">' +
         z.name.toUpperCase() + '</div>' +
@@ -66,7 +87,8 @@ export default function LeafletMap({
                                      //   always line up with what's drawn, even
                                      //   when the source GeoJSON is missing some
                                      //   of a zone's member suburbs.
-  var homePinRef = useRef(null);
+  // Home pin retired (see zoneLabelHtml — home is baked into the label).
+  // var homePinRef = useRef(null);
   var tileLayersRef = useRef({ base: null });
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
@@ -117,8 +139,10 @@ export default function LeafletMap({
       var labelLatLng = [bbCenter.lat, bbCenter.lng];
       zoneCentersRef.current[z.id] = labelLatLng;
 
-      // Number badge + zone name label (+ optional 7-day activity flame)
-      var html = zoneLabelHtml(z, null);
+      // Number badge + zone name label (+ optional 7-day activity flame).
+      // homeZone passed in via prop — re-rendered when it changes via the
+      // refresh effect below so the house badge appears/disappears live.
+      var html = zoneLabelHtml(z, null, homeZone === z.id);
       var label = L.marker(labelLatLng, {
         icon: L.divIcon({ className: "cs-zone-label", html: html, iconSize: [140, 72], iconAnchor: [70, 36] }),
         interactive: false,
@@ -198,43 +222,17 @@ export default function LeafletMap({
       var marker = zoneLabelsRef.current[id];
       var z = ZONE_BY_ID[id];
       if(!marker || !z) return;
-      var html = zoneLabelHtml(z, zoneActivity && zoneActivity[id]);
+      var html = zoneLabelHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id);
       marker.setIcon(L.divIcon({
         className: "cs-zone-label", html: html,
         iconSize: [140, 72], iconAnchor: [70, 36],
       }));
     });
-  },[zoneActivity]);
+  },[zoneActivity, homeZone]);
 
-  // Home pin — add/remove/move as homeZone changes.
-  useEffect(function(){
-    var map = mapRef.current;
-    if(!map) return;
-    // Remove prior pin
-    if(homePinRef.current){ map.removeLayer(homePinRef.current); homePinRef.current = null; }
-    if(!homeZone) return;
-    var z = ZONE_BY_ID[homeZone];
-    if(!z) return;
-    var accent = (t && t.accent) || "#14110f";
-    var textC = (t && t.accentText) || "#fff";
-    var html =
-      '<div style="width:32px;height:32px;border-radius:50%;background:' + accent + ';color:' + textC + ';' +
-        'display:flex;align-items:center;justify-content:center;' +
-        'box-shadow:0 2px 6px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.9)">' +
-        '<div style="width:16px;height:16px;display:flex">' + HOME_SVG + '</div>' +
-      '</div>';
-    // Anchor the pin to the same polygon-derived centre the zone label uses,
-    // so home stays visually attached to the rendered shape. iconAnchor y
-    // pushes the pin ~54px above that point, clearing the number + name
-    // label stack (which is ±28px around the centre).
-    var center = zoneCentersRef.current[homeZone] || z.center;
-    var pin = L.marker(center, {
-      icon: L.divIcon({ className: "cs-home-pin", html: html, iconSize: [32,32], iconAnchor: [16,70] }),
-      interactive: false,
-      zIndexOffset: 1500,
-    }).addTo(map);
-    homePinRef.current = pin;
-  },[homeZone, t]);
+  // (Old standalone home-pin effect retired — the home indicator is
+  // baked into the zone-number label's house-shaped badge above. One
+  // marker per zone, less clutter.)
 
   return (
     <div ref={elRef} style={{ position: "absolute", inset: 0 }} />
