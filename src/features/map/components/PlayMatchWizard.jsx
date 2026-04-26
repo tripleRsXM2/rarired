@@ -838,8 +838,8 @@ export default function PlayMatchWizard({
                       <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                         {[
                           { id:"any",  label:"Any level" },
-                          { id:"same", label:"Same level" },
-                          { id:"tier", label:"Same tier" },
+                          { id:"same", label:"My level" },
+                          { id:"tier", label:"Similar" },
                         ].map(function(opt){
                           var on = skillFilter === opt.id;
                           return (

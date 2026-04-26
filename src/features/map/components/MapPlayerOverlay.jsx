@@ -386,8 +386,8 @@ export default function MapPlayerOverlay({
               <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                 {[
                   { id:"any",  label:"Any level" },
-                  { id:"same", label:"Same level" },
-                  { id:"tier", label:"Same tier" },
+                  { id:"same", label:"My level" },
+                  { id:"tier", label:"Similar" },
                 ].map(function(opt){
                   var on = skillFilter === opt.id;
                   return (
@@ -407,6 +407,25 @@ export default function MapPlayerOverlay({
                   );
                 })}
               </div>
+              {/* Quiet helper line — clarifies what each filter means.
+                  Hidden on "Any" so we don't add noise when the row
+                  is in its default state. */}
+              {skillFilter === "same" && (
+                <div style={{
+                  fontSize: 10, color: fg, opacity: 0.55,
+                  marginTop: 6, lineHeight: 1.4,
+                }}>
+                  Players with your exact skill level (e.g. Intermediate 2 = Intermediate 2).
+                </div>
+              )}
+              {skillFilter === "tier" && (
+                <div style={{
+                  fontSize: 10, color: fg, opacity: 0.55,
+                  marginTop: 6, lineHeight: 1.4,
+                }}>
+                  Anyone in your broad tier (Beginner, Intermediate, or Advanced).
+                </div>
+              )}
             </div>
             {/* Scope tabs (In zone / Everywhere) live in the top
                 chrome now, not in this sheet — see the standalone

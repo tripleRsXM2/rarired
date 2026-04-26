@@ -284,7 +284,11 @@ export default function MapTab({
           overlay (homes / courts / activity flames) plus a basemap
           theme picker (auto/light/dark). Zone colors are NOT a toggle —
           they're permanent identifying chrome. Preferences persist to
-          localStorage. */}
+          localStorage.
+          Hidden during the entire Play Match flow (steps 2-4) so the
+          map chrome doesn't compete with the floating prompt + step
+          UI. Reappears when the user backs out of play mode. */}
+      {playMode === "off" && (
       <button
         ref={layersBtnRef}
         onClick={function(){
@@ -325,8 +329,9 @@ export default function MapTab({
           <path d="M2 12.5 L9 16 L16 12.5"/>
         </svg>
       </button>
+      )}
 
-      {layersOpen && (
+      {layersOpen && playMode === "off" && (
         <div ref={layersPanelRef}
           style={{
             // Slides with the cog. Same easing/timing as the cog +
