@@ -473,68 +473,101 @@ export default function LeafletMap({
     playCourtsRef.current.forEach(function(m){ if(map.hasLayer(m)) map.removeLayer(m); });
     playCourtsRef.current = [];
     if(inPlayCourt){
-      // 8 placements cycle through to spread labels around each dot.
-      // Each entry: dot anchor (in icon pixels) + SVG line endpoints
-      // + label position. Icon is 220×100.
-      // Label box sits OUTSIDE the dot's quadrant, away from the
-      // anchor. With 8 directions there's enough variety that even
-      // tight clusters end up legible.
-      //   0 NE  · 1 NW  · 2 SE  · 3 SW
-      //   4 N   · 5 S   · 6 E   · 7 W
-      var DIRS = [
-        // Diagonal long
-        { name:"NE", anchor:[20,80], lineTo:[110,28], labelX:120, labelY:14 },
-        { name:"NW", anchor:[200,80], lineTo:[110,28], labelX: 14, labelY:14, rightAlign:true },
-        { name:"SE", anchor:[20,20], lineTo:[110,72], labelX:120, labelY:60 },
-        { name:"SW", anchor:[200,20], lineTo:[110,72], labelX: 14, labelY:60, rightAlign:true },
-        // Cardinal long
-        { name:"N",  anchor:[110,82], lineTo:[110,18], labelX:110, labelY: 4, centreLabel:true },
-        { name:"S",  anchor:[110,18], lineTo:[110,82], labelX:110, labelY:90, centreLabel:true },
-        { name:"E",  anchor:[20,50], lineTo:[100,50],  labelX:108, labelY:42 },
-        { name:"W",  anchor:[200,50], lineTo:[120,50], labelX: 12, labelY:42, rightAlign:true },
-      ];
+      // Collision-aware rendering.
+      //   • Compute each court's screen pixel after fitBounds.
+      //   • If a court has ANY neighbour within ~80px, mark it as
+      //     "crowded" — those use the 8-way diagonal offset + line.
+      //   • Otherwise render a clean caps text label below the dot
+      //     with no box and no connector. Quiet typography wins.
+      // Compute pixel positions on a microtask so fitBounds has
+      // finalised the projection.
       var zoneCourts = COURTS.filter(function(c){ return c.zone === playZoneId; });
-      zoneCourts.forEach(function(c, i){
-        var d = DIRS[i % DIRS.length];
-        var label = shortenCourtName(c.name);
-        // Position the label box. centreLabel = anchor on horizontal
-        // centre (for N/S). rightAlign = label sits on the LEFT of
-        // the anchor (anchor is right edge of label).
-        var labelStyle =
-          "position:absolute;top:" + d.labelY + "px;" +
-          (d.centreLabel
-            ? "left:" + d.labelX + "px;transform:translateX(-50%);"
-            : (d.rightAlign
-                ? "right:" + (220 - d.labelX) + "px;"
-                : "left:" + d.labelX + "px;")) +
-          "white-space:nowrap;";
-        var html =
-          '<div style="position:relative;width:220px;height:100px;cursor:pointer">' +
-            '<svg width="220" height="100" style="position:absolute;inset:0;pointer-events:none">' +
-              '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
-                    'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
-                    'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
-                    'style="filter:drop-shadow(0 0 2px rgba(255,255,255,0.6))"/>' +
-            '</svg>' +
-            '<div class="cs-play-dot" style="position:absolute;' +
-              'left:' + (d.anchor[0] - 5) + 'px;top:' + (d.anchor[1] - 5) + 'px;"></div>' +
-            '<div class="cs-play-label" style="' + labelStyle + '">' + label + '</div>' +
-          '</div>';
-        var m = L.marker([c.lat, c.lng], {
-          icon: L.divIcon({
-            className: "cs-play-court",
-            html: html,
-            iconSize: [220, 100],
-            iconAnchor: d.anchor,
-          }),
-          zIndexOffset: 1500,
+      setTimeout(function(){
+        var map2 = mapRef.current;
+        if(!map2 || playMode !== "court") return;
+        var pts = zoneCourts.map(function(c){
+          return { c: c, pt: map2.latLngToContainerPoint([c.lat, c.lng]) };
         });
-        m.on("click", function(){
-          if(courtSelectRef.current) courtSelectRef.current(c);
+        var COLLISION_PX = 80;
+        pts.forEach(function(a){
+          a.crowded = pts.some(function(b){
+            if(b.c === a.c) return false;
+            var dx = a.pt.x - b.pt.x;
+            var dy = a.pt.y - b.pt.y;
+            return (dx*dx + dy*dy) < (COLLISION_PX * COLLISION_PX);
+          });
         });
-        m.addTo(map);
-        playCourtsRef.current.push(m);
-      });
+        // Clear any existing markers (we may rebuild here).
+        playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
+        playCourtsRef.current = [];
+
+        // 8-way placements for the "crowded" path.
+        var DIRS = [
+          { name:"NE", anchor:[20,80], lineTo:[110,28], labelX:120, labelY:14 },
+          { name:"NW", anchor:[200,80], lineTo:[110,28], labelX: 14, labelY:14, rightAlign:true },
+          { name:"SE", anchor:[20,20], lineTo:[110,72], labelX:120, labelY:60 },
+          { name:"SW", anchor:[200,20], lineTo:[110,72], labelX: 14, labelY:60, rightAlign:true },
+          { name:"N",  anchor:[110,82], lineTo:[110,18], labelX:110, labelY: 4, centreLabel:true },
+          { name:"S",  anchor:[110,18], lineTo:[110,82], labelX:110, labelY:90, centreLabel:true },
+          { name:"E",  anchor:[20,50], lineTo:[100,50],  labelX:108, labelY:42 },
+          { name:"W",  anchor:[200,50], lineTo:[120,50], labelX: 12, labelY:42, rightAlign:true },
+        ];
+
+        pts.forEach(function(p, i){
+          var c = p.c;
+          var labelText = shortenCourtName(c.name).toUpperCase();
+          var html, iconSize, iconAnchor;
+
+          if(p.crowded){
+            // Crowded: 8-way offset + connector line + small label box.
+            var d = DIRS[i % DIRS.length];
+            var labelStyle =
+              "position:absolute;top:" + d.labelY + "px;" +
+              (d.centreLabel
+                ? "left:" + d.labelX + "px;transform:translateX(-50%);"
+                : (d.rightAlign
+                    ? "right:" + (220 - d.labelX) + "px;"
+                    : "left:" + d.labelX + "px;")) +
+              "white-space:nowrap;";
+            html =
+              '<div style="position:relative;width:220px;height:100px;cursor:pointer">' +
+                '<svg width="220" height="100" style="position:absolute;inset:0;pointer-events:none">' +
+                  '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
+                        'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
+                        'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
+                        'style="filter:drop-shadow(0 0 2px rgba(255,255,255,0.6))"/>' +
+                '</svg>' +
+                '<div class="cs-play-dot" style="position:absolute;' +
+                  'left:' + (d.anchor[0] - 5) + 'px;top:' + (d.anchor[1] - 5) + 'px;"></div>' +
+                '<div class="cs-play-label" style="' + labelStyle + '">' + labelText + '</div>' +
+              '</div>';
+            iconSize = [220, 100];
+            iconAnchor = d.anchor;
+          } else {
+            // Calm: dot + caps label below, pure typography. No box,
+            // no line. Centred under the dot.
+            html =
+              '<div style="position:relative;width:160px;height:48px;cursor:pointer">' +
+                '<div class="cs-play-dot" style="position:absolute;left:75px;top:0"></div>' +
+                '<div class="cs-play-name" style="position:absolute;top:16px;left:0;right:0;text-align:center">' +
+                  labelText +
+                '</div>' +
+              '</div>';
+            iconSize = [160, 48];
+            iconAnchor = [80, 5]; // anchor at the dot centre
+          }
+
+          var m = L.marker([c.lat, c.lng], {
+            icon: L.divIcon({ className:"cs-play-court", html: html, iconSize: iconSize, iconAnchor: iconAnchor }),
+            zIndexOffset: 1500,
+          });
+          m.on("click", function(){
+            if(courtSelectRef.current) courtSelectRef.current(c);
+          });
+          m.addTo(map2);
+          playCourtsRef.current.push(m);
+        });
+      }, 50);
       // Fit the map to the picked zone so the courts are spread out
       // enough that their labels don't pile on top of each other.
       // fitBounds(bbox) with maxZoom 14 — the framing user liked

@@ -109,10 +109,20 @@ export default function Providers({ t, theme, children }){
       // the lat/lng anchor + a glassy white label pill at the
       // diagonal offset. Direction cycles NE/NW/SE/SW per court.
       ".cs-play-court{pointer-events:auto}",
+      // Calm path — pure caps typography below the dot. No box, no
+      // line. Halo for legibility.
+      ".cs-play-name{font:800 10px/1.15 ui-sans-serif,system-ui,sans-serif;" +
+        "color:#14110f;letter-spacing:0.06em;text-transform:uppercase;" +
+        "white-space:nowrap;" +
+        "text-shadow:0 1px 2px rgba(255,255,255,0.85)," +
+        "0 0 6px rgba(255,255,255,0.65)}",
+      // Crowded path — small all-caps label inside a glassy chip.
+      // Used only when collision detection flags a court as having
+      // a neighbour within ~80px.
       ".cs-play-label{background:rgba(255,255,255,0.96);color:#14110f;" +
-        "padding:4px 10px;border-radius:6px;" +
-        "font:700 11px/1.2 ui-sans-serif,system-ui,sans-serif;" +
-        "letter-spacing:-0.01em;" +
+        "padding:3px 8px;border-radius:5px;" +
+        "font:800 10px/1.2 ui-sans-serif,system-ui,sans-serif;" +
+        "letter-spacing:0.05em;text-transform:uppercase;" +
         "box-shadow:0 2px 8px rgba(20,18,17,0.18);" +
         "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}",
       ".cs-play-dot{width:10px;height:10px;border-radius:50%;background:#fff;" +

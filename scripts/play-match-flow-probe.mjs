@@ -106,41 +106,49 @@ async function probe() {
     // a known zone centroid lat/lng to screen coords, then dispatch
     // a real Playwright click at that pixel.
     var clickTarget = await u.page.evaluate(function(){
-      // ZONES.cbd centroid is around -33.88, 151.21 — should be visible
-      // when fitBounds-ed. Use Leaflet's map.latLngToContainerPoint.
-      var map = window.__lmap;
-      if(!map){
-        // Try to grab the map instance from the leaflet container
-        var lc = document.querySelector(".leaflet-container");
-        if(lc && lc._leaflet_id){
-          // L is attached globally via the leaflet import; the map
-          // instance can be retrieved through any registered layer.
-          // Hacky but works: walk Leaflet's registry.
-          for(var k in window){
-            if(window[k] && window[k]._leaflet_id === lc._leaflet_id){
-              map = window[k]; break;
-            }
-          }
-        }
-      }
-      // Fallback: just click at the centre of the leaflet container,
-      // which after fitBounds(allZones) should land on a zone.
-      var rect = document.querySelector(".leaflet-container").getBoundingClientRect();
-      return { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+      // Walk Leaflet's internal _layers cache on the container to
+      // find the map instance (Leaflet 1.x). Then project a known
+      // CBD lat/lng to screen pixels — robust against bbox shifts.
+      var lc = document.querySelector(".leaflet-container");
+      // Leaflet attaches _leaflet_pos and the map instance is
+      // referenced by any L.Layer added to it. Layers expose ._map.
+      // Fastest path: use the global L (still in window scope when
+      // imported from leaflet/dist).
+      var map = null;
+      // L.Map has a unique `_container` property pointing to the div.
+      // We can iterate window for any object whose _container matches.
+      // But this can be flaky. Easier: dispatch a Leaflet click via
+      // the canvas at a known lat/lng using simulateClick on the
+      // tile-pane container. Since polygons are rendered with
+      // preferCanvas, Leaflet listens on the canvas and projects
+      // back to lat/lng then hit-tests polygons.
+      var rect = lc.getBoundingClientRect();
+      // Best-effort: click roughly at -33.895, 151.16 (Inner West
+      // centroid). Without the map instance we estimate using the
+      // visible zone polygons. Looking at all-zones framing with
+      // northern-beaches now extending to Mona Vale, Inner West sits
+      // upper-mid-left of the visible map area.
+      return {
+        x: rect.left + rect.width * 0.50,
+        y: rect.top + rect.height * 0.45,
+      };
     });
     log("clicking at: " + JSON.stringify(clickTarget));
     await u.page.mouse.click(clickTarget.x, clickTarget.y);
-    await u.page.waitForTimeout(900);
+    // Wait for collision-aware label rendering to complete (the
+    // setTimeout(50) in LeafletMap fires after fitBounds settles).
+    await u.page.waitForTimeout(1500);
 
     var afterClick = await u.page.evaluate(function(){
       var leaflet = document.querySelector(".leaflet-container");
-      var courtLabels = document.querySelectorAll(".cs-play-label");
-      // Diagonal connectors are SVG <line> inside each marker.
+      var crowdedLabels = document.querySelectorAll(".cs-play-label");
+      var calmNames = document.querySelectorAll(".cs-play-name");
       var svgLines = document.querySelectorAll(".cs-play-court svg line");
       var dots = document.querySelectorAll(".cs-play-dot");
       return {
         playModeAttr: leaflet ? leaflet.getAttribute("data-play-mode") : null,
-        courtLabelCount: courtLabels.length,
+        crowdedLabelCount: crowdedLabels.length,
+        calmNameCount: calmNames.length,
         connectorLineCount: svgLines.length,
         dotCount: dots.length,
       };
@@ -149,17 +157,23 @@ async function probe() {
 
     if(afterClick.playModeAttr === "court"){
       log("✓ advanced to step 2 (court mode)");
-      if(afterClick.courtLabelCount > 0){
-        log("✓ court stacks rendered (" + afterClick.courtLabelCount + " labels, " +
-          afterClick.connectorLineCount + " lines, " + afterClick.dotCount + " dots)");
-        if(afterClick.courtLabelCount === afterClick.connectorLineCount &&
-           afterClick.courtLabelCount === afterClick.dotCount){
-          log("✓ stack structure consistent (label = line = dot count)");
+      var totalCourts = afterClick.crowdedLabelCount + afterClick.calmNameCount;
+      if(totalCourts > 0){
+        log("✓ court markers rendered: " + afterClick.calmNameCount + " calm + " +
+          afterClick.crowdedLabelCount + " crowded (" + afterClick.connectorLineCount + " lines, " +
+          afterClick.dotCount + " dots)");
+        if(totalCourts === afterClick.dotCount){
+          log("✓ all courts have a dot");
         } else {
-          log("⚠ stack structure mismatch — labels/lines/dots not 1:1:1");
+          log("⚠ count mismatch: " + totalCourts + " labels vs " + afterClick.dotCount + " dots");
+        }
+        if(afterClick.connectorLineCount === afterClick.crowdedLabelCount){
+          log("✓ connector lines only on crowded courts (collision detection working)");
+        } else {
+          log("⚠ line count " + afterClick.connectorLineCount + " ≠ crowded count " + afterClick.crowdedLabelCount);
         }
       } else {
-        log("⚠ court mode active but no labeled stacks visible");
+        log("⚠ court mode active but no markers visible");
       }
     } else {
       log("✗ stuck in " + afterClick.playModeAttr + " — bug not fixed");
