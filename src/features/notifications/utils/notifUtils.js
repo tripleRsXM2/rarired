@@ -92,6 +92,10 @@ export function getNotifLabel(n) {
     // Module 9 — opponent invites
     case "match_invite_claimed":       return name + " joined CourtSync and claimed the match — they'll confirm or dispute next.";
     case "match_invite_declined":      return name + " marked your invite as 'not me' — you can re-issue or void the match.";
+    // Module 9.1.5 — closes the casual-match trust gap. Informational
+    // only (Activity bucket): the match is already in the recipient's
+    // feed; this is just the heads-up that it was logged.
+    case "casual_match_logged":        return name + " logged a casual match with you.";
     default:                           return "New notification.";
   }
 }
@@ -142,6 +146,11 @@ var TYPE_URGENCY_BONUS = {
   pact_confirmed:             80,  // go-ahead, book it
   pact_booked:                75,  // payment + logistics
   pact_cancelled:             20,  // activity
+  // Module 9.1.5 — informational. Sits in Activity, low urgency:
+  // the recipient might want to glance, but nothing's at stake.
+  // Below match_confirmed (50) so it doesn't outrank a legitimate
+  // ranked outcome.
+  casual_match_logged:        35,
 };
 
 export function computePriorityScore(n) {

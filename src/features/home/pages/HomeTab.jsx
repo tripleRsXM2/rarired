@@ -503,7 +503,7 @@ function FeedCard({
               {(m.sets || []).map(function(_, i) {
                 return (
                   <div key={i} style={{
-                    width: 24, textAlign: "center",
+                    width: 32, textAlign: "center",
                     fontSize: 8, fontWeight: 600, color: t.textTertiary,
                     letterSpacing: "0.04em",
                   }}>S{i + 1}</div>
@@ -607,46 +607,59 @@ function FeedCard({
                 } else {
                   wonSet = false;
                 }
-                // Inner tiebreak read — shown only on the LOSING row's
-                // cell (the side with 6 in a 7-6 set) when valid.
+                // Inner tiebreak read — render BOTH players' tb scores,
+                // each on their own row, so the full tiebreak result
+                // (e.g. 7-0) is visible at a glance. The single-digit
+                // "7-6 (3)" broadcast notation hides one side of the
+                // story — fine on TV, ambiguous in a stat list.
+                //
+                // Mapping: row 0 always reads s.you / tieBreak.you
+                // (the submitter's frame), row 1 always reads s.them
+                // / tieBreak.them. Built earlier in this same render
+                // block at lines 537-555.
                 var setObj = (m.sets || [])[i];
                 var tbSuper = null;
                 if (setObj && setObj.tieBreak && hasMine && hasOpp) {
                   var hi = Math.max(Number(score), Number(opp));
                   var lo = Math.min(Number(score), Number(opp));
-                  if (hi === 7 && lo === 6 && !wonSet) {
-                    // This is the loser's row — show their tiebreak
-                    // points (the smaller of the inner pair). Reading
-                    // off the original set object so we always get
-                    // *this row's* points regardless of orientation.
-                    var tbY = Number(setObj.tieBreak.you);
-                    var tbT = Number(setObj.tieBreak.them);
-                    if (Number.isFinite(tbY) && Number.isFinite(tbT)) {
-                      // The loser's row points are the LOSER's inner
-                      // score (Math.min of the inner pair).
-                      tbSuper = Math.min(tbY, tbT);
+                  if (hi === 7 && lo === 6) {
+                    var myTbKey = ri === 0 ? 'you' : 'them';
+                    var myTbRaw = setObj.tieBreak[myTbKey];
+                    if (myTbRaw != null && myTbRaw !== '') {
+                      var myTbNum = Number(myTbRaw);
+                      if (Number.isFinite(myTbNum)) tbSuper = myTbNum;
                     }
                   }
                 }
                 return (
                   <div key={i} style={{
-                    width: 24, textAlign: "center",
+                    width: 32, textAlign: "center",
                     fontSize: 14, fontWeight: wonSet ? 600 : 400,
                     color: wonSet ? t.text : t.textTertiary,
                     fontVariantNumeric: "tabular-nums",
                     letterSpacing: "-0.2px",
                     lineHeight: 1,
-                    position: "relative",
                   }}>
                     {score !== undefined && score !== "" ? score : "–"}
                     {tbSuper != null && (
-                      <span style={{
-                        position: "absolute",
-                        top: -4, right: -1,
-                        fontSize: 8, fontWeight: 700,
-                        color: t.textTertiary,
-                        letterSpacing: 0,
-                      }}>{tbSuper}</span>
+                      // Tennis convention: "7-6 (3)" — the parenthesised
+                      // number is the LOSER's tiebreak score. Rendered
+                      // as a true semantic <sup> so it sits INLINE next
+                      // to the loser's "6" in its own cell, with no
+                      // chance of bleeding into the neighbouring cell.
+                      // (Earlier iterations used absolute positioning
+                      // with right:-8 which pushed the digit OUT of
+                      // its parent cell and visually attached it to
+                      // the wrong set.)
+                      <sup style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: t.textSecondary,
+                        marginLeft: 1,
+                        fontVariantNumeric: "tabular-nums",
+                        lineHeight: 0,
+                        verticalAlign: "super",
+                      }}>{tbSuper}</sup>
                     )}
                   </div>
                 );

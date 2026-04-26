@@ -145,6 +145,11 @@ const PUSH_TYPE_TO_CATEGORY: Record<string, string> = {
   // knows about (not a brand-new invite TO them).
   match_invite_claimed:         "match_updates",
   match_invite_declined:        "match_updates",
+  // Module 9.1.5: informational heads-up that a casual match was
+  // logged with the recipient. Sits under match_updates — same
+  // bucket as match_confirmed / match_voided which are also
+  // "FYI, your match changed status" pushes.
+  casual_match_logged:          "match_updates",
 };
 
 // Title + body + URL templates per type. Concise on purpose — payloads
@@ -322,6 +327,15 @@ function buildPayloadForType(type: string, fromName: string | null, entityId: st
       return {
         type, title: "Invite declined",
         body:  `${safeName} marked your invite as 'not me'. Re-issue or void the match.`,
+        url:   "/home" + (entityId ? `?highlightMatchId=${encodeURIComponent(entityId)}` : ""),
+        entityId,
+      };
+    case "casual_match_logged":
+      // Module 9.1.5 — informational. Body deliberately understates:
+      // there's nothing the recipient must do, but they should know.
+      return {
+        type, title: "Casual match logged",
+        body:  `${safeName} logged a casual match with you. View it in your feed.`,
         url:   "/home" + (entityId ? `?highlightMatchId=${encodeURIComponent(entityId)}` : ""),
         entityId,
       };

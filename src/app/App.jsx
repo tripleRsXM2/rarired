@@ -907,6 +907,11 @@ export default function App(){
           availDraft={currentUser.availDraft} setAvailDraft={currentUser.setAvailDraft}
           receivedRequests={social.receivedRequests}
           toast={toast}
+          /* Module 9.2 — sign-out funnels through the auth controller's
+             cleanup helper (disablePush → supabase.auth.signOut) so a
+             logged-out browser doesn't keep the previous user's push
+             subscription alive on a shared device. */
+          signOutAndCleanup={auth.signOutAndCleanup}
           onClose={function(){setShowSettings(false);currentUser.setEditingAvail(false);}}
         />
       )}
@@ -927,6 +932,7 @@ export default function App(){
           submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
           viewerSuburb={currentUser.profile&&currentUser.profile.suburb}
+          viewerProfile={currentUser.profile}
           myLeagues={leagues.leagues}
         />
         <DisputeModal

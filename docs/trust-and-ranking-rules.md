@@ -50,10 +50,13 @@ Two flavours:
 | Flavour | Condition | Status on log | match_type | Affects stats? |
 |---|---|---|---|---|
 | **Ranked** | Opponent is a real linked user (`opponent_id` set) | `pending_confirmation` | `ranked` | Only after opponent **confirms** |
-| **Casual** | Freetext opponent name only (no `opponent_id`) | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched |
+| **Casual (linked)** | Linked CourtSync user opponent, opted into casual via the match-type toggle | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched. Linked opponent gets a heads-up via `casual_match_logged` notification (informational, no action required). |
+| **Casual (freetext)** | Freetext opponent name only (no `opponent_id`) | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched. No notification (no recipient). |
 | **Tournament match** | `tournament_id` set | Follows the tournament's own flow | Via existing tournament code path, not the casual/ranked split |
 
 The word "Casual" in the UI means "no stat impact, no confirmation loop". "Ranked" means "linked opponent, confirmation required, stats update on accept."
+
+**Casual heads-up** (Module 9.1.5): a linked-opponent casual match still notifies the opponent via the `casual_match_logged` notification — informational only, no Confirm/Dispute CTA. Closes the trust gap where a friend could log fake casual matches against you and you'd never know unless you scrolled the feed. Recipients can void the match through the existing FeedCard flow if it didn't actually happen. Full spec: `docs/notification-taxonomy.md` v7.
 
 ### State machine (ranked matches only)
 

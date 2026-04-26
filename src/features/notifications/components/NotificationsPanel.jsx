@@ -562,6 +562,13 @@ function NotifRow({
             ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
           )}
 
+          {/* Module 9.1.5 — informational heads-up. No action required.
+              Soft "View in feed →" matching the match_voided/expired
+              treatment so it doesn't shout for attention. */}
+          {n.type === "casual_match_logged" && (
+            ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
+          )}
+
           {/* like / comment — "View match" CTA, lands in feed */}
           {(n.type === "like" || n.type === "comment") && (
             ctaButton(t, t.accent, true, "View match →", goFeed)

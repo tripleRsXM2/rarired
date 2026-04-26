@@ -29,6 +29,10 @@ var PUSH_WORTHY_TYPES = {
   // "they're verifying it now"; declined means "your invite was
   // rejected — re-issue or void."
   match_invite_claimed:       1, match_invite_declined:    1,
+  // Module 9.1.5 — informational push so the recipient at least
+  // gets a heads-up that a casual match was logged with them
+  // (would otherwise only surface as a feed scroll-by).
+  casual_match_logged:        1,
 };
 
 // Fire-and-forget push fan-out. The Edge Function handles category

@@ -116,6 +116,8 @@ After successful sign-in / sign-up, the AuthModal email-form handler reads `sess
 
 **Known limitation:** cross-device magic-link auth doesn't preserve sessionStorage. If we ever ship email magic-links, the recipient lands on `/home` instead of the invite — they'd need to re-paste the link. P2 follow-up.
 
+**Privacy:** `cs_auth_next` is tab-scoped sessionStorage (cleared on tab close), single-use (cleared after consumption), and stores only the path — never invite tokens, never user identifiers. See `docs/privacy-and-storage.md` "Invite / auth-redirect flow state" for the broader storage classification.
+
 ## Notifications
 
 Two new types, registered in `notifUtils.js`, `notificationService.js` (push allow-list), and the `send-push` Edge Function (`PUSH_TYPE_TO_CATEGORY` + `buildPayloadForType`):

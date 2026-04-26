@@ -1,35 +1,32 @@
+// src/features/scoring/components/ScoreModal.jsx
+//
+// Slim shell for the redesigned Log Match composer (slice 1).
+//
+// Responsibilities:
+//   - Modal chrome (backdrop, card, max-width)
+//   - All state (saving / saveError / mismatchAck / finish /
+//     casualFallbackOffer / opponentLeagueIds)
+//   - Hooks (live validation memo, opponent-league-eligibility effect)
+//   - handleSave + supporting validators (buildValidatorOptions,
+//     runScoreValidation, winnerBySets) — unchanged from the previous
+//     monolithic ScoreModal
+//   - Finish-state overlay (MatchFinishMoment / InviteShareCard)
+//   - Header (title) + footer (Cancel + contextual Save CTA)
+//   - Mounts <MatchComposer/> for the entire form body
+//
+// Slice 1 of the Log-Match redesign. The form body has been broken
+// into MatchupHeader / OpponentPicker / ScoreboardInput / MatchComposer
+// — none of which know about save state. All data flow + validation
+// stays here, so existing flows (resubmit / invite / casual / league /
+// challenge-conversion / tournament) work without touching their
+// callers.
+
 import { useState, useMemo, useEffect } from "react";
-import { avColor } from "../../../lib/utils/avatar.js";
-import { inputStyle } from "../../../lib/theme.js";
-import { COURTS } from "../../map/data/courts.js";
 import { fetchOpponentActiveLeagueIds } from "../../leagues/services/leagueService.js";
 import { validateMatchScore, CODES as SCORE_CODES } from "../utils/tennisScoreValidation.js";
 import MatchFinishMoment from "./MatchFinishMoment.jsx";
 import InviteShareCard from "./InviteShareCard.jsx";
-import { ONE_SET_RATING_NOTICE } from "../../rating/copy.js";
-
-// Sort COURTS so venues in the viewer's own suburb float to the top, then
-// same-zone (implicit "nearby" bucket from the map), then alphabetical. This
-// keeps the dropdown useful when the list grows — the default cursor lands
-// on the venues the viewer is most likely to actually play at.
-function sortCourtsForViewer(viewerSuburb){
-  var vs = (viewerSuburb || "").trim().toLowerCase();
-  // derive the viewer's likely zone from their suburb so we can bump
-  // same-zone courts above alphabetical order.
-  var myZone = null;
-  if(vs){
-    var hit = COURTS.find(function(c){ return (c.suburb||"").toLowerCase() === vs; });
-    if(hit) myZone = hit.zone;
-  }
-  return COURTS.slice().sort(function(a,b){
-    var aSub = (a.suburb||"").toLowerCase();
-    var bSub = (b.suburb||"").toLowerCase();
-    var aTier = vs && aSub === vs ? 0 : (myZone && a.zone === myZone ? 1 : 2);
-    var bTier = vs && bSub === vs ? 0 : (myZone && b.zone === myZone ? 1 : 2);
-    if(aTier !== bTier) return aTier - bTier;
-    return a.name.localeCompare(b.name);
-  });
-}
+import MatchComposer from "./MatchComposer.jsx";
 
 export default function ScoreModal({
   t, authUser, scoreModal, setScoreModal,
@@ -39,35 +36,32 @@ export default function ScoreModal({
   showOppDrop, setShowOppDrop,
   friends, suggestedPlayers,
   submitMatch, resubmitMatch, recordResult,
-  // Module 6.7 — viewer's suburb drives the court-dropdown priority so
-  // they see their local courts first. Optional; falls back to pure A→Z.
+  // Module 6.7 — viewer's suburb drives the court-dropdown priority.
   viewerSuburb,
-  // Module 7 — leagues the viewer is actively in. When the opponent is a
-  // linked user we offer a league picker so this match can count toward
-  // a shared leaderboard. See leagues-and-seasons.md.
+  // Slice 1 redesign — viewer profile powers the matchup header avatar.
+  viewerProfile,
+  // Module 7 — leagues the viewer is actively in.
   myLeagues,
 }) {
-  var iStyle=inputStyle(t);
-  var [saving,setSaving]=useState(false);
-  var [saveError,setSaveError]=useState("");
-  // Track whether the user has been warned once about a result/sets mismatch.
-  // We warn on first save attempt, let them correct or proceed on the second.
-  // Retirement / incomplete matches are valid cases where sets don't predict
-  // the stored winner — we don't want to hard-block.
-  var [mismatchAck,setMismatchAck]=useState(false);
-  // Slice 3 (design overhaul): finish-moment state. When non-null, the
-  // modal swaps the form body for a brief acknowledgment card that
-  // auto-dismisses after ~1.5s. Shape: { status, result, opponentName }.
+  var [saving, setSaving] = useState(false);
+  var [saveError, setSaveError] = useState("");
+  // Result/sets mismatch warning — warn once on first save, let the
+  // user correct or proceed on the second tap.
+  var [mismatchAck, setMismatchAck] = useState(false);
+  // Finish-moment payload. When non-null the modal swaps the body for
+  // the acknowledgment card (or the InviteShareCard if invite was created).
   var [finish, setFinish] = useState(null);
-  // Tennis-score-validation slice B: when ranked validation fails but
-  // a casual time-limited save would pass, we hold the score-validator
-  // diagnostic here so the user can tap "Save as casual time-limited"
-  // explicitly. Shape: { code, message } | null.
+  // Casual-fallback diagnostic (slice B of Module 7.6) — shown beneath
+  // the form when ranked validation fails but a casual time-limited
+  // save would pass.
   var [casualFallbackOffer, setCasualFallbackOffer] = useState(null);
-  // Slice E: live validation message rendered as a quiet caption
-  // beneath the Sets block. Recomputes whenever sets / matchType /
-  // completionType / leagueId changes. Does NOT block typing — the
-  // hard block stays at handleSave time.
+  // Opponent's overlapping league memberships — drives league-selector
+  // eligibility. Hooked to run on every linked-opponent change.
+  var [opponentLeagueIds, setOpponentLeagueIds] = useState(new Set());
+
+  // Live validation memo — recomputes on every relevant draft change.
+  // Mirrors the pre-redesign behaviour so the inline Invalid /
+  // Time-limited / One-set captions still render under the scoreboard.
   var liveValidation = useMemo(function () {
     if (!scoreDraft || !scoreDraft.sets) return null;
     var clean = scoreDraft.sets.filter(function (s) { return s.you !== "" || s.them !== ""; });
@@ -76,8 +70,10 @@ export default function ScoreModal({
       ? (myLeagues || []).find(function (lg) { return lg.id === scoreDraft.leagueId; })
       : null;
     var matchType = scoreDraft.matchType
-      || ((isResubmit || casualOppId) ? 'ranked' : 'casual');
-    if (matchType === 'ranked' && !casualOppId && !isResubmit) matchType = 'casual';
+      || ((scoreModal && scoreModal.resubmit) || casualOppId ? 'ranked' : 'casual');
+    if (matchType === 'ranked' && !casualOppId && !(scoreModal && scoreModal.resubmit)) {
+      matchType = 'casual';
+    }
     var completionType = scoreDraft.completionType || 'completed';
     var allowPartial = (matchType === 'casual') && (completionType !== 'completed');
     return validateMatchScore(clean, {
@@ -90,10 +86,6 @@ export default function ScoreModal({
       finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
         ? 'match_tiebreak' : 'normal_set',
       allowPartialScores: allowPartial,
-      // Module 7.6 supplement: ranked + completed 7-6/6-7 sets need
-      // valid tiebreak details. Casual / time-limited rows stay
-      // tolerant — users can record a 7-6 tiebreak result casually
-      // without being forced to type the inner score.
       requireTiebreakDetails: matchType === 'ranked' && completionType === 'completed',
       leagueMode: league ? league.mode : null,
       leagueAllowPartial: false,
@@ -104,16 +96,13 @@ export default function ScoreModal({
     scoreDraft && scoreDraft.matchType,
     scoreDraft && scoreDraft.completionType,
     scoreDraft && scoreDraft.leagueId,
-    casualOppId, isResubmit,
+    casualOppId, scoreModal && scoreModal.resubmit,
     (myLeagues || []).length,
   ]);
 
-  // Module 7.5: opponent's active league memberships (subset of viewer's
-  // leagues). Refetched whenever the linked opponent changes — used by the
-  // league selector below to show only leagues both players are members of.
-  // MUST be declared above the early-return below so hook order is stable
-  // across modal open/close cycles (rules of hooks).
-  var [opponentLeagueIds, setOpponentLeagueIds] = useState(new Set());
+  // Refresh the opponent's league set whenever the linked opponent
+  // changes. MUST live above the early-return below so hook order
+  // stays stable across modal open/close cycles.
   var isVerifiedForEffect = scoreModal ? (!!scoreModal.resubmit || !!casualOppId) : false;
   useEffect(function () {
     if (!scoreModal) { setOpponentLeagueIds(new Set()); return; }
@@ -132,36 +121,31 @@ export default function ScoreModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [casualOppId, isVerifiedForEffect, !!scoreModal, (myLeagues || []).length]);
 
-  if(!scoreModal) return null;
+  if (!scoreModal) return null;
 
-  var isResubmit=!!scoreModal.resubmit;
-  var isVerified=isResubmit?true:!!casualOppId;
+  var isResubmit = !!scoreModal.resubmit;
+  var isVerified = isResubmit ? true : !!casualOppId;
 
-  // Compute who the sets say won, in the submitter's frame:
-  // "you" > "them" = submitter win. Returns "win" | "loss" | null (tied/empty).
-  // Skip sets with blank / non-numeric scores on either side — Number("") is
-  // 0, not NaN, so the old naive check counted "6-" as a 6-0 submitter win
-  // and falsely triggered the mismatch warning on retirements.
-  function winnerBySets(sets){
-    if(!sets||!sets.length) return null;
-    var ys=0, ts=0;
-    sets.forEach(function(s){
+  // ── helpers ─────────────────────────────────────────────────────────
+
+  // Compute who the sets say won. Skip blanks / NaN. Returns
+  // "win" | "loss" | null.
+  function winnerBySets(sets) {
+    if (!sets || !sets.length) return null;
+    var ys = 0, ts = 0;
+    sets.forEach(function (s) {
       var yStr = s.you  == null ? "" : String(s.you).trim();
       var tStr = s.them == null ? "" : String(s.them).trim();
-      if(yStr === "" || tStr === "") return;
-      var y=Number(yStr), th=Number(tStr);
-      if(Number.isNaN(y)||Number.isNaN(th)) return;
-      if(y===th) return;
-      if(y>th) ys++; else ts++;
+      if (yStr === "" || tStr === "") return;
+      var y = Number(yStr), th = Number(tStr);
+      if (Number.isNaN(y) || Number.isNaN(th)) return;
+      if (y === th) return;
+      if (y > th) ys++; else ts++;
     });
-    if(ys===ts) return null;
-    return ys>ts ? "win" : "loss";
+    if (ys === ts) return null;
+    return ys > ts ? "win" : "loss";
   }
 
-  // Build validator options from scoreDraft + scoreModal context.
-  // `forceCasual` is set by the "Save as casual time-limited" CTA so
-  // the explicit user-consent path shifts matchType + completionType
-  // for THIS attempt only.
   function buildValidatorOptions(forceCasual) {
     var explicitMatchType = scoreDraft.matchType;
     var defaultMatchType  = (isVerified) ? 'ranked' : 'casual';
@@ -174,27 +158,16 @@ export default function ScoreModal({
     return {
       matchType: matchType,
       completionType: forceCasual ? 'time_limited' : 'completed',
-      // ScoreModal supports up to 5 sets in the UI today. Best-of-3 is
-      // the dominant amateur format and matches the Elo + league
-      // pipeline. When a league is tagged, defer to its match_format.
-      // null lets the validator auto-derive format from sets count
-      // (1 set → one_set, 2+ sets → best_of_3). Leagues still win
-      // when present because league.match_format is explicit.
       matchFormat: (league && league.match_format) || null,
       finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
         ? 'match_tiebreak' : 'normal_set',
       allowPartialScores: !!forceCasual,
-      // Tiebreak details required only for the ranked + completed
-      // path. forceCasual lands here as casual + time_limited so it
-      // bypasses the requirement (matches the "save as casual" CTA
-      // semantics — partial submissions don't have to itemise tb pts).
       requireTiebreakDetails: !forceCasual && matchType === 'ranked',
       leagueMode: league ? league.mode : null,
-      leagueAllowPartial: false, // no league flag exists yet — open question in docs
+      leagueAllowPartial: false,
     };
   }
 
-  // Run the central validator + react accordingly. Returns true on pass.
   function runScoreValidation(forceCasual) {
     var clean = scoreDraft.sets.filter(function (s) { return s.you !== "" || s.them !== ""; });
     var ranked = buildValidatorOptions(false);
@@ -202,15 +175,10 @@ export default function ScoreModal({
     var rankedResult = validateMatchScore(clean, ranked);
     var attemptResult = forceCasual ? validateMatchScore(clean, attempt) : rankedResult;
 
-    // Reset the casual-fallback offer at the start of each fresh attempt.
     setCasualFallbackOffer(null);
 
     if (attemptResult.ok) return true;
 
-    // If we're attempting ranked and only the "ranked requires completed"
-    // gate is failing, offer the explicit casual fallback path. Only
-    // surfaces when matchType resolves to ranked AND the score would
-    // pass under casual time-limited rules.
     if (!forceCasual && rankedResult.code === SCORE_CODES.RANKED_REQUIRES_COMPLETED) {
       var casualOpts = buildValidatorOptions(true);
       var casualResult = validateMatchScore(clean, casualOpts);
@@ -224,25 +192,20 @@ export default function ScoreModal({
     return false;
   }
 
-  async function handleSave(opts){
+  async function handleSave(opts) {
     var forceCasual = !!(opts && opts.forceCasual);
     setSaveError("");
-    var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
-    if(!clean.length){setSaveError("Add at least one set score.");return;}
+    var clean = scoreDraft.sets.filter(function (s) { return s.you !== "" || s.them !== ""; });
+    if (!clean.length) { setSaveError("Add at least one set score."); return; }
 
-    // Tennis score validation (slice B) — runs before the legacy
-    // winnerBySets sanity check so format-level errors surface first.
     if (!runScoreValidation(forceCasual)) return;
 
-    // Result-vs-sets sanity check. If the set scores clearly say the opposite
-    // of what the user picked, warn once — they can correct it or tap Save
-    // again to proceed (valid for retirements / incomplete matches).
-    var whoWon=winnerBySets(clean);
-    if(whoWon && whoWon!==scoreDraft.result && !mismatchAck){
+    var whoWon = winnerBySets(clean);
+    if (whoWon && whoWon !== scoreDraft.result && !mismatchAck) {
       setMismatchAck(true);
       setSaveError(
-        "Heads up — your set scores say you " + (whoWon==="win"?"won":"lost") +
-        " but you picked " + (scoreDraft.result==="win"?"Win":"Loss") +
+        "Heads up — your set scores say you " + (whoWon === "win" ? "won" : "lost") +
+        " but you picked " + (scoreDraft.result === "win" ? "Win" : "Loss") +
         ". Tap Save again to keep it, or fix the scores above."
       );
       return;
@@ -250,15 +213,13 @@ export default function ScoreModal({
 
     setSaving(true);
 
-    if(isResubmit){
-      var resubRes=await resubmitMatch(scoreModal.match, scoreDraft);
+    if (isResubmit) {
+      var resubRes = await resubmitMatch(scoreModal.match, scoreDraft);
       setSaving(false);
-      if(resubRes&&resubRes.error){
-        setSaveError(typeof resubRes.error==='string'?resubRes.error:"Could not resubmit — please try again.");
+      if (resubRes && resubRes.error) {
+        setSaveError(typeof resubRes.error === 'string' ? resubRes.error : "Could not resubmit — please try again.");
         return;
       }
-      // Slice 3: resubmit always lands as pending_confirmation — show
-      // the finish moment so the user understands the next step.
       setFinish({
         status: "pending_confirmation",
         result: scoreDraft.result,
@@ -267,19 +228,14 @@ export default function ScoreModal({
       return;
     }
 
-    var oppName=scoreModal.casual?(casualOppName.trim()||"Unknown"):scoreModal.oppName;
-    var opponentId=scoreModal.casual?casualOppId:(scoreModal.opponentId||null);
+    var oppName = scoreModal.casual ? (casualOppName.trim() || "Unknown") : scoreModal.oppName;
+    var opponentId = scoreModal.casual ? casualOppId : (scoreModal.opponentId || null);
 
-    // If the user chose the "Save as casual time-limited" path, force
-    // matchType=casual on this submission so it doesn't try to count
-    // toward Elo / can't accidentally pick up a ranked league tag.
-    // submitMatch already demotes ranked-without-opponent to casual,
-    // so we just override the explicit field on the draft for this call.
     var draftForSubmit = forceCasual
       ? Object.assign({}, scoreDraft, { matchType: 'casual', leagueId: null })
       : scoreDraft;
 
-    var res=await submitMatch({
+    var res = await submitMatch({
       scoreModal,
       scoreDraft: draftForSubmit,
       oppName,
@@ -287,34 +243,22 @@ export default function ScoreModal({
     });
     setSaving(false);
 
-    if(res&&res.error){
-      if(res.error==='duplicate'){
-        setSaveError(res.message||"This match is already logged.");
-      } else if(res.error==='rating_uninitialised'){
-        // Module 7.7: user hasn't picked a starting CourtSync Rating
-        // skill level yet. Surface the helper message verbatim so the
-        // hook owns the copy.
-        setSaveError(res.message||"Set your starting skill level before logging ranked matches.");
-      } else if(res.error!=='not_authenticated'){
-        setSaveError(typeof res.error==='string'?res.error:"Could not save match — please try again.");
+    if (res && res.error) {
+      if (res.error === 'duplicate') {
+        setSaveError(res.message || "This match is already logged.");
+      } else if (res.error === 'rating_uninitialised') {
+        setSaveError(res.message || "Set your starting skill level before logging ranked matches.");
+      } else if (res.error !== 'not_authenticated') {
+        setSaveError(typeof res.error === 'string' ? res.error : "Could not save match — please try again.");
       }
       return;
     }
 
-    // Tournament bracket recording (separate from stat/verification flow)
-    if(scoreModal.winnerId1&&scoreModal.winnerId2){
-      var winnerId=scoreDraft.result==="win"?scoreModal.winnerId1:scoreModal.winnerId2;
-      recordResult(scoreModal.tournId,scoreModal.roundIdx,scoreModal.matchId,winnerId);
+    if (scoreModal.winnerId1 && scoreModal.winnerId2) {
+      var winnerId = scoreDraft.result === "win" ? scoreModal.winnerId1 : scoreModal.winnerId2;
+      recordResult(scoreModal.tournId, scoreModal.roundIdx, scoreModal.matchId, winnerId);
     }
 
-    // Slice 3: pop into the finish moment. The card auto-dismisses
-    // after ~1.5s (handled inside MatchFinishMoment), at which point
-    // closeFromFinish() runs and the modal closes for real.
-    //
-    // Module 9: when submitMatch returns res.invite, the finish moment
-    // hands off to an InviteShareCard (slice 4) instead of auto-
-    // dismissing — the user needs to actually share the link before
-    // the match can become verified.
     setFinish({
       status: res && res.status ? res.status : "confirmed",
       result: scoreDraft.result,
@@ -331,34 +275,55 @@ export default function ScoreModal({
     setCasualOppId(null);
   }
 
-  // Slice 3: when the finish moment is up we deliberately swallow the
-  // backdrop-click so the auto-dismiss timer is the only path to close.
-  // This keeps the moment from feeling abrupt if the user taps too soon.
   function backdropClick() {
     if (finish) return;
     setScoreModal(null);
     if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
   }
 
+  // Slice 4 — fully contextual CTA copy. Drives from the same signals
+  // the composer uses internally (matchType, invite-toggle, completion)
+  // so the button label always reflects what tapping it actually does.
+  var ctaLabel = computeCtaLabel({
+    saving: saving,
+    isResubmit: isResubmit,
+    isVerified: isVerified,
+    isCasualModal: !!(scoreModal && scoreModal.casual),
+    isTournamentSlot: !!(scoreModal && scoreModal.winnerId1 && scoreModal.winnerId2),
+    matchType: scoreDraft.matchType,
+    completionType: scoreDraft.completionType,
+    inviteOpponent: !!scoreDraft.inviteOpponent,
+    hasOpponentName: !!(casualOppName && casualOppName.trim()),
+  });
+
   return (
     <div
       onClick={backdropClick}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:"0 16px"}}>
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 200, padding: "0 16px",
+      }}>
       <div
-        onClick={function(e){e.stopPropagation();}}
+        onClick={function (e) { e.stopPropagation(); }}
         className="pop"
-        style={{background:t.modalBg,border:"1px solid "+t.border,borderRadius:16,padding:"28px 24px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
+        style={{
+          background: t.modalBg, border: "1px solid " + t.border,
+          borderRadius: 16,
+          padding: "28px 24px",
+          width: "100%", maxWidth: 540,
+          maxHeight: "92vh", overflowY: "auto",
+        }}>
         {finish ? (
-          // Module 9: when an invite was created, hand off to the
-          // share card instead of the auto-dismiss finish moment —
-          // sharing the link IS the activation moment, so we don't
-          // close until the user taps Done.
           finish.invite ? (
             <InviteShareCard
               t={t}
               matchId={finish.matchId}
               invite={finish.invite}
-              loggerName={authUser && (authUser.name || authUser.user_metadata && authUser.user_metadata.name)}
+              loggerName={authUser && (authUser.name || (authUser.user_metadata && authUser.user_metadata.name))}
               invitedName={finish.opponentName}
               onClose={closeFromFinish}
             />
@@ -372,659 +337,126 @@ export default function ScoreModal({
             />
           )
         ) : (
-        <>
-        <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>{isResubmit?"Edit & Resubmit":"Log Result"}</h2>
+          <>
+            <h2 style={{
+              fontSize: 18, fontWeight: 700,
+              color: t.text, marginBottom: 18,
+              letterSpacing: "-0.3px",
+            }}>
+              {isResubmit ? "Edit & Resubmit" : "Log Match"}
+            </h2>
 
-        {/* Resubmit mode: locked opponent */}
-        {isResubmit&&(
-          <div style={{marginBottom:16,padding:"10px 14px",borderRadius:8,background:t.bgTertiary,border:"1px solid "+t.border}}>
-            <div style={{fontSize:10,fontWeight:700,color:t.textTertiary,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Opponent</div>
-            <div style={{fontSize:14,fontWeight:600,color:t.text}}>{scoreModal.oppName}</div>
-            <div style={{fontSize:11,color:t.textSecondary,marginTop:2}}>Corrected result will be sent to your opponent to confirm again</div>
-          </div>
-        )}
+            <MatchComposer
+              t={t}
+              scoreModal={scoreModal}
+              isResubmit={isResubmit}
+              isVerified={isVerified}
+              viewerProfile={viewerProfile}
+              viewerSuburb={viewerSuburb}
+              scoreDraft={scoreDraft}
+              setScoreDraft={setScoreDraft}
+              casualOppName={casualOppName}
+              setCasualOppName={setCasualOppName}
+              casualOppId={casualOppId}
+              setCasualOppId={setCasualOppId}
+              showOppDrop={showOppDrop}
+              setShowOppDrop={setShowOppDrop}
+              friends={friends}
+              suggestedPlayers={suggestedPlayers}
+              myLeagues={myLeagues}
+              opponentLeagueIds={opponentLeagueIds}
+              liveValidation={liveValidation}
+              saveError={saveError}
+              casualFallbackOffer={casualFallbackOffer}
+              saving={saving}
+              onSaveCasualFallback={function () {
+                setSaveError("");
+                setCasualFallbackOffer(null);
+                handleSave({ forceCasual: true });
+              }}
+            />
 
-        {/* Opponent field — new match only */}
-        {!isResubmit&&scoreModal.casual
-          ?<div style={{marginBottom:16}}>
-            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Opponent</label>
-            <div style={{position:"relative"}}>
-              <input value={casualOppName} placeholder="Type a name…"
-                onChange={function(e){
-                  setCasualOppName(e.target.value);
-                  setCasualOppId(null); // clear selection if they retype
-                  setShowOppDrop(true);
-                }}
-                onFocus={function(){setShowOppDrop(true);}}
-                onBlur={function(){setTimeout(function(){setShowOppDrop(false);},180);}}
-                style={Object.assign({},iStyle,{fontSize:14,marginBottom:0})}/>
-              {showOppDrop&&(function(){
-                var q=(casualOppName||"").trim().toLowerCase();
-                var all=friends.concat(suggestedPlayers.filter(function(s){return!friends.some(function(f){return f.id===s.id;});}));
-                var hits=q?all.filter(function(u){return u.name&&u.name.toLowerCase().includes(q);}):friends.slice(0,6);
-                if(!hits.length) return null;
-                return (
-                  <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:t.bgCard,border:"1px solid "+t.border,borderRadius:10,boxShadow:"0 8px 28px rgba(0,0,0,0.14)",zIndex:400,overflow:"hidden"}}>
-                    {hits.map(function(u){
-                      return (
-                        <div key={u.id}
-                          onMouseDown={function(){
-                            setCasualOppName(u.name);
-                            setCasualOppId(u.id);
-                            setShowOppDrop(false);
-                          }}
-                          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid "+t.border}}>
-                          <div style={{width:30,height:30,borderRadius:"50%",background:avColor(u.name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>
-                            {(u.avatar&&u.avatar.length<=2)?u.avatar:(u.name||"?").slice(0,2).toUpperCase()}
-                          </div>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:13,fontWeight:600,color:t.text}}>{u.name}</div>
-                            {u.skill&&<div style={{fontSize:11,color:t.textTertiary}}>{u.skill}</div>}
-                          </div>
-                          <span style={{fontSize:9,fontWeight:700,color:t.accent,letterSpacing:"0.05em",textTransform:"uppercase"}}>Verified</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Match-type toggle — only shown when opponent is a linked
-                friend (Module 7.5 product rule: friend → choose Ranked or
-                Casual; freetext → casual auto, no toggle). Default Ranked. */}
-            {casualOppName.trim() && isVerified && (function(){
-              var effectiveMatchType = scoreDraft.matchType || 'ranked';
-              function pick(mt){
-                setScoreDraft(function(d){ return Object.assign({}, d, { matchType: mt }); });
-              }
-              var btn = function(mt, label, glyph){
-                var on = effectiveMatchType === mt;
-                var color = on
-                  ? (mt === 'ranked' ? t.accent : t.textSecondary)
-                  : t.textSecondary;
-                var bg = on
-                  ? (mt === 'ranked' ? t.accentSubtle : t.bgTertiary)
-                  : 'transparent';
-                var borderC = on
-                  ? (mt === 'ranked' ? t.accent : t.border)
-                  : t.border;
-                return (
-                  <button key={mt} type="button" onClick={function(){pick(mt);}}
-                    style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + borderC, background: bg, color: color, fontSize: 12, fontWeight: on ? 700 : 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    <span>{glyph}</span><span>{label}</span>
-                  </button>
-                );
-              };
-              return (
-                <div style={{marginTop: 10}}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: 'block', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Match type</label>
-                  <div style={{display:'flex',gap:8}}>
-                    {btn('ranked', 'Ranked', '✓')}
-                    {btn('casual', 'Casual', '○')}
-                  </div>
-                  <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 6, lineHeight: 1.4 }}>
-                    {effectiveMatchType === 'ranked'
-                      ? 'Counts toward ELO — opponent will confirm to lock it in.'
-                      : 'Logged for records only — no ELO or W/L impact.'}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Module 9 — Invite-to-confirm toggle. Only shown when the
-                opponent is a freetext name (no friend linked yet). When
-                on, the match goes in as ranked + pending_opponent_claim;
-                we generate a secure share-link they can send to the
-                opponent. The match doesn't affect rating or league
-                standings until the recipient signs in, claims the
-                invite, and explicitly confirms. */}
-            {casualOppName.trim() && !isVerified && (function () {
-              var on = !!scoreDraft.inviteOpponent;
-              return (
-                <div style={{
-                  marginTop: 14,
-                  paddingTop: 12, paddingBottom: 12,
-                  borderTop: "1px solid " + t.border,
-                  display: "flex", flexDirection: "column", gap: 6,
-                }}>
-                  <button type="button"
-                    onClick={function () {
-                      setScoreDraft(function (d) {
-                        return Object.assign({}, d, { inviteOpponent: !on });
-                      });
-                    }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      background: "transparent", border: "none",
-                      padding: 0, cursor: "pointer",
-                    }}>
-                    <span style={{
-                      flexShrink: 0,
-                      width: 42, height: 24, borderRadius: 12,
-                      border: "1px solid " + (on ? t.accent : t.border),
-                      background: on ? t.accent : "transparent",
-                      position: "relative",
-                      transition: "background 0.15s, border-color 0.15s",
-                    }}>
-                      <span style={{
-                        position: "absolute",
-                        top: 2, left: on ? 20 : 2,
-                        width: 18, height: 18, borderRadius: "50%",
-                        background: on ? "#fff" : t.textSecondary,
-                        transition: "left 0.15s, background 0.15s",
-                      }}/>
-                    </span>
-                    <span style={{
-                      fontSize: 11, fontWeight: 800,
-                      color: t.text, letterSpacing: "0.12em",
-                      textTransform: "uppercase",
-                    }}>
-                      Invite {casualOppName.trim()} to confirm
-                    </span>
-                  </button>
-                  <div style={{
-                    fontSize: 11, color: t.textSecondary,
-                    lineHeight: 1.5, letterSpacing: "-0.1px",
-                    paddingLeft: 52,
-                  }}>
-                    {on
-                      ? "We'll generate a secure link you can share. They sign in, claim it, then confirm or dispute. The match doesn't affect rating until they confirm."
-                      : "Without an invite, this match logs as a casual record only — no rating impact, no verification."}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-          :(!isResubmit&&<p style={{fontSize:12,color:t.textSecondary,marginBottom:16}}>vs {scoreModal.oppName} · {scoreModal.tournName}</p>)
-        }
-
-        {/* League selector — Module 7.5 eligibility rule:
-              1. league.status === 'active'
-              2. viewer is an active member (lg.my_status === 'active')
-              3. opponent is an active member (opponentLeagueIds set)
-              4. league.mode === effective match type
-            All four must be true; otherwise the league is hidden. If no
-            league passes, the selector itself is hidden — no empty
-            dropdown clutter. Backend trigger validates the same rules
-            (defence in depth) so a forced payload is still rejected. */}
-        {(function(){
-          if (isResubmit) return null;
-          if (!isVerified) return null;  // freetext opponent → can't league-tag
-          var effectiveMatchType = scoreDraft.matchType || 'ranked';
-          var eligible = (myLeagues || []).filter(function(lg){
-            return lg.status === "active"
-              && lg.my_status === "active"
-              && lg.mode === effectiveMatchType
-              && opponentLeagueIds.has(lg.id);
-          });
-          if (!eligible.length) return null;
-          var currentId = scoreDraft.leagueId || "";
-          // If the user previously picked a league but then changed match
-          // type so it's no longer eligible, clear the stale pick.
-          var pickIsStale = currentId && !eligible.some(function(lg){return lg.id === currentId;});
-          if (pickIsStale && currentId) {
-            // Clear stale league_id by mutating scoreDraft once on render —
-            // safe because setScoreDraft batches and effective state is the
-            // local value we just computed.
-            setTimeout(function(){
-              setScoreDraft(function(d){ return Object.assign({}, d, { leagueId: null }); });
-            }, 0);
-          }
-          var prompt = effectiveMatchType === 'ranked'
-            ? 'Count toward a ranked league?'
-            : 'Count toward a casual league?';
-          return (
-            <div style={{marginBottom:16}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-                {prompt}
-              </label>
-              <select
-                value={pickIsStale ? "" : currentId}
-                onChange={function(e){
-                  var v = e.target.value || null;
-                  setScoreDraft(function(d){ return Object.assign({}, d, { leagueId: v }); });
-                }}
-                style={Object.assign({},iStyle,{fontSize:13,marginBottom:0,appearance:"auto"})}>
-                <option value="">No — just a {effectiveMatchType} match</option>
-                {eligible.map(function(lg){
-                  return <option key={lg.id} value={lg.id}>{lg.name}</option>;
-                })}
-              </select>
-            </div>
-          );
-        })()}
-
-        {/* Date */}
-        <div style={{marginBottom:16}}>
-          <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Date</label>
-          <input type="date" value={scoreDraft.date}
-            onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{date:e.target.value});});}}
-            style={Object.assign({},iStyle,{fontSize:14,marginBottom:0})}/>
-        </div>
-
-        {/* Result */}
-        <div style={{marginBottom:16}}>
-          <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase"}}>Result</label>
-          <div style={{display:"flex",gap:8}}>
-            {[{id:"win",l:"Win",c:t.green},{id:"loss",l:"Loss",c:t.red}].map(function(r){
-              var on=scoreDraft.result===r.id;
-              return (
-                <button key={r.id}
-                  onClick={function(){setScoreDraft(function(d){return Object.assign({},d,{result:r.id});});}}
-                  style={{flex:1,padding:"12px",borderRadius:9,border:"1px solid "+(on?r.c:t.border),background:on?r.c+"18":"transparent",fontSize:15,fontWeight:on?700:400,color:on?r.c:t.textSecondary}}>
-                  {r.l}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Completion type — slice E. Only shown when the match would
-            be casual (no linked opponent OR explicitly downgraded). For
-            ranked matches the "completed" rule is non-negotiable; the
-            casual-fallback affordance below the error block handles the
-            partial-score path explicitly.
-            Editorial styling: flat segmented control — no fill on
-            active, hairline borders, 800-weight typography to match
-            the rest of the redesign. */}
-        {(scoreDraft.matchType === 'casual' || (!casualOppId && !isResubmit)) && (
-          <div style={{marginBottom:16}}>
-            <label style={{fontSize:10,fontWeight:800,color:t.textSecondary,letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:8}}>How it ended</label>
-            <div style={{display:"flex",gap:0,borderTop:"1px solid "+t.border,borderBottom:"1px solid "+t.border}}>
-              {[
-                { id: 'completed',    label: 'Completed'    },
-                { id: 'time_limited', label: 'Time-limited' },
-                { id: 'retired',      label: 'Retired'      },
-              ].map(function (c, i) {
-                var on = (scoreDraft.completionType || 'completed') === c.id;
-                return (
-                  <button key={c.id}
-                    onClick={function () { setScoreDraft(function (d) { return Object.assign({}, d, { completionType: c.id }); }); }}
-                    style={{
-                      flex: 1,
-                      padding: "10px 6px",
-                      borderRadius: 0,
-                      background: "transparent",
-                      border: "none",
-                      borderLeft: i === 0 ? "none" : "1px solid " + t.border,
-                      color: on ? t.text : t.textTertiary,
-                      fontSize: 11,
-                      fontWeight: 800,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      position: "relative",
-                    }}>
-                    {c.label}
-                    {on && (
-                      <span style={{
-                        position: "absolute",
-                        left: 0, right: 0, bottom: -1, height: 2,
-                        background: t.text,
-                      }}/>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Sets */}
-        <div style={{marginBottom:16}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,alignItems:"center"}}>
-            <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,letterSpacing:"0.06em",textTransform:"uppercase"}}>Sets</label>
-            {scoreDraft.sets.length<5&&(
+            {/* Footer — Cancel + contextual Save CTA. */}
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button
-                onClick={function(){setScoreDraft(function(d){return Object.assign({},d,{sets:d.sets.concat([{you:"",them:""}])});});}}
-                style={{background:"transparent",border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:11,color:t.textSecondary,fontWeight:500}}>
-                + Set
-              </button>
-            )}
-          </div>
-          {scoreDraft.sets.map(function(set,si){
-            // Tiebreak reveal — a 7-6 / 6-7 set gets an inline sub-row
-            // for the inner tiebreak points. Hidden the moment the set
-            // score moves away from a tiebreak shape; the tieBreak field
-            // is dropped from the row at the same time so we never
-            // persist stale data.
-            var yNum = Number(String(set.you ?? "").trim());
-            var tNum = Number(String(set.them ?? "").trim());
-            var isTbShape = Number.isFinite(yNum) && Number.isFinite(tNum)
-              && ((yNum === 7 && tNum === 6) || (yNum === 6 && tNum === 7));
-            return (
-              <div key={si} style={{ marginBottom: 8 }}>
-                <div style={{display:"grid",gridTemplateColumns:"60px 1fr 1fr 24px",gap:8,alignItems:"center"}}>
-                  <span style={{fontSize:12,fontWeight:500,color:t.textSecondary}}>Set {si+1}</span>
-                  {["you","them"].map(function(who){
-                    return (
-                      <input key={who} type="number" inputMode="numeric" pattern="[0-9]*" min="0" value={set[who]} placeholder="0"
-                        onChange={function(e){
-                          var v=e.target.value;
-                          setScoreDraft(function(d){
-                            var ns=d.sets.map(function(ss,idx){
-                              if (idx!==si) return ss;
-                              var next = Object.assign({}, ss, { [who]: v });
-                              // If this edit moves the set away from a
-                              // 7-6 / 6-7 shape, drop any stale tieBreak
-                              // field so we don't persist it.
-                              var ny = Number(String(next.you ?? "").trim());
-                              var nt = Number(String(next.them ?? "").trim());
-                              var stillTb = Number.isFinite(ny) && Number.isFinite(nt)
-                                && ((ny === 7 && nt === 6) || (ny === 6 && nt === 7));
-                              if (!stillTb && next.tieBreak) {
-                                next = Object.assign({}, next);
-                                delete next.tieBreak;
-                              }
-                              return next;
-                            });
-                            return Object.assign({},d,{sets:ns});
-                          });
-                        }}
-                        style={{padding:"10px 0",textAlign:"center",borderRadius:8,border:"1px solid "+t.border,background:t.inputBg,color:t.text,fontSize:20,fontWeight:700,width:"100%",fontVariantNumeric:"tabular-nums"}}/>
-                    );
-                  })}
-                  {scoreDraft.sets.length>1
-                    ?<button onClick={function(){setScoreDraft(function(d){return Object.assign({},d,{sets:d.sets.filter(function(_,idx){return idx!==si;})});});}} style={{background:"none",border:"none",color:t.textTertiary,fontSize:16,padding:0}}>×</button>
-                    :<div/>
-                  }
-                </div>
-
-                {/* Tiebreak sub-row — same column layout, smaller inputs.
-                    Renders only when the set score is 7-6 or 6-7. */}
-                {isTbShape && (
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "60px 1fr 1fr 24px",
-                    gap: 8, marginTop: 6, alignItems: "center",
-                  }}>
-                    <span style={{
-                      fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                      textTransform: "uppercase", color: t.textTertiary,
-                    }}>Tiebreak</span>
-                    {["you","them"].map(function(who){
-                      var tbVal = (set.tieBreak && set.tieBreak[who] != null) ? set.tieBreak[who] : "";
-                      return (
-                        <input key={who} type="number" inputMode="numeric" pattern="[0-9]*" min="0"
-                          value={tbVal}
-                          placeholder={who === (yNum === 7 ? "you" : "them") ? "7" : "0-5"}
-                          onChange={function(e){
-                            var v = e.target.value;
-                            setScoreDraft(function(d){
-                              var ns = d.sets.map(function(ss, idx){
-                                if (idx !== si) return ss;
-                                var nextTb = Object.assign({}, ss.tieBreak || {});
-                                nextTb[who] = v;
-                                return Object.assign({}, ss, { tieBreak: nextTb });
-                              });
-                              return Object.assign({}, d, { sets: ns });
-                            });
-                          }}
-                          style={{
-                            padding: "7px 0", textAlign: "center",
-                            borderRadius: 6,
-                            border: "1px solid " + t.border,
-                            background: t.inputBg, color: t.text,
-                            fontSize: 14, fontWeight: 600,
-                            width: "100%", fontVariantNumeric: "tabular-nums",
-                          }}/>
-                      );
-                    })}
-                    <div/>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {/* Slice E: live validation caption — editorial hairline
-              strip with a tiny ALL-CAPS tag + body message. Errors
-              tag in red, partial-pass tag muted. No fill, no radius. */}
-          {liveValidation && !liveValidation.ok && (
-            <div style={{
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: "1px solid " + t.border,
-              display: "flex", gap: 10, alignItems: "baseline",
-            }}>
-              <span style={{
-                fontSize: 9, fontWeight: 800,
-                color: t.red, letterSpacing: "0.16em",
-                textTransform: "uppercase", flexShrink: 0,
-                fontVariantNumeric: "tabular-nums",
-              }}>
-                Invalid
-              </span>
-              <span style={{
-                fontSize: 12, color: t.textSecondary,
-                lineHeight: 1.4, letterSpacing: "-0.1px",
-              }}>
-                {liveValidation.message}
-              </span>
-            </div>
-          )}
-          {liveValidation && liveValidation.ok && liveValidation.completionStatus === "partial" && (
-            <div style={{
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: "1px solid " + t.border,
-              display: "flex", gap: 10, alignItems: "baseline",
-            }}>
-              <span style={{
-                fontSize: 9, fontWeight: 800,
-                color: t.textTertiary, letterSpacing: "0.16em",
-                textTransform: "uppercase", flexShrink: 0,
-              }}>
-                {scoreDraft.completionType === 'retired' ? 'Retired' : 'Time-limited'}
-              </span>
-              <span style={{
-                fontSize: 12, color: t.textSecondary,
-                lineHeight: 1.4, letterSpacing: "-0.1px",
-              }}>
-                Saved as casual. Won't affect rating.
-              </span>
-            </div>
-          )}
-          {/* Module 7.7 supplement: when the validator passes for a
-              ranked one-set match, surface the reduced-weight notice so
-              users know it counts but at less impact than a full BO3. */}
-          {liveValidation && liveValidation.ok
-            && liveValidation.completionStatus !== "partial"
-            && (function () {
-              var clean = (scoreDraft.sets || []).filter(function (s) { return s.you !== "" || s.them !== ""; });
-              if (clean.length !== 1) return null;
-              var matchType = scoreDraft.matchType
-                || ((isResubmit || casualOppId) ? 'ranked' : 'casual');
-              if (matchType === 'ranked' && !casualOppId && !isResubmit) matchType = 'casual';
-              if (matchType !== 'ranked') return null;
-              return (
-                <div style={{
-                  marginTop: 10,
-                  paddingTop: 10,
-                  borderTop: "1px solid " + t.border,
-                  display: "flex", gap: 10, alignItems: "baseline",
+                onClick={function () {
+                  setScoreModal(null);
+                  if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
+                }}
+                style={{
+                  flex: 1, padding: "12px", borderRadius: 8,
+                  border: "1px solid " + t.border,
+                  background: "transparent", color: t.text,
+                  fontSize: 13, fontWeight: 500,
+                  cursor: "pointer",
                 }}>
-                  <span style={{
-                    fontSize: 9, fontWeight: 800,
-                    color: t.orange, letterSpacing: "0.16em",
-                    textTransform: "uppercase", flexShrink: 0,
-                  }}>
-                    One set
-                  </span>
-                  <span style={{
-                    fontSize: 12, color: t.textSecondary,
-                    lineHeight: 1.4, letterSpacing: "-0.1px",
-                  }}>
-                    {ONE_SET_RATING_NOTICE}
-                  </span>
-                </div>
-              );
-            })()}
-        </div>
-
-        {/* Venue + Court
-            Venue is a dropdown sourced from the same COURTS list as the Map
-            — so map selection and log-match selection stay in sync. Sorted
-            by viewer suburb first, then same-zone, then alphabetical.
-            "Custom venue..." reveals a free-text input as a fallback for
-            private clubs or courts we haven't catalogued yet. */}
-        {(function(){
-          var sortedCourts = sortCourtsForViewer(viewerSuburb);
-          var currentVenue = scoreDraft.venue || "";
-          var matchesKnownCourt = !!currentVenue && sortedCourts.some(function(c){ return c.name === currentVenue; });
-          var isCustom = !!currentVenue && !matchesKnownCourt;
-
-          // The <select> value is either the known court name, "__custom__"
-          // when the user has typed a free-text venue, or "" for placeholder.
-          var selectValue = matchesKnownCourt ? currentVenue : (isCustom ? "__custom__" : "");
-
-          function handleSelect(e){
-            var v = e.target.value;
-            if(v === "__custom__"){
-              // entering custom mode — keep whatever's already in venue (may be blank)
-              setScoreDraft(function(d){ return Object.assign({}, d, { venue: d.venue || "" }); });
-              return;
-            }
-            setScoreDraft(function(d){ return Object.assign({}, d, { venue: v }); });
-          }
-
-          return (
-            <div style={{marginBottom:16}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div>
-                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Venue</label>
-                  <select
-                    value={selectValue}
-                    onChange={handleSelect}
-                    style={Object.assign({},iStyle,{fontSize:13,marginBottom:0,appearance:"auto"})}>
-                    <option value="">— Select court —</option>
-                    {sortedCourts.map(function(c){
-                      var isLocal = viewerSuburb && (c.suburb||"").toLowerCase() === (viewerSuburb||"").toLowerCase();
-                      var label = isLocal ? (c.name + " · " + c.suburb + " ★") : (c.name + " · " + c.suburb);
-                      return <option key={c.name} value={c.name}>{label}</option>;
-                    })}
-                    <option value="__custom__">Custom venue…</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Court</label>
-                  <input value={scoreDraft.court||""} placeholder="e.g. Court 3"
-                    onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{court:e.target.value});});}}
-                    style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
-                </div>
-              </div>
-
-              {/* Free-text fallback — only when "Custom venue…" is picked */}
-              {isCustom && (
-                <div style={{marginTop:8}}>
-                  <input value={currentVenue} placeholder="Type venue name"
-                    autoFocus
-                    onChange={function(e){setScoreDraft(function(d){return Object.assign({},d,{venue:e.target.value});});}}
-                    style={Object.assign({},iStyle,{fontSize:13,marginBottom:0})}/>
-                  <div style={{fontSize:10,color:t.textTertiary,marginTop:4,letterSpacing:"0.02em"}}>
-                    Can't find your court? Type the venue name here.
-                  </div>
-                </div>
-              )}
+                Cancel
+              </button>
+              <button
+                onClick={function () { handleSave(); }}
+                disabled={saving}
+                style={{
+                  flex: 2, padding: "12px", borderRadius: 8,
+                  border: "none",
+                  background: saving ? t.border : t.accent,
+                  color: "#fff", fontSize: 13, fontWeight: 600,
+                  opacity: saving ? 0.7 : 1,
+                  cursor: saving ? "default" : "pointer",
+                }}>
+                {ctaLabel}
+              </button>
             </div>
-          );
-        })()}
-
-        {/* Error — editorial hairline strip. Matches the live-validation
-            caption + casual-fallback pattern so the stack reads as one
-            voice when ranked validation fails and we offer the casual
-            escape hatch directly underneath. */}
-        {saveError&&(
-          <div style={{
-            marginBottom: 12,
-            paddingTop: 10, paddingBottom: 10,
-            borderTop: "1px solid " + t.border,
-            display: "flex", gap: 10, alignItems: "baseline",
-          }}>
-            <span style={{
-              fontSize: 9, fontWeight: 800,
-              color: t.red, letterSpacing: "0.16em",
-              textTransform: "uppercase", flexShrink: 0,
-            }}>
-              Can't save
-            </span>
-            <span style={{
-              fontSize: 12, color: t.text,
-              lineHeight: 1.4, letterSpacing: "-0.1px",
-            }}>
-              {saveError}
-            </span>
-          </div>
-        )}
-
-        {/* Casual fallback — explicit user-consent path when ranked
-            validation fails because the score is partial / time-limited
-            but would pass under casual rules. NEVER auto-converts;
-            user must tap to opt in.
-            Editorial styling: hairline strip, no fill / no radius.
-            Orange survives only as a thin accent on the eyebrow tag
-            so the CTA still draws the eye in a form full of greys. */}
-        {casualFallbackOffer && (
-          <div style={{
-            marginBottom: 14,
-            paddingTop: 12,
-            paddingBottom: 12,
-            borderTop: "1px solid " + t.border,
-            borderBottom: "1px solid " + t.border,
-            display: "flex", flexDirection: "column", gap: 8,
-          }}>
-            <span style={{
-              fontSize: 9, fontWeight: 800,
-              color: t.orange, letterSpacing: "0.16em",
-              textTransform: "uppercase",
-            }}>
-              Partial score
-            </span>
-            <span style={{
-              fontSize: 13, color: t.text,
-              lineHeight: 1.35, letterSpacing: "-0.1px",
-            }}>
-              This score isn't a completed match, so it can't affect rating. Save as casual time-limited instead?
-            </span>
-            <button
-              onClick={function(){ setSaveError(""); setCasualFallbackOffer(null); handleSave({forceCasual: true}); }}
-              disabled={saving}
-              style={{
-                alignSelf: "flex-start",
-                marginTop: 2,
-                padding: "0 0 2px 0",
-                background: "transparent",
-                border: "none",
-                borderBottom: "1px solid " + t.text,
-                color: t.text,
-                fontSize: 11, fontWeight: 800,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-                opacity: saving ? 0.5 : 1,
-              }}>
-              Save as casual →
-            </button>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:8}}>
-          <button
-            onClick={function(){setScoreModal(null);if(!isResubmit){setCasualOppName("");setCasualOppId(null);}}}
-            style={{flex:1,padding:"12px",borderRadius:8,border:"1px solid "+t.border,background:"transparent",color:t.text,fontSize:13,fontWeight:500}}>
-            Cancel
-          </button>
-          <button
-            onClick={function(){ handleSave(); }}
-            disabled={saving}
-            style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:saving?t.border:t.accent,color:"#fff",fontSize:13,fontWeight:600,opacity:saving?0.7:1}}>
-            {saving?"Saving…":isResubmit?"Resubmit for confirmation":(isVerified&&scoreModal.casual?"Submit for confirmation":"Save result")}
-          </button>
-        </div>
-        </>
+          </>
         )}
       </div>
     </div>
   );
+}
+
+// Slice 4 — derive CTA copy from the same context the composer uses.
+// The label always reflects what tapping the button actually does.
+//
+// Order of precedence (most specific → most generic):
+//   1. Saving spinner state              → "Saving…"
+//   2. Resubmit context                  → "Resubmit for confirmation"
+//   3. Tournament-bracket slot           → "Save & advance bracket"
+//   4. Casual modal + freetext + invite  → "Save & share invite"
+//   5. Casual modal + freetext + !invite → "Save as casual"
+//   6. Casual modal + linked + ranked    → "Submit for confirmation"
+//   7. Casual modal + linked + casual    → "Save match"
+//   8. Anything else (legacy fallback)   → "Save result"
+//
+// Time-limited / retired completion type is signalled by the inline
+// caption strip under the scoreboard, not the CTA copy — keeps the
+// button label short and punchy.
+function computeCtaLabel({
+  saving,
+  isResubmit,
+  isVerified,
+  isCasualModal,
+  isTournamentSlot,
+  matchType,
+  completionType,           // eslint-disable-line no-unused-vars
+  inviteOpponent,
+  hasOpponentName,
+}) {
+  if (saving) return "Saving…";
+  if (isResubmit) return "Resubmit for confirmation";
+  if (isTournamentSlot) return "Save & advance bracket";
+  if (isCasualModal && !isVerified && hasOpponentName && inviteOpponent) {
+    return "Save & share invite";
+  }
+  if (isCasualModal && !isVerified) {
+    // Freetext / no opponent picked yet — without an invite this is a
+    // casual-only record. Same copy whether or not a name is typed,
+    // because the action is the same.
+    return "Save as casual";
+  }
+  if (isCasualModal && isVerified) {
+    var effective = matchType || 'ranked';
+    return effective === 'ranked'
+      ? "Submit for confirmation"
+      : "Save match";
+  }
+  return "Save result";
 }

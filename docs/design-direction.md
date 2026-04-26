@@ -174,9 +174,68 @@ Below the hero:
 - Deeper stats accordion (W/L breakdown, match formats, surfaces)
 - Match history (existing ProfileMatchRow, untouched in slice 2)
 
-## Log Match flow (slice 3 — not yet implemented)
+## Log Match flow (Module 9.1 — shipped)
 
-Open question. Direction: keep current ScoreModal logic but add a "completion moment" — subtle reveal of stats movement on save. Not a confetti animation; a brief "+12 ranking points" or "your form is now W-W-W-L-W" surface for 1.5s before the modal closes. Goal: make the act of logging feel like an achievement, not a form completion.
+The Log Match modal is the most data-dense surface in the app. The redesign turns it into a **match composer**: scoreboard-first, derived state where possible, contextual copy throughout. Goal: the form should read as "you're composing a match", not "you're filling in fields".
+
+### Component anatomy
+
+The modal is split into a slim **shell** (`ScoreModal.jsx`, ~290 lines) + four focused body components, all under `src/features/scoring/components/`:
+
+| Component | Job |
+|---|---|
+| `MatchupHeader.jsx` | Editorial "you VS opponent" hero — eyebrows, avatars, hairline divider. Embeds OpponentPicker on the casual + freetext path. |
+| `OpponentPicker.jsx` | Three-state picker: **input** (search + dropdown), **friend chip** (verified, accent eyebrow), **freetext chip** (muted, "WILL NEED INVITE" eyebrow). Mid-typing never triggers chip mode — only an explicit commit does (friend select / freetext-row tap / Enter). |
+| `ScoreboardInput.jsx` | The hero. Players-as-rows × sets-as-cols actual scoreboard with tabular-nums. Inline tiebreak sub-row appears when any set hits 7-6/6-7. "+ Set" rail at the right edge while sets.length < 5. |
+| `MatchComposer.jsx` | Orchestrator — lays out the new hierarchy and owns the score-derived winner effect + collapse state. |
+| `ScoreModal.jsx` | Shell — chrome, save state, validator glue, finish/invite overlay, contextual save CTA copy. |
+
+### Body hierarchy (locked)
+
+1. **Matchup header** (you VS opponent — picker if casual+freetext, chip otherwise)
+2. **Scoreboard** (the hero)
+3. **Live validation strip** (under scoreboard for tight feedback loop)
+4. **Outcome** — derived "You win — 6-3, 6-4" strip OR manual Win/Loss buttons (only when the score is empty / tied / retired / time-limited)
+5. Match-type toggle (when both players are linked)
+6. Completion type (casual only)
+7. League selector (when eligible)
+8. Invite-to-confirm toggle (casual + freetext only)
+9. Collapsible "+ Add details" — date / venue / court (auto-opens when any field has a non-default value, e.g. resubmit)
+10. Error / casual-fallback strips
+11. Cancel + contextual Save CTA
+
+### Score-derived winner
+
+When the entered set scores produce an unambiguous winner AND completion is `'completed'`, the manual Win/Loss buttons are hidden and the outcome strip displays the derived result + formatted score. The result auto-syncs to `scoreDraft.result` so the rest of the system (validator, submit, finish moment) sees the right value without the user tapping a button.
+
+Manual buttons stay visible whenever:
+- Score is empty or tied (sets-won is ambiguous)
+- Completion is `'retired'` (retiree may be sets-ahead)
+- Completion is `'time_limited'` (sets-won doesn't define winner)
+
+### Contextual CTA copy
+
+The save button label always reflects what tapping it does. `computeCtaLabel()` in `ScoreModal.jsx` derives copy from:
+
+| State | Label |
+|---|---|
+| Saving | "Saving…" |
+| Resubmit | "Resubmit for confirmation" |
+| Tournament-bracket slot | "Save & advance bracket" |
+| Casual modal + freetext + invite-toggle ON | "Save & share invite" |
+| Casual modal + freetext + invite-toggle OFF | "Save as casual" |
+| Casual modal + linked friend + ranked | "Submit for confirmation" |
+| Casual modal + linked friend + casual | "Save match" |
+| Fallback | "Save result" |
+
+Time-limited / retired completion type is signalled by the inline caption strip under the scoreboard, not the CTA copy — keeps the button label short and punchy.
+
+### Editorial vocabulary used here
+
+- **Eyebrows** — 9px, weight 800, 0.16em tracking, ALL CAPS, `t.textTertiary` (or accent for "VERIFIED" / orange for "ONE SET" / red for "INVALID")
+- **Hairlines** — `borderTop: 1px solid t.border` on caption strips, no fills, no radii. Adopted from the editorial pass on ActionReviewDrawer / NotificationsPanel / Auth screens.
+- **Tabular numerals** — `fontVariantNumeric: tabular-nums` on every score input + the formatted-score caption so digits align between sets.
+- **Tap targets** — score inputs are 22px font in 12px-padded cells (~46px tall) so they remain mobile-comfortable even when 5 set columns are present.
 
 ## League surfaces (slice 4 — not yet implemented)
 
