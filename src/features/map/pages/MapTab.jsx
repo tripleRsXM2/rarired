@@ -437,35 +437,21 @@ export default function MapTab({
             : "0 1px 4px rgba(255,255,255,0.55)",
           fontWeight: 500,
         };
-        // Position rule:
-        //   • Desktop OR (mobile + zone-hover): bottom-left, classic
-        //     hover-preview slot.
-        //   • Mobile + court/players mode: top-left so the bottom of
-        //     the screen stays clear for the prompt + Continue button
-        //     and the player cards. Top placement clears the step
-        //     progress bar (which sits at top:~10px / 3px tall).
-        var pinTopLeft = isMobile && (playMode === "court" || playMode === "players");
-        var wrapStyle = pinTopLeft
-          ? {
-              position:"absolute",
-              top: "calc(env(safe-area-inset-top, 0px) + 14px)",
-              left: 14,
-              // Tighter card on mobile-pinned: less width, less gap
-              // between elements, smaller heading. The card is now
-              // the smaller-sister of the desktop card on purpose —
-              // user feedback was 'a bit smaller on mobile'.
-              maxWidth: 180,
-              zIndex:500, pointerEvents:"none",
-              display:"flex", flexDirection:"column", gap: 4,
-              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-            }
-          : {
-              position:"absolute", left: isMobile ? 14 : 18, bottom: isMobile ? 14 : 18,
-              maxWidth: isMobile ? 240 : 360,
-              zIndex:500, pointerEvents:"none",
-              display:"flex", flexDirection:"column", gap: 8,
-              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-            };
+        // Position rule (revised):
+        //   The CourtSync identity card lives at TOP-LEFT permanently
+        //   in a separate slot (rendered as its own element below).
+        //   This bottom-left slot is reserved for HOVER previews and
+        //   for the persistent zone/court info during play modes —
+        //   per user 'hover stuff is supposed to stay bottom left'.
+        //   pinTopLeft logic retired.
+        var pinTopLeft = false;
+        var wrapStyle = {
+          position:"absolute", left: isMobile ? 14 : 18, bottom: isMobile ? 14 : 18,
+          maxWidth: isMobile ? 240 : 360,
+          zIndex:500, pointerEvents:"none",
+          display:"flex", flexDirection:"column", gap: 8,
+          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+        };
         // When pinned top-left we tighten typography so the card
         // doesn't crowd the chrome above/around it.
         if(pinTopLeft){
@@ -518,37 +504,7 @@ export default function MapTab({
                   : (playMode === "zone"  && hovered)    ? hovered
                   : (hovered && !selected)               ? hovered
                   : null;
-
-        // ── CourtSync fallback card ───────────────────────────────
-        // When nothing else is owning the corner card, render a
-        // persistent product-identity card so the left side of the
-        // map doesn't feel hollow. Visible in:
-        //   • Default mode + no hover (no zone open, no preview)
-        //   • Zone-pick mode + no hover (gives the user something
-        //     to read while their eye scans the polygons)
-        // Hidden when a zone is selected (side panel takes over)
-        // and during court/players modes (those have their own
-        // persistent cards).
-        if(!which){
-          var hideForSelected = !!selected && playMode === "off";
-          if(hideForSelected) return null;
-          var brandRed = (t && t.red) || "#ef4444";
-          return (
-            <div className="fade-up" style={wrapStyle}>
-              <span style={labelStyle}>CourtSync</span>
-              <div style={{
-                width: pinTopLeft ? 36 : 56,
-                height: pinTopLeft ? 2 : 3,
-                background: brandRed,
-                borderRadius: 2,
-                boxShadow: "0 1px 4px " + brandRed + "55",
-              }}/>
-              <div style={pinTopLeft ? Object.assign({}, subStyle, {fontSize:11}) : subStyle}>
-                Sydney&rsquo;s social tennis network.
-              </div>
-            </div>
-          );
-        }
+        if(!which) return null;
         var h = ZONE_BY_ID[which];
         if(!h) return null;
         return (
@@ -573,6 +529,59 @@ export default function MapTab({
                 {h.blurb}
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* CourtSync identity card — TOP-LEFT, persistent across the
+          entire map experience. Doesn't change when the user hovers
+          a zone, picks a court, or enters players mode (those cards
+          live in the bottom-left slot). The only state that hides
+          this is the open-side-panel layout where the right column
+          is owning the workspace and the top-left would feel busy.
+          Same typography/accent-rule pattern as the hover cards
+          for visual consistency. Red accent rule by design — the
+          identity colour, not a zone tint. */}
+      {(function(){
+        if(playMode === "off" && selected) return null;
+        var brandRed = (t && t.red) || "#ef4444";
+        var size = isMobile
+          ? { heading: 18, subFont: 11, ruleW: 36, ruleH: 2, gap: 4, maxW: 200, top: 14, left: 14 }
+          : { heading: 28, subFont: 12, ruleW: 56, ruleH: 3, gap: 6, maxW: 320, top: 22, left: 22 };
+        var headLabel = {
+          fontSize: size.heading, fontWeight: 900,
+          letterSpacing: "-0.025em", lineHeight: 1.05,
+          color: mapDark ? "#ffffff" : "#14110f",
+          textShadow: mapDark
+            ? "0 2px 14px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
+            : "0 2px 14px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
+        };
+        var subLabel = {
+          fontSize: size.subFont, lineHeight: 1.4,
+          color: mapDark ? "rgba(255,255,255,0.82)" : "rgba(20,18,17,0.7)",
+          textShadow: mapDark
+            ? "0 1px 4px rgba(0,0,0,0.55)"
+            : "0 1px 4px rgba(255,255,255,0.55)",
+          fontWeight: 500,
+        };
+        return (
+          <div className="fade-up" style={{
+            position:"absolute",
+            top: "calc(env(safe-area-inset-top, 0px) + " + size.top + "px)",
+            left: size.left,
+            maxWidth: size.maxW,
+            zIndex: 500, pointerEvents:"none",
+            display:"flex", flexDirection:"column", gap: size.gap,
+            fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+          }}>
+            <span style={headLabel}>CourtSync</span>
+            <div style={{
+              width: size.ruleW, height: size.ruleH,
+              background: brandRed,
+              borderRadius: 2,
+              boxShadow: "0 1px 4px " + brandRed + "55",
+            }}/>
+            <div style={subLabel}>Sydney&rsquo;s social tennis network.</div>
           </div>
         );
       })()}
