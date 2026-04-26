@@ -448,7 +448,7 @@ export default function MapTab({
         var wrapStyle = pinTopLeft
           ? {
               position:"absolute",
-              top: "calc(env(safe-area-inset-top, 0px) + 30px)",
+              top: "calc(env(safe-area-inset-top, 0px) + " + (isMobile ? 14 : 30) + "px)",
               left: 14,
               maxWidth: 220,
               zIndex:500, pointerEvents:"none",
@@ -590,7 +590,7 @@ export default function MapTab({
               The chevron + title are centered as a unit. */}
           <div style={{
             position:"absolute",
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + " + (isMobile ? 24 : 40) + "px)",
             left: 0, right: 0,
             zIndex: 540,
             pointerEvents:"none",

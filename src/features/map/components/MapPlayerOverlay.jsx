@@ -202,23 +202,63 @@ export default function MapPlayerOverlay({
     ? "1px solid rgba(255,255,255,0.18)"
     : "1px solid rgba(20,18,17,0.10)";
 
+  // The Singles/Doubles toggle lives in different slots per
+  // viewport. Desktop: centred pill in the top chrome alongside
+  // the filter cog. Mobile: rendered separately just above the
+  // title prompt to mirror the gap scope tabs have to the player
+  // carousel (per user redesign brief). The element is the same;
+  // only the wrapping position changes.
+  var formatToggleEl = (
+    <div className="fade-up" style={{
+      display:"inline-flex",
+      padding: 4, borderRadius: 999,
+      background: glassBg,
+      backdropFilter: "blur(20px) saturate(140%)",
+      WebkitBackdropFilter: "blur(20px) saturate(140%)",
+      border: glassBorder,
+      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+      pointerEvents:"auto",
+    }}>
+      {[
+        { id:"singles", label:"Singles" },
+        { id:"doubles", label:"Doubles" },
+      ].map(function(f){
+        var on = format === f.id;
+        return (
+          <button key={f.id} type="button"
+            onClick={function(){
+              if(on) return;
+              var newCap = f.id === "singles" ? 1 : 3;
+              setFormat(f.id);
+              setSelectedIds(function(prev){ return prev.slice(0, newCap); });
+            }}
+            style={{
+              padding: isMobile ? "6px 12px" : "8px 18px",
+              borderRadius: 999,
+              background: on ? fg : "transparent",
+              color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
+              border:"none", cursor: on ? "default" : "pointer",
+              fontSize: isMobile ? 11 : 12, fontWeight: 800,
+              letterSpacing:"0.06em", textTransform:"uppercase",
+              transition:"background 0.15s, color 0.15s",
+            }}>
+            {f.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   // ─────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────
   return (
     <>
-      {/* TOP — Singles/Doubles toggle + Filter cog. Layout differs
-          by viewport so the chrome doesn't fight the bottom-left
-          context card on a tight phone screen.
-            • Desktop: pill centred, cog absolute-right.
-            • Mobile : pill + cog right-aligned (court card lives
-              top-left in players mode on mobile, so we surrender
-              the centre to keep things uncluttered).
-          Scope tabs render in a different slot per viewport too —
-          see the standalone scope-tabs block below. */}
+      {/* TOP CHROME — desktop: format pill centred + cog absolute
+          right. Mobile: cog only (format moves to the bottom slot). */}
       <div style={{
         position: "absolute",
-        top: "calc(env(safe-area-inset-top, 0px) + " + (isMobile ? 28 : 16) + "px)",
+        top: "calc(env(safe-area-inset-top, 0px) + " + (isMobile ? 14 : 16) + "px)",
         left: 16, right: 16,
         zIndex: 545,
         display:"flex", alignItems:"center",
@@ -226,46 +266,7 @@ export default function MapPlayerOverlay({
         gap: isMobile ? 8 : 12,
         pointerEvents:"none",
       }}>
-        {/* Singles/Doubles segmented toggle. Pure-glass pill so the
-            blurred map shows through. */}
-        <div className="fade-up" style={{
-          display:"inline-flex",
-          padding: 4, borderRadius: 999,
-          background: glassBg,
-          backdropFilter: "blur(20px) saturate(140%)",
-          WebkitBackdropFilter: "blur(20px) saturate(140%)",
-          border: glassBorder,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-          pointerEvents:"auto",
-        }}>
-          {[
-            { id:"singles", label:"Singles" },
-            { id:"doubles", label:"Doubles" },
-          ].map(function(f){
-            var on = format === f.id;
-            return (
-              <button key={f.id} type="button"
-                onClick={function(){
-                  if(on) return;
-                  var newCap = f.id === "singles" ? 1 : 3;
-                  setFormat(f.id);
-                  setSelectedIds(function(prev){ return prev.slice(0, newCap); });
-                }}
-                style={{
-                  padding: isMobile ? "6px 12px" : "8px 18px",
-                  borderRadius: 999,
-                  background: on ? fg : "transparent",
-                  color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
-                  border:"none", cursor: on ? "default" : "pointer",
-                  fontSize: isMobile ? 11 : 12, fontWeight: 800,
-                  letterSpacing:"0.06em", textTransform:"uppercase",
-                  transition:"background 0.15s, color 0.15s",
-                }}>
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
+        {!isMobile && formatToggleEl}
 
         {/* Filter cog. On desktop it's absolutely positioned so the
             centred format pill keeps its visual primacy; on mobile
@@ -308,17 +309,33 @@ export default function MapPlayerOverlay({
         </button>
       </div>
 
+      {/* MOBILE — Singles/Doubles slot. Sits directly above the
+          title prompt with the same visual gap as scope tabs have
+          to the player carousel above (≈ 16-18px). Hidden on
+          desktop (rendered in the top chrome row instead). */}
+      {isMobile && (
+        <div style={{
+          position:"absolute",
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 100px)",
+          left: 0, right: 0,
+          zIndex: 545,
+          display:"flex", justifyContent:"center",
+          pointerEvents:"none",
+        }}>
+          {formatToggleEl}
+        </div>
+      )}
+
       {/* Scope tabs — In zone / Everywhere.
             • Desktop: directly below the format toggle (top chrome).
-            • Mobile : just above the bottom prompt. The mobile top
-              is already crowded with the court card + format pill
-              + cog; relocating the scope tabs near the bottom
-              prompt keeps them paired with the player roster they
-              control.
+            • Mobile : just below the player cards (above the format
+              toggle which sits above the title). Slightly tighter
+              gap to the cards than before — user feedback was the
+              previous bottom:110 read too far away.
           Quiet underline-tabs styling so they read as secondary. */}
       <div style={isMobile ? {
         position:"absolute",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 110px)",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 158px)",
         left: 0, right: 0,
         zIndex: 545,
         display:"flex", justifyContent:"center",
@@ -645,7 +662,7 @@ export default function MapPlayerOverlay({
           Morphs into a Continue button once ≥1 player is picked. */}
       <div style={{
         position:"absolute",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + " + (isMobile ? 24 : 40) + "px)",
         left: 0, right: 0,
         zIndex: 540,
         pointerEvents:"none",
