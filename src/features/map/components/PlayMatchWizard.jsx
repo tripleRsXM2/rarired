@@ -27,12 +27,14 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
 
-// Three steps now: zone → court → player(s). The old step-4 confirm
-// screen was dropped because it just echoed the draft the DM composer
-// already shows. Council call: trust the user; the DM is the natural
-// confirmation. Also harmonises with the side-panel "Message" path
-// which goes straight to the DM with no extra confirm.
-var TOTAL_STEPS = 3;
+// Four steps:
+//   0 zone   1 court   2 player(s)   3 when + send
+// Step 3 was carrying too much (player picker + when chips + day
+// chips + time chips + booking link + preview + send). Split per
+// PM/UX council so each step has ONE clear action: pick player(s)
+// then plan when. Modern wizard pattern (Strava, Hinge, Apple
+// Watch onboarding).
+var TOTAL_STEPS = 4;
 
 // Day-of-week chip labels — Mon-Sun. Match what people actually
 // type when planning ("Sat" not "Saturday") so the rendered draft
@@ -82,6 +84,9 @@ export default function PlayMatchWizard({
     // flow handed both off), jump straight to step 2 (player picker).
     // If only zone is pre-filled, start at step 1 (court picker).
     // Otherwise step 0 (zone picker).
+    // Smart skip: with both zone+court pre-filled (map flow) start
+    // at step 2 (player picker). Map flow skips zone+court because
+    // they're picked on the map.
     var startStep = (initialZoneId && initialCourtName) ? 2
                   : initialZoneId ? 1 : 0;
     setStep(startStep);
@@ -188,10 +193,8 @@ export default function PlayMatchWizard({
       return players.find(function(p){ return p.id === id; });
     }).filter(Boolean);
     if(!partners.length) return;
-    // Funnel: emit player_picked too so we keep the existing
-    // step-completion event even though the dedicated confirm step
-    // is gone.
-    track("play_match_player_picked", { player_count: partners.length, scope: scope });
+    // (player_picked is now fired from the step-2 "Continue" button
+    // since picking is its own step in the 4-step flow.)
     var zone = ZONES.find(function(z){ return z.id === zoneId; });
     var when = resolveWhen(whenMode, pickedDays, timeOfDay);
     var ctx = {
@@ -316,10 +319,10 @@ export default function PlayMatchWizard({
           padding: "62px 28px 0",
           display:"flex", gap: 5,
         }}>
-          {[0,1,2].map(function(i){
+          {[0,1,2,3].map(function(i){
             return (
               <div key={i} style={{
-                width: 28, height: 3, borderRadius: 2,
+                width: 22, height: 3, borderRadius: 2,
                 background: i <= step ? t.text : t.border,
                 transition: "background 0.2s",
               }}/>
@@ -345,6 +348,7 @@ export default function PlayMatchWizard({
             {step === 0 && "Where do you want to play?"}
             {step === 1 && "Which court?"}
             {step === 2 && "Who do you want to play with?"}
+            {step === 3 && "When do you want to play?"}
           </div>
         </div>
 
@@ -672,11 +676,9 @@ export default function PlayMatchWizard({
                 </>
               )}
 
-              {/* When? — chip group for the day/range, drives the
-                  pre-filled draft wording. Optional; defaults to
-                  "this week". Three modes: week / weekend / pick days.
-                  "Pick days" expands a Mon-Sun multi-select. */}
-              {!loading && players.length > 0 && (
+              {/* When? — moved to step 3 below per user. Step 2 is
+                  now player picker only. */}
+              {false && !loading && players.length > 0 && (
                 <div style={{ marginTop: 18 }}>
                   <div style={{
                     fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
@@ -868,12 +870,187 @@ export default function PlayMatchWizard({
             </div>
           )}
 
+          {/* Step 3 — When? + send invite. Split out from step 2
+              per user / PM council so each step has one clear
+              action. Renders the same chip group + day chips +
+              time tabs + booking link + message preview that
+              previously crowded step 2. */}
+          {step === 3 && (
+            <div>
+              {!loading && players.length > 0 && (
+                <div>
+                  <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
+                    textTransform: "uppercase", color: t.textTertiary,
+                    marginBottom: 8,
+                  }}>
+                    When?
+                  </div>
+                  <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
+                    {[
+                      { id:"week",      label:"This week" },
+                      { id:"next-week", label:"Next week" },
+                      { id:"weekend",   label:"Weekend" },
+                      { id:"days",      label:"Pick days" },
+                    ].map(function(opt){
+                      var on = whenMode === opt.id;
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={function(){
+                            setWhenMode(opt.id);
+                            if(opt.id !== "days") setPickedDays([]);
+                          }}
+                          style={{
+                            padding: "8px 14px", borderRadius: 999,
+                            background: on ? t.text : hexToRgba(t.bgCard, 0.78),
+                            color: on ? t.bg : t.textSecondary,
+                            border:"none", cursor:"pointer",
+                            fontSize: 12, fontWeight: 700,
+                            letterSpacing:"0.01em",
+                            transition: "background 0.15s, color 0.15s",
+                          }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {whenMode === "days" && (
+                    <div style={{ display:"flex", gap: 5, flexWrap:"wrap", marginTop: 10 }}>
+                      {DAYS.map(function(d){
+                        var on = pickedDays.indexOf(d) !== -1;
+                        return (
+                          <button key={d} type="button"
+                            onClick={function(){
+                              setPickedDays(function(prev){
+                                return prev.indexOf(d) !== -1
+                                  ? prev.filter(function(x){ return x !== d; })
+                                  : prev.concat([d]);
+                              });
+                            }}
+                            style={{
+                              minWidth: 38, padding: "7px 0", borderRadius: 10,
+                              background: on ? t.accent : hexToRgba(t.bgCard, 0.78),
+                              color: on ? (t.accentText || "#fff") : t.textSecondary,
+                              border:"none", cursor:"pointer",
+                              fontSize: 11, fontWeight: 800,
+                              letterSpacing:"0.04em",
+                              transition: "background 0.15s, color 0.15s",
+                            }}>
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Time of day — underline tabs */}
+                  <div style={{ display:"flex", gap: 18, marginTop: 12, paddingBottom: 2 }}>
+                    {[
+                      { id:"anytime",   label:"Anytime"   },
+                      { id:"morning",   label:"Morning"   },
+                      { id:"afternoon", label:"Afternoon" },
+                      { id:"evening",   label:"Evening"   },
+                    ].map(function(opt){
+                      var on = timeOfDay === opt.id;
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={function(){ if(!on) setTimeOfDay(opt.id); }}
+                          style={{
+                            padding:"4px 0", background:"transparent", border:"none",
+                            borderBottom: "2px solid " + (on ? t.text : "transparent"),
+                            color: on ? t.text : t.textTertiary,
+                            fontSize: 12, fontWeight: on ? 700 : 500,
+                            letterSpacing:"0.01em",
+                            cursor: on ? "default" : "pointer",
+                            transition:"color 0.15s, border-color 0.15s",
+                          }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {pickedCourt && pickedCourt.bookingUrl && (
+                    <a href={pickedCourt.bookingUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        marginTop: 12, padding: "10px 12px", borderRadius: 12,
+                        background: hexToRgba(t.bgCard, 0.78),
+                        color: t.text, textDecoration:"none",
+                        display:"flex", alignItems:"center", gap: 10,
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background = t.bgCard; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = hexToRgba(t.bgCard, 0.78); }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 10,
+                        background: hexToRgba(t.accent, 0.14),
+                        color: t.accent, flexShrink: 0,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                      }}>
+                        <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                             stroke="currentColor" strokeWidth="1.8"
+                             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M11 4h3v3M14 4l-6 6M8 5H5v8h8v-3"/>
+                        </svg>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{
+                          fontSize: 12.5, fontWeight: 700, color: t.text,
+                          letterSpacing: "-0.01em",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        }}>
+                          Check times at {pickedCourt.name}
+                        </div>
+                        <div style={{
+                          fontSize: 10, color: t.textTertiary, marginTop: 2,
+                          letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:700,
+                        }}>
+                          Opens venue's booking site
+                        </div>
+                      </div>
+                    </a>
+                  )}
+
+                  {selectedIds.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
+                        textTransform: "uppercase", color: t.textTertiary,
+                        marginBottom: 6,
+                      }}>
+                        Message preview
+                      </div>
+                      <div style={{
+                        padding: "12px 14px",
+                        borderRadius: "16px 16px 16px 4px",
+                        background: hexToRgba(t.accent, 0.10),
+                        color: t.text, fontSize: 13.5, lineHeight: 1.45,
+                        letterSpacing: "-0.005em", maxWidth: "95%",
+                      }}>
+                        {previewInviteText({
+                          partners: selectedIds.map(function(id){ return players.find(function(p){ return p.id === id; }); }).filter(Boolean),
+                          court: courtName, zone: zone,
+                          when: resolveWhen(whenMode, pickedDays, timeOfDay),
+                        })}
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: t.textTertiary,
+                        marginTop: 6, letterSpacing:"0.02em",
+                      }}>
+                        This sends as a direct message to each player.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
 
-        {/* Footer — Send invite directly from step 2 (player picker).
-            The old step 3 confirm screen was dropped: the DM composer
-            already shows the same draft in editable form, so an extra
-            preview screen is dead weight. Council call. */}
+        {/* Footer — step 2 = Continue → step 3, step 3 = Send invite. */}
         {step === 2 && (
           <div style={{
             padding: "12px 16px",
@@ -885,16 +1062,40 @@ export default function PlayMatchWizard({
                 ? "Pick at least one"
                 : (selectedIds.length === 1 ? "1 player selected" : selectedIds.length + " players selected")}
             </span>
-            <button type="button" onClick={sendInvite}
+            <button type="button" onClick={function(){
+                if(!selectedIds.length) return;
+                track("play_match_player_picked", { player_count: selectedIds.length, scope: scope });
+                go(3);
+              }}
               disabled={selectedIds.length === 0}
               style={{
                 padding:"11px 22px", borderRadius: 10,
-                background: selectedIds.length ? t.accent : t.border,
-                color: selectedIds.length ? (t.accentText || "#fff") : t.textTertiary,
+                background: selectedIds.length ? t.text : t.border,
+                color: selectedIds.length ? t.bg : t.textTertiary,
                 border:"none",
                 fontSize: 13, fontWeight: 800, letterSpacing:"0.02em",
                 cursor: selectedIds.length ? "pointer" : "not-allowed",
-                boxShadow: selectedIds.length ? "0 2px 6px rgba(20,18,17,0.18)" : "none",
+                transition: "background 0.15s",
+              }}>
+              Continue →
+            </button>
+          </div>
+        )}
+        {step === 3 && (
+          <div style={{
+            padding: "12px 16px",
+            borderTop: "1px solid " + t.border,
+            display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center",
+          }}>
+            <button type="button" onClick={sendInvite}
+              style={{
+                padding:"11px 24px", borderRadius: 10,
+                background: t.accent,
+                color: t.accentText || "#fff",
+                border:"none",
+                fontSize: 13, fontWeight: 800, letterSpacing:"0.02em",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(20,18,17,0.18)",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}>
               Send invite →

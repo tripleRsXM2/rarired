@@ -103,8 +103,10 @@ export default function MapTab({
   var layersPanelRef = useRef(null);
   var selectedZone = selected ? ZONE_BY_ID[selected] : null;
   // The side panel must NOT render during the map-native play mode —
-  // it would cover the map and defeat the in-map experience.
-  var sidePanelZone = (playMode === "off") ? selectedZone : null;
+  // it would cover the map and defeat the in-map experience. Also
+  // hidden while the Play Match wizard is open (otherwise it sticks
+  // out behind the wizard's modal backdrop).
+  var sidePanelZone = (playMode === "off" && !wizardOpen) ? selectedZone : null;
   var playZone = playZoneId ? ZONE_BY_ID[playZoneId] : null;
   var homeZone = profile && profile.home_zone;
 
