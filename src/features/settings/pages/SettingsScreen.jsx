@@ -332,36 +332,52 @@ export default function SettingsScreen({
                 Used so partners can filter their player picker (e.g. for women's doubles). Visible to others only when they apply that filter. You can change or clear this any time.
               </div>
             </div>
-            {/* Payment handle — opt-in. Fills the Tindis split deep-links.
-                We never receive or transmit money; the handle is purely a
-                reminder string rendered back to the partner when they owe. */}
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-                Payment handle (for Tindis)
-              </label>
-              <div style={{display:"grid",gridTemplateColumns:"1.2fr 2fr",gap:8}}>
-                <select
-                  value={profileDraft.payment_method||""}
-                  onChange={function(e){setProfileDraft(function(d){return Object.assign({},d,{payment_method:e.target.value||null});});}}
-                  style={iStyle}>
-                  <option value="">None</option>
-                  <option value="payid">PayID (AU)</option>
-                  <option value="beem">Beem It (AU)</option>
-                  <option value="paypal">PayPal.me</option>
-                  <option value="venmo">Venmo</option>
-                  <option value="zelle">Zelle</option>
-                  <option value="other">Other</option>
-                </select>
-                <input
-                  value={profileDraft.payment_handle||""}
-                  onChange={function(e){setProfileDraft(function(d){return Object.assign({},d,{payment_handle:e.target.value});});}}
-                  placeholder={profileDraft.payment_method==="payid"?"email or phone":(profileDraft.payment_method==="paypal"?"paypal.me username":"handle")}
-                  style={iStyle}/>
-              </div>
-              <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
-                CourtSync never sees or processes payments. This just opens your wallet app when a partner owes you after a pact.
-              </div>
-            </div>
+            {/* Age (optional). Stored as birth_year (integer) so the
+                age the matchmaker shows recomputes each year on its
+                own — no annual drift, and no full DOB stored. Floor
+                hint of 13 is editorial; the DB CHECK only enforces
+                a sane range (1900 ≤ year ≤ this year). */}
+            {(function(){
+              var nowYear = new Date().getFullYear();
+              var by      = profileDraft.birth_year || "";
+              var age     = by ? (nowYear - Number(by)) : null;
+              return (
+                <div style={{marginBottom:12}}>
+                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                    Age (optional)
+                  </label>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1900" max={nowYear}
+                      placeholder="Birth year (e.g. 1995)"
+                      value={by}
+                      onChange={function(e){
+                        var raw = e.target.value;
+                        var v   = raw === "" ? null : Number(raw);
+                        setProfileDraft(function(d){
+                          return Object.assign({},d,{ birth_year: (Number.isFinite(v) ? v : null) });
+                        });
+                      }}
+                      style={iStyle}/>
+                    <div style={{
+                      display:"flex", alignItems:"center", padding:"0 12px",
+                      borderRadius:8, border:"1px solid "+t.border,
+                      background:"transparent", color:t.textSecondary,
+                      fontSize:13, fontWeight:600, letterSpacing:"-0.05px",
+                    }}>
+                      {age != null && age >= 0 && age <= 120
+                        ? (age + " years old")
+                        : "—"}
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
+                    Just the year — we compute age each time. Helps players match by age bracket. Leave blank to skip.
+                  </div>
+                </div>
+              );
+            })()}
             {/* Skill level — stacked list so SKILL_HINTS sits below each rung.
                 Module 7.7: locked once a confirmed ranked match has been
                 recorded (profile.skill_level_locked = true, set server-side
@@ -476,12 +492,12 @@ export default function SettingsScreen({
                   avatar_url:   profileDraft.avatar_url,
                   availability: profileDraft.availability,
                   played_courts: profileDraft.played_courts || [],
-                  payment_handle: profileDraft.payment_handle || null,
-                  payment_method: profileDraft.payment_method || null,
                   // Gender is optional — null when the user hasn't chosen.
                   // The DB CHECK constraint accepts only the four allowed
                   // values or NULL.
                   gender:        profileDraft.gender || null,
+                  // Birth year (optional) — integer 1900..thisYear or null.
+                  birth_year:    Number.isFinite(profileDraft.birth_year) ? profileDraft.birth_year : null,
                   avatar:       init2,
                 });
                 setProfile(nd);
@@ -502,9 +518,8 @@ export default function SettingsScreen({
                     avatar_url:nd.avatar_url||null,
                     availability:nd.availability||{},
                     played_courts: nd.played_courts || [],
-                    payment_handle: nd.payment_handle,
-                    payment_method: nd.payment_method,
                     gender:         nd.gender,
+                    birth_year:     nd.birth_year,
                   };
                   if (!profile.skill_level_locked) {
                     payload.skill = nd.skill || "Intermediate 1";
@@ -515,7 +530,6 @@ export default function SettingsScreen({
                     if(toast) toast("Couldn't save — try again.", "error");
                   } else {
                     setProfileDraft(nd); // keep the draft in sync with the saved row
-                    if(nd.payment_handle) track("payment_handle_added", { method: nd.payment_method || "unknown" });
                     if(toast) toast("Profile saved", "success");
                   }
                 }

@@ -156,36 +156,6 @@ export function computeShares(total, mode, customA, customB) {
   return { a: half, b: t - half };
 }
 
-// Build a tel: / payment deep-link. AU-first: PayID is email/phone, so
-// we can't deep-link it universally — we fall back to a "Copy amount
-// + handle" affordance in the UI. Venmo / PayPal.me are the only ones
-// with standard deep-link URIs.
-//
-// Returns { primary, secondary, copyText } — primary is a clickable
-// launch URL when possible; copyText is the always-available fallback.
-export function buildPaymentLinks(amountCents, handle, method, note) {
-  var dollars = ((amountCents || 0) / 100).toFixed(2);
-  var n = note || "Tennis split";
-  if (method === "venmo" && handle) {
-    return {
-      primary: "venmo://paycharge?txn=pay&recipients=" +
-        encodeURIComponent(handle) + "&amount=" + dollars +
-        "&note=" + encodeURIComponent(n),
-      label: "Open Venmo",
-      copyText: handle + " · $" + dollars,
-    };
-  }
-  if (method === "paypal" && handle) {
-    return {
-      primary: "https://paypal.me/" + encodeURIComponent(handle) + "/" + dollars,
-      label: "Open PayPal",
-      copyText: "paypal.me/" + handle + " · $" + dollars,
-    };
-  }
-  // PayID / Beem / Zelle all default to copy-paste.
-  return {
-    primary: null,
-    label: null,
-    copyText: (handle ? handle + " · " : "") + "$" + dollars,
-  };
-}
+// (buildPaymentLinks helper retired alongside payment_handle /
+// payment_method on profiles. Pact settlement is off-platform —
+// the only signal we record is the "Mark yourself paid" toggle.)

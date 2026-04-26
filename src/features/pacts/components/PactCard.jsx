@@ -9,13 +9,14 @@
 //   played                           → score summary link-out
 //   cancelled / expired              → greyed, history only
 //
-// Money (if `total_cost_cents` set): shows the per-side share and,
-// when a partner has a payment_handle, a launch button for their wallet
-// (Venmo / PayPal.me) or a copy-to-clipboard fallback (PayID / Beem / Zelle).
+// Money (if `total_cost_cents` set): shows the per-side share and a
+// "Mark yourself paid" toggle. The deep-link payment launcher
+// (Venmo / PayPal.me / PayID copy) was retired alongside the
+// payment_handle profile field — settlement is off-platform.
 
 import { useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
-import { computeShares, buildPaymentLinks } from "../services/pactService.js";
+import { computeShares } from "../services/pactService.js";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -50,8 +51,6 @@ export default function PactCard({
   var meSide = isProposer ? "proposer" : "partner";
   var otherId = isProposer ? pact.partner_id : pact.proposer_id;
   var other = otherId ? (profileMap[otherId] || { id: otherId, name: "Player" }) : null;
-  var otherPaymentHandle = other && other.payment_handle;
-  var otherPaymentMethod = other && other.payment_method;
 
   var iAgreed    = isProposer ? pact.proposer_agreed : pact.partner_agreed;
   var theyAgreed = isProposer ? pact.partner_agreed  : pact.proposer_agreed;
@@ -69,17 +68,6 @@ export default function PactCard({
   var meta = STATUS_META[pact.status] || STATUS_META.proposed;
   var pillColor = t[meta.color] || t.textTertiary;
   var pillBg    = t[meta.bg]    || t.bgTertiary;
-
-  function requestPayment() {
-    var links = buildPaymentLinks(myShare, otherPaymentHandle, otherPaymentMethod, "Tennis · " + (pact.venue || ""));
-    if (links.primary) {
-      window.open(links.primary, "_blank");
-    } else {
-      // Copy the handle + amount to clipboard and notify.
-      try { navigator.clipboard.writeText(links.copyText); } catch (e) {}
-      if (typeof window !== "undefined" && window.alert) window.alert("Copied: " + links.copyText);
-    }
-  }
 
   function handleBookConfirm() {
     if (!bookingForm) { setBookingForm({ booking_ref: "", total_cost: (pact.total_cost_cents != null ? (pact.total_cost_cents / 100) : "") }); return; }
@@ -187,13 +175,9 @@ export default function PactCard({
               <span style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid " + t.border, background: "transparent", color: theyPaid ? t.green : t.textTertiary, fontSize: 11, fontWeight: 600 }}>
                 {theyPaid ? "✓ They paid" : "Waiting on them"}
               </span>
-              {/* Payment launcher — only when we owe them and they have a handle */}
-              {myShare > 0 && otherPaymentHandle && (
-                <button onClick={requestPayment}
-                  style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid " + t.accent, background: t.accent, color: t.accentText, fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.01em" }}>
-                  Pay {other ? other.name.split(" ")[0] : "partner"} {formatDollars(myShare)}
-                </button>
-              )}
+              {/* Payment launcher retired — settlement is off-platform.
+                  The "Mark yourself paid" toggle above is the only
+                  signal we record. */}
             </div>
           )}
         </div>

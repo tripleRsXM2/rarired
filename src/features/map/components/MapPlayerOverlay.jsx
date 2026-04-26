@@ -34,6 +34,19 @@ import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { track } from "../../../lib/analytics.js";
 
 function firstName(n){ return (n||"Player").split(/\s+/)[0]; }
+
+// Resolve the displayable age from a profile's birth_year. Returns
+// null when birth_year is missing OR the math goes wonky (someone
+// typed 1850 then we just don't render an age — better than showing
+// "175 yo"). Cap at 110 just in case.
+function ageFromProfile(p){
+  if(!p || !p.birth_year) return null;
+  var by = Number(p.birth_year);
+  if(!Number.isFinite(by)) return null;
+  var age = new Date().getFullYear() - by;
+  if(age < 13 || age > 110) return null;
+  return age;
+}
 function hexToRgba(hex, a){
   if(!hex || typeof hex !== "string") return "rgba(0,0,0," + a + ")";
   var h = hex.replace("#","");
@@ -529,16 +542,29 @@ export default function MapPlayerOverlay({
                       }}>✓</div>
                     )}
                   </div>
-                  <div style={{
-                    fontSize: 13, fontWeight: 800,
-                    letterSpacing:"-0.01em",
-                    lineHeight: 1.15,
-                    textAlign:"center",
-                    width: "100%",
-                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                  }}>
-                    {firstName(p.name || p.username || p.full_name || "Player")}
-                  </div>
+                  {(function(){
+                    var age = ageFromProfile(p);
+                    var name = firstName(p.name || p.username || p.full_name || "Player");
+                    return (
+                      <div style={{
+                        fontSize: 13, fontWeight: 800,
+                        letterSpacing:"-0.01em",
+                        lineHeight: 1.15,
+                        textAlign:"center",
+                        width: "100%",
+                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                      }}>
+                        {name}
+                        {age != null && (
+                          <span style={{
+                            fontWeight: 600,
+                            opacity: 0.65,
+                            marginLeft: 4,
+                          }}>· {age}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* Chips stack — level always visible if known;
                       history chip stacks ABOVE level when present. */}
                   <div style={{

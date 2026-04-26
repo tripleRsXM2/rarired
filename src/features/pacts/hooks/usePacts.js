@@ -43,7 +43,7 @@ export function usePacts(opts) {
     });
     if (!need.size) return;
     var ids = Array.from(need);
-    var r = await fetchProfilesByIds(ids, "id,name,avatar,avatar_url,skill,suburb,home_zone,payment_handle,payment_method");
+    var r = await fetchProfilesByIds(ids, "id,name,avatar,avatar_url,skill,suburb,home_zone");
     if (r.error) return;
     var patch = {};
     (r.data || []).forEach(function (p) {

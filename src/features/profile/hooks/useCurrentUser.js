@@ -17,8 +17,8 @@ export function useCurrentUser(){
   // letting the user fire a profile UPDATE — otherwise a stale draft
   // sourced from INITIAL_PROFILE can stomp populated columns.
   // Real-world incident: a user opened Settings + tapped Save before
-  // fetchProfile returned, wiping their played_courts / payment_handle
-  // / bio / avatar_url with empty defaults.
+  // fetchProfile returned, wiping their played_courts / bio /
+  // avatar_url with empty defaults.
   var [profileLoaded,setProfileLoaded]=useState(false);
   var [editingAvail,setEditingAvail]=useState(false);
   var [availDraft,setAvailDraft]=useState({});
