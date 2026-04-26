@@ -22,6 +22,7 @@ import { THEME_OPTIONS } from "../../../lib/theme.js";
 import { track } from "../../../lib/analytics.js";
 import { useEffect } from "react";
 import PushSettingsCard from "../../notifications/components/PushSettingsCard.jsx";
+import ChangePasswordCard from "../components/ChangePasswordCard.jsx";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
@@ -673,9 +674,14 @@ export default function SettingsScreen({
             </div>
             {/* Friend requests row removed — duplicates the People tab.
                 Direct your inbox to /people/requests if you want it. */}
+            {/* Change password — collapsed row by default, expands
+                inline to current+new+confirm with a live rule
+                checklist and re-auth before update. Sits ABOVE Sign
+                out so destructive action stays last in the list. */}
+            <ChangePasswordCard t={t} authUser={authUser} toast={toast}/>
             <button
               onClick={function(){supabase.auth.signOut();onClose();}}
-              style={{width:"100%",padding:"14px 16px",border:"none",background:"transparent",color:t.red,fontSize:13,fontWeight:600,textAlign:"left",cursor:"pointer"}}>
+              style={{width:"100%",padding:"14px 16px",border:"none",borderTop:"1px solid "+t.border,background:"transparent",color:t.red,fontSize:13,fontWeight:600,textAlign:"left",cursor:"pointer"}}>
               Sign out
             </button>
           </div>
