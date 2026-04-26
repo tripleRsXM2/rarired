@@ -455,28 +455,27 @@ export default function MapTab({
           don't double-stack interactive surfaces. */}
       {playMode !== "off" && (
         <>
-          {/* Bold prompt — typography matches the profile-hero
-              language (28/900, tight tracking) so it feels native to
-              the app's voice rather than a modal. */}
+          {/* Bold prompt — pure typography, no box. Theme-inverted
+              against the dim+blur basemap so it always reads. Drop
+              shadow gives it legibility against any underlying tile.
+              Big and confident — closer to the profile-hero voice. */}
           <div style={{
-            position:"absolute", top: 24, left: 0, right: 0,
+            position:"absolute", top: 30, left: 16, right: 16,
             zIndex: 540,
             display:"flex", justifyContent:"center",
             pointerEvents:"none",
           }}>
             <div className="fade-up" style={{
-              maxWidth: 460,
-              padding: "12px 22px",
-              borderRadius: 999,
-              background: hexToRgba(t.bgCard, 0.94),
-              WebkitBackdropFilter: "blur(20px) saturate(140%)",
-              backdropFilter: "blur(20px) saturate(140%)",
-              boxShadow: "0 8px 24px rgba(20,18,17,0.18), 0 1px 0 rgba(255,255,255,0.6) inset",
-              fontSize: 22, fontWeight: 900,
-              letterSpacing: "-0.025em",
-              color: t.text,
+              fontSize: 40, fontWeight: 900,
+              letterSpacing: "-0.04em",
+              lineHeight: 1.05,
+              color: mapDark ? "#ffffff" : "#14110f",
+              textShadow: mapDark
+                ? "0 2px 16px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
+                : "0 2px 16px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
               textAlign:"center",
               fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+              maxWidth: 520,
             }}>
               {playMode === "zone" && "Choose your zone"}
               {playMode === "court" && (playZone ? playZone.name : "Choose your court")}

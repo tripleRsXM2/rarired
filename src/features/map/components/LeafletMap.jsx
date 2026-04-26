@@ -341,7 +341,9 @@ export default function LeafletMap({
       if(m) map.removeLayer(m);
     });
     zoneNameLayersRef.current = {};
-    if(!showZoneNames) return;
+    // Hide all peripheral chrome during play mode — user picks zones
+    // / courts only, no other labels distract.
+    if(!showZoneNames || playMode !== "off") return;
     var isDark = resolveDark(theme, mapThemeOverride);
     ZONES.forEach(function(z){
       var center = zoneCentersRef.current[z.id] || z.center;
@@ -367,7 +369,7 @@ export default function LeafletMap({
       }).addTo(map);
       zoneNameLayersRef.current[z.id] = marker;
     });
-  },[showZoneNames, theme, mapThemeOverride]);
+  },[showZoneNames, theme, mapThemeOverride, playMode]);
 
   // Court visibility — coordinates THREE toggles:
   //   1. showCourts (layers panel) — hide the whole layer entirely
@@ -382,8 +384,12 @@ export default function LeafletMap({
 
     var inFocus    = !!focusedCourtName;
     var inPlayCourt = playMode === "court" && !!playZoneId;
-    var showCluster = showCourts && !inFocus && !inPlayCourt;
-    var showSolo    = showCourts && inFocus;
+    var inPlayZone  = playMode === "zone";
+    // Cluster only shows in default mode (no focus, not in play).
+    var showCluster = showCourts && !inFocus && !inPlayCourt && !inPlayZone;
+    // Solo focus marker hidden during play modes — they have their
+    // own marker rendering (or none, in zone mode).
+    var showSolo    = showCourts && inFocus && !inPlayZone && !inPlayCourt;
 
     // Cluster visibility
     if(showCluster){
@@ -467,6 +473,31 @@ export default function LeafletMap({
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);
 
+  // Reflect play-mode on the leaflet-container so CSS in providers
+  // can blur+dim the tile pane. Also auto-fit to all zones on
+  // entering "zone" mode so the user can see every option even
+  // if they were zoomed deep in beforehand.
+  var prevPlayModeRef = useRef("off");
+  useEffect(function(){
+    var map = mapRef.current;
+    if(!map) return;
+    var c = map.getContainer();
+    if(playMode === "off") c.removeAttribute("data-play-mode");
+    else                   c.setAttribute("data-play-mode", playMode);
+
+    var prev = prevPlayModeRef.current;
+    prevPlayModeRef.current = playMode;
+    if(prev === "off" && playMode === "zone"){
+      var layers = Object.values(zoneLayersRef.current).filter(Boolean);
+      if(layers.length){
+        try {
+          var group = L.featureGroup(layers);
+          map.fitBounds(group.getBounds(), { padding: [40, 40] });
+        } catch(_){}
+      }
+    }
+  },[playMode]);
+
   // Restyle zones when hover / selected / play-mode change. Zone
   // colours are always shown unless we're in court-pick play mode
   // (where everything except the chosen zone fades hard so the
@@ -526,11 +557,16 @@ export default function LeafletMap({
   useEffect(function(){
     var map = mapRef.current;
     if(!map) return;
+    // Hide home + flame centroid badges during play mode so the
+    // map shows only the polygons (step 1) or only the picked
+    // zone's courts (step 2).
+    var inPlay = playMode !== "off";
     Object.keys(zoneLabelsRef.current).forEach(function(id){
       var z = ZONE_BY_ID[id];
       if(!z) return;
       var prev = zoneLabelsRef.current[id];
       if(prev){ map.removeLayer(prev); }
+      if(inPlay){ zoneLabelsRef.current[id] = null; return; }
       var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id, showHomes, showActivity);
       if(!html){
         zoneLabelsRef.current[id] = null;
@@ -561,7 +597,7 @@ export default function LeafletMap({
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });
-  },[zoneActivity, homeZone, showHomes, showActivity]);
+  },[zoneActivity, homeZone, showHomes, showActivity, playMode]);
 
   // (Old standalone home-pin effect retired — the home indicator is
   // baked into the zone-number label's house-shaped badge above. One
