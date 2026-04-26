@@ -501,16 +501,20 @@ export default function LeafletMap({
         playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
         playCourtsRef.current = [];
 
-        // 8-way placements for the "crowded" path.
+        // 8-way placements for the crowded path. Tightened offsets
+        // ~50% so labels sit closer to their dots. Icon size 140×70
+        // (was 220×100). Each entry: dot anchor + line endpoints +
+        // label position. Lines are short — just enough to clear
+        // the dot and connect to the label.
         var DIRS = [
-          { name:"NE", anchor:[20,80], lineTo:[110,28], labelX:120, labelY:14 },
-          { name:"NW", anchor:[200,80], lineTo:[110,28], labelX: 14, labelY:14, rightAlign:true },
-          { name:"SE", anchor:[20,20], lineTo:[110,72], labelX:120, labelY:60 },
-          { name:"SW", anchor:[200,20], lineTo:[110,72], labelX: 14, labelY:60, rightAlign:true },
-          { name:"N",  anchor:[110,82], lineTo:[110,18], labelX:110, labelY: 4, centreLabel:true },
-          { name:"S",  anchor:[110,18], lineTo:[110,82], labelX:110, labelY:90, centreLabel:true },
-          { name:"E",  anchor:[20,50], lineTo:[100,50],  labelX:108, labelY:42 },
-          { name:"W",  anchor:[200,50], lineTo:[120,50], labelX: 12, labelY:42, rightAlign:true },
+          { name:"NE", anchor:[15,55], lineTo:[55,25], labelX:60,  labelY:14 },
+          { name:"NW", anchor:[125,55], lineTo:[85,25], labelX:12,  labelY:14, rightAlign:true },
+          { name:"SE", anchor:[15,15], lineTo:[55,45], labelX:60,  labelY:48 },
+          { name:"SW", anchor:[125,15], lineTo:[85,45], labelX:12,  labelY:48, rightAlign:true },
+          { name:"N",  anchor:[70,58], lineTo:[70,22], labelX:70,  labelY: 4, centreLabel:true },
+          { name:"S",  anchor:[70,12], lineTo:[70,48], labelX:70,  labelY:54, centreLabel:true },
+          { name:"E",  anchor:[15,35], lineTo:[55,35], labelX:60,  labelY:30 },
+          { name:"W",  anchor:[125,35], lineTo:[85,35], labelX:12,  labelY:30, rightAlign:true },
         ];
 
         pts.forEach(function(p, i){
@@ -519,33 +523,34 @@ export default function LeafletMap({
           var html, iconSize, iconAnchor;
 
           if(p.crowded){
-            // Crowded: 8-way offset + connector line + small label box.
+            // Crowded: dot + thin connector line + caps name at a
+            // diagonal offset. Same `cs-play-name` typography as the
+            // calm path — no box. Tight icon (140×70).
             var d = DIRS[i % DIRS.length];
             var labelStyle =
               "position:absolute;top:" + d.labelY + "px;" +
               (d.centreLabel
                 ? "left:" + d.labelX + "px;transform:translateX(-50%);"
                 : (d.rightAlign
-                    ? "right:" + (220 - d.labelX) + "px;"
+                    ? "right:" + (140 - d.labelX) + "px;"
                     : "left:" + d.labelX + "px;")) +
               "white-space:nowrap;";
             html =
-              '<div style="position:relative;width:220px;height:100px;cursor:pointer">' +
-                '<svg width="220" height="100" style="position:absolute;inset:0;pointer-events:none">' +
+              '<div style="position:relative;width:140px;height:70px;cursor:pointer">' +
+                '<svg width="140" height="70" style="position:absolute;inset:0;pointer-events:none">' +
                   '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
                         'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
                         'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
-                        'style="filter:drop-shadow(0 0 2px rgba(255,255,255,0.6))"/>' +
+                        'style="filter:drop-shadow(0 0 2px rgba(255,255,255,0.7))"/>' +
                 '</svg>' +
                 '<div class="cs-play-dot" style="position:absolute;' +
                   'left:' + (d.anchor[0] - 5) + 'px;top:' + (d.anchor[1] - 5) + 'px;"></div>' +
-                '<div class="cs-play-label" style="' + labelStyle + '">' + labelText + '</div>' +
+                '<div class="cs-play-name" style="' + labelStyle + '">' + labelText + '</div>' +
               '</div>';
-            iconSize = [220, 100];
+            iconSize = [140, 70];
             iconAnchor = d.anchor;
           } else {
-            // Calm: dot + caps label below, pure typography. No box,
-            // no line. Centred under the dot.
+            // Calm: dot + caps name 4px below. Same name class.
             html =
               '<div style="position:relative;width:160px;height:48px;cursor:pointer">' +
                 '<div class="cs-play-dot" style="position:absolute;left:75px;top:0"></div>' +
@@ -554,7 +559,7 @@ export default function LeafletMap({
                 '</div>' +
               '</div>';
             iconSize = [160, 48];
-            iconAnchor = [80, 5]; // anchor at the dot centre
+            iconAnchor = [80, 5];
           }
 
           var m = L.marker([c.lat, c.lng], {

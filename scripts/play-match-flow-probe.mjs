@@ -141,14 +141,14 @@ async function probe() {
 
     var afterClick = await u.page.evaluate(function(){
       var leaflet = document.querySelector(".leaflet-container");
-      var crowdedLabels = document.querySelectorAll(".cs-play-label");
-      var calmNames = document.querySelectorAll(".cs-play-name");
+      // All courts now use .cs-play-name (unified style). Crowded
+      // ones additionally have an SVG line; calm ones don't.
+      var names = document.querySelectorAll(".cs-play-name");
       var svgLines = document.querySelectorAll(".cs-play-court svg line");
       var dots = document.querySelectorAll(".cs-play-dot");
       return {
         playModeAttr: leaflet ? leaflet.getAttribute("data-play-mode") : null,
-        crowdedLabelCount: crowdedLabels.length,
-        calmNameCount: calmNames.length,
+        nameCount: names.length,
         connectorLineCount: svgLines.length,
         dotCount: dots.length,
       };
@@ -157,20 +157,13 @@ async function probe() {
 
     if(afterClick.playModeAttr === "court"){
       log("✓ advanced to step 2 (court mode)");
-      var totalCourts = afterClick.crowdedLabelCount + afterClick.calmNameCount;
-      if(totalCourts > 0){
-        log("✓ court markers rendered: " + afterClick.calmNameCount + " calm + " +
-          afterClick.crowdedLabelCount + " crowded (" + afterClick.connectorLineCount + " lines, " +
-          afterClick.dotCount + " dots)");
-        if(totalCourts === afterClick.dotCount){
-          log("✓ all courts have a dot");
-        } else {
-          log("⚠ count mismatch: " + totalCourts + " labels vs " + afterClick.dotCount + " dots");
-        }
-        if(afterClick.connectorLineCount === afterClick.crowdedLabelCount){
-          log("✓ connector lines only on crowded courts (collision detection working)");
-        } else {
-          log("⚠ line count " + afterClick.connectorLineCount + " ≠ crowded count " + afterClick.crowdedLabelCount);
+      if(afterClick.nameCount > 0){
+        var calm = afterClick.nameCount - afterClick.connectorLineCount;
+        log("✓ court markers: " + afterClick.nameCount + " names, " +
+          calm + " calm (no line) + " + afterClick.connectorLineCount +
+          " crowded (line) — " + afterClick.dotCount + " dots");
+        if(afterClick.nameCount === afterClick.dotCount){
+          log("✓ name : dot ratio is 1:1");
         }
       } else {
         log("⚠ court mode active but no markers visible");
