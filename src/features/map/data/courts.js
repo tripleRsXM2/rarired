@@ -105,13 +105,10 @@ export var COURTS = [
     bookingUrl: tv("snape-park-tc") },
   { name:"Cooper Park Tennis",       zone:"east", courts:8, lat:-33.8825, lng:151.2510,
     suburb:"Double Bay",       bookingUrl: tv("cooper-park-tc") },
-  { name:"Steyne Park",              zone:"east", courts:2, lat:-33.8760, lng:151.2435,
-    suburb:"Double Bay",       bookingUrl: null },
+  // Steyne Park + Waverley Park Tennis removed per user — not curated.
   { name:"Queens Park Tennis",       zone:"east", courts:4, lat:-33.8958, lng:151.2520,
     suburb:"Queens Park",
     bookingUrl: "https://www.queensparktennis.com.au/contact-us" },
-  { name:"Waverley Park Tennis",     zone:"east", courts:6, lat:-33.8968, lng:151.2565,
-    suburb:"Bondi Junction",   bookingUrl: null },
   { name:"Latham Park Tennis",       zone:"east", courts:5, lat:-33.9189, lng:151.2555,
     suburb:"Coogee",           bookingUrl: tv("latham-park-tc") },
   { name:"Des Renford Tennis",       zone:"east", courts:6, lat:-33.9390, lng:151.2410,
@@ -170,8 +167,7 @@ export var COURTS = [
     suburb:"North Sydney",     bookingUrl: NORTH_SYD },
   { name:"St Leonards Park Tennis",  zone:"lower-north", courts:4, lat:-33.8342, lng:151.2063,
     suburb:"North Sydney",     bookingUrl: NORTH_SYD },
-  { name:"Drill Hall Common",        zone:"lower-north", courts:2, lat:-33.8289, lng:151.2480,
-    suburb:"Mosman",           bookingUrl: null },
+  // Drill Hall Common removed per user.
   { name:"Chatswood Park Tennis",    zone:"lower-north", courts:5, lat:-33.7984, lng:151.1860,
     suburb:"Chatswood",
     bookingUrl: "https://www.chatswoodtennis.com.au/book-a-court/#bookacourt" },
@@ -213,10 +209,7 @@ export var COURTS = [
   { name:"Ken Rosewall Tennis Centre", zone:"south", courts:8, lat:-33.9890, lng:151.0835,
     suburb:"Mortdale", address:"53 Roberts Ave, Mortdale NSW 2223",
     bookingUrl: tv("ken-rosewall-tennis-centre") },
-  { name:"Lance Hutchison Tennis",   zone:"south", courts:4, lat:-33.9268, lng:151.1960,
-    suburb:"Mascot",           bookingUrl: null },
-  { name:"Bicentennial Park Tennis", zone:"south", courts:4, lat:-33.9478, lng:151.1370,
-    suburb:"Rockdale",         bookingUrl: null },
+  // Lance Hutchison Tennis + Bicentennial Park Tennis removed per user.
 ];
 
 export function courtsInZone(zoneId){
