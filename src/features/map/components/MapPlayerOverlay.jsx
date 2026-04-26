@@ -35,15 +35,24 @@ import { track } from "../../../lib/analytics.js";
 
 function firstName(n){ return (n||"Player").split(/\s+/)[0]; }
 
-// Resolve the displayable age from a profile's birth_year. Returns
-// null when birth_year is missing OR the math goes wonky (someone
-// typed 1850 then we just don't render an age — better than showing
-// "175 yo"). Cap at 110 just in case.
+// Resolve the displayable age from a profile's birthdate (ISO
+// YYYY-MM-DD). Returns null when missing or out-of-range so a
+// fat-fingered "1850-01-01" doesn't surface as a 175-year-old.
+// Computes off the full date so 364-day-old players don't tick
+// over a year early.
 function ageFromProfile(p){
-  if(!p || !p.birth_year) return null;
-  var by = Number(p.birth_year);
-  if(!Number.isFinite(by)) return null;
-  var age = new Date().getFullYear() - by;
+  if(!p || !p.birthdate) return null;
+  var s = String(p.birthdate);
+  // Parse YYYY-MM-DD without timezone gymnastics.
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if(!m) return null;
+  var y = +m[1], mo = +m[2], d = +m[3];
+  var now = new Date();
+  var age = now.getFullYear() - y;
+  // Subtract a year if the birthday hasn't happened yet this year.
+  var thisMo = now.getMonth() + 1;
+  var thisD  = now.getDate();
+  if(thisMo < mo || (thisMo === mo && thisD < d)) age--;
   if(age < 13 || age > 110) return null;
   return age;
 }

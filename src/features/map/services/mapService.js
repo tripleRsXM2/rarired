@@ -140,7 +140,7 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit, excludeIds) 
 
   // (a) Self-reporters — profiles.played_courts overlaps any canonical name.
   var selfReq = supabase.from("profiles")
-    .select("id,name,avatar,avatar_url,skill,suburb,home_zone,availability,played_courts,ranking_points,last_active,show_online_status,show_last_seen,gender,birth_year")
+    .select("id,name,avatar,avatar_url,skill,suburb,home_zone,availability,played_courts,ranking_points,last_active,show_online_status,show_last_seen,gender,birthdate")
     .overlaps("played_courts", names);
   if (viewerId) selfReq = selfReq.neq("id", viewerId);
 
@@ -181,7 +181,7 @@ export async function fetchPlayersAtCourt(courtName, viewer, limit, excludeIds) 
     var idList = Array.from(derivedIds);
     if (idList.length) {
       var pRes = await supabase.from("profiles")
-        .select("id,name,avatar,avatar_url,skill,suburb,home_zone,availability,played_courts,ranking_points,last_active,show_online_status,show_last_seen,gender,birth_year")
+        .select("id,name,avatar,avatar_url,skill,suburb,home_zone,availability,played_courts,ranking_points,last_active,show_online_status,show_last_seen,gender,birthdate")
         .in("id", idList);
       if (!pRes.error) {
         (pRes.data || []).forEach(function (p) {
@@ -272,7 +272,7 @@ export async function fetchRecentPlayersAtCourt(courtName, windowDays, limit) {
 export function fetchPlayersInZone(zoneId, limit, excludeIds){
   var l = limit || 20;
   var q = supabase.from("profiles")
-    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone,gender,birth_year");
+    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone,gender,birthdate");
   if (zoneId) q = q.eq("home_zone", zoneId);
   else        q = q.not("home_zone", "is", null); // "Everywhere" still requires a zone — skip ghosts
   if (excludeIds && excludeIds.length) {

@@ -332,48 +332,34 @@ export default function SettingsScreen({
                 Used so partners can filter their player picker (e.g. for women's doubles). Visible to others only when they apply that filter. You can change or clear this any time.
               </div>
             </div>
-            {/* Age (optional). Stored as birth_year (integer) so the
-                age the matchmaker shows recomputes each year on its
-                own — no annual drift, and no full DOB stored. Floor
-                hint of 13 is editorial; the DB CHECK only enforces
-                a sane range (1900 ≤ year ≤ this year). */}
+            {/* Birthdate (optional). Native date input — mobile shows
+                the system picker, desktop shows a calendar. Stored as
+                an ISO YYYY-MM-DD string into profiles.birthdate; age
+                is computed on read wherever it's displayed. No live
+                age echo here — the user already knows how old they
+                are, and the preview read as 'CourtSync judging me'. */}
             {(function(){
-              var nowYear = new Date().getFullYear();
-              var by      = profileDraft.birth_year || "";
-              var age     = by ? (nowYear - Number(by)) : null;
+              var todayIso = new Date().toISOString().slice(0,10);
+              var bd = profileDraft.birthdate || "";
               return (
                 <div style={{marginBottom:12}}>
                   <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-                    Age (optional)
+                    Birthdate (optional)
                   </label>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="1900" max={nowYear}
-                      placeholder="Birth year (e.g. 1995)"
-                      value={by}
-                      onChange={function(e){
-                        var raw = e.target.value;
-                        var v   = raw === "" ? null : Number(raw);
-                        setProfileDraft(function(d){
-                          return Object.assign({},d,{ birth_year: (Number.isFinite(v) ? v : null) });
-                        });
-                      }}
-                      style={iStyle}/>
-                    <div style={{
-                      display:"flex", alignItems:"center", padding:"0 12px",
-                      borderRadius:8, border:"1px solid "+t.border,
-                      background:"transparent", color:t.textSecondary,
-                      fontSize:13, fontWeight:600, letterSpacing:"-0.05px",
-                    }}>
-                      {age != null && age >= 0 && age <= 120
-                        ? (age + " years old")
-                        : "—"}
-                    </div>
-                  </div>
+                  <input
+                    type="date"
+                    min="1900-01-01"
+                    max={todayIso}
+                    value={bd}
+                    onChange={function(e){
+                      var v = e.target.value || null;
+                      setProfileDraft(function(d){
+                        return Object.assign({},d,{ birthdate: v });
+                      });
+                    }}
+                    style={iStyle}/>
                   <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
-                    Just the year — we compute age each time. Helps players match by age bracket. Leave blank to skip.
+                    Helps players match by age bracket. Leave blank to skip.
                   </div>
                 </div>
               );
@@ -496,8 +482,8 @@ export default function SettingsScreen({
                   // The DB CHECK constraint accepts only the four allowed
                   // values or NULL.
                   gender:        profileDraft.gender || null,
-                  // Birth year (optional) — integer 1900..thisYear or null.
-                  birth_year:    Number.isFinite(profileDraft.birth_year) ? profileDraft.birth_year : null,
+                  // Birthdate (optional) — ISO YYYY-MM-DD or null.
+                  birthdate:     profileDraft.birthdate || null,
                   avatar:       init2,
                 });
                 setProfile(nd);
@@ -519,7 +505,7 @@ export default function SettingsScreen({
                     availability:nd.availability||{},
                     played_courts: nd.played_courts || [],
                     gender:         nd.gender,
-                    birth_year:     nd.birth_year,
+                    birthdate:      nd.birthdate,
                   };
                   if (!profile.skill_level_locked) {
                     payload.skill = nd.skill || "Intermediate 1";
