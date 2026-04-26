@@ -450,6 +450,20 @@ export function useMatchHistory(opts){
     if(needsConfirmation&&sendNotification){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
+    // Module 9.1.5 — closes the trust gap on casual matches with a
+    // linked opponent. The match auto-confirms (no Elo to argue
+    // about), but the opponent should still know it was logged
+    // against them so they can object if it didn't happen. Fires
+    // ONLY when:
+    //   - match_type === 'casual'      (covered above by !needsConfirmation
+    //                                    once we know opp is linked)
+    //   - opponentId is set            (no recipient otherwise)
+    //   - not invite-flow              (invite path has its own loop)
+    // Activity-bucket informational notification — see
+    // notifUtils.js for copy + sort weight.
+    if(!needsConfirmation && matchType === 'casual' && opponentId && !inviteFlow && sendNotification){
+      await sendNotification({user_id:opponentId,type:'casual_match_logged',from_user_id:authUser.id,match_id:matchId});
+    }
     track("match_logged",{match_id:matchId,is_ranked:matchType==='ranked',match_type:matchType,has_opponent_linked:!!opponentId,is_invite_flow:!!inviteFlow,sets:clean.length,result:scoreDraft.result});
     // Module 4: convert accepted challenge → completed when this match was
     // logged via the "Log result" CTA on an accepted challenge.
