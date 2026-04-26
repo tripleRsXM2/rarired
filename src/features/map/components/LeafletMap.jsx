@@ -470,32 +470,86 @@ export default function LeafletMap({
     // playMode === "court" so the user sees individual venues with
     // their names floating beside them. Tooltips have a built-in
     // pointer that connects label → marker.
+    // Detach any zoom listener bound by a previous render pass.
+    if(playCourtsRef.current.__unbind){
+      try { playCourtsRef.current.__unbind(); } catch(_){}
+    }
     playCourtsRef.current.forEach(function(m){ if(map.hasLayer(m)) map.removeLayer(m); });
     playCourtsRef.current = [];
     if(inPlayCourt){
-      // Collision-aware rendering.
-      //   • Compute each court's screen pixel after fitBounds.
-      //   • If a court has ANY neighbour within ~80px, mark it as
-      //     "crowded" — those use the 8-way diagonal offset + line.
-      //   • Otherwise render a clean caps text label below the dot
-      //     with no box and no connector. Quiet typography wins.
-      // Compute pixel positions on a microtask so fitBounds has
-      // finalised the projection.
+      // Collision + cluster-aware rendering.
+      //   • Compute each court's screen pixel after fitBounds / zoom.
+      //   • If a court has ANY neighbour within ~80px, mark crowded.
+      //   • Group crowded courts into CLUSTERS via flood-fill on the
+      //     collision graph, then deterministically distribute the 3
+      //     line-length variants WITHIN each cluster. Random hash
+      //     assignment was putting cluster mates on the same variant
+      //     and stacking them; cluster-aware ensures variant 0/1/2
+      //     are spread across each tight group.
       var zoneCourts = COURTS.filter(function(c){ return c.zone === playZoneId; });
-      setTimeout(function(){
+      var renderTimer = null;
+      function renderCourtsLayer(){
         var map2 = mapRef.current;
         if(!map2 || playMode !== "court") return;
+        // Clear any markers from a previous render pass (e.g. after
+        // zoom) — keeps the layer fresh without piling up duplicates.
+        playCourtsRef.current.forEach(function(m){
+          if(map2.hasLayer(m)) map2.removeLayer(m);
+        });
+        // Preserve the __unbind so we don't lose the zoom listener
+        // when we wipe the array.
+        var unbind = playCourtsRef.current.__unbind;
+        playCourtsRef.current = [];
+        if(unbind) playCourtsRef.current.__unbind = unbind;
         var pts = zoneCourts.map(function(c){
           return { c: c, pt: map2.latLngToContainerPoint([c.lat, c.lng]) };
         });
         var COLLISION_PX = 80;
+        pts.forEach(function(a, i){ a.idx = i; });
         pts.forEach(function(a){
           a.crowded = pts.some(function(b){
-            if(b.c === a.c) return false;
+            if(b === a) return false;
             var dx = a.pt.x - b.pt.x;
             var dy = a.pt.y - b.pt.y;
             return (dx*dx + dy*dy) < (COLLISION_PX * COLLISION_PX);
           });
+        });
+        // Flood-fill cluster membership across the collision graph.
+        var clusterId = pts.map(function(){ return -1; });
+        var nextCluster = 0;
+        function neighbours(idx){
+          var a = pts[idx], out = [];
+          pts.forEach(function(b, j){
+            if(j === idx) return;
+            var dx = a.pt.x - b.pt.x;
+            var dy = a.pt.y - b.pt.y;
+            if(dx*dx + dy*dy < COLLISION_PX*COLLISION_PX) out.push(j);
+          });
+          return out;
+        }
+        pts.forEach(function(p, i){
+          if(!p.crowded || clusterId[i] !== -1) return;
+          var stack = [i];
+          while(stack.length){
+            var k = stack.pop();
+            if(clusterId[k] !== -1) continue;
+            clusterId[k] = nextCluster;
+            neighbours(k).forEach(function(n){
+              if(clusterId[n] === -1 && pts[n].crowded) stack.push(n);
+            });
+          }
+          nextCluster++;
+        });
+        // Assign variant index within each cluster (round-robin so
+        // no two cluster mates share a variant unless the cluster
+        // exceeds VARIANTS.length).
+        var perClusterCount = {};
+        pts.forEach(function(p, i){
+          if(!p.crowded){ p.variantIdx = 0; return; }
+          var ci = clusterId[i];
+          var pos = perClusterCount[ci] || 0;
+          p.variantIdx = pos;
+          perClusterCount[ci] = pos + 1;
         });
         // Clear any existing markers (we may rebuild here).
         playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
@@ -519,10 +573,10 @@ export default function LeafletMap({
           var html, iconSize, iconAnchor;
 
           if(p.crowded){
-            // Crowded: dot + connector + caps name. Cycle through
-            // 6 placement variants (3 up-right + 3 down-right) so
-            // cluster mates stagger along TWO axes (length + up/down).
-            var d = VARIANTS[i % VARIANTS.length];
+            // Crowded: dot + connector + caps name. Variant chosen
+            // by cluster-aware round-robin so cluster mates stagger
+            // along the diagonal instead of stacking.
+            var d = VARIANTS[(p.variantIdx || 0) % VARIANTS.length];
             html =
               '<div style="position:relative;width:180px;height:120px;cursor:pointer">' +
                 '<svg width="180" height="120" style="position:absolute;inset:0;pointer-events:none">' +
@@ -563,7 +617,22 @@ export default function LeafletMap({
           m.addTo(map2);
           playCourtsRef.current.push(m);
         });
-      }, 50);
+      }
+      // Initial paint after fitBounds settles.
+      renderTimer = setTimeout(renderCourtsLayer, 50);
+      // Re-render when the user zooms — pixel positions change so
+      // the cluster + variant assignments need to update too.
+      function onZoom(){
+        if(renderTimer) clearTimeout(renderTimer);
+        renderTimer = setTimeout(renderCourtsLayer, 60);
+      }
+      map.on("zoomend moveend", onZoom);
+      // Stash an unbinder so the cleanup branch (when leaving court
+      // mode) can detach the listener.
+      playCourtsRef.current.__unbind = function(){
+        map.off("zoomend moveend", onZoom);
+        if(renderTimer) clearTimeout(renderTimer);
+      };
       // Fit the map to the picked zone so the courts are spread out
       // enough that their labels don't pile on top of each other.
       // fitBounds(bbox) with maxZoom 14 — the framing user liked
