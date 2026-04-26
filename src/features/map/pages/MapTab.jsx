@@ -371,10 +371,21 @@ export default function MapTab({
           element now that the floating zone-name labels are gone. This
           IS the on-map zone identifier when nothing is selected. Larger
           type, accent stripe, drop-shadow + slide-in animation. */}
-      {hovered && !selected && (function(){
-        var h = ZONE_BY_ID[hovered];
+      {(function(){
+        // Card resolves which zone to show in three states:
+        //   1. Court mode → ALWAYS show the picked zone (persistent
+        //      context: "you're inside Eastern Suburbs").
+        //   2. Zone mode → show the hovered zone (preview).
+        //   3. Default mode → show the hovered zone if user is
+        //      hovering and nothing is otherwise selected.
+        var which = (playMode === "court" && playZoneId) ? playZoneId
+                  : (playMode === "zone"  && hovered)    ? hovered
+                  : (hovered && !selected)               ? hovered
+                  : null;
+        if(!which) return null;
+        var h = ZONE_BY_ID[which];
         if(!h) return null;
-        var a = zoneActivity[hovered];
+        var a = zoneActivity[which];
         // Hover card — boxless, typography-led. Nike Run vibe:
         // big bold name, thin accent rule in the zone's own colour,
         // tiny blurb. No card chrome (no border, no fill, no
@@ -529,7 +540,7 @@ export default function MapTab({
                 fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
               }}>
                 {playMode === "zone" && "Choose your zone"}
-                {playMode === "court" && (playZone ? playZone.name : "Choose your court")}
+                {playMode === "court" && "Choose court"}
               </div>
             </div>
           </div>
