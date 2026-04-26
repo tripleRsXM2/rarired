@@ -228,6 +228,19 @@ export default function LeafletMap({
       // via CSS in providers.jsx.
       attributionControl: false,
       preferCanvas: true,
+      // Continuous (non-snapping) zoom so the auto-fit can land at
+      // ANY zoom that frames the bbox cleanly — not just integer
+      // 12 / 13 / 14. The integer snap was the source of "the map
+      // looks ugly small" on mobile: a 6-zone Sydney bbox would
+      // fitBounds and zoomSnap:1 would round DOWN to a level that
+      // left ugly whitespace, then jump UP to a level that cropped
+      // the polygons. zoomSnap:0 lets fitBounds compute the exact
+      // fractional zoom that fills the frame edge-to-edge.
+      // zoomDelta:0.5 keeps keyboard +/- nav coarse-grained so
+      // accessibility users still feel a discrete step.
+      zoomSnap: 0,
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 80,
     });
     L.control.attribution({
       prefix: false, // drop the "Leaflet" word
@@ -279,15 +292,18 @@ export default function LeafletMap({
     // the visible map instead of floating inside extra whitespace.
     if(allZoneLayers.length){
       var group = L.featureGroup(allZoneLayers);
-      // Mobile padding is far tighter — Sydney's all-zones bbox is
-      // wide-and-tall but on a 400px portrait screen the default 24px
-      // padding leaves the map floating inside whitespace. Drop to 8px
-      // and also lift the maxZoom so the basemap actually fills the
-      // frame (otherwise fitBounds bottoms out at zoom ~9 and reads as
-      // "tiny island in a sea of whitespace").
+      // Asymmetric padding so the bbox doesn't crash into the
+      // floating chrome. On mobile the bottom prompt + Play Match
+      // CTA stack ~150px tall; on desktop both are smaller and
+      // there's room to spare. paddingTopLeft / paddingBottomRight
+      // are [x, y] — y is what we care about for the prompt.
+      // Combined with zoomSnap:0 (set on map init) the fit can land
+      // at ANY fractional zoom that fills the available frame —
+      // no "rounded down to ugly whitespace" artefact.
       map.fitBounds(group.getBounds(), {
-        padding: isMobile ? [8, 8] : [24, 24],
-        maxZoom: isMobile ? 12 : 14,
+        paddingTopLeft:     isMobile ? [12, 24]  : [24, 24],
+        paddingBottomRight: isMobile ? [12, 150] : [24, 80],
+        maxZoom: 14,
       });
     }
 
@@ -307,8 +323,9 @@ export default function LeafletMap({
         if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
           try {
             map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), {
-              padding: isMobile ? [8,8] : [24,24],
-              maxZoom: isMobile ? 12 : 14,
+              paddingTopLeft:     isMobile ? [12, 24]  : [24, 24],
+              paddingBottomRight: isMobile ? [12, 150] : [24, 80],
+              maxZoom: 14,
               animate: false,
             });
           } catch(_){}
@@ -322,7 +339,14 @@ export default function LeafletMap({
     setTimeout(function(){
       try { map.invalidateSize(); } catch(_){}
       if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
-        try { map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), { padding: [24,24], animate: false }); } catch(_){}
+        try {
+          map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), {
+            paddingTopLeft:     isMobile ? [12, 24]  : [24, 24],
+            paddingBottomRight: isMobile ? [12, 150] : [24, 80],
+            maxZoom: 14,
+            animate: false,
+          });
+        } catch(_){}
       }
     }, 60);
 
@@ -621,10 +645,18 @@ export default function LeafletMap({
       var zoneLayer = zoneLayersRef.current[playZoneId];
       if(zoneLayer){
         try {
+          // Court mode is the screen the user complained about —
+          // 'covers the letters of the zone and Choose court text
+          // making it feel clunky'. Big bottom padding clears the
+          // bottom prompt + progress bar (~150px stack on mobile);
+          // top padding clears the top-left court card. With
+          // zoomSnap:0 the fit lands at the exact fractional zoom
+          // that frames the picked zone in the remaining height.
           map.fitBounds(zoneLayer.getBounds(), {
-            padding: isMobile ? [16, 16] : [40, 40],
+            paddingTopLeft:     isMobile ? [16, 80]  : [40, 40],
+            paddingBottomRight: isMobile ? [16, 160] : [40, 80],
             animate: false,
-            maxZoom: isMobile ? 14 : 14,
+            maxZoom: 14,
           });
         } catch(_){}
       }
@@ -660,8 +692,9 @@ export default function LeafletMap({
           // can't click a zone" — clicks during a pan didn't
           // reliably hit polygon hit-areas.
           map.fitBounds(group.getBounds(), {
-            padding: isMobile ? [12, 12] : [40, 40],
-            maxZoom: isMobile ? 12 : 14,
+            paddingTopLeft:     isMobile ? [12, 24]  : [40, 40],
+            paddingBottomRight: isMobile ? [12, 150] : [40, 80],
+            maxZoom: 14,
             animate: false,
           });
         } catch(_){}
