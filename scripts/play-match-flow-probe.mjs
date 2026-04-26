@@ -134,20 +134,31 @@ async function probe() {
 
     var afterClick = await u.page.evaluate(function(){
       var leaflet = document.querySelector(".leaflet-container");
-      var courtTips = document.querySelectorAll(".cs-play-court-tip");
+      var courtLabels = document.querySelectorAll(".cs-play-label");
+      var connectorLines = document.querySelectorAll(".cs-play-line");
+      var dots = document.querySelectorAll(".cs-play-dot");
       return {
         playModeAttr: leaflet ? leaflet.getAttribute("data-play-mode") : null,
-        courtTooltipCount: courtTips.length,
+        courtLabelCount: courtLabels.length,
+        connectorLineCount: connectorLines.length,
+        dotCount: dots.length,
       };
     });
     log("after zone CLICK: " + JSON.stringify(afterClick));
 
     if(afterClick.playModeAttr === "court"){
       log("✓ advanced to step 2 (court mode)");
-      if(afterClick.courtTooltipCount > 0){
-        log("✓ permanent court tooltips rendered (" + afterClick.courtTooltipCount + ")");
+      if(afterClick.courtLabelCount > 0){
+        log("✓ court stacks rendered (" + afterClick.courtLabelCount + " labels, " +
+          afterClick.connectorLineCount + " lines, " + afterClick.dotCount + " dots)");
+        if(afterClick.courtLabelCount === afterClick.connectorLineCount &&
+           afterClick.courtLabelCount === afterClick.dotCount){
+          log("✓ stack structure consistent (label = line = dot count)");
+        } else {
+          log("⚠ stack structure mismatch — labels/lines/dots not 1:1:1");
+        }
       } else {
-        log("⚠ court mode active but no permanent tooltips visible");
+        log("⚠ court mode active but no labeled stacks visible");
       }
     } else {
       log("✗ stuck in " + afterClick.playModeAttr + " — bug not fixed");

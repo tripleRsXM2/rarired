@@ -457,17 +457,27 @@ export default function LeafletMap({
     if(inPlayCourt){
       var zoneCourts = COURTS.filter(function(c){ return c.zone === playZoneId; });
       zoneCourts.forEach(function(c){
+        // Custom labeled stack — label, thin connector, dot. Single
+        // divIcon (no Leaflet tooltip) so we control the connector
+        // line precisely. Anchor at the dot's centre so click hit-
+        // testing maps to the venue's actual lat/lng.
         var html =
-          '<div style="box-sizing:border-box;width:14px;height:14px;border-radius:50%;background:#fff;' +
-            'box-shadow:0 1px 3px rgba(0,0,0,0.32),0 0 0 1px rgba(20,18,17,0.22);"></div>';
+          '<div class="cs-play-stack" style="display:flex;flex-direction:column;align-items:center;cursor:pointer">' +
+            '<div class="cs-play-label">' + c.name + '</div>' +
+            '<div class="cs-play-line"></div>' +
+            '<div class="cs-play-dot"></div>' +
+          '</div>';
+        // Stack height ~ 22 (label) + 18 (line) + 12 (dot) = ~52
+        // Anchor at the dot centre (y=46 from top).
         var m = L.marker([c.lat, c.lng], {
-          icon: L.divIcon({ className:"cs-play-court", html: html, iconSize:[14,14], iconAnchor:[7,7] }),
+          icon: L.divIcon({
+            className: "cs-play-court",
+            html: html,
+            iconSize: [140, 52],
+            iconAnchor: [70, 46],
+          }),
           zIndexOffset: 1500,
         });
-        m.bindTooltip(
-          '<div style="font:700 11.5px/1.2 ui-sans-serif,system-ui,sans-serif;letter-spacing:-0.01em">' + c.name + '</div>',
-          { permanent: true, direction: "top", offset: [0, -8], opacity: 1, className: "cs-play-court-tip" }
-        );
         m.on("click", function(){
           if(courtSelectRef.current) courtSelectRef.current(c);
         });
@@ -476,27 +486,23 @@ export default function LeafletMap({
       });
       // Fit the map to the picked zone so the courts are spread out
       // enough that their labels don't pile on top of each other.
-      // Fixed-zoom setView per zone instead of fitBounds. Why:
-      // bbox-fit gives wildly different visual scales because zones
-      // have very different aspect ratios. Eastern Suburbs (Paddington
-      // to La Perouse, ~12km tall + narrow) was fitting at a low
-      // zoom with most of the viewport empty horizontally; CBD/Inner
-      // West (compact + roughly square) fitted nicely. Using the
-      // hand-tuned zone.center + a single zoom level frames every
-      // zone at the same visual scale — the courts at the heart are
-      // visible, long tails clip off-screen which is acceptable for
-      // a "zoom in to focus" expectation.
-      var zoneData = ZONE_BY_ID[playZoneId];
-      var zoneCenter = zoneData && zoneData.center
-        ? zoneData.center
-        : (zoneCentersRef.current[playZoneId] || null);
-      if(zoneCenter){
-        try { map.setView(zoneCenter, 13, { animate: false }); } catch(_){}
-      } else {
-        var zoneLayer = zoneLayersRef.current[playZoneId];
-        if(zoneLayer){
-          try { map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60], animate: false, maxZoom: 13 }); } catch(_){}
-        }
+      // fitBounds(bbox) with maxZoom 13 — guarantees the WHOLE zone
+      // is in frame. setView at fixed zoom 13 cropped Eastern Suburbs
+      // (Paddington → La Perouse runs ~14km tall; doesn't fit at 13).
+      // Compact zones (CBD) cap at 13 so they don't over-zoom into
+      // street-level. Tall narrow zones (Eastern Suburbs, Northern
+      // Beaches) take their natural ~12 zoom — they read smaller in
+      // the viewport but the whole shape is visible, which matches
+      // the user expectation of "everything in frame."
+      var zoneLayer = zoneLayersRef.current[playZoneId];
+      if(zoneLayer){
+        try {
+          map.fitBounds(zoneLayer.getBounds(), {
+            padding: [50, 50],
+            animate: false,
+            maxZoom: 13,
+          });
+        } catch(_){}
       }
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);

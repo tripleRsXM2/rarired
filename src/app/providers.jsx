@@ -102,16 +102,24 @@ export default function Providers({ t, theme, children }){
         "filter:blur(1.75px);" +
         "transition:filter 0.35s ease}",
 
-      // Map-native Play Match — permanent court labels in step 2.
-      // Override Leaflet's default yellow tooltip so it reads as a
-      // floating glass chip, with a thin connector arrow to the
-      // marker (the closest we get to a "graphic" line without a
-      // custom SVG layer).
-      ".cs-play-court-tip{background:rgba(255,255,255,0.96)!important;" +
-        "border:none!important;box-shadow:0 4px 14px rgba(20,18,17,0.18)!important;" +
-        "border-radius:10px!important;padding:6px 10px!important;color:#14110f!important;" +
-        "backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}",
-      ".cs-play-court-tip:before{border-top-color:rgba(255,255,255,0.96)!important}",
+      // Map-native Play Match — court markers in step 2 are full
+      // stacks: label · thin line · dot. Replaces the old yellow
+      // Leaflet tooltip. Reads as one cohesive labeled point with
+      // a true connector line (matches the "graphic" feel of major
+      // map apps). The whole stack is the click target.
+      ".cs-play-court{pointer-events:auto}",
+      ".cs-play-stack{pointer-events:auto;user-select:none}",
+      ".cs-play-label{background:rgba(255,255,255,0.96);color:#14110f;" +
+        "padding:4px 10px;border-radius:6px;" +
+        "font:700 11px/1.2 ui-sans-serif,system-ui,sans-serif;" +
+        "letter-spacing:-0.01em;white-space:nowrap;" +
+        "box-shadow:0 2px 8px rgba(20,18,17,0.18);" +
+        "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}",
+      ".cs-play-line{width:1px;height:14px;" +
+        "background:rgba(20,18,17,0.55);" +
+        "box-shadow:0 0 4px rgba(255,255,255,0.55)}",
+      ".cs-play-dot{width:10px;height:10px;border-radius:50%;background:#fff;" +
+        "box-shadow:0 1px 3px rgba(20,18,17,0.4),0 0 0 1px rgba(20,18,17,0.32)}",
 
       // Zoom-aware label visibility — at broad zoom (city-fit) zone
       // names + activity flames hide so they don't collide with
