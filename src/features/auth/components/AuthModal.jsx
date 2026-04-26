@@ -224,6 +224,21 @@ export default function AuthModal({
                 setAuthLoading(false);
                 if(r.error){setAuthError(mapAuthError(r.error.message));return;}
                 setShowAuth(false);setAuthStep("choose");setAuthEmail("");setAuthPassword("");setAuthName("");setAuthError("");setAuthFieldErrors({});
+                // Module 9: if a redirect-back URL was stashed (e.g. by
+                // InviteMatchPage when we sent the user to sign in),
+                // navigate there now via the History API so the SPA
+                // router picks it up. We use pushState + popstate so
+                // BrowserRouter reads the new URL without a hard reload.
+                try {
+                  var nextUrl = sessionStorage.getItem("cs_auth_next");
+                  if (nextUrl) {
+                    sessionStorage.removeItem("cs_auth_next");
+                    if (nextUrl.startsWith("/") && nextUrl !== window.location.pathname + window.location.search) {
+                      window.history.pushState({}, "", nextUrl);
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }
+                  }
+                } catch (_) {}
               }}
               style={Object.assign({}, primaryBtn, { opacity: authLoading?0.65:1 })}>
               {authLoading?"Please wait…":authMode==="signup"?"Create account":"Log in"}

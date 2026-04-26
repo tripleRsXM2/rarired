@@ -40,6 +40,8 @@ import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
 import ActionReviewDrawer from "../features/notifications/components/ActionReviewDrawer.jsx";
 import AuthModal from "../features/auth/components/AuthModal.jsx";
+import InviteMatchPage from "../features/scoring/pages/InviteMatchPage.jsx";
+import { parseInvitePath } from "../features/scoring/utils/inviteUrl.js";
 import ComposeMessageModal from "../features/people/components/ComposeMessageModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
@@ -515,6 +517,46 @@ export default function App(){
       date: match.rawDate || new Date().toISOString().slice(0,10),
       venue: match.venue || '', court: match.court || '',
     });
+  }
+
+  // ── Module 9: opponent-invite landing page ────────────────────────────
+  // /invite/match/<token> short-circuits the regular shell. The page
+  // handles its own auth-redirect via the AuthModal hook so we render
+  // it for both logged-in and logged-out users. parseInvitePath
+  // validates the token shape so a bogus URL falls through to /home.
+  var invitePath = parseInvitePath(location.pathname);
+  if (invitePath) {
+    return (
+      <Providers t={t} theme={theme}>
+        <InviteMatchPage
+          t={t}
+          token={invitePath}
+          authUser={auth.authUser}
+          openAuth={function (opts) {
+            // The opts.next contains the invite URL we want to come
+            // back to. Stash it for AuthModal + open the modal.
+            try { sessionStorage.setItem("cs_auth_next", (opts && opts.next) || (location.pathname + location.search)); } catch (_) {}
+            auth.setShowAuth(true);
+          }}
+        />
+        {auth.showAuth && (
+          <AuthModal
+            t={t}
+            showAuth={auth.showAuth} setShowAuth={auth.setShowAuth}
+            authMode={auth.authMode} setAuthMode={auth.setAuthMode}
+            authStep={auth.authStep} setAuthStep={auth.setAuthStep}
+            authEmail={auth.authEmail} setAuthEmail={auth.setAuthEmail}
+            authPassword={auth.authPassword} setAuthPassword={auth.setAuthPassword}
+            authName={auth.authName} setAuthName={auth.setAuthName}
+            authLoading={auth.authLoading} setAuthLoading={auth.setAuthLoading}
+            authNewPassword={auth.authNewPassword} setAuthNewPassword={auth.setAuthNewPassword}
+            authNewPassword2={auth.authNewPassword2} setAuthNewPassword2={auth.setAuthNewPassword2}
+            authError={auth.authError} setAuthError={auth.setAuthError}
+            authFieldErrors={auth.authFieldErrors} setAuthFieldErrors={auth.setAuthFieldErrors}
+          />
+        )}
+      </Providers>
+    );
   }
 
   return (
