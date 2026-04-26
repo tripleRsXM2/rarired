@@ -30,6 +30,7 @@ import {
   fetchViewerMatchCountsBy,
   tierFromSkill,
 } from "../services/mapService.js";
+import { nearbySkillLevels } from "../../../lib/constants/domain.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { track } from "../../../lib/analytics.js";
 
@@ -153,11 +154,16 @@ export default function MapPlayerOverlay({
   var visible = useMemo(function(){
     var viewerSkill = (authUser && authUser.profile && authUser.profile.skill) || null;
     var viewerTier  = viewerSkill ? tierFromSkill(viewerSkill) : null;
+    // 'My level' = viewer's rung ± 1. We compute the allowed set once
+    // here so the per-row filter is just an array check.
+    var nearSet = (skillFilter === "same" && viewerSkill)
+      ? nearbySkillLevels(viewerSkill)
+      : [];
     return players.filter(function(p){
       if(genderFilter !== "any" && p.gender !== genderFilter) return false;
       if(skillFilter !== "any"){
         if(!viewerSkill || !p.skill) return false;
-        if(skillFilter === "same" && p.skill !== viewerSkill) return false;
+        if(skillFilter === "same" && nearSet.indexOf(p.skill) === -1) return false;
         if(skillFilter === "tier"){
           var pt = tierFromSkill(p.skill);
           if(!pt || !viewerTier || pt !== viewerTier) return false;
@@ -437,7 +443,7 @@ export default function MapPlayerOverlay({
                   fontSize: 10, color: fg, opacity: 0.55,
                   marginTop: 6, lineHeight: 1.4,
                 }}>
-                  Players with your exact skill level (e.g. Intermediate 2 = Intermediate 2).
+                  Your level ±1 rung (e.g. Intermediate 2 also matches Intermediate 1 and Advanced 1).
                 </div>
               )}
               {skillFilter === "tier" && (

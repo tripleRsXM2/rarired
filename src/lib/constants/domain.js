@@ -58,6 +58,22 @@ export function skillRank(skill) {
   return idx < 0 ? null : idx;
 }
 
+// "Near my level" set — used by the player picker's "My level"
+// filter. Returns the viewer's skill plus the rung directly above
+// and the rung directly below (clamped to the ladder boundaries).
+// Example: viewer = 'Intermediate 2'
+//   → ['Intermediate 1', 'Intermediate 2', 'Advanced 1']
+// User-feedback: an exact-match filter was too strict — picking
+// 'Intermediate 2' was excluding the very players you'd most often
+// hit with (one rung either side).
+export function nearbySkillLevels(skill) {
+  var idx = SKILL_LEVELS.indexOf(skill);
+  if (idx < 0) return [];
+  var lo = Math.max(0, idx - 1);
+  var hi = Math.min(SKILL_LEVELS.length - 1, idx + 1);
+  return SKILL_LEVELS.slice(lo, hi + 1);
+}
+
 export const PLAY_STYLES  = ["Baseline","Serve and Volley","All-Court","Defensive"];
 export const DAYS_SHORT   = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 export const TIME_BLOCKS  = ["Morning","Afternoon","Evening","Late"];

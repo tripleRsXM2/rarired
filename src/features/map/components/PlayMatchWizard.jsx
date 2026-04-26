@@ -23,6 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import { ZONES } from "../data/zones.js";
 import { courtsInZone } from "../data/courts.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchViewerMatchCountsBy, tierFromSkill } from "../services/mapService.js";
+import { nearbySkillLevels } from "../../../lib/constants/domain.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
@@ -978,11 +979,14 @@ export default function PlayMatchWizard({
                   if(genderFilter !== "any"){
                     if(p.gender !== genderFilter) return false;
                   }
-                  // Skill filter.
+                  // Skill filter. 'same' = ±1 rung from viewer's level
+                  // (e.g. Intermediate 2 also matches Intermediate 1 +
+                  // Advanced 1). 'tier' = same broad tier.
                   if(skillFilter !== "any"){
                     if(!viewerSkill || !p.skill) return false;
                     if(skillFilter === "same"){
-                      if(p.skill !== viewerSkill) return false;
+                      var nearSet = nearbySkillLevels(viewerSkill);
+                      if(nearSet.indexOf(p.skill) === -1) return false;
                     } else if(skillFilter === "tier"){
                       var pt = tierFromSkill(p.skill);
                       if(!pt || !viewerTier || pt !== viewerTier) return false;
