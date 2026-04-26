@@ -518,7 +518,37 @@ export default function MapTab({
                   : (playMode === "zone"  && hovered)    ? hovered
                   : (hovered && !selected)               ? hovered
                   : null;
-        if(!which) return null;
+
+        // ── CourtSync fallback card ───────────────────────────────
+        // When nothing else is owning the corner card, render a
+        // persistent product-identity card so the left side of the
+        // map doesn't feel hollow. Visible in:
+        //   • Default mode + no hover (no zone open, no preview)
+        //   • Zone-pick mode + no hover (gives the user something
+        //     to read while their eye scans the polygons)
+        // Hidden when a zone is selected (side panel takes over)
+        // and during court/players modes (those have their own
+        // persistent cards).
+        if(!which){
+          var hideForSelected = !!selected && playMode === "off";
+          if(hideForSelected) return null;
+          var brandRed = (t && t.red) || "#ef4444";
+          return (
+            <div className="fade-up" style={wrapStyle}>
+              <span style={labelStyle}>CourtSync</span>
+              <div style={{
+                width: pinTopLeft ? 36 : 56,
+                height: pinTopLeft ? 2 : 3,
+                background: brandRed,
+                borderRadius: 2,
+                boxShadow: "0 1px 4px " + brandRed + "55",
+              }}/>
+              <div style={pinTopLeft ? Object.assign({}, subStyle, {fontSize:11}) : subStyle}>
+                Sydney&rsquo;s social tennis network.
+              </div>
+            </div>
+          );
+        }
         var h = ZONE_BY_ID[which];
         if(!h) return null;
         return (

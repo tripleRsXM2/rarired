@@ -598,30 +598,24 @@ export default function MapPlayerOverlay({
               : "No players match these filters."}
           </div>
         ) : (
-          // Outer scroll container — full width, horizontal overflow.
-          // Inner inline-flex auto-centers via margin:auto when its
-          // width is less than the container, and aligns flush-left
-          // when it exceeds (so overflowing carousels still scroll
-          // from the leftmost card without it being clipped).
+          // Carousel — flex parent with justify-content:center so
+          // the cards centre when they fit the container. When the
+          // row overflows, the parent's overflow:auto handles it
+          // and modern browsers (Chrome / Safari / FF current) keep
+          // the leftmost card reachable via scroll. Cards have
+          // flex-shrink:0 so they never compress.
           <div
             style={{
+              display:"flex",
+              gap: 10,
+              justifyContent:"center",
               overflowX:"auto", overflowY:"hidden",
+              scrollSnapType:"x mandatory",
               WebkitOverflowScrolling:"touch",
               padding: "6px 16px 10px",
               pointerEvents:"auto",
               // Hide scrollbar — feels native on phones.
               scrollbarWidth: "none",
-            }}>
-            <div style={{
-              display:"inline-flex",
-              gap: 10,
-              scrollSnapType:"x mandatory",
-              // margin:auto on a flex/inline-flex inside a wider
-              // overflow-auto parent centers the row; if the row
-              // is wider than the parent, scrollLeft 0 sees the
-              // first card flush-left (no clipped left edge).
-              margin: "0 auto",
-              minWidth: "min-content",
             }}>
             {visible.map(function(p){
               var isSel = selectedIds.indexOf(p.id) !== -1;
@@ -732,7 +726,6 @@ export default function MapPlayerOverlay({
                 </button>
               );
             })}
-            </div>
           </div>
         )}
       </div>
