@@ -74,6 +74,23 @@ export function nearbySkillLevels(skill) {
   return SKILL_LEVELS.slice(lo, hi + 1);
 }
 
+// Age brackets — six tennis-category buckets the user picks in
+// Settings. Stored as the `id` on profiles.age_bracket (CHECK
+// constraint at the DB level). Display in two lines:
+//   primary  → the range ("18 – 24")
+//   sub      → the tennis category ("Open")
+export const AGE_BRACKETS = [
+  { id:"u18",     label:"Under 18", sub:"Junior"  },
+  { id:"18_24",   label:"18 – 24",  sub:"Open"    },
+  { id:"25_34",   label:"25 – 34",  sub:"Open"    },
+  { id:"35_44",   label:"35 – 44",  sub:"35+"     },
+  { id:"45_54",   label:"45 – 54",  sub:"Masters" },
+  { id:"55_plus", label:"55+",      sub:"Seniors" },
+];
+export var AGE_BRACKET_BY_ID = AGE_BRACKETS.reduce(function(acc, b){
+  acc[b.id] = b; return acc;
+}, {});
+
 export const PLAY_STYLES  = ["Baseline","Serve and Volley","All-Court","Defensive"];
 export const DAYS_SHORT   = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 export const TIME_BLOCKS  = ["Morning","Afternoon","Evening","Late"];

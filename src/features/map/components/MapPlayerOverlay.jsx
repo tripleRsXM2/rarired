@@ -30,32 +30,20 @@ import {
   fetchViewerMatchCountsBy,
   tierFromSkill,
 } from "../services/mapService.js";
-import { nearbySkillLevels } from "../../../lib/constants/domain.js";
+import { nearbySkillLevels, AGE_BRACKET_BY_ID } from "../../../lib/constants/domain.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { track } from "../../../lib/analytics.js";
 
 function firstName(n){ return (n||"Player").split(/\s+/)[0]; }
 
-// Resolve the displayable age from a profile's birthdate (ISO
-// YYYY-MM-DD). Returns null when missing or out-of-range so a
-// fat-fingered "1850-01-01" doesn't surface as a 175-year-old.
-// Computes off the full date so 364-day-old players don't tick
-// over a year early.
-function ageFromProfile(p){
-  if(!p || !p.birthdate) return null;
-  var s = String(p.birthdate);
-  // Parse YYYY-MM-DD without timezone gymnastics.
-  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  if(!m) return null;
-  var y = +m[1], mo = +m[2], d = +m[3];
-  var now = new Date();
-  var age = now.getFullYear() - y;
-  // Subtract a year if the birthday hasn't happened yet this year.
-  var thisMo = now.getMonth() + 1;
-  var thisD  = now.getDate();
-  if(thisMo < mo || (thisMo === mo && thisD < d)) age--;
-  if(age < 13 || age > 110) return null;
-  return age;
+// Resolve the displayable age-bracket label from a profile.
+// Returns the bracket's `label` ("18 – 24", "55+", etc.) or null
+// when the user hasn't set one. Single lookup against the shared
+// AGE_BRACKETS map — no DOB math, no timezone math.
+function bracketLabel(p){
+  if(!p || !p.age_bracket) return null;
+  var b = AGE_BRACKET_BY_ID[p.age_bracket];
+  return b ? b.label : null;
 }
 function hexToRgba(hex, a){
   if(!hex || typeof hex !== "string") return "rgba(0,0,0," + a + ")";
@@ -558,7 +546,7 @@ export default function MapPlayerOverlay({
                     )}
                   </div>
                   {(function(){
-                    var age = ageFromProfile(p);
+                    var bracket = bracketLabel(p);
                     var name = firstName(p.name || p.username || p.full_name || "Player");
                     return (
                       <div style={{
@@ -570,12 +558,12 @@ export default function MapPlayerOverlay({
                         overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
                       }}>
                         {name}
-                        {age != null && (
+                        {bracket && (
                           <span style={{
                             fontWeight: 600,
                             opacity: 0.65,
                             marginLeft: 4,
-                          }}>· {age}</span>
+                          }}>· {bracket}</span>
                         )}
                       </div>
                     );

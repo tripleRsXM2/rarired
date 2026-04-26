@@ -11,7 +11,7 @@ import { supabase } from "../../../lib/supabase.js";
 import { initials } from "../../../lib/utils/avatar.js";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
-import { SKILL_LEVELS, SKILL_HINTS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS } from "../../../lib/constants/domain.js";
+import { SKILL_LEVELS, SKILL_HINTS, PLAY_STYLES, DAYS_SHORT, TIME_BLOCKS, AGE_BRACKETS } from "../../../lib/constants/domain.js";
 import AvailabilityChips from "../../../components/ui/AvailabilityChips.jsx";
 import CourtsPicker from "../../../components/ui/CourtsPicker.jsx";
 import { ZONES } from "../../map/data/zones.js";
@@ -332,38 +332,58 @@ export default function SettingsScreen({
                 Used so partners can filter their player picker (e.g. for women's doubles). Visible to others only when they apply that filter. You can change or clear this any time.
               </div>
             </div>
-            {/* Birthdate (optional). Native date input — mobile shows
-                the system picker, desktop shows a calendar. Stored as
-                an ISO YYYY-MM-DD string into profiles.birthdate; age
-                is computed on read wherever it's displayed. No live
-                age echo here — the user already knows how old they
-                are, and the preview read as 'CourtSync judging me'. */}
-            {(function(){
-              var todayIso = new Date().toISOString().slice(0,10);
-              var bd = profileDraft.birthdate || "";
-              return (
-                <div style={{marginBottom:12}}>
-                  <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-                    Birthdate (optional)
-                  </label>
-                  <input
-                    type="date"
-                    min="1900-01-01"
-                    max={todayIso}
-                    value={bd}
-                    onChange={function(e){
-                      var v = e.target.value || null;
-                      setProfileDraft(function(d){
-                        return Object.assign({},d,{ birthdate: v });
-                      });
-                    }}
-                    style={iStyle}/>
-                  <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
-                    Helps players match by age bracket. Leave blank to skip.
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Age bracket (optional). 2-column card grid mirroring
+                the standard tennis age categories (Junior / Open /
+                35+ / Masters / Seniors). Storing the bracket directly
+                — no DOB needed — which keeps the PII footprint small
+                and the matchmaker query trivial. Tapping a selected
+                card again clears the field. */}
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                Age (optional)
+              </label>
+              <div style={{
+                display:"grid",
+                gridTemplateColumns:"1fr 1fr",
+                gap: 6,
+              }}>
+                {AGE_BRACKETS.map(function(b){
+                  var on = (profileDraft.age_bracket || "") === b.id;
+                  return (
+                    <button key={b.id} type="button"
+                      onClick={function(){
+                        setProfileDraft(function(d){
+                          return Object.assign({},d,{ age_bracket: on ? null : b.id });
+                        });
+                      }}
+                      style={{
+                        textAlign:"left",
+                        padding:"12px 14px",
+                        borderRadius: 10,
+                        border:"1px solid "+(on?t.accent:t.border),
+                        background: on ? t.accentSubtle : "transparent",
+                        color: on ? t.accent : t.text,
+                        cursor:"pointer",
+                        display:"flex", flexDirection:"column", gap: 3,
+                      }}>
+                      <span style={{
+                        fontSize: 16, fontWeight: 800,
+                        letterSpacing:"-0.02em", lineHeight: 1.05,
+                      }}>{b.label}</span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        letterSpacing:"0.12em", textTransform:"uppercase",
+                        color: on ? t.accent : t.textTertiary,
+                        opacity: on ? 0.85 : 1,
+                      }}>{b.sub}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
+                Helps players match by age bracket. Tap your selected card again to clear.
+              </div>
+            </div>
             {/* Skill level — stacked list so SKILL_HINTS sits below each rung.
                 Module 7.7: locked once a confirmed ranked match has been
                 recorded (profile.skill_level_locked = true, set server-side
@@ -482,8 +502,8 @@ export default function SettingsScreen({
                   // The DB CHECK constraint accepts only the four allowed
                   // values or NULL.
                   gender:        profileDraft.gender || null,
-                  // Birthdate (optional) — ISO YYYY-MM-DD or null.
-                  birthdate:     profileDraft.birthdate || null,
+                  // Age bracket (optional) — one of the AGE_BRACKETS ids or null.
+                  age_bracket:   profileDraft.age_bracket || null,
                   avatar:       init2,
                 });
                 setProfile(nd);
@@ -505,7 +525,7 @@ export default function SettingsScreen({
                     availability:nd.availability||{},
                     played_courts: nd.played_courts || [],
                     gender:         nd.gender,
-                    birthdate:      nd.birthdate,
+                    age_bracket:    nd.age_bracket,
                   };
                   if (!profile.skill_level_locked) {
                     payload.skill = nd.skill || "Intermediate 1";
