@@ -675,9 +675,10 @@ export default function MapTab({
           // no inner highlights. Theme-adaptive: dark CTA on light
           // basemap, light CTA on dark basemap — so contrast stays
           // constant and the button never gets lost. Apple's primary-
-          // button pattern. 104px reads as confidently primary on
-          // both mobile and desktop without overwhelming the map.
-          width: 104, height: 104,
+          // button pattern. Sized at 114px (was 104, +10% per user)
+          // so it reads even more confidently as the map's hero
+          // action without crowding the bottom prompt.
+          width: 114, height: 114,
           borderRadius: "50%",
           border: "none",
           background: mapDark ? "#fff" : "#14110f",
@@ -705,11 +706,11 @@ export default function MapTab({
           e.currentTarget.style.transform = "translateX(-50%)";
         }}>
         <span style={{
-          fontSize: 19, fontWeight: 900,
+          fontSize: 21, fontWeight: 900,
           letterSpacing: "0.10em", lineHeight: 1,
         }}>PLAY</span>
         <span style={{
-          fontSize: 10, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
           letterSpacing: "0.20em", lineHeight: 1,
           opacity: 0.72, marginTop: 3,
         }}>MATCH</span>
