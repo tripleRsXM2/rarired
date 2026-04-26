@@ -146,6 +146,10 @@ export default function LeafletMap({
   //             zone, courts get permanent name labels
   playMode = "off",
   playZoneId = null,
+  // Set when playMode === "players" — the venue the user picked
+  // before reaching the player picker. We reframe the map onto
+  // this court so it sits dead-centre under the floating cards.
+  playCourtName = null,
   // Map basemap override: "auto" follows app theme (default), "light"
   // forces positron, "dark" forces dark-matter. Lives in the cog
   // panel so users can read a dark map in a light app and vice versa.
@@ -459,13 +463,19 @@ export default function LeafletMap({
     if(!map || !cluster) return;
 
     var inFocus    = !!focusedCourtName;
-    var inPlayCourt = playMode === "court" && !!playZoneId;
-    var inPlayZone  = playMode === "zone";
+    var inPlayCourt   = playMode === "court" && !!playZoneId;
+    var inPlayZone    = playMode === "zone";
+    var inPlayPlayers = playMode === "players" && !!playCourtName;
     // Cluster only shows in default mode (no focus, not in play).
-    var showCluster = showCourts && !inFocus && !inPlayCourt && !inPlayZone;
-    // Solo focus marker hidden during play modes — they have their
-    // own marker rendering (or none, in zone mode).
-    var showSolo    = showCourts && inFocus && !inPlayZone && !inPlayCourt;
+    var showCluster = showCourts && !inFocus && !inPlayCourt && !inPlayZone && !inPlayPlayers;
+    // Solo focus marker — visible when in side-panel focus mode OR
+    // when in the map-native players step (where we want exactly
+    // ONE marker on the picked court, anchoring the venue).
+    var showSolo    = (inFocus || inPlayPlayers) && !inPlayZone && !inPlayCourt;
+    // Which name to render the solo marker for. Players mode wins
+    // over the side-panel focus, since playCourtName is the more
+    // specific signal in that flow.
+    var soloName    = inPlayPlayers ? playCourtName : focusedCourtName;
 
     // Cluster visibility
     if(showCluster){
@@ -482,7 +492,10 @@ export default function LeafletMap({
       soloMarkerRef.current = null;
     }
     if(showSolo){
-      var c = COURTS.find(function(x){ return x.name === focusedCourtName; });
+      var c = COURTS.find(function(x){
+        return x.name === soloName
+          || (x.aliases && x.aliases.indexOf(soloName) !== -1);
+      });
       if(c){
         // Focused marker — same white-dot language as the default,
         // just a touch bigger (18 vs 14) so it has presence. In
@@ -597,7 +610,7 @@ export default function LeafletMap({
         } catch(_){}
       }
     }
-  },[showCourts, focusedCourtName, playMode, playZoneId]);
+  },[showCourts, focusedCourtName, playMode, playZoneId, playCourtName]);
 
   // Reflect play-mode on the leaflet-container so CSS in providers
   // can blur+dim the tile pane. Also auto-fit to all zones on
@@ -631,7 +644,21 @@ export default function LeafletMap({
         } catch(_){}
       }
     }
-  },[playMode]);
+    // PLAYERS mode reframes onto the picked court so the venue sits
+    // dead-centre under the floating cards. Zoom 16 keeps the
+    // surrounding streets readable but tight enough that the court
+    // is unmistakably "where we're playing".
+    if(playMode === "players" && prev !== "players" && playCourtName){
+      var court = COURTS.find(function(c){
+        return c.name === playCourtName
+          || (c.aliases && c.aliases.indexOf(playCourtName) !== -1);
+      });
+      if(court){
+        try { map.setView([court.lat, court.lng], 16, { animate: false }); }
+        catch(_){}
+      }
+    }
+  },[playMode, playCourtName]);
 
   // Restyle zones when hover / selected / play-mode change. Zone
   // colours are always shown unless we're in court-pick play mode
@@ -645,9 +672,11 @@ export default function LeafletMap({
       var isHover = hovered === id;
       var isSel   = selected === id;
 
-      // Play mode COURT: only the chosen zone is bright. Everything
-      // else fades to a hairline.
-      if(playMode === "court" && playZoneId){
+      // Play mode COURT or PLAYERS: only the chosen zone is bright,
+      // everything else fades to a hairline. Same visual lock-in for
+      // both — the user has committed to a zone, the rest must read
+      // as background.
+      if((playMode === "court" || playMode === "players") && playZoneId){
         var isPlay = id === playZoneId;
         layer.setStyle({
           color: z.color,

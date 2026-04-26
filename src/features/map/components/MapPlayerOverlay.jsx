@@ -187,7 +187,10 @@ export default function MapPlayerOverlay({
   // ─────────────────────────────────────────────────────────────
   return (
     <>
-      {/* TOP — Singles/Doubles toggle (centre) + Filter cog (right) */}
+      {/* TOP — Singles/Doubles toggle (centre) + Filter cog (right).
+          Scope tabs (In zone / Everywhere) sit immediately below as
+          quiet underline tabs — surfaces the most common roster
+          decision without taking space from the format pill. */}
       <div style={{
         position: "absolute",
         top: "calc(env(safe-area-inset-top, 0px) + 16px)",
@@ -276,11 +279,57 @@ export default function MapPlayerOverlay({
         </button>
       </div>
 
-      {/* Filter sheet — floats below the top row when open. */}
+      {/* Scope tabs — In zone / Everywhere. Surfaces directly below
+          the format toggle so the user sees both axes at a glance.
+          Quiet underline-tabs styling so they read as secondary to
+          the format pill. */}
+      <div style={{
+        position:"absolute",
+        top: "calc(env(safe-area-inset-top, 0px) + 64px)",
+        left: 0, right: 0,
+        zIndex: 545,
+        display:"flex", justifyContent:"center",
+        pointerEvents:"none",
+      }}>
+        <div className="fade-up" style={{
+          display:"inline-flex", gap: 22,
+          padding: "8px 18px", borderRadius: 999,
+          background: glassBg,
+          backdropFilter:"blur(20px) saturate(140%)",
+          WebkitBackdropFilter:"blur(20px) saturate(140%)",
+          border: glassBorder,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
+          pointerEvents:"auto",
+        }}>
+          {[
+            { id:"zone",       label:"In zone" },
+            { id:"everywhere", label:"Everywhere" },
+          ].map(function(s){
+            var on = scope === s.id;
+            return (
+              <button key={s.id} type="button"
+                onClick={function(){ if(!on){ setScope(s.id); setSelectedIds([]); } }}
+                style={{
+                  padding:"4px 0", background:"transparent", border:"none",
+                  borderBottom: "2px solid " + (on ? fg : "transparent"),
+                  color: on ? fg : (mapDark ? "rgba(255,255,255,0.55)" : "rgba(20,18,17,0.45)"),
+                  fontSize: 11, fontWeight: on ? 800 : 600,
+                  letterSpacing:"0.06em", textTransform:"uppercase",
+                  cursor: on ? "default" : "pointer",
+                  transition:"color 0.15s, border-color 0.15s",
+                }}>
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filter sheet — floats below the top chrome when open. */}
       {filtersOpen && (
         <div className="fade-up" style={{
           position:"absolute",
-          top: "calc(env(safe-area-inset-top, 0px) + 68px)",
+          top: "calc(env(safe-area-inset-top, 0px) + 116px)",
           left: 16, right: 16,
           zIndex: 545,
           display:"flex", justifyContent:"center",
@@ -359,42 +408,21 @@ export default function MapPlayerOverlay({
                 })}
               </div>
             </div>
-            {/* In-zone / Everywhere toggle — secondary scope decision,
-                lives inside the filter sheet so the top chrome stays
-                clean. */}
-            <div style={{ marginTop: 10, display:"flex", gap: 12, paddingTop: 8, borderTop: "1px solid " + (mapDark ? "rgba(255,255,255,0.12)" : "rgba(20,18,17,0.08)") }}>
-              {[
-                { id:"zone",       label:"In zone" },
-                { id:"everywhere", label:"Everywhere" },
-              ].map(function(s){
-                var on = scope === s.id;
-                return (
-                  <button key={s.id} type="button"
-                    onClick={function(){ if(!on){ setScope(s.id); setSelectedIds([]); } }}
-                    style={{
-                      padding:"4px 0", background:"transparent", border:"none",
-                      borderBottom: "2px solid " + (on ? fg : "transparent"),
-                      color: on ? fg : (mapDark ? "rgba(255,255,255,0.55)" : "rgba(20,18,17,0.45)"),
-                      fontSize: 12, fontWeight: on ? 800 : 600,
-                      letterSpacing:"0.02em",
-                      cursor: on ? "default" : "pointer",
-                    }}>
-                    {s.label}
-                  </button>
-                );
-              })}
-            </div>
+            {/* Scope tabs (In zone / Everywhere) live in the top
+                chrome now, not in this sheet — see the standalone
+                scope-tabs block above the filter button. */}
           </div>
         </div>
       )}
 
-      {/* PLAYER CARDS — horizontal-scroll carousel floating above
-          the bottom prompt. Cards are translucent glass tiles so
-          the blurred map breathes through. */}
+      {/* PLAYER CARDS — horizontal-scroll carousel anchored to the
+          vertical centre of the viewport. Cards float over the
+          blurred basemap; the picked court sits below them centred
+          via the LeafletMap setView. */}
       <div style={{
         position:"absolute",
         left: 0, right: 0,
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 130px)",
+        top: "50%", transform: "translateY(-50%)",
         zIndex: 542,
         pointerEvents: "none",
       }}>
@@ -492,33 +520,44 @@ export default function MapPlayerOverlay({
                   }}>
                     {firstName(p.name || p.username || p.full_name || "Player")}
                   </div>
-                  {p.historyCount > 0 ? (
-                    <span style={{
-                      padding: "2px 8px", borderRadius: 999,
-                      background: hexToRgba(t.accent || "#ff6b3d", isSel ? 0.18 : 0.14),
-                      color: t.accent || "#ff6b3d",
-                      fontSize: 9, fontWeight: 900,
-                      letterSpacing:"0.06em", textTransform:"uppercase",
-                    }}>
-                      {p.historyCount === 1 ? "1 match" : (p.historyCount + " matches")}
-                    </span>
-                  ) : (p.skill || p.skill_level) ? (
-                    <span style={{
-                      padding: "2px 8px", borderRadius: 999,
-                      background: isSel
-                        ? (mapDark ? "rgba(20,18,17,0.10)" : "rgba(255,255,255,0.18)")
-                        : (mapDark ? "rgba(255,255,255,0.10)" : "rgba(20,18,17,0.06)"),
-                      color: isSel
-                        ? (mapDark ? "rgba(20,18,17,0.7)" : "rgba(255,255,255,0.85)")
-                        : (mapDark ? "rgba(255,255,255,0.75)" : "rgba(20,18,17,0.65)"),
-                      fontSize: 9, fontWeight: 800,
-                      letterSpacing:"0.04em", textTransform:"uppercase",
-                    }}>
-                      {p.skill || p.skill_level}
-                    </span>
-                  ) : (
-                    <span style={{ height: 14 }}/>
-                  )}
+                  {/* Chips stack — level always visible if known;
+                      history chip stacks ABOVE level when present. */}
+                  <div style={{
+                    display:"flex", flexDirection:"column", alignItems:"center", gap: 3,
+                    width: "100%",
+                  }}>
+                    {p.historyCount > 0 && (
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 999,
+                        background: hexToRgba(t.accent || "#ff6b3d", isSel ? 0.18 : 0.14),
+                        color: t.accent || "#ff6b3d",
+                        fontSize: 9, fontWeight: 900,
+                        letterSpacing:"0.06em", textTransform:"uppercase",
+                        whiteSpace:"nowrap",
+                      }}>
+                        {p.historyCount === 1 ? "1 match" : (p.historyCount + " matches")}
+                      </span>
+                    )}
+                    {(p.skill || p.skill_level) ? (
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 999,
+                        background: isSel
+                          ? (mapDark ? "rgba(20,18,17,0.10)" : "rgba(255,255,255,0.18)")
+                          : (mapDark ? "rgba(255,255,255,0.10)" : "rgba(20,18,17,0.06)"),
+                        color: isSel
+                          ? (mapDark ? "rgba(20,18,17,0.7)" : "rgba(255,255,255,0.85)")
+                          : (mapDark ? "rgba(255,255,255,0.75)" : "rgba(20,18,17,0.65)"),
+                        fontSize: 9, fontWeight: 800,
+                        letterSpacing:"0.04em", textTransform:"uppercase",
+                        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                        maxWidth: "100%",
+                      }}>
+                        {p.skill || p.skill_level}
+                      </span>
+                    ) : (
+                      !p.historyCount && <span style={{ height: 14 }}/>
+                    )}
+                  </div>
                 </button>
               );
             })}

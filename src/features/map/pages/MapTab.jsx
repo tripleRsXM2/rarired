@@ -193,7 +193,7 @@ export default function MapTab({
     // falling through to setSelected which silently changed state
     // even though the side panel doesn't render in court mode —
     // user perceived "map layers working in the background."
-    if(playMode === "court") return;
+    if(playMode === "court" || playMode === "players") return;
     setSelected(zoneId);
     if(zoneId){
       var a = zoneActivity[zoneId] || { matches_7d: 0, players_7d: 0 };
@@ -258,6 +258,7 @@ export default function MapTab({
         focusedCourtName={panelCourtName}
         playMode={playMode}
         playZoneId={playZoneId}
+        playCourtName={playCourtName}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
