@@ -71,6 +71,11 @@ export default function PlayMatchWizard({
   // / etc.
   var [timeOfDay, setTimeOfDay] = useState("anytime"); // anytime|morning|afternoon|evening
 
+  // Step 2 player-search query — case-insensitive prefix match on
+  // first/last name. Filters the loaded `players` array client-side
+  // (we already cap at ~80 candidates, so no server round-trip).
+  var [playerQuery, setPlayerQuery] = useState("");
+
   // Tracks whether a mouse-press started on the backdrop. Used to
   // distinguish "user clicked the dim area" from "user drag-selected
   // text inside the modal and overshot". See backdrop onMouseDown +
@@ -518,7 +523,7 @@ export default function PlayMatchWizard({
                   var on = scope === s.id;
                   return (
                     <button key={s.id} type="button"
-                      onClick={function(){ if(!on){ setScope(s.id); setSelectedIds([]); } }}
+                      onClick={function(){ if(!on){ setScope(s.id); setSelectedIds([]); setPlayerQuery(""); } }}
                       style={{
                         padding:"4px 0", background:"transparent", border:"none",
                         borderBottom: "2px solid " + (on ? t.text : "transparent"),
@@ -533,6 +538,64 @@ export default function PlayMatchWizard({
                   );
                 })}
               </div>
+
+              {/* Search — only renders once the player set has loaded
+                  AND there are enough candidates that scrolling becomes
+                  the friction. Below ~6 players a search adds visual
+                  weight without value. Filters client-side on the
+                  already-loaded array so there's no server round-trip
+                  per keystroke. */}
+              {!loading && players.length >= 6 && (
+                <div style={{ position:"relative", marginBottom: 10 }}>
+                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                       stroke="currentColor" strokeWidth="1.7"
+                       strokeLinecap="round" strokeLinejoin="round"
+                       style={{
+                         position:"absolute", top:"50%", left: 12,
+                         transform:"translateY(-50%)", color: t.textTertiary,
+                         pointerEvents:"none",
+                       }}>
+                    <circle cx="8" cy="8" r="5"/>
+                    <path d="M12 12l4 4"/>
+                  </svg>
+                  <input
+                    type="search"
+                    value={playerQuery}
+                    placeholder={"Search " + players.length + " players"}
+                    onChange={function(e){ setPlayerQuery(e.target.value); }}
+                    autoComplete="off"
+                    style={{
+                      width: "100%", boxSizing:"border-box",
+                      padding: "9px 32px 9px 34px",
+                      borderRadius: 10,
+                      background: hexToRgba(t.bgCard, 0.78),
+                      border: "1px solid " + t.border,
+                      color: t.text,
+                      fontSize: 13,
+                      letterSpacing:"-0.1px",
+                      outline: "none",
+                    }}/>
+                  {playerQuery && (
+                    <button type="button"
+                      onClick={function(){ setPlayerQuery(""); }}
+                      aria-label="Clear search"
+                      style={{
+                        position:"absolute", top:"50%", right: 6,
+                        transform:"translateY(-50%)",
+                        width: 24, height: 24, borderRadius: "50%",
+                        background:"transparent", border:"none",
+                        color: t.textSecondary, cursor:"pointer",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                      }}>
+                      <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+                           stroke="currentColor" strokeWidth="2"
+                           strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 5l8 8M13 5l-8 8"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Selection counter */}
               <div style={{
@@ -562,12 +625,40 @@ export default function PlayMatchWizard({
                     </div>
                   )}
                 </div>
-              ) : (
-                // Horizontal scrolling carousel of profile cards.
-                // Each card: 80px circle avatar (with accent ring on
-                // select), name + skill below. Scroll-snap + mouse
-                // drag friendly. Big tap target on mobile.
+              ) : (() => {
+                // Apply the search filter once. Selection state is
+                // tracked against the underlying `players` array (by
+                // id), so filtering for render is safe — picks survive
+                // a query change.
+                var q = (playerQuery || "").trim().toLowerCase();
+                var visible = q
+                  ? players.filter(function(p){
+                      var name = (p.name || p.username || p.full_name || "").toLowerCase();
+                      return name.indexOf(q) !== -1;
+                    })
+                  : players;
+                if(visible.length === 0) {
+                  return (
+                    <div style={{ padding:"24px 0", textAlign:"center", color: t.textTertiary, fontSize: 12 }}>
+                      No players match "{playerQuery}".
+                      <div style={{ marginTop:8 }}>
+                        <button type="button" onClick={function(){ setPlayerQuery(""); }}
+                          style={{
+                            background:"transparent", border:"none", color: t.accent,
+                            fontSize: 12, fontWeight: 700, cursor:"pointer",
+                          }}>
+                          Clear search
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
                 <>
+                {/* Horizontal scrolling carousel of profile cards.
+                    Each card: 60px circle avatar (with accent ring on
+                    select), name + skill below. Scroll-snap + mouse
+                    drag friendly. Big tap target on mobile. */}
                 <div style={{
                   display: "flex",
                   gap: 10,
@@ -579,7 +670,7 @@ export default function PlayMatchWizard({
                   // Hide scrollbar but keep functionality.
                   scrollbarWidth: "thin",
                 }}>
-                  {players.map(function(p){
+                  {visible.map(function(p){
                     var isSel = selectedIds.indexOf(p.id) !== -1;
                     var disabled = !isSel && selectedIds.length >= MAX_SELECT;
                     return (
@@ -674,199 +765,8 @@ export default function PlayMatchWizard({
                   <span>Slide for more players</span>
                 </div>
                 </>
-              )}
-
-              {/* When? — moved to step 3 below per user. Step 2 is
-                  now player picker only. */}
-              {false && !loading && players.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <div style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                    textTransform: "uppercase", color: t.textTertiary,
-                    marginBottom: 8,
-                  }}>
-                    When?
-                  </div>
-                  <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
-                    {[
-                      { id:"week",      label:"This week" },
-                      { id:"next-week", label:"Next week" },
-                      { id:"weekend",   label:"Weekend" },
-                      { id:"days",      label:"Pick days" },
-                    ].map(function(opt){
-                      var on = whenMode === opt.id;
-                      return (
-                        <button key={opt.id} type="button"
-                          onClick={function(){
-                            setWhenMode(opt.id);
-                            if(opt.id !== "days") setPickedDays([]);
-                          }}
-                          style={{
-                            padding: "8px 14px", borderRadius: 999,
-                            background: on ? t.text : hexToRgba(t.bgCard, 0.78),
-                            color: on ? t.bg : t.textSecondary,
-                            border:"none", cursor:"pointer",
-                            fontSize: 12, fontWeight: 700,
-                            letterSpacing:"0.01em",
-                            transition: "background 0.15s, color 0.15s",
-                          }}>
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {whenMode === "days" && (
-                    <div style={{
-                      display:"flex", gap: 5, flexWrap:"wrap",
-                      marginTop: 10,
-                    }}>
-                      {DAYS.map(function(d){
-                        var on = pickedDays.indexOf(d) !== -1;
-                        return (
-                          <button key={d} type="button"
-                            onClick={function(){
-                              setPickedDays(function(prev){
-                                return prev.indexOf(d) !== -1
-                                  ? prev.filter(function(x){ return x !== d; })
-                                  : prev.concat([d]);
-                              });
-                            }}
-                            style={{
-                              minWidth: 38,
-                              padding: "7px 0", borderRadius: 10,
-                              background: on ? t.accent : hexToRgba(t.bgCard, 0.78),
-                              color: on ? (t.accentText || "#fff") : t.textSecondary,
-                              border:"none", cursor:"pointer",
-                              fontSize: 11, fontWeight: 800,
-                              letterSpacing:"0.04em",
-                              transition: "background 0.15s, color 0.15s",
-                            }}>
-                            {d}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Time of day — underline tabs (same language as
-                      In zone/Everywhere on the side panel). No track,
-                      no bg, just text with a 2px underline under the
-                      active option. Reads quietly — text leads. */}
-                  <div style={{ display:"flex", gap: 18, marginTop: 12, paddingBottom: 2 }}>
-                    {[
-                      { id:"anytime",   label:"Anytime"   },
-                      { id:"morning",   label:"Morning"   },
-                      { id:"afternoon", label:"Afternoon" },
-                      { id:"evening",   label:"Evening"   },
-                    ].map(function(opt){
-                      var on = timeOfDay === opt.id;
-                      return (
-                        <button key={opt.id} type="button"
-                          onClick={function(){ if(!on) setTimeOfDay(opt.id); }}
-                          style={{
-                            padding:"4px 0",
-                            background:"transparent",
-                            border:"none",
-                            borderBottom: "2px solid " + (on ? t.text : "transparent"),
-                            color: on ? t.text : t.textTertiary,
-                            fontSize: 12,
-                            fontWeight: on ? 700 : 500,
-                            letterSpacing:"0.01em",
-                            cursor: on ? "default" : "pointer",
-                            transition:"color 0.15s, border-color 0.15s",
-                          }}>
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Booking-link slot — venue is locked in by now
-                      so "check times at <venue>" reads naturally and
-                      can directly inform the day choice above. */}
-                  {pickedCourt && pickedCourt.bookingUrl && (
-                    <a href={pickedCourt.bookingUrl}
-                      target="_blank" rel="noopener noreferrer"
-                      style={{
-                        marginTop: 12,
-                        padding: "10px 12px",
-                        borderRadius: 12,
-                        background: hexToRgba(t.bgCard, 0.78),
-                        color: t.text, textDecoration:"none",
-                        display:"flex", alignItems:"center", gap: 10,
-                        transition: "background 0.15s",
-                      }}
-                      onMouseEnter={function(e){ e.currentTarget.style.background = t.bgCard; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.background = hexToRgba(t.bgCard, 0.78); }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: 10,
-                        background: hexToRgba(t.accent, 0.14),
-                        color: t.accent, flexShrink: 0,
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                      }}>
-                        <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
-                             stroke="currentColor" strokeWidth="1.8"
-                             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M11 4h3v3M14 4l-6 6M8 5H5v8h8v-3"/>
-                        </svg>
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{
-                          fontSize: 12.5, fontWeight: 700, color: t.text,
-                          letterSpacing: "-0.01em",
-                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                        }}>
-                          Check times at {pickedCourt.name}
-                        </div>
-                        <div style={{
-                          fontSize: 10, color: t.textTertiary, marginTop: 2,
-                          letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:700,
-                        }}>
-                          Opens venue's booking site
-                        </div>
-                      </div>
-                    </a>
-                  )}
-
-                  {/* Live draft preview — message-bubble style so the
-                      user sees EXACTLY what lands in the DM. Updates
-                      as they tweak partners / when. */}
-                  {selectedIds.length > 0 && (
-                    <div style={{ marginTop: 14 }}>
-                      <div style={{
-                        fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                        textTransform: "uppercase", color: t.textTertiary,
-                        marginBottom: 6,
-                      }}>
-                        Message preview
-                      </div>
-                      <div style={{
-                        padding: "12px 14px",
-                        borderRadius: "16px 16px 16px 4px",
-                        background: hexToRgba(t.accent, 0.10),
-                        color: t.text,
-                        fontSize: 13.5, lineHeight: 1.45,
-                        letterSpacing: "-0.005em",
-                        maxWidth: "95%",
-                      }}>
-                        {previewInviteText({
-                          partners: selectedIds.map(function(id){ return players.find(function(p){ return p.id === id; }); }).filter(Boolean),
-                          court: courtName,
-                          zone: zone,
-                          when: resolveWhen(whenMode, pickedDays, timeOfDay),
-                        })}
-                      </div>
-                      <div style={{
-                        fontSize: 10, color: t.textTertiary,
-                        marginTop: 6, letterSpacing:"0.02em",
-                      }}>
-                        This sends as a direct message to each player.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
