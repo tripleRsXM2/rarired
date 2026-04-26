@@ -40,7 +40,8 @@ var TOTAL_STEPS = 4;
 // type when planning ("Sat" not "Saturday") so the rendered draft
 // reads naturally.
 var DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-var MAX_SELECT  = 3; // viewer + 3 others = doubles
+// MAX_SELECT used to be a hard 3-cap; replaced by per-format `maxSelect`
+// derived from the Singles/Doubles toggle in step 2. See useState(format).
 
 export default function PlayMatchWizard({
   t, open,
@@ -76,6 +77,14 @@ export default function PlayMatchWizard({
   // (we already cap at ~80 candidates, so no server round-trip).
   var [playerQuery, setPlayerQuery] = useState("");
 
+  // Step 2 format — Singles caps the picker at 1 partner, Doubles
+  // caps at 3 (viewer + 3 = a foursome). Defaults to Doubles because
+  // the picker UI already implies multi-select; users who want
+  // singles flip it explicitly. Switching Doubles→Singles trims the
+  // selection so the counter never lies about what'll be sent.
+  var [format, setFormat] = useState("doubles"); // "singles" | "doubles"
+  var maxSelect = format === "singles" ? 1 : 3;
+
   // Tracks whether a mouse-press started on the backdrop. Used to
   // distinguish "user clicked the dim area" from "user drag-selected
   // text inside the modal and overshot". See backdrop onMouseDown +
@@ -99,6 +108,8 @@ export default function PlayMatchWizard({
     setCourtName(initialCourtName || null);
     setSelectedIds([]);
     setScope("zone");
+    setFormat("doubles");
+    setPlayerQuery("");
     setWhenMode("week");
     setPickedDays([]);
     setTimeOfDay("anytime");
@@ -218,7 +229,7 @@ export default function PlayMatchWizard({
       if(prev.indexOf(p.id) !== -1){
         return prev.filter(function(id){ return id !== p.id; });
       }
-      if(prev.length >= MAX_SELECT) return prev;
+      if(prev.length >= maxSelect) return prev;
       return prev.concat([p.id]);
     });
   }
@@ -543,6 +554,50 @@ export default function PlayMatchWizard({
           {/* Step 2 — pick player(s) */}
           {step === 2 && (
             <div>
+              {/* Format selector — Singles vs Doubles. The most primary
+                  intent on this screen ("how many partners do I want?"),
+                  so it leads. Switching format trims the picked list to
+                  the new cap so the counter never lies. */}
+              <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                {[
+                  { id:"singles", label:"Singles", sub:"1 partner"  },
+                  { id:"doubles", label:"Doubles", sub:"up to 3"    },
+                ].map(function(f){
+                  var on = format === f.id;
+                  return (
+                    <button key={f.id} type="button"
+                      onClick={function(){
+                        if(on) return;
+                        setFormat(f.id);
+                        // Trim selection to the new cap so what the
+                        // counter says matches what'll actually send.
+                        var newCap = f.id === "singles" ? 1 : 3;
+                        setSelectedIds(function(prev){ return prev.slice(0, newCap); });
+                      }}
+                      style={{
+                        flex:1,
+                        padding:"10px 12px", borderRadius: 12,
+                        background: on ? t.text : hexToRgba(t.bgCard, 0.78),
+                        color: on ? t.bg : t.text,
+                        border: "none", cursor: on ? "default" : "pointer",
+                        textAlign:"left",
+                        transition: "background 0.15s, color 0.15s",
+                      }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, letterSpacing:"-0.01em" }}>
+                        {f.label}
+                      </div>
+                      <div style={{
+                        fontSize: 10.5, fontWeight: 600,
+                        opacity: on ? 0.7 : 0.85,
+                        marginTop: 2, letterSpacing:"0.01em",
+                      }}>
+                        {f.sub}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Scope toggle — same underline-tabs pattern as the side panel */}
               <div style={{ display:"flex", gap:18, marginBottom:14, paddingBottom:2 }}>
                 {[
@@ -626,13 +681,16 @@ export default function PlayMatchWizard({
                 </div>
               )}
 
-              {/* Selection counter */}
+              {/* Selection counter — reads against the live cap so the
+                  "X of Y" matches the format pill above. */}
               <div style={{
                 fontSize: 11, color: t.textSecondary, marginBottom: 8,
                 display:"flex", justifyContent:"space-between", alignItems:"baseline",
               }}>
-                <span>{selectedIds.length} of {MAX_SELECT} selected</span>
-                <span style={{ color: t.textTertiary }}>Singles or doubles · up to 3</span>
+                <span>{selectedIds.length} of {maxSelect} selected</span>
+                <span style={{ color: t.textTertiary }}>
+                  {format === "singles" ? "1v1" : "Up to 4 players total"}
+                </span>
               </div>
 
               {loading ? (
@@ -701,7 +759,7 @@ export default function PlayMatchWizard({
                 }}>
                   {visible.map(function(p){
                     var isSel = selectedIds.indexOf(p.id) !== -1;
-                    var disabled = !isSel && selectedIds.length >= MAX_SELECT;
+                    var disabled = !isSel && selectedIds.length >= maxSelect;
                     return (
                       <button key={p.id} type="button"
                         onClick={function(){ togglePlayer(p); }}
