@@ -12,8 +12,11 @@
 // Visual: editorial vocabulary — eyebrow + display headline, hairline
 // dividers, ALL-CAPS labels at 0.12em letterspacing.
 
+import { useEffect, useState } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
+import { fetchTrustBadge } from "../../trust/services/trustService.js";
+import ReliabilityBadge from "../../trust/components/ReliabilityBadge.jsx";
 
 var EYEBROW = {
   fontSize: 10, fontWeight: 800, letterSpacing: "0.12em",
@@ -23,6 +26,24 @@ var EYEBROW = {
 export default function ChallengeModal({
   t, composer, draft, setDraft, loading, onSend, onClose,
 }) {
+  // Module 10 Slice 2 — fetch the target's reliability badge so the
+  // composer can render a subtle positive tag ("Confirmed" / "Reliable" /
+  // "Responsive") next to their name. Hidden for new / building users
+  // per the public-visibility rule. Hooks must run before the early
+  // return so the order stays stable across mount cycles.
+  var [trustBadge, setTrustBadge] = useState(null);
+  useEffect(function () {
+    if (!composer || !composer.targetUser || !composer.targetUser.id) {
+      setTrustBadge(null);
+      return;
+    }
+    var alive = true;
+    fetchTrustBadge(composer.targetUser.id).then(function (row) {
+      if (alive) setTrustBadge(row && row.public_badge);
+    });
+    return function () { alive = false; };
+  }, [composer && composer.targetUser && composer.targetUser.id]);
+
   if (!composer) return null;
   var iStyle = inputStyle(t);
   var target = composer.targetUser;
@@ -89,6 +110,15 @@ export default function ChallengeModal({
                 letterSpacing: "0.04em",
               }}>
                 {[target.suburb, target.skill].filter(Boolean).join(" · ")}
+              </div>
+            )}
+            {/* Module 10 Slice 2 — subtle positive tag. Renders only
+                for responsive / reliable / confirmed; new + building
+                stay silent so a fresh account doesn't get a soft-
+                negative read. */}
+            {trustBadge && (
+              <div style={{ marginTop: 6 }}>
+                <ReliabilityBadge t={t} badge={trustBadge} variant="chip" />
               </div>
             )}
           </div>

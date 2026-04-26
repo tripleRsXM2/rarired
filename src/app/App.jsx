@@ -52,6 +52,11 @@ import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 import DisputeModal from "../features/scoring/components/DisputeModal.jsx";
 import ChallengeModal from "../features/challenges/components/ChallengeModal.jsx";
 import { useToasts, ToastStack } from "../components/ui/Toast.jsx";
+// Module 10 Slice 2 — private post-match feedback prompt.
+// Mounts at App-level after the opponent confirms a match so the
+// truth loop is complete before we ask "how was it?".
+import PostMatchFeedbackCard, { feedbackCardWasDismissed }
+  from "../features/trust/components/PostMatchFeedbackCard.jsx";
 
 export default function App(){
   // Theme bootstrap — migrate any legacy id ("wimbledon" → "grass", etc.)
@@ -371,6 +376,38 @@ export default function App(){
       venue: challenge.venue||"",
       court: challenge.court||"",
     });
+  }
+
+  // Module 10 Slice 2 — pending post-match feedback prompt. Shape:
+  //   { matchId, reviewedUserId, reviewedName }
+  // Set after the viewer (acting as opponent) confirms a match. Cleared
+  // on submit, skip, or sessionStorage cooldown. Only ever set for
+  // matches where opponent_id is linked (no freetext) — RPC-side
+  // eligibility blocks the rest.
+  var [pendingFeedbackMatch,setPendingFeedbackMatch]=useState(null);
+
+  // Wraps useMatchHistory.confirmOpponentMatch. On success, queues the
+  // feedback prompt for the just-confirmed match (unless the user has
+  // already dismissed feedback for this match in this tab session).
+  // Same return shape as the underlying call so existing callers keep
+  // working.
+  async function confirmOpponentMatchAndAskFeedback(match){
+    var r = await matchHistory.confirmOpponentMatch(match);
+    if (r && !r.error && match && match.id) {
+      var oppId = match.submitterId
+        || (match.isTagged ? match.user_id : match.opponent_id);
+      var oppName = match.friendName || match.oppName || "your opponent";
+      // Only mount if there's a real linked party AND the user hasn't
+      // dismissed feedback for this match already.
+      if (oppId && !feedbackCardWasDismissed(match.id)) {
+        setPendingFeedbackMatch({
+          matchId: String(match.id),
+          reviewedUserId: oppId,
+          reviewedName: oppName,
+        });
+      }
+    }
+    return r;
   }
 
   // ── In-context notification review drawer ────────────────────────────────
@@ -712,7 +749,7 @@ export default function App(){
               setDisputeModal={matchHistory.setDisputeModal} setDisputeDraft={matchHistory.setDisputeDraft}
               deleteMatch={matchHistory.deleteMatch} removeTaggedMatch={matchHistory.removeTaggedMatch}
               resubmitMatch={matchHistory.resubmitMatch}
-              confirmOpponentMatch={matchHistory.confirmOpponentMatch}
+              confirmOpponentMatch={confirmOpponentMatchAndAskFeedback}
               acceptCorrection={matchHistory.acceptCorrection}
               voidMatchAction={matchHistory.voidMatchAction}
               openProfile={openProfile}
@@ -955,7 +992,7 @@ export default function App(){
               if(reviewDrawer.notifId)notifications.dismissNotification(reviewDrawer.notifId);
             }}
             acceptCorrection={matchHistory.acceptCorrection}
-            confirmOpponentMatch={matchHistory.confirmOpponentMatch}
+            confirmOpponentMatch={confirmOpponentMatchAndAskFeedback}
             onCounter={function(match){
               setReviewDrawer(null);
               // match_tag → first-round dispute; everything else → counter-propose.
@@ -1025,6 +1062,21 @@ export default function App(){
           onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
         />
         <ToastStack t={t} toasts={toastSystem.toasts} dismiss={toastSystem.dismiss} />
+
+        {/* Module 10 Slice 2 — private post-match feedback prompt.
+            Mounts at the App root so it floats over any tab. Only set
+            after a successful confirmOpponentMatch on a linked-opponent
+            match. Auto-dismisses on submit / skip / sessionStorage cooldown. */}
+        {pendingFeedbackMatch && auth.authUser && (
+          <PostMatchFeedbackCard
+            t={t}
+            matchId={pendingFeedbackMatch.matchId}
+            reviewedUserId={pendingFeedbackMatch.reviewedUserId}
+            reviewedName={pendingFeedbackMatch.reviewedName}
+            toast={toast}
+            onClose={function () { setPendingFeedbackMatch(null); }}
+          />
+        )}
     </Providers>
   );
 }
