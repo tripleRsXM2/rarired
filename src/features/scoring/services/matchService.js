@@ -38,9 +38,28 @@ export function deleteMatchRow(matchId, ownerId){
   return supabase.from('match_history').delete().eq('id',matchId).eq('user_id',ownerId);
 }
 export function markMatchTagStatus(matchId, status, returnData){
-  var q=supabase.from('match_history').update({tag_status:status,status:status==='accepted'?'confirmed':'expired'}).eq('id',matchId);
-  if(returnData) return q.select('*').single();
-  return q;
+  // Tag accept/reject was previously a direct UPDATE on match_history,
+  // but the RLS UPDATE policy is now restricted to the row owner. The
+  // tagged user (opponent) responds via a SECURITY DEFINER RPC that
+  // verifies caller = tagged_user_id and writes both tag_status and
+  // status in a single atomic step.
+  // Returns { data, error } shaped like the old PostgREST call so
+  // callers don't need to change. When returnData is true we surface
+  // the updated row directly (RPC already returns the full row).
+  var p = supabase.rpc('respond_to_match_tag', {
+    p_match_id: matchId,
+    p_accept:   status === 'accepted',
+  });
+  if(returnData){
+    return p.then(function(r){
+      // RPC returns SETOF or single row depending on caller; coerce
+      // to a single row for parity with the old .select().single().
+      if(r.error) return { data:null, error:r.error };
+      var d = Array.isArray(r.data) ? r.data[0] : r.data;
+      return { data:d, error:null };
+    });
+  }
+  return p;
 }
 export function confirmMatchAndUpdateStats(matchId){
   return supabase.rpc('confirm_match_and_update_stats',{p_match_id:matchId});
