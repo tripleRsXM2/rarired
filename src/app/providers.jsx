@@ -93,12 +93,13 @@ export default function Providers({ t, theme, children }){
       ".cs-map-frame{position:relative;overflow:hidden;min-height:360px;isolation:isolate;" +
         "height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))}",
 
-      // Map-native Play Match — basemap dim+blur during play mode.
-      // Targets the tile pane only so polygons and markers stay
-      // crisp while the busy street-grid behind softens away.
+      // Map-native Play Match — basemap softens during play mode.
+      // Light blur only (no darken, no desat) per user feedback —
+      // the basemap should recede subtly, not feel "off". Reduced
+      // ~30% from the original 2.5px → 1.75px.
       ".leaflet-container[data-play-mode='zone'] .leaflet-tile-pane," +
         ".leaflet-container[data-play-mode='court'] .leaflet-tile-pane{" +
-        "filter:blur(2.5px) brightness(0.72) saturate(0.6);" +
+        "filter:blur(1.75px);" +
         "transition:filter 0.35s ease}",
 
       // Map-native Play Match — permanent court labels in step 2.

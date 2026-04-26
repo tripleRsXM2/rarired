@@ -426,6 +426,7 @@ export default function MapTab({
       {/* Side panel — primary workspace when a zone is selected.
           Selection-then-action pattern: user highlights a court, then
           1+ players, then fires a batched Message or a single Challenge. */}
+      {sidePanelZone && (
       <ZoneSidePanel
         t={t} zone={sidePanelZone} onClose={function(){ setSelected(null); }}
         authUser={authUser} profile={profile}
@@ -448,6 +449,7 @@ export default function MapTab({
           if(onMessagePlayer) onMessagePlayer(partners, ctx);
         }}
       />
+      )}
 
       {/* Map-native Play Match flow — bold prompt + back button.
           Lives at the top-centre of the map during steps 1 and 2.
@@ -467,15 +469,16 @@ export default function MapTab({
           }}>
             <div className="fade-up" style={{
               fontSize: 40, fontWeight: 900,
-              letterSpacing: "-0.04em",
+              letterSpacing: "0.02em", // measured letter-spacing for all-caps
               lineHeight: 1.05,
+              textTransform: "uppercase",
               color: mapDark ? "#ffffff" : "#14110f",
               textShadow: mapDark
                 ? "0 2px 16px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
                 : "0 2px 16px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
               textAlign:"center",
               fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-              maxWidth: 520,
+              maxWidth: 600,
             }}>
               {playMode === "zone" && "Choose your zone"}
               {playMode === "court" && (playZone ? playZone.name : "Choose your court")}
