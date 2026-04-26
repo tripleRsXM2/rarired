@@ -116,7 +116,7 @@ export default function Providers({ t, theme, children }){
       // as one visual language. Stronger halo for legibility since
       // we no longer have a chip background.
       ".cs-play-name{font:800 12px/1.15 ui-sans-serif,system-ui,sans-serif;" +
-        "color:#14110f;letter-spacing:0.05em;text-transform:uppercase;" +
+        "color:#000;letter-spacing:0.05em;text-transform:uppercase;" +
         "white-space:nowrap;" +
         "text-shadow:0 1px 2px rgba(255,255,255,0.92)," +
         "0 0 8px rgba(255,255,255,0.7)," +

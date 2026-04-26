@@ -501,21 +501,13 @@ export default function LeafletMap({
         playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
         playCourtsRef.current = [];
 
-        // 8-way placements for the crowded path. Tightened offsets
-        // ~50% so labels sit closer to their dots. Icon size 140×70
-        // (was 220×100). Each entry: dot anchor + line endpoints +
-        // label position. Lines are short — just enough to clear
-        // the dot and connect to the label.
-        var DIRS = [
-          { name:"NE", anchor:[15,55], lineTo:[55,25], labelX:60,  labelY:14 },
-          { name:"NW", anchor:[125,55], lineTo:[85,25], labelX:12,  labelY:14, rightAlign:true },
-          { name:"SE", anchor:[15,15], lineTo:[55,45], labelX:60,  labelY:48 },
-          { name:"SW", anchor:[125,15], lineTo:[85,45], labelX:12,  labelY:48, rightAlign:true },
-          { name:"N",  anchor:[70,58], lineTo:[70,22], labelX:70,  labelY: 4, centreLabel:true },
-          { name:"S",  anchor:[70,12], lineTo:[70,48], labelX:70,  labelY:54, centreLabel:true },
-          { name:"E",  anchor:[15,35], lineTo:[55,35], labelX:60,  labelY:30 },
-          { name:"W",  anchor:[125,35], lineTo:[85,35], labelX:12,  labelY:30, rightAlign:true },
-        ];
+        // Single direction for crowded labels — NE diagonal. User
+        // call: when labels split off in different directions in a
+        // dense cluster the eye gets confused. Same direction for
+        // every crowded court is calmer and reads as a system.
+        // Icon size 140×70, dot at bottom-left (anchor), label
+        // sitting up-and-right with a short connector line.
+        var NE = { anchor:[15,55], lineTo:[55,25], labelX:60, labelY:14 };
 
         pts.forEach(function(p, i){
           var c = p.c;
@@ -523,18 +515,10 @@ export default function LeafletMap({
           var html, iconSize, iconAnchor;
 
           if(p.crowded){
-            // Crowded: dot + thin connector line + caps name at a
-            // diagonal offset. Same `cs-play-name` typography as the
-            // calm path — no box. Tight icon (140×70).
-            var d = DIRS[i % DIRS.length];
-            var labelStyle =
-              "position:absolute;top:" + d.labelY + "px;" +
-              (d.centreLabel
-                ? "left:" + d.labelX + "px;transform:translateX(-50%);"
-                : (d.rightAlign
-                    ? "right:" + (140 - d.labelX) + "px;"
-                    : "left:" + d.labelX + "px;")) +
-              "white-space:nowrap;";
+            // Crowded: dot + NE diagonal connector + caps name.
+            // Same direction every time — a unified cluster reads
+            // calm even when packed.
+            var d = NE;
             html =
               '<div style="position:relative;width:140px;height:70px;cursor:pointer">' +
                 '<svg width="140" height="70" style="position:absolute;inset:0;pointer-events:none">' +
@@ -545,7 +529,10 @@ export default function LeafletMap({
                 '</svg>' +
                 '<div class="cs-play-dot" style="position:absolute;' +
                   'left:' + (d.anchor[0] - 5) + 'px;top:' + (d.anchor[1] - 5) + 'px;"></div>' +
-                '<div class="cs-play-name" style="' + labelStyle + '">' + labelText + '</div>' +
+                '<div class="cs-play-name" style="position:absolute;' +
+                  'left:' + d.labelX + 'px;top:' + d.labelY + 'px;white-space:nowrap">' +
+                  labelText +
+                '</div>' +
               '</div>';
             iconSize = [140, 70];
             iconAnchor = d.anchor;
