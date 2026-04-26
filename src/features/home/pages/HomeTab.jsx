@@ -503,7 +503,7 @@ function FeedCard({
               {(m.sets || []).map(function(_, i) {
                 return (
                   <div key={i} style={{
-                    width: 28, textAlign: "center",
+                    width: 32, textAlign: "center",
                     fontSize: 8, fontWeight: 600, color: t.textTertiary,
                     letterSpacing: "0.04em",
                   }}>S{i + 1}</div>
@@ -630,32 +630,33 @@ function FeedCard({
                 }
                 return (
                   <div key={i} style={{
-                    width: 28, textAlign: "center",
+                    width: 32, textAlign: "center",
                     fontSize: 14, fontWeight: wonSet ? 600 : 400,
                     color: wonSet ? t.text : t.textTertiary,
                     fontVariantNumeric: "tabular-nums",
                     letterSpacing: "-0.2px",
                     lineHeight: 1,
-                    position: "relative",
                   }}>
                     {score !== undefined && score !== "" ? score : "–"}
                     {tbSuper != null && (
                       // Tennis convention: "7-6 (3)" — the parenthesised
-                      // number is the LOSER's tiebreak score. Rendered as
-                      // a clear superscript so it's actually readable
-                      // (was 8px / textTertiary which read as a degree
-                      // mark when the loser scored 0). 11px in the same
-                      // colour as the cell + tabular-nums keeps it
-                      // precise without growing the cell footprint.
-                      <span style={{
-                        position: "absolute",
-                        top: -3, right: -8,
-                        fontSize: 10, fontWeight: 700,
+                      // number is the LOSER's tiebreak score. Rendered
+                      // as a true semantic <sup> so it sits INLINE next
+                      // to the loser's "6" in its own cell, with no
+                      // chance of bleeding into the neighbouring cell.
+                      // (Earlier iterations used absolute positioning
+                      // with right:-8 which pushed the digit OUT of
+                      // its parent cell and visually attached it to
+                      // the wrong set.)
+                      <sup style={{
+                        fontSize: 9,
+                        fontWeight: 700,
                         color: t.textSecondary,
-                        letterSpacing: 0,
+                        marginLeft: 1,
                         fontVariantNumeric: "tabular-nums",
-                        lineHeight: 1,
-                      }}>{tbSuper}</span>
+                        lineHeight: 0,
+                        verticalAlign: "super",
+                      }}>{tbSuper}</sup>
                     )}
                   </div>
                 );
