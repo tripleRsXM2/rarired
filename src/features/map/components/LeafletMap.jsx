@@ -501,22 +501,24 @@ export default function LeafletMap({
         playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
         playCourtsRef.current = [];
 
-        // Single direction for crowded labels (NE diagonal) — calmer
-        // than 8-way splay. But identical-length lines stack labels
-        // in dense clusters (e.g. Eastern Suburbs around Coogee/
-        // Maroubra). Solution from cartography: vary the LEADER LINE
-        // LENGTH while keeping the direction constant. Three variants
-        // cycle: short / medium / long. Labels in a 3-court cluster
-        // land at three different positions along the same diagonal.
-        // Icon size 180×100; dot anchored bottom-left (always at the
-        // same offset from the lat/lng).
-        var NE_VARIANTS = [
-          // Short — line ends ~30px from dot
-          { anchor:[15,90], lineTo:[40,65], labelX:45, labelY:54 },
-          // Medium — line ends ~52px from dot
-          { anchor:[15,90], lineTo:[60,45], labelX:65, labelY:34 },
-          // Long — line ends ~80px from dot
-          { anchor:[15,90], lineTo:[88,18], labelX:93, labelY: 8 },
+        // Crowded labels — labels go RIGHT but mix UP and DOWN with
+        // 3 line-lengths each. 6 placement variants cycle so cluster
+        // mates statistically land on different positions. All
+        // labels still point right (consistent reading direction)
+        // but the vertical spread breaks up neighbour overlap that
+        // a 3-variant single-direction approach couldn't solve
+        // (e.g. Steyne Park ↔ Des Renford in Eastern Suburbs).
+        // Icon size 180×120 — taller to fit both up and down lines.
+        // Anchor varies per variant so dots align with their lat/lng.
+        var VARIANTS = [
+          // Three NE lengths — anchor at bottom-left, lines go up-right
+          { anchor:[15,110], lineTo:[40,82],  labelX:45, labelY:71 },  // NE short
+          { anchor:[15,110], lineTo:[62,55],  labelX:67, labelY:44 },  // NE medium
+          { anchor:[15,110], lineTo:[90,25],  labelX:95, labelY:14 },  // NE long
+          // Three SE lengths — anchor at top-left, lines go down-right
+          { anchor:[15,10],  lineTo:[40,38],  labelX:45, labelY:32 },  // SE short
+          { anchor:[15,10],  lineTo:[62,65],  labelX:67, labelY:60 },  // SE medium
+          { anchor:[15,10],  lineTo:[90,95],  labelX:95, labelY:90 },  // SE long
         ];
 
         pts.forEach(function(p, i){
@@ -525,13 +527,13 @@ export default function LeafletMap({
           var html, iconSize, iconAnchor;
 
           if(p.crowded){
-            // Crowded: dot + NE connector + caps name. Cycle through
-            // three line-lengths so cluster labels stagger along the
-            // diagonal instead of stacking.
-            var d = NE_VARIANTS[i % NE_VARIANTS.length];
+            // Crowded: dot + connector + caps name. Cycle through
+            // 6 placement variants (3 up-right + 3 down-right) so
+            // cluster mates stagger along TWO axes (length + up/down).
+            var d = VARIANTS[i % VARIANTS.length];
             html =
-              '<div style="position:relative;width:180px;height:100px;cursor:pointer">' +
-                '<svg width="180" height="100" style="position:absolute;inset:0;pointer-events:none">' +
+              '<div style="position:relative;width:180px;height:120px;cursor:pointer">' +
+                '<svg width="180" height="120" style="position:absolute;inset:0;pointer-events:none">' +
                   '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
                         'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
                         'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
@@ -544,7 +546,7 @@ export default function LeafletMap({
                   labelText +
                 '</div>' +
               '</div>';
-            iconSize = [180, 100];
+            iconSize = [180, 120];
             iconAnchor = d.anchor;
           } else {
             // Calm: dot + caps name 4px below. Same name class.
