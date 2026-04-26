@@ -174,6 +174,13 @@ export default function LeafletMap({
   // Map-native play-court-mode markers — one per court in the
   // chosen zone, each with a permanent name tooltip.
   var playCourtsRef = useRef([]);
+  // Mirrors playMode for any deferred callback (setTimeout from
+  // zoomend, etc.) so they read the CURRENT mode rather than the
+  // stale closure value at the time they were scheduled. Without
+  // this a pending render-after-zoom that fires post-back-out
+  // would re-add court markers after cleanup wiped them.
+  var playModeRef = useRef(playMode);
+  playModeRef.current = playMode;
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
   // reads the latest callback — otherwise the first render's closure sticks.
@@ -490,7 +497,11 @@ export default function LeafletMap({
       var renderTimer = null;
       function renderCourtsLayer(){
         var map2 = mapRef.current;
-        if(!map2 || playMode !== "court") return;
+        // Read the LIVE play-mode from a ref (not the closure)
+        // — pending setTimeouts from zoom/pan events that fire
+        // after the user has backed out would otherwise see the
+        // stale "court" value and re-add markers.
+        if(!map2 || playModeRef.current !== "court") return;
         // Clear any markers from a previous render pass (e.g. after
         // zoom) — keeps the layer fresh without piling up duplicates.
         playCourtsRef.current.forEach(function(m){
@@ -551,9 +562,13 @@ export default function LeafletMap({
           p.variantIdx = pos;
           perClusterCount[ci] = pos + 1;
         });
-        // Clear any existing markers (we may rebuild here).
-        playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
-        playCourtsRef.current = [];
+        // (Earlier clear at the top of renderCourtsLayer already
+        // wiped + preserved __unbind. This second clear was a
+        // remnant from the original single-pass implementation; it
+        // re-set playCourtsRef.current = [] WITHOUT preserving
+        // __unbind, so on zoom the zoom-listener was orphaned and a
+        // subsequent "back" couldn't detach it — courts stayed
+        // visible after exiting court mode.)
 
         // Crowded labels — all in NE direction (up-right) per user.
         // Three line-length variants cycle so cluster mates stagger
