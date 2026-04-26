@@ -414,16 +414,10 @@ export default function MapTab({
               }}>
                 {h.name}
               </span>
-              {a && a.matches_7d > 0 && (
-                <span style={{
-                  fontSize: 11, fontWeight: 900, letterSpacing: "0.06em",
-                  color: "#fff", background: "rgba(239,68,68,0.95)",
-                  padding: "3px 9px", borderRadius: 999,
-                  textTransform: "uppercase",
-                }}>
-                  {a.matches_7d} this week
-                </span>
-              )}
+              {/* Activity flame chip retired from the hover card per
+                  user — kept the visual quieter. The flame still
+                  shows on the map's centroid badges via the layers
+                  panel toggle. */}
             </div>
             {/* Thin accent rule in the zone colour — a designer
                 touch that anchors the name without re-introducing
