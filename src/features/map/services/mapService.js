@@ -308,6 +308,45 @@ export async function fetchZonePlayerCounts(){
   return { data: counts, error: null };
 }
 
+// History-aware ranking helper for the Play Match player picker.
+// Given the viewer + a list of candidate user_ids, returns a map
+// {candidateId: confirmedMatchCountTogether}. Used to float "people
+// you've already played with" to the front of the carousel and
+// render a "N matches together" social-proof chip on the cards.
+//
+// Cheap: one query over match_history filtered to confirmed rows
+// involving the viewer + any of the candidate ids. RLS already
+// limits SELECT to (auth.uid() = user_id OR auth.uid() = opponent_id),
+// so the dataset is automatically scoped to "viewer's own matches."
+//
+// Returns { data: { [opponentId]: count }, error }.
+export async function fetchViewerMatchCountsBy(viewerId, candidateIds){
+  if(!viewerId) return { data: {}, error: null };
+  var ids = Array.isArray(candidateIds) ? candidateIds.filter(Boolean) : [];
+  if(ids.length === 0) return { data: {}, error: null };
+  // We need rows where the viewer is one party and a candidate is the
+  // other. Build a single OR filter that pulls both perspectives in
+  // one round-trip:
+  //   (user_id = viewer AND opponent_id IN candidates)
+  //   OR (opponent_id = viewer AND user_id IN candidates)
+  var inList = "(" + ids.join(",") + ")";
+  var orExpr =
+    "and(user_id.eq." + viewerId + ",opponent_id.in." + inList + ")," +
+    "and(opponent_id.eq." + viewerId + ",user_id.in." + inList + ")";
+  var r = await supabase.from("match_history")
+    .select("user_id,opponent_id")
+    .eq("status", "confirmed")
+    .or(orExpr);
+  if(r.error) return { data: {}, error: r.error };
+  var counts = {};
+  (r.data || []).forEach(function(row){
+    var other = row.user_id === viewerId ? row.opponent_id : row.user_id;
+    if(!other) return;
+    counts[other] = (counts[other] || 0) + 1;
+  });
+  return { data: counts, error: null };
+}
+
 // Write-side helper used by the Map side panel and Settings screen.
 // Passing null clears the home zone.
 export function setHomeZone(userId, zoneId){

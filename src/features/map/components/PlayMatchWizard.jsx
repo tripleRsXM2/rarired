@@ -22,7 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ZONES } from "../data/zones.js";
 import { courtsInZone } from "../data/courts.js";
-import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt } from "../services/mapService.js";
+import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchViewerMatchCountsBy } from "../services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
@@ -156,12 +156,41 @@ export default function PlayMatchWizard({
       var arr2 = Object.values(byId).filter(function(p){
         return !viewerId || p.id !== viewerId;
       });
-      // Rank: plays-here first, then mapService.scorePlayerForCourt.
-      arr2.sort(function(a, b){
-        return scorePlayerForCourt(b, courtName, zoneId) - scorePlayerForCourt(a, courtName, zoneId);
+      // Second pass: pull confirmed-match counts between the viewer
+      // and each candidate so we can rank "people you've already
+      // played with" to the front and decorate their cards with a
+      // social-proof chip. Single round-trip through match_history.
+      var ids = arr2.map(function(p){ return p.id; });
+      fetchViewerMatchCountsBy(viewerId, ids).then(function(hc){
+        if(cancelled) return;
+        var counts = (hc && hc.data) || {};
+        // Annotate each candidate with historyCount (0 default) and
+        // a properly-scored skill/avail signal from scorePlayerForCourt
+        // (the previous call passed args in the wrong order so the
+        // sort was a no-op — the only ranking signal was playsHere).
+        var annotated = arr2.map(function(p){
+          var n = counts[p.id] || 0;
+          var score = scorePlayerForCourt(authUser || null, p, !!p.playsHere);
+          return Object.assign({}, p, { historyCount: n, score: score });
+        });
+        // Rank: history-with-viewer desc → score desc.
+        annotated.sort(function(a, b){
+          if(b.historyCount !== a.historyCount) return b.historyCount - a.historyCount;
+          return (b.score || 0) - (a.score || 0);
+        });
+        setPlayers(annotated);
+        setLoading(false);
+      }).catch(function(){
+        if(cancelled) return;
+        // History fetch failed — fall back to the un-annotated list,
+        // still sorted by the (now correct) score signal.
+        var fallback = arr2.map(function(p){
+          var score = scorePlayerForCourt(authUser || null, p, !!p.playsHere);
+          return Object.assign({}, p, { historyCount: 0, score: score });
+        }).sort(function(a, b){ return (b.score || 0) - (a.score || 0); });
+        setPlayers(fallback);
+        setLoading(false);
       });
-      setPlayers(arr2);
-      setLoading(false);
     }).catch(function(){ if(!cancelled) setLoading(false); });
     return function(){ cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -733,6 +762,24 @@ export default function PlayMatchWizard({
                         }}>
                           {firstName(p.name || p.username || p.full_name || "Player")}
                         </div>
+                        {/* Social-proof chip — shows match history with
+                            the viewer when there is any. Floats people
+                            the user has already played with above the
+                            skill pill so the picker reads as a
+                            recommendation, not a directory. */}
+                        {p.historyCount > 0 && (
+                          <span style={{
+                            padding: "1px 6px", borderRadius: 999,
+                            background: hexToRgba(t.accent, 0.14),
+                            color: t.accent,
+                            fontSize: 8.5, fontWeight: 800,
+                            letterSpacing:"0.04em",
+                            textTransform:"uppercase",
+                            whiteSpace:"nowrap",
+                          }}>
+                            {p.historyCount === 1 ? "1 match" : (p.historyCount + " matches")}
+                          </span>
+                        )}
                         {/* Skill pill */}
                         {(p.skill || p.skill_level) ? (
                           <span style={{
@@ -746,7 +793,7 @@ export default function PlayMatchWizard({
                             {p.skill || p.skill_level}
                           </span>
                         ) : (
-                          <span style={{ height: 14 }}/>
+                          !p.historyCount && <span style={{ height: 14 }}/>
                         )}
                       </button>
                     );
