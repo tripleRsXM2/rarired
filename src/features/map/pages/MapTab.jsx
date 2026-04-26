@@ -15,6 +15,8 @@ import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
 import CourtInfoCard from "../components/CourtInfoCard.jsx";
 import PlayMatchWizard from "../components/PlayMatchWizard.jsx";
 import MapPlayerOverlay from "../components/MapPlayerOverlay.jsx";
+import StepProgressBar from "../components/StepProgressBar.jsx";
+import useIsMobile from "../../../lib/hooks/useIsMobile.js";
 import { ZONE_BY_ID } from "../data/zones.js";
 import { COURTS } from "../data/courts.js";
 import { fetchZoneActivity } from "../services/mapService.js";
@@ -170,6 +172,12 @@ export default function MapTab({
     return function(){ cancelled = true; };
   },[]);
 
+  // Phone breakpoint — shared with the rest of the codebase. Drives
+  // mobile-specific repositioning of the play-mode chrome (court
+  // card moves to top-left during court mode so the bottom prompt
+  // breathes; segmented progress bar tightens its margins, etc.).
+  var isMobile = useIsMobile();
+
   // Resolve the basemap tone the user is actually seeing (same logic
   // as LeafletMap.resolveDark). Used by the Play Match CTA to invert
   // its colours on dark basemaps so the button never gets lost.
@@ -260,6 +268,7 @@ export default function MapTab({
         playMode={playMode}
         playZoneId={playZoneId}
         playCourtName={playCourtName}
+        isMobile={isMobile}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
@@ -535,33 +544,51 @@ export default function MapTab({
           Lives at the top-centre of the map during steps 1 and 2.
           The CTA below is hidden while play mode is active so we
           don't double-stack interactive surfaces. */}
+      {/* Step progress bar — shown across the entire Play Match
+          flow (zone → court → players → when). The wizard's When
+          step inherits the same bar even though its modal sits on
+          top, because the user perceives all four steps as one
+          flow. Steps map: zone=0, court=1, players=2, when=3. */}
+      {(playMode !== "off" || wizardOpen) && (
+        <StepProgressBar
+          isMobile={isMobile}
+          mapDark={mapDark}
+          total={4}
+          step={
+            wizardOpen          ? 3
+            : playMode === "players" ? 2
+            : playMode === "court"   ? 1
+            : 0
+          }
+        />
+      )}
+
       {/* Players step has its own self-contained chrome (see
           MapPlayerOverlay) so we suppress the generic prompt+back
           when playMode === 'players'. */}
       {playMode !== "off" && playMode !== "players" && (
         <>
-          {/* Bold prompt at the bottom + inline back arrow.
-              Pure typography, no box, theme-inverted with a halo
-              shadow. The back ← sits LEFT of the title as a thin
-              chevron (no button chrome) so it harmonises with the
-              type rather than overpowering it. Tappable padding
-              keeps it accessible without visual weight. */}
+          {/* Bold prompt at the bottom — TRULY centered (back arrow
+              absolute-left so it doesn't push the title off-axis).
+              Pure typography, no box, theme-inverted halo. */}
           <div style={{
             position:"absolute",
             bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
-            left: 16, right: 16,
+            left: 0, right: 0,
             zIndex: 540,
-            display:"flex", justifyContent:"center", alignItems:"center",
             pointerEvents:"none",
           }}>
             <div className="fade-up" style={{
-              display:"flex", alignItems:"center", gap: 14,
+              position:"relative",
               maxWidth: 720,
+              margin:"0 auto",
+              padding: isMobile ? "0 56px" : "0 64px", // reserve space for the back chevron on the left
+              textAlign:"center",
             }}>
-              {/* Inline back arrow — chevron only, no button chrome.
-                  pointerEvents:auto on the wrapper button so it's
-                  tappable while the rest of the prompt stays
-                  pointer-transparent. */}
+              {/* Back chevron — absolute, vertically centered on the
+                  prompt row. pointerEvents:auto on the button so it's
+                  tappable while the rest of the prompt stays pointer-
+                  transparent. */}
               <button type="button"
                 onClick={function(){
                   if(playMode === "court"){ setPlayZoneId(null); setPlayMode("zone"); return; }
@@ -569,6 +596,10 @@ export default function MapTab({
                 }}
                 aria-label={playMode === "court" ? "Back to zones" : "Cancel"}
                 style={{
+                  position:"absolute",
+                  left: isMobile ? 8 : 12,
+                  top:"50%",
+                  transform:"translateY(-50%)",
                   pointerEvents: "auto",
                   background: "transparent", border: "none", cursor: "pointer",
                   color: mapDark ? "#ffffff" : "#14110f",
@@ -578,14 +609,14 @@ export default function MapTab({
                     ? "drop-shadow(0 1px 4px rgba(0,0,0,0.55))"
                     : "drop-shadow(0 1px 4px rgba(255,255,255,0.55))",
                 }}>
-                <svg width="28" height="28" viewBox="0 0 18 18" fill="none"
+                <svg width={isMobile ? 24 : 28} height={isMobile ? 24 : 28} viewBox="0 0 18 18" fill="none"
                      stroke="currentColor" strokeWidth="1.8"
                      strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 14L6 9l5-5"/>
                 </svg>
               </button>
               <div style={{
-                fontSize: 40, fontWeight: 900,
+                fontSize: isMobile ? 30 : 40, fontWeight: 900,
                 letterSpacing: "0.02em",
                 lineHeight: 1.05,
                 textTransform: "uppercase",
@@ -611,6 +642,7 @@ export default function MapTab({
         <MapPlayerOverlay
           t={t}
           mapDark={mapDark}
+          isMobile={isMobile}
           authUser={authUser}
           blockedUserIds={blockedUserIds}
           zoneId={playZoneId}

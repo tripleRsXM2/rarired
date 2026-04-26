@@ -59,6 +59,9 @@ export default function MapPlayerOverlay({
   authUser, blockedUserIds,
   zoneId, courtName,
   onBack, onContinue,
+  // Phone breakpoint — drives mobile chrome (Singles/Doubles + scope
+  // tabs reposition; bottom prompt sized down; back-chevron tighter).
+  isMobile = false,
 }){
   // Picker state — independent from anything else on the map. Reset
   // implicitly by the parent unmounting/remounting the overlay when
@@ -613,27 +616,32 @@ export default function MapPlayerOverlay({
         )}
       </div>
 
-      {/* BOTTOM PROMPT — same spot/size as Choose court. Morphs into
-          a Continue button once ≥ 1 player is selected. The back
-          arrow is always present. */}
+      {/* BOTTOM PROMPT — same spot/size as Choose court, truly
+          centered (back chevron is absolute-left so the title
+          isn't pushed off-axis). Morphs into a Continue button
+          once ≥ 1 player is selected. */}
       <div style={{
         position:"absolute",
         bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
-        left: 16, right: 16,
+        left: 0, right: 0,
         zIndex: 540,
-        display:"flex", justifyContent:"center", alignItems:"center",
         pointerEvents:"none",
       }}>
         <div className="fade-up" style={{
-          display:"flex", alignItems:"center", gap: 14,
+          position:"relative",
           maxWidth: 720,
+          margin:"0 auto",
+          padding: isMobile ? "0 56px" : "0 64px",
+          textAlign:"center",
         }}>
-          {/* Inline back arrow — chevron, no chrome. Mirrors the
-              Choose court back arrow exactly. */}
           <button type="button"
             onClick={function(){ onBack && onBack(); }}
             aria-label="Back to court"
             style={{
+              position:"absolute",
+              left: isMobile ? 8 : 12,
+              top:"50%",
+              transform:"translateY(-50%)",
               pointerEvents:"auto",
               background:"transparent", border:"none", cursor:"pointer",
               color: fg,
@@ -643,24 +651,21 @@ export default function MapPlayerOverlay({
                 ? "drop-shadow(0 1px 4px rgba(0,0,0,0.55))"
                 : "drop-shadow(0 1px 4px rgba(255,255,255,0.55))",
             }}>
-            <svg width="28" height="28" viewBox="0 0 18 18" fill="none"
+            <svg width={isMobile ? 24 : 28} height={isMobile ? 24 : 28} viewBox="0 0 18 18" fill="none"
                  stroke="currentColor" strokeWidth="1.8"
                  strokeLinecap="round" strokeLinejoin="round">
               <path d="M11 14L6 9l5-5"/>
             </svg>
           </button>
 
-          {/* Title or Continue button. Same font/size/case as
-              "Choose court" (40px / 900 / uppercase / 0.02em). */}
           {selectedIds.length === 0 ? (
             <div style={{
-              fontSize: 40, fontWeight: 900,
+              fontSize: isMobile ? 30 : 40, fontWeight: 900,
               letterSpacing:"0.02em", lineHeight: 1.05,
               textTransform:"uppercase",
               color: fg,
               textShadow: halo,
               fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-              textAlign:"center",
             }}>
               Pick {format === "singles" ? "a player" : "players"}
             </div>
@@ -672,9 +677,9 @@ export default function MapPlayerOverlay({
                 background: t.accent || "#ff6b3d",
                 color:"#ffffff",
                 border:"none",
-                padding: "16px 28px",
+                padding: isMobile ? "13px 22px" : "16px 28px",
                 borderRadius: 999,
-                fontSize: 16, fontWeight: 900,
+                fontSize: isMobile ? 14 : 16, fontWeight: 900,
                 letterSpacing:"0.06em", textTransform:"uppercase",
                 fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
                 cursor:"pointer",

@@ -150,6 +150,10 @@ export default function LeafletMap({
   // before reaching the player picker. We reframe the map onto
   // this court so it sits dead-centre under the floating cards.
   playCourtName = null,
+  // Phone breakpoint — drives tighter padding on the auto-fit so
+  // Sydney's bbox actually fills the viewport instead of floating
+  // inside ugly whitespace on a 400px-wide screen.
+  isMobile = false,
   // Map basemap override: "auto" follows app theme (default), "light"
   // forces positron, "dark" forces dark-matter. Lives in the cog
   // panel so users can read a dark map in a light app and vice versa.
@@ -275,7 +279,16 @@ export default function LeafletMap({
     // the visible map instead of floating inside extra whitespace.
     if(allZoneLayers.length){
       var group = L.featureGroup(allZoneLayers);
-      map.fitBounds(group.getBounds(), { padding: [24, 24] });
+      // Mobile padding is far tighter — Sydney's all-zones bbox is
+      // wide-and-tall but on a 400px portrait screen the default 24px
+      // padding leaves the map floating inside whitespace. Drop to 8px
+      // and also lift the maxZoom so the basemap actually fills the
+      // frame (otherwise fitBounds bottoms out at zoom ~9 and reads as
+      // "tiny island in a sea of whitespace").
+      map.fitBounds(group.getBounds(), {
+        padding: isMobile ? [8, 8] : [24, 24],
+        maxZoom: isMobile ? 12 : 14,
+      });
     }
 
     // Hard-refresh sizing race fix: on first paint the container
@@ -292,7 +305,13 @@ export default function LeafletMap({
         // Re-fit only when no zone is selected and we're not in
         // play mode — those modes own their own framing.
         if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
-          try { map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), { padding: [24,24], animate: false }); } catch(_){}
+          try {
+            map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), {
+              padding: isMobile ? [8,8] : [24,24],
+              maxZoom: isMobile ? 12 : 14,
+              animate: false,
+            });
+          } catch(_){}
         }
       });
       ro.observe(elRef.current);
@@ -603,9 +622,9 @@ export default function LeafletMap({
       if(zoneLayer){
         try {
           map.fitBounds(zoneLayer.getBounds(), {
-            padding: [40, 40],
+            padding: isMobile ? [16, 16] : [40, 40],
             animate: false,
-            maxZoom: 14,
+            maxZoom: isMobile ? 14 : 14,
           });
         } catch(_){}
       }
@@ -640,7 +659,11 @@ export default function LeafletMap({
           // Animation was the cause of "map moves on its own + I
           // can't click a zone" — clicks during a pan didn't
           // reliably hit polygon hit-areas.
-          map.fitBounds(group.getBounds(), { padding: [40, 40], animate: false });
+          map.fitBounds(group.getBounds(), {
+            padding: isMobile ? [12, 12] : [40, 40],
+            maxZoom: isMobile ? 12 : 14,
+            animate: false,
+          });
         } catch(_){}
       }
     }
