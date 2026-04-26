@@ -460,9 +460,14 @@ export default function MapTab({
           {/* Bold prompt — pure typography, no box. Theme-inverted
               against the dim+blur basemap so it always reads. Drop
               shadow gives it legibility against any underlying tile.
-              Big and confident — closer to the profile-hero voice. */}
+              Big and confident — closer to the profile-hero voice.
+              Lives at the BOTTOM (replacing where the PLAY MATCH
+              CTA was) — the user's gaze is already there from the
+              tap that entered play mode. Continuity > navigation. */}
           <div style={{
-            position:"absolute", top: 30, left: 16, right: 16,
+            position:"absolute",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
+            left: 16, right: 16,
             zIndex: 540,
             display:"flex", justifyContent:"center",
             pointerEvents:"none",
@@ -503,9 +508,9 @@ export default function MapTab({
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
                  stroke="currentColor" strokeWidth="1.8"
                  strokeLinecap="round" strokeLinejoin="round">
-              {playMode === "court"
-                ? <path d="M11 14L6 9l5-5"/>
-                : <path d="M5 5l8 8M13 5l-8 8"/>}
+              {/* Always a back arrow — both states are "step back",
+                  not "destroy / cancel". X read too harsh. */}
+              <path d="M11 14L6 9l5-5"/>
             </svg>
           </button>
         </>

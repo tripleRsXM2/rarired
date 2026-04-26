@@ -468,7 +468,7 @@ export default function LeafletMap({
       // enough that their labels don't pile on top of each other.
       var zoneLayer = zoneLayersRef.current[playZoneId];
       if(zoneLayer){
-        try { map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60] }); } catch(_){}
+        try { map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60], animate: false }); } catch(_){}
       }
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);
@@ -492,7 +492,11 @@ export default function LeafletMap({
       if(layers.length){
         try {
           var group = L.featureGroup(layers);
-          map.fitBounds(group.getBounds(), { padding: [40, 40] });
+          // animate:false so the map snaps to the framing instantly.
+          // The 250ms default animation was the cause of "map moves
+          // on its own + I can't click a zone" — clicks during the
+          // pan animation didn't reliably hit polygon hit-areas.
+          map.fitBounds(group.getBounds(), { padding: [40, 40], animate: false });
         } catch(_){}
       }
     }
