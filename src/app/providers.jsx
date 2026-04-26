@@ -118,9 +118,16 @@ export default function Providers({ t, theme, children }){
       ".cs-play-name{font:800 12px/1.15 ui-sans-serif,system-ui,sans-serif;" +
         "color:#000;letter-spacing:0.05em;text-transform:uppercase;" +
         "white-space:nowrap;" +
-        "text-shadow:0 1px 2px rgba(255,255,255,0.92)," +
-        "0 0 8px rgba(255,255,255,0.7)," +
-        "0 0 2px rgba(255,255,255,0.85)}",
+        // Strong glyph stroke so connector lines that pass near a
+        // label appear to go BEHIND the text rather than cutting
+        // through letters. paint-order:stroke ensures the white
+        // outline is rendered first so the black fill draws on top
+        // (otherwise the stroke eats the glyph). Combined with the
+        // soft outer halo for legibility on busy basemap.
+        "-webkit-text-stroke:3px #fff;" +
+        "paint-order:stroke fill;" +
+        "text-shadow:0 1px 2px rgba(255,255,255,0.85)," +
+        "0 0 6px rgba(255,255,255,0.6)}",
       ".cs-play-dot{width:10px;height:10px;border-radius:50%;background:#fff;" +
         "box-shadow:0 1px 3px rgba(20,18,17,0.4),0 0 0 1px rgba(20,18,17,0.32)}",
 

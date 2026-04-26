@@ -501,24 +501,16 @@ export default function LeafletMap({
         playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
         playCourtsRef.current = [];
 
-        // Crowded labels — labels go RIGHT but mix UP and DOWN with
-        // 3 line-lengths each. 6 placement variants cycle so cluster
-        // mates statistically land on different positions. All
-        // labels still point right (consistent reading direction)
-        // but the vertical spread breaks up neighbour overlap that
-        // a 3-variant single-direction approach couldn't solve
-        // (e.g. Steyne Park ↔ Des Renford in Eastern Suburbs).
-        // Icon size 180×120 — taller to fit both up and down lines.
-        // Anchor varies per variant so dots align with their lat/lng.
+        // Crowded labels — all in NE direction (up-right) per user.
+        // Three line-length variants cycle so cluster mates stagger
+        // along the same diagonal. Label halo (-webkit-text-stroke
+        // in CSS) acts as a buffer so any line crossing near a
+        // label appears to pass BEHIND the text instead of cutting
+        // through letters.
         var VARIANTS = [
-          // Three NE lengths — anchor at bottom-left, lines go up-right
           { anchor:[15,110], lineTo:[40,82],  labelX:45, labelY:71 },  // NE short
           { anchor:[15,110], lineTo:[62,55],  labelX:67, labelY:44 },  // NE medium
           { anchor:[15,110], lineTo:[90,25],  labelX:95, labelY:14 },  // NE long
-          // Three SE lengths — anchor at top-left, lines go down-right
-          { anchor:[15,10],  lineTo:[40,38],  labelX:45, labelY:32 },  // SE short
-          { anchor:[15,10],  lineTo:[62,65],  labelX:67, labelY:60 },  // SE medium
-          { anchor:[15,10],  lineTo:[90,95],  labelX:95, labelY:90 },  // SE long
         ];
 
         pts.forEach(function(p, i){
