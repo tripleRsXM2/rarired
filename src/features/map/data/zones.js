@@ -14,37 +14,11 @@
 
 import { ZONE_POLYGONS } from "./zonePolygons.js";
 
-// Manual polygon supplements — hand-approximated areas the source
-// sydney-suburbs.geojson is missing. The build-zone-polygons.mjs
-// generator logs these (see "Missing members" output): the geojson
-// covers Manly → Dee Why for Northern Beaches but stops there;
-// Collaroy / Narrabeen / Mona Vale / Avalon / Palm Beach are absent.
-// Until we wire up a more complete suburb dataset, we layer this
-// approximate polygon on top so the zone visually reaches the rest
-// of the actual peninsula. Coordinates traced loosely from coastline
-// landmarks (refine if you have ABS / NSW boundary data handy).
-var MANUAL_NORTHERN_BEACHES_NORTH = [
-  [
-    [-33.7460, 151.2950],   // SW — Collaroy plateau inland
-    [-33.7460, 151.3100],   // SE — Long Reef Point
-    [-33.7300, 151.3060],   // Collaroy Beach
-    [-33.7150, 151.3030],   // Narrabeen Beach
-    [-33.7000, 151.3030],   // North Narrabeen
-    [-33.6800, 151.3060],   // Mona Vale Beach
-    [-33.6800, 151.2950],   // Mona Vale inland
-    [-33.7000, 151.2880],   // Narrabeen Lake western shore
-    [-33.7250, 151.2820],   // Cromer / Wheeler Heights
-    [-33.7400, 151.2880],   // Collaroy Plateau
-    [-33.7460, 151.2950],   // close
-  ],
-];
-
-// Merge generator output + manual additions for any zone we patch.
-function mergePolys(zoneId, manual){
-  var generated = ZONE_POLYGONS[zoneId] || [];
-  if(!manual) return generated;
-  return generated.concat([manual]);
-}
+// (Earlier manual Northern Beaches polygon retired — the generator
+// now uses sydney-suburbs-all.geojson which has every missing
+// suburb (Collaroy/Narrabeen/Mona Vale/Avalon/Palm Beach/Belrose/
+// Frenchs Forest etc) so the zone polygon is now a single
+// continuous shape from the official boundary data.)
 
 export var ZONES = [
   {
@@ -121,7 +95,7 @@ export var ZONES = [
     color: "#7FC4D9",
     blurb: "Manly, Dee Why, Brookvale, Curl Curl, Narrabeen, Palm Beach",
     center: [-33.700, 151.300],
-    polygons: mergePolys("northern-beaches", MANUAL_NORTHERN_BEACHES_NORTH),
+    polygons: ZONE_POLYGONS["northern-beaches"],
     members: [
       "MANLY","MANLY VALE","FAIRLIGHT","BALGOWLAH","BALGOWLAH HEIGHTS","NORTH BALGOWLAH",
       "SEAFORTH","CLONTARF","QUEENSCLIFF","NORTH MANLY","NORTH HARBOUR",
