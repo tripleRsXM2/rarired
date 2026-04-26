@@ -478,7 +478,13 @@ export default function LeafletMap({
       // enough that their labels don't pile on top of each other.
       var zoneLayer = zoneLayersRef.current[playZoneId];
       if(zoneLayer){
-        try { map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60], animate: false }); } catch(_){}
+        try {
+          // Cap maxZoom so small zones (e.g. Eastern Suburbs) don't
+          // over-zoom into a tiny crop. fitBounds without a cap
+          // uses the map's maxZoom (19) which made small polygons
+          // fill the screen at street-level zoom.
+          map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60], animate: false, maxZoom: 14 });
+        } catch(_){}
       }
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);
@@ -497,15 +503,20 @@ export default function LeafletMap({
 
     var prev = prevPlayModeRef.current;
     prevPlayModeRef.current = playMode;
-    if(prev === "off" && playMode === "zone"){
+    // Refit to all zones whenever we LAND in zone mode — entering
+    // play mode (off → zone) AND backing out from court → zone.
+    // Without the second case, hitting back from "Choose your court"
+    // left the map zoomed into the picked zone with no way to see
+    // the others.
+    if(playMode === "zone" && prev !== "zone"){
       var layers = Object.values(zoneLayersRef.current).filter(Boolean);
       if(layers.length){
         try {
           var group = L.featureGroup(layers);
           // animate:false so the map snaps to the framing instantly.
-          // The 250ms default animation was the cause of "map moves
-          // on its own + I can't click a zone" — clicks during the
-          // pan animation didn't reliably hit polygon hit-areas.
+          // Animation was the cause of "map moves on its own + I
+          // can't click a zone" — clicks during a pan didn't
+          // reliably hit polygon hit-areas.
           map.fitBounds(group.getBounds(), { padding: [40, 40], animate: false });
         } catch(_){}
       }
