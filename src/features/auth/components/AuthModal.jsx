@@ -40,14 +40,38 @@ export default function AuthModal({
   }
 
   function validateEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());}
-  function validatePassword(pw){return pw.length>=6;}
+  // Password rules MUST mirror the Supabase Auth project policy
+  // (Dashboard → Auth → Password). Today: ≥10 chars, with at least
+  // one lowercase, one uppercase, and one digit. If you change the
+  // policy in Supabase, change this rule + the placeholder + the
+  // PASSWORD_RULE_TEXT below in lockstep — otherwise the UI will
+  // happily accept a "valid" password that the server then rejects.
+  var PASSWORD_RULE_TEXT = "Min 10 characters, with upper- & lowercase letters and a number.";
+  function validatePassword(pw){
+    if(!pw || pw.length < 10) return false;
+    if(!/[a-z]/.test(pw)) return false;
+    if(!/[A-Z]/.test(pw)) return false;
+    if(!/[0-9]/.test(pw)) return false;
+    return true;
+  }
   function mapAuthError(msg){
     if(!msg) return "Something went wrong. Please try again.";
     if(msg.includes("Invalid login credentials")||msg.includes("invalid_credentials")) return "Incorrect email or password.";
     if(msg.includes("User already registered")||msg.includes("already been registered")) return "An account with this email already exists.";
     if(msg.includes("Email not confirmed")) return "Please check your email to confirm your account first.";
-    if(msg.includes("Password should be at least")) return "Password must be at least 6 characters.";
+    // Surface the real password-policy reason instead of overwriting
+    // it. The previous "must be at least 6 characters" string was
+    // both wrong (real policy is 10) AND misleading because users
+    // who typed a 6-char password saw an error claiming they needed
+    // 6 characters.
+    if(msg.includes("Password should be") || msg.toLowerCase().includes("weak_password") || msg.toLowerCase().includes("weak password")) return PASSWORD_RULE_TEXT;
     if(msg.includes("Unable to validate email")) return "Please enter a valid email address.";
+    // Supabase's built-in disposable/test-domain blocklist rejects
+    // addresses like @test.com / @example.com with this code. Surface
+    // a clear hint instead of a generic "invalid email" — the user
+    // may have typed something that passes our regex but the server
+    // refuses for policy reasons.
+    if(msg.includes("email_address_invalid") || msg.includes("Email address") && msg.includes("is invalid")) return "That email domain isn't allowed. Try a real address (e.g. gmail.com).";
     if(msg.includes("signup_disabled")) return "Sign ups are currently disabled. Contact support.";
     if(msg.includes("network")||msg.includes("fetch")) return "Connection error. Check your internet and try again.";
     return msg;
@@ -207,7 +231,7 @@ export default function AuthModal({
             <div style={{marginBottom:6}}>
               <label style={labelStyle}>Password</label>
               <input type="password" value={authPassword}
-                placeholder={authMode==="signup"?"Min 6 characters":"Your password"}
+                placeholder={authMode==="signup"?"Min 10 chars, Aa1":"Your password"}
                 onChange={function(e){setAuthPassword(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{password:null});});}}
                 style={Object.assign({},iStyle,{borderColor:authFieldErrors.password?t.red:t.border})}/>
               {authFieldErrors.password&&<div style={fieldErrorStyle}>{authFieldErrors.password}</div>}
@@ -238,7 +262,7 @@ export default function AuthModal({
                 if(!authEmail.trim()) fe.email="Email is required.";
                 else if(!validateEmail(authEmail)) fe.email="Please enter a valid email address.";
                 if(!authPassword) fe.password="Password is required.";
-                else if(authMode==="signup"&&!validatePassword(authPassword)) fe.password="Password must be at least 6 characters.";
+                else if(authMode==="signup"&&!validatePassword(authPassword)) fe.password=PASSWORD_RULE_TEXT;
                 if(Object.keys(fe).length){setAuthFieldErrors(fe);return;}
                 setAuthLoading(true);setAuthError("");setAuthFieldErrors({});
                 var r=authMode==="signup"
@@ -373,7 +397,7 @@ export default function AuthModal({
             }}>Choose a new password for your account.</p>
             <div style={{marginBottom:14}}>
               <label style={labelStyle}>New password</label>
-              <input type="password" value={authNewPassword} placeholder="Min 6 characters"
+              <input type="password" value={authNewPassword} placeholder="Min 10 chars, Aa1"
                 onChange={function(e){setAuthNewPassword(e.target.value);setAuthFieldErrors(function(f){return Object.assign({},f,{np:null});});}}
                 style={Object.assign({},iStyle,{borderColor:authFieldErrors.np?t.red:t.border})}/>
               {authFieldErrors.np&&<div style={fieldErrorStyle}>{authFieldErrors.np}</div>}
@@ -390,7 +414,7 @@ export default function AuthModal({
               disabled={authLoading}
               onClick={async function(){
                 var fe={};
-                if(!authNewPassword||authNewPassword.length<6) fe.np="Password must be at least 6 characters.";
+                if(!validatePassword(authNewPassword)) fe.np=PASSWORD_RULE_TEXT;
                 if(authNewPassword!==authNewPassword2) fe.np2="Passwords don't match.";
                 if(Object.keys(fe).length){setAuthFieldErrors(fe);return;}
                 setAuthLoading(true);setAuthError("");
