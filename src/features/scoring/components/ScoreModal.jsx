@@ -281,16 +281,20 @@ export default function ScoreModal({
     if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
   }
 
-  // Footer CTA copy — kept in the shell so it stays in lockstep with
-  // the saving / isResubmit / verified state. Slice 4 will swap this
-  // for fully contextual copy driven by liveValidation + matchType.
-  var ctaLabel = saving
-    ? "Saving…"
-    : (isResubmit
-        ? "Resubmit for confirmation"
-        : (isVerified && scoreModal.casual
-            ? "Submit for confirmation"
-            : "Save result"));
+  // Slice 4 — fully contextual CTA copy. Drives from the same signals
+  // the composer uses internally (matchType, invite-toggle, completion)
+  // so the button label always reflects what tapping it actually does.
+  var ctaLabel = computeCtaLabel({
+    saving: saving,
+    isResubmit: isResubmit,
+    isVerified: isVerified,
+    isCasualModal: !!(scoreModal && scoreModal.casual),
+    isTournamentSlot: !!(scoreModal && scoreModal.winnerId1 && scoreModal.winnerId2),
+    matchType: scoreDraft.matchType,
+    completionType: scoreDraft.completionType,
+    inviteOpponent: !!scoreDraft.inviteOpponent,
+    hasOpponentName: !!(casualOppName && casualOppName.trim()),
+  });
 
   return (
     <div
@@ -407,4 +411,52 @@ export default function ScoreModal({
       </div>
     </div>
   );
+}
+
+// Slice 4 — derive CTA copy from the same context the composer uses.
+// The label always reflects what tapping the button actually does.
+//
+// Order of precedence (most specific → most generic):
+//   1. Saving spinner state              → "Saving…"
+//   2. Resubmit context                  → "Resubmit for confirmation"
+//   3. Tournament-bracket slot           → "Save & advance bracket"
+//   4. Casual modal + freetext + invite  → "Save & share invite"
+//   5. Casual modal + freetext + !invite → "Save as casual"
+//   6. Casual modal + linked + ranked    → "Submit for confirmation"
+//   7. Casual modal + linked + casual    → "Save match"
+//   8. Anything else (legacy fallback)   → "Save result"
+//
+// Time-limited / retired completion type is signalled by the inline
+// caption strip under the scoreboard, not the CTA copy — keeps the
+// button label short and punchy.
+function computeCtaLabel({
+  saving,
+  isResubmit,
+  isVerified,
+  isCasualModal,
+  isTournamentSlot,
+  matchType,
+  completionType,           // eslint-disable-line no-unused-vars
+  inviteOpponent,
+  hasOpponentName,
+}) {
+  if (saving) return "Saving…";
+  if (isResubmit) return "Resubmit for confirmation";
+  if (isTournamentSlot) return "Save & advance bracket";
+  if (isCasualModal && !isVerified && hasOpponentName && inviteOpponent) {
+    return "Save & share invite";
+  }
+  if (isCasualModal && !isVerified) {
+    // Freetext / no opponent picked yet — without an invite this is a
+    // casual-only record. Same copy whether or not a name is typed,
+    // because the action is the same.
+    return "Save as casual";
+  }
+  if (isCasualModal && isVerified) {
+    var effective = matchType || 'ranked';
+    return effective === 'ranked'
+      ? "Submit for confirmation"
+      : "Save match";
+  }
+  return "Save result";
 }

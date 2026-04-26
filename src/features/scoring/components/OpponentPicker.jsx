@@ -1,25 +1,38 @@
 // src/features/scoring/components/OpponentPicker.jsx
 //
-// Three-state opponent picker for the redesigned Log Match composer.
+// Slice 3 — three-state opponent picker for the Log Match composer.
+// Internal `editing` state owns the visual mode; the parent only sees
+// the canonical `value` (string name) + `selectedId` (friend id|null).
 //
-//   1. Idle / typing     — input + suggestion dropdown (friends bubble up)
-//   2. Linked friend     — chip with avatar + "VERIFIED" tag, tap × to clear
-//   3. Freetext name     — chip with grey avatar + "WILL NEED INVITE" tag,
-//                          tap × to clear
+//   1. INPUT          — input + suggestion dropdown. Friends bubble
+//                       up first. When the typed query has no matches,
+//                       the dropdown grows a bottom row "Use 'Bob' —
+//                       they'll need an invite" that commits the
+//                       freetext name without an id.
 //
-// Slice 1 keeps the data flow identical to the old in-modal block:
-// ScoreModal owns `casualOppName`, `casualOppId`, `showOppDrop`, and the
-// callbacks just write back into those setters. Slice 3 will polish the
-// 3-state interaction further (currently the chip → input transition is
-// abrupt; that's intentional — minimal change for slice 1).
+//   2. FRIEND CHIP    — selectedId is set. Shows avatar + name + a
+//                       small "VERIFIED" eyebrow in accent colour.
+//                       Tap the × to clear and re-enter input mode.
+//
+//   3. FREETEXT CHIP  — value is set, selectedId is null, editing
+//                       has been committed (user picked the
+//                       "use this name" row OR pressed Enter in the
+//                       input). Shows a muted avatar + name + a
+//                       "WILL NEED INVITE" eyebrow. Tap × to clear.
+//
+// External clears (parent sets value="" + selectedId=null) drop the
+// picker back to input mode automatically. Mid-typing never triggers
+// chip mode — only an explicit commit (friend select, freetext-row
+// tap, or Enter) does.
 
-import { avColor } from "../../../lib/utils/avatar.js";
+import { useState, useEffect } from "react";
+import { avColor, initials } from "../../../lib/utils/avatar.js";
 import { inputStyle } from "../../../lib/theme.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 export default function OpponentPicker({
   t,
-  value,            // string — current typed name
+  value,            // string — current typed name (parent-owned)
   onChangeName,     // (string) => void
   selectedId,       // string|null — friend id when a linked opponent is chosen
   onSelect,         // (id|null, name|null, profile?) => void
@@ -33,63 +46,84 @@ export default function OpponentPicker({
   var name = value || "";
   var trimmed = name.trim();
 
-  // State 2/3: a name is committed (selected friend OR a typed-and-blurred
-  // freetext). We render a chip. The chip's clear-button drops back to
-  // state 1.
-  // For slice 1 we keep the old behaviour: while typing the input is
-  // visible and the dropdown floats. The chip-state only kicks in when a
-  // friend has been selected (selectedId truthy). Freetext stays in
-  // input mode through the whole flow — that's where slice 3 will
-  // change the UX. This keeps slice 1 a clean refactor.
+  // editing=true: render input + dropdown.
+  // editing=false: render chip (friend if selectedId, else freetext).
+  // Default to editing=true on first mount when nothing is committed.
+  // Default to editing=false when the parent opened with a pre-filled
+  // value (e.g. challenge conversion → opponent already known).
+  var [editing, setEditing] = useState(function () { return !value && !selectedId; });
+
+  // Keep internal mode in sync with external clears. If the parent
+  // wipes both fields (e.g. modal close + re-open), drop into input
+  // mode so the user can pick again. We DON'T flip back to chip mode
+  // automatically when the parent updates `value` mid-typing — that
+  // would interrupt typing.
+  useEffect(function () {
+    if (!value && !selectedId) setEditing(true);
+  }, [value, selectedId]);
+
+  // Resolve the friend object for chip render (state 2).
   var linkedFriend = selectedId
     ? (friends || []).concat(suggestedPlayers || []).find(function (u) {
         return u.id === selectedId;
       })
     : null;
 
-  if (linkedFriend) {
+  // ── State 2: friend chip ────────────────────────────────────────────
+  if (!editing && linkedFriend) {
     return (
-      <div style={{
-        display: "flex", alignItems: "center",
-        justifyContent: "flex-end",
-        gap: 10, minWidth: 0,
-      }}>
-        <div style={{ minWidth: 0, textAlign: "right" }}>
-          <div style={{
-            fontSize: 9, fontWeight: 800,
-            color: t.accent, letterSpacing: "0.16em",
-            textTransform: "uppercase",
-          }}>
-            Verified
-          </div>
-          <div style={{
-            fontSize: 14, fontWeight: 700, color: t.text,
-            letterSpacing: "-0.2px",
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
-            {linkedFriend.name}
-          </div>
-        </div>
-        <PlayerAvatar
-          name={linkedFriend.name}
-          avatar={linkedFriend.avatar}
-          avatarUrl={linkedFriend.avatar_url}
-          profile={linkedFriend}
-          size={36}
-        />
-        <button type="button"
-          onClick={onClear}
-          aria-label="Clear opponent"
-          style={{
-            background: "transparent", border: "none",
-            color: t.textTertiary, fontSize: 16,
-            padding: "0 0 0 2px", cursor: "pointer",
-            lineHeight: 1,
-          }}>
-          ×
-        </button>
-      </div>
+      <ChipBox t={t}
+        avatar={
+          <PlayerAvatar
+            name={linkedFriend.name}
+            avatar={linkedFriend.avatar}
+            avatarUrl={linkedFriend.avatar_url}
+            profile={linkedFriend}
+            size={36}
+          />
+        }
+        eyebrow="Verified"
+        eyebrowColor={t.accent}
+        name={linkedFriend.name}
+        onEdit={function () { setEditing(true); setShowDrop(false); }}
+        onClear={function () { onClear(); setEditing(true); }}
+      />
     );
+  }
+
+  // ── State 3: freetext chip (committed name, no friend) ──────────────
+  if (!editing && trimmed && !selectedId) {
+    return (
+      <ChipBox t={t}
+        avatar={<FreetextAvatar t={t} name={trimmed} />}
+        eyebrow="Will need invite"
+        eyebrowColor={t.textTertiary}
+        name={trimmed}
+        onEdit={function () { setEditing(true); setShowDrop(false); }}
+        onClear={function () { onClear(); setEditing(true); }}
+      />
+    );
+  }
+
+  // ── State 1: input + dropdown ───────────────────────────────────────
+  function commitFreetext(text) {
+    var v = (text || "").trim();
+    if (!v) return;
+    onChangeName(v);
+    setEditing(false);
+    setShowDrop(false);
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      // Enter commits whatever's typed as freetext (when no friend is
+      // already selected). If the user wanted a friend they'd tap
+      // them in the dropdown.
+      if (trimmed && !selectedId) commitFreetext(trimmed);
+    } else if (e.key === "Escape") {
+      setShowDrop(false);
+    }
   }
 
   return (
@@ -100,6 +134,7 @@ export default function OpponentPicker({
         onChange={function (e) { onChangeName(e.target.value); setShowDrop(true); }}
         onFocus={function () { setShowDrop(true); }}
         onBlur={function () { setTimeout(function () { setShowDrop(false); }, 180); }}
+        onKeyDown={handleKeyDown}
         style={Object.assign({}, iStyle, {
           fontSize: 13, marginBottom: 0,
           textAlign: "right",
@@ -115,7 +150,18 @@ export default function OpponentPicker({
         var hits = q
           ? pool.filter(function (u) { return u.name && u.name.toLowerCase().includes(q); })
           : (friends || []).slice(0, 6);
-        if (!hits.length) return null;
+
+        // Show the freetext-commit row when:
+        //   - user has typed at least 2 chars
+        //   - the typed query doesn't exactly match any pool entry
+        //     (case-insensitive, trimmed)
+        var exactMatch = q && pool.some(function (u) {
+          return u.name && u.name.toLowerCase().trim() === q;
+        });
+        var showFreetextRow = q.length >= 2 && !exactMatch;
+
+        if (!hits.length && !showFreetextRow) return null;
+
         return (
           <div style={{
             position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
@@ -130,6 +176,7 @@ export default function OpponentPicker({
                 <div key={u.id}
                   onMouseDown={function () {
                     onSelect(u.id, u.name, u);
+                    setEditing(false);
                     setShowDrop(false);
                   }}
                   style={{
@@ -168,9 +215,115 @@ export default function OpponentPicker({
                 </div>
               );
             })}
+
+            {/* Freetext commit row — bottom of the dropdown. */}
+            {showFreetextRow && (
+              <div
+                onMouseDown={function () { commitFreetext(trimmed); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 12px", cursor: "pointer",
+                  background: t.bgTertiary,
+                }}>
+                <FreetextAvatar t={t} name={trimmed} size={30} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 600, color: t.text,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    Use "{trimmed}"
+                  </div>
+                  <div style={{ fontSize: 11, color: t.textTertiary }}>
+                    Not on CourtSync — they'll need an invite
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 9, fontWeight: 800,
+                  color: t.textTertiary,
+                  letterSpacing: "0.12em", textTransform: "uppercase",
+                }}>
+                  Invite
+                </span>
+              </div>
+            )}
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// ── Local sub-components ──────────────────────────────────────────────
+
+// Chip wrapper used by both the friend-chip (state 2) and freetext-chip
+// (state 3) renders. Layout: avatar + (eyebrow / name) stack + ×.
+// Tapping anywhere outside the × calls onEdit so the user can re-enter
+// input mode without explicitly clearing.
+function ChipBox({ t, avatar, eyebrow, eyebrowColor, name, onEdit, onClear }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center",
+      justifyContent: "flex-end",
+      gap: 10, minWidth: 0,
+    }}>
+      <button type="button" onClick={onEdit}
+        style={{
+          display: "flex", alignItems: "center",
+          gap: 10, minWidth: 0,
+          background: "transparent", border: "none",
+          padding: 0, cursor: "pointer",
+          textAlign: "right",
+        }}>
+        <div style={{ minWidth: 0, textAlign: "right" }}>
+          <div style={{
+            fontSize: 9, fontWeight: 800,
+            color: eyebrowColor, letterSpacing: "0.16em",
+            textTransform: "uppercase",
+          }}>
+            {eyebrow}
+          </div>
+          <div style={{
+            fontSize: 14, fontWeight: 700, color: t.text,
+            letterSpacing: "-0.2px",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {name}
+          </div>
+        </div>
+        {avatar}
+      </button>
+      <button type="button"
+        onClick={onClear}
+        aria-label="Clear opponent"
+        style={{
+          background: "transparent", border: "none",
+          color: t.textTertiary, fontSize: 16,
+          padding: "0 0 0 2px", cursor: "pointer",
+          lineHeight: 1,
+        }}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+// Muted-grey avatar for freetext opponents — no avColor hash here so
+// the visual reads as "placeholder identity" vs the deterministic-
+// coloured friend avatars.
+function FreetextAvatar({ t, name, size = 36 }) {
+  var label = initials(name) || "?";
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      background: t.bgTertiary,
+      border: "1px dashed " + t.border,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: Math.round(size * 0.32), fontWeight: 700,
+      color: t.textTertiary,
+      flexShrink: 0,
+      letterSpacing: "-0.5px",
+    }}>
+      {label}
     </div>
   );
 }

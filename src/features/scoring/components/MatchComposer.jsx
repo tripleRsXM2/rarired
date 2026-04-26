@@ -19,13 +19,48 @@
 // Slice 1 of the Log-Match redesign — pure structural lift. Validator,
 // submit logic, state shape, and persistent fields are unchanged.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { inputStyle } from "../../../lib/theme.js";
 import { COURTS } from "../../map/data/courts.js";
 import { ONE_SET_RATING_NOTICE } from "../../rating/copy.js";
+import { formatMatchScore } from "../utils/tennisScoreValidation.js";
 import MatchupHeader from "./MatchupHeader.jsx";
 import OpponentPicker from "./OpponentPicker.jsx";
 import ScoreboardInput from "./ScoreboardInput.jsx";
+
+// Slice 2 — derive the winner from the set scores when the match has
+// a clear outcome. Returns "win" | "loss" | null.
+//
+// Rules:
+//   - completion='retired'      → null  (retiree can be sets-ahead)
+//   - completion='time_limited' → null  (sets-won doesn't define winner)
+//   - any blank / NaN cell      → ignored (only counts fully-typed sets)
+//   - tied set count            → null  (ambiguous — let user pick)
+//   - otherwise                 → whoever won more sets, in viewer frame
+//
+// Used by the composer to (a) hide the manual Win/Loss buttons when the
+// outcome is unambiguous + completed, and (b) auto-sync scoreDraft.result
+// so the rest of the system (validator, submit, finish moment) sees the
+// derived value without relying on the user to tap a button. Manual
+// buttons stay visible whenever this returns null.
+function deriveResultFromSets(sets, completionType) {
+  if (completionType === 'retired' || completionType === 'time_limited') return null;
+  if (!sets || !sets.length) return null;
+  var yWins = 0, tWins = 0;
+  for (var i = 0; i < sets.length; i++) {
+    var s = sets[i];
+    var yStr = s.you  == null ? "" : String(s.you).trim();
+    var tStr = s.them == null ? "" : String(s.them).trim();
+    if (yStr === "" || tStr === "") continue;
+    var y = Number(yStr), t = Number(tStr);
+    if (!Number.isFinite(y) || !Number.isFinite(t)) continue;
+    if (y === t) continue;
+    if (y > t) yWins++; else tWins++;
+  }
+  if (yWins === 0 && tWins === 0) return null;
+  if (yWins === tWins) return null;
+  return yWins > tWins ? 'win' : 'loss';
+}
 
 // Sort COURTS so venues in the viewer's own suburb float to the top, then
 // same-zone, then alphabetical. Mirrors the helper that lived in the old
@@ -73,6 +108,18 @@ export default function MatchComposer({
   onSaveCasualFallback, // () => void — fires "save as casual time-limited"
 }) {
   var iStyle = inputStyle(t);
+
+  // Slice 2 — auto-sync scoreDraft.result with the derived outcome
+  // whenever the score becomes unambiguous. Manual Win/Loss buttons
+  // stay hidden in this state; the user only sees + interacts with
+  // them when the score is empty / tied / retired / time-limited.
+  var derivedResult = deriveResultFromSets(scoreDraft.sets, scoreDraft.completionType);
+  useEffect(function () {
+    if (derivedResult && scoreDraft.result !== derivedResult) {
+      setScoreDraft(function (d) { return Object.assign({}, d, { result: derivedResult }); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedResult]);
 
   // Collapsible "Add details" — closed by default. We treat the section
   // as auto-open if any field already has a non-default value, so a
@@ -244,34 +291,84 @@ export default function MatchComposer({
         })()
       }
 
-      {/* RESULT — Win / Loss */}
-      <div style={{ marginTop: 14, marginBottom: 16 }}>
-        <label style={labelStyle(t)}>Result</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[
-            { id: "win",  l: "Win",  c: t.green },
-            { id: "loss", l: "Loss", c: t.red   },
-          ].map(function (r) {
-            var on = scoreDraft.result === r.id;
-            return (
-              <button key={r.id}
-                onClick={function () {
-                  setScoreDraft(function (d) { return Object.assign({}, d, { result: r.id }); });
-                }}
-                style={{
-                  flex: 1, padding: "12px", borderRadius: 9,
-                  border: "1px solid " + (on ? r.c : t.border),
-                  background: on ? r.c + "18" : "transparent",
-                  fontSize: 15, fontWeight: on ? 700 : 400,
-                  color: on ? r.c : t.textSecondary,
-                  cursor: "pointer",
-                }}>
-                {r.l}
-              </button>
-            );
-          })}
+      {/* RESULT — Slice 2: derive from scoreboard when unambiguous,
+          fall back to manual Win/Loss buttons when the score is empty,
+          tied, or the match is retired / time-limited (cases where the
+          set count alone doesn't define the winner). */}
+      {derivedResult ? (
+        <div style={{
+          marginTop: 14, marginBottom: 16,
+          paddingTop: 12, paddingBottom: 12,
+          borderTop: "1px solid " + t.border,
+          borderBottom: "1px solid " + t.border,
+        }}>
+          <div style={{
+            display: "flex", alignItems: "baseline", gap: 10,
+            marginBottom: 4,
+          }}>
+            <span style={{
+              fontSize: 9, fontWeight: 800,
+              color: t.textTertiary, letterSpacing: "0.16em",
+              textTransform: "uppercase",
+            }}>
+              Outcome
+            </span>
+            <span style={{
+              fontSize: 16, fontWeight: 800,
+              color: derivedResult === 'win' ? t.green : t.red,
+              letterSpacing: "0.04em", textTransform: "uppercase",
+            }}>
+              You {derivedResult === 'win' ? 'win' : 'lose'}
+            </span>
+          </div>
+          <div style={{
+            fontSize: 13, color: t.textSecondary,
+            fontVariantNumeric: "tabular-nums",
+            letterSpacing: "-0.1px",
+          }}>
+            {formatMatchScore(scoreDraft.sets) || ""}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div style={{ marginTop: 14, marginBottom: 16 }}>
+          <label style={labelStyle(t)}>Result</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { id: "win",  l: "Win",  c: t.green },
+              { id: "loss", l: "Loss", c: t.red   },
+            ].map(function (r) {
+              var on = scoreDraft.result === r.id;
+              return (
+                <button key={r.id}
+                  onClick={function () {
+                    setScoreDraft(function (d) { return Object.assign({}, d, { result: r.id }); });
+                  }}
+                  style={{
+                    flex: 1, padding: "12px", borderRadius: 9,
+                    border: "1px solid " + (on ? r.c : t.border),
+                    background: on ? r.c + "18" : "transparent",
+                    fontSize: 15, fontWeight: on ? 700 : 400,
+                    color: on ? r.c : t.textSecondary,
+                    cursor: "pointer",
+                  }}>
+                  {r.l}
+                </button>
+              );
+            })}
+          </div>
+          {/* Tiny helper hint when the score is empty — sets context
+              for why we're asking. Hidden once a score is being typed. */}
+          {(!scoreDraft.sets || scoreDraft.sets.every(function (s) { return s.you === "" && s.them === ""; })) && (
+            <div style={{
+              fontSize: 10.5, color: t.textTertiary,
+              marginTop: 6, lineHeight: 1.4,
+              letterSpacing: "-0.05px",
+            }}>
+              Enter the score above and we'll work out who won.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MATCH TYPE — only when opponent is a linked friend (Module 7.5).
           Freetext stays casual until the invite-to-confirm flow runs. */}
