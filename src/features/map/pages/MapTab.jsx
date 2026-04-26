@@ -178,6 +178,11 @@ export default function MapTab({
       track("play_match_step_entered", { step: 1 });
       return;
     }
+    // In court mode, taps on other zones are no-ops. They were
+    // falling through to setSelected which silently changed state
+    // even though the side panel doesn't render in court mode —
+    // user perceived "map layers working in the background."
+    if(playMode === "court") return;
     setSelected(zoneId);
     if(zoneId){
       var a = zoneActivity[zoneId] || { matches_7d: 0, players_7d: 0 };
