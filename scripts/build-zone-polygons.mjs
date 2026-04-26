@@ -59,15 +59,19 @@ var ZONE_MEMBERS = {
   "northern-beaches": [
     // North Harbour removed per user — sits across the harbour from
     // Manly and felt geographically off-zone.
+    //
+    // Trimmed northern half: per user "remove everything north of
+    // Belrose / North Narrabeen / Ingleside, as well as those just
+    // listed." Removed: North Narrabeen, Elanora Heights, Warriewood,
+    // Mona Vale, Bayview, Newport, Bilgola, Bilgola Plateau, Avalon
+    // Beach, Clareville, Whale Beach, Palm Beach, Church Point,
+    // Ingleside, Terrey Hills, Duffys Forest, Davidson, Belrose.
     "MANLY","MANLY VALE","FAIRLIGHT","BALGOWLAH","BALGOWLAH HEIGHTS","NORTH BALGOWLAH",
     "SEAFORTH","CLONTARF","QUEENSCLIFF","NORTH MANLY",
     "FRESHWATER","CURL CURL","NORTH CURL CURL","DEE WHY","BROOKVALE","BEACON HILL",
     "NARRAWEENA","CROMER","COLLAROY","COLLAROY PLATEAU","WHEELER HEIGHTS",
-    "NARRABEEN","NORTH NARRABEEN","ELANORA HEIGHTS","WARRIEWOOD","MONA VALE",
-    "BAYVIEW","NEWPORT","BILGOLA","BILGOLA PLATEAU","AVALON BEACH","CLAREVILLE",
-    "WHALE BEACH","PALM BEACH","CHURCH POINT","INGLESIDE","TERREY HILLS",
-    "DUFFYS FOREST","BELROSE","DAVIDSON","FORESTVILLE","FRENCHS FOREST",
-    "KILLARNEY HEIGHTS","ALLAMBIE HEIGHTS",
+    "NARRABEEN",
+    "FORESTVILLE","FRENCHS FOREST","KILLARNEY HEIGHTS","ALLAMBIE HEIGHTS",
   ],
   "south": [
     "MASCOT","BOTANY","BANKSMEADOW","PORT BOTANY",
