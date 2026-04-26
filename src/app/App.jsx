@@ -927,6 +927,7 @@ export default function App(){
           submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
           viewerSuburb={currentUser.profile&&currentUser.profile.suburb}
+          viewerProfile={currentUser.profile}
           myLeagues={leagues.leagues}
         />
         <DisputeModal
