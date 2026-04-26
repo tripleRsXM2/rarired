@@ -109,19 +109,8 @@ export default function Providers({ t, theme, children }){
       // the lat/lng anchor + a glassy white label pill at the
       // diagonal offset. Direction cycles NE/NW/SE/SW per court.
       ".cs-play-court{pointer-events:auto}",
-      // Hover-only labels for hover-capable devices (desktop with
-      // mouse). Default: name + connector line are invisible. On
-      // hover the label and line fade in. Touch devices (phones,
-      // tablets — no hover gesture) skip this rule entirely so
-      // labels stay visible. User pick: avoids overlap completely
-      // on web while keeping discoverability on mobile.
-      "@media (hover: hover) and (pointer: fine){" +
-        ".cs-play-court .cs-play-name," +
-        ".cs-play-court svg line{" +
-          "opacity:0;transition:opacity 0.15s ease}" +
-        ".cs-play-court:hover .cs-play-name," +
-        ".cs-play-court:hover svg line{opacity:1}" +
-      "}",
+      // (Hover-only labels retired per user — labels now visible
+      // always, no connector lines.)
       // Unified label style — pure caps typography. No box, no
       // border. Used for BOTH calm (dot + name below) and crowded
       // (dot + line + offset name) placements. The only difference

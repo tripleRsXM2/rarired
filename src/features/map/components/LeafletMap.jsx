@@ -624,19 +624,13 @@ export default function LeafletMap({
           var labelText = shortenCourtName(c.name).toUpperCase();
           var html, iconSize, iconAnchor;
 
-          // Hover-capable devices show only ONE label at a time
-          // (CSS reveals on :hover), so overlap can't happen on
-          // desktop. The diagonal/variant logic only buys us anything
-          // on touch where labels are always visible. Branch here:
-          // hover devices → use the simple calm structure for ALL
-          // courts; touch → keep cluster-aware diagonal for crowded.
-          var isHoverCapable = typeof window !== "undefined" &&
-            window.matchMedia &&
-            window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-          if(p.crowded && !isHoverCapable){
-            // Crowded (touch only): dot + connector + caps name.
-            // Variant chosen by cluster-aware round-robin so cluster
-            // mates stagger along the diagonal instead of stacking.
+          // User pick: always show the simple "dot + label below"
+          // structure regardless of crowdedness or device. The
+          // diagonal-with-line approach is retired — even though it
+          // solved overlap, the lines "sticking out" felt visually
+          // busy. Trade-off: dense clusters (e.g. Eastern Suburbs)
+          // will have some label overlap. Acceptable per user.
+          if(false){
             var d = VARIANTS[(p.variantIdx || 0) % VARIANTS.length];
             html =
               '<div style="position:relative;width:180px;height:120px;cursor:pointer">' +
