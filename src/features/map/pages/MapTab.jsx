@@ -668,8 +668,14 @@ export default function MapTab({
         initialZoneId={selected}
         initialCourtName={wizardInitialCourt}
         onClose={function(){
+          // Tear down the whole play flow — without this, `selected`
+          // stays set to the picked zone and the right-side panel
+          // (sidePanelZone) pops back in once playMode falls to "off".
           setWizardOpen(false);
           setWizardInitialCourt(null);
+          setPlayMode("off");
+          setPlayZoneId(null);
+          setSelected(null);
         }}
         onSendInvite={function(partners, ctx){
           if(!partners || !partners.length){ setWizardOpen(false); return; }
@@ -682,7 +688,14 @@ export default function MapTab({
           } else if(onMessagePlayer){
             onMessagePlayer(partners, ctx);
           }
+          // Same teardown as onClose — clearing `selected` here is
+          // what stops the zone side-panel from flashing in after
+          // the wizard closes on send.
           setWizardOpen(false);
+          setWizardInitialCourt(null);
+          setPlayMode("off");
+          setPlayZoneId(null);
+          setSelected(null);
         }}
       />
     </div>
