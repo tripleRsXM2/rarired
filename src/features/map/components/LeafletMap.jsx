@@ -181,6 +181,10 @@ export default function LeafletMap({
   // would re-add court markers after cleanup wiped them.
   var playModeRef = useRef(playMode);
   playModeRef.current = playMode;
+  // Same closure-ref pattern for `selected` — used by the
+  // ResizeObserver below to decide whether to re-fit on resize.
+  var selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
   // reads the latest callback — otherwise the first render's closure sticks.
@@ -266,6 +270,35 @@ export default function LeafletMap({
       map.fitBounds(group.getBounds(), { padding: [24, 24] });
     }
 
+    // Hard-refresh sizing race fix: on first paint the container
+    // may not have its final dimensions yet (CSS / dvh / flex layout
+    // settles after Leaflet measures), so the initial fitBounds
+    // computes off the wrong size and the map renders mis-centred.
+    // ResizeObserver fires invalidateSize + re-fits whenever the
+    // container changes size — covers hard-refresh, browser-resize,
+    // sidebar-collapse, orientation flip, etc.
+    var ro = null;
+    if(typeof ResizeObserver !== "undefined"){
+      ro = new ResizeObserver(function(){
+        try { map.invalidateSize(); } catch(_){}
+        // Re-fit only when no zone is selected and we're not in
+        // play mode — those modes own their own framing.
+        if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
+          try { map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), { padding: [24,24], animate: false }); } catch(_){}
+        }
+      });
+      ro.observe(elRef.current);
+    }
+    // Belt-and-braces: a deferred invalidateSize after the first
+    // paint cycle in case the ResizeObserver doesn't fire (some
+    // older browsers don't trigger it for the initial layout).
+    setTimeout(function(){
+      try { map.invalidateSize(); } catch(_){}
+      if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
+        try { map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), { padding: [24,24], animate: false }); } catch(_){}
+      }
+    }, 60);
+
     // Zoom-aware label visibility — UI council rule: at broad zoom
     // (city-fit) zone names and activity flames are hidden because
     // they collide with cluster numbers. The layers panel toggles
@@ -344,7 +377,11 @@ export default function LeafletMap({
     if(showCourts) map.addLayer(clusterGroup);
 
     mapRef.current = map;
-    return function(){ map.remove(); mapRef.current = null; };
+    return function(){
+      try { if(ro) ro.disconnect(); } catch(_){}
+      map.remove();
+      mapRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
