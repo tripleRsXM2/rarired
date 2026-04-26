@@ -476,15 +476,27 @@ export default function LeafletMap({
       });
       // Fit the map to the picked zone so the courts are spread out
       // enough that their labels don't pile on top of each other.
-      var zoneLayer = zoneLayersRef.current[playZoneId];
-      if(zoneLayer){
-        try {
-          // Cap maxZoom so small zones (e.g. Eastern Suburbs) don't
-          // over-zoom into a tiny crop. fitBounds without a cap
-          // uses the map's maxZoom (19) which made small polygons
-          // fill the screen at street-level zoom.
-          map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60], animate: false, maxZoom: 14 });
-        } catch(_){}
+      // Fixed-zoom setView per zone instead of fitBounds. Why:
+      // bbox-fit gives wildly different visual scales because zones
+      // have very different aspect ratios. Eastern Suburbs (Paddington
+      // to La Perouse, ~12km tall + narrow) was fitting at a low
+      // zoom with most of the viewport empty horizontally; CBD/Inner
+      // West (compact + roughly square) fitted nicely. Using the
+      // hand-tuned zone.center + a single zoom level frames every
+      // zone at the same visual scale — the courts at the heart are
+      // visible, long tails clip off-screen which is acceptable for
+      // a "zoom in to focus" expectation.
+      var zoneData = ZONE_BY_ID[playZoneId];
+      var zoneCenter = zoneData && zoneData.center
+        ? zoneData.center
+        : (zoneCentersRef.current[playZoneId] || null);
+      if(zoneCenter){
+        try { map.setView(zoneCenter, 13, { animate: false }); } catch(_){}
+      } else {
+        var zoneLayer = zoneLayersRef.current[playZoneId];
+        if(zoneLayer){
+          try { map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60], animate: false, maxZoom: 13 }); } catch(_){}
+        }
       }
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);
