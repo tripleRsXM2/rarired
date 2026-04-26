@@ -5,6 +5,7 @@ import { COURTS } from "../../map/data/courts.js";
 import { fetchOpponentActiveLeagueIds } from "../../leagues/services/leagueService.js";
 import { validateMatchScore, CODES as SCORE_CODES } from "../utils/tennisScoreValidation.js";
 import MatchFinishMoment from "./MatchFinishMoment.jsx";
+import InviteShareCard from "./InviteShareCard.jsx";
 import { ONE_SET_RATING_NOTICE } from "../../rating/copy.js";
 
 // Sort COURTS so venues in the viewer's own suburb float to the top, then
@@ -342,13 +343,28 @@ export default function ScoreModal({
         className="pop"
         style={{background:t.modalBg,border:"1px solid "+t.border,borderRadius:16,padding:"28px 24px",width:"100%",maxWidth:540,maxHeight:"92vh",overflowY:"auto"}}>
         {finish ? (
-          <MatchFinishMoment
-            t={t}
-            status={finish.status}
-            result={finish.result}
-            opponentName={finish.opponentName}
-            onClose={closeFromFinish}
-          />
+          // Module 9: when an invite was created, hand off to the
+          // share card instead of the auto-dismiss finish moment —
+          // sharing the link IS the activation moment, so we don't
+          // close until the user taps Done.
+          finish.invite ? (
+            <InviteShareCard
+              t={t}
+              matchId={finish.matchId}
+              invite={finish.invite}
+              loggerName={authUser && (authUser.name || authUser.user_metadata && authUser.user_metadata.name)}
+              invitedName={finish.opponentName}
+              onClose={closeFromFinish}
+            />
+          ) : (
+            <MatchFinishMoment
+              t={t}
+              status={finish.status}
+              result={finish.result}
+              opponentName={finish.opponentName}
+              onClose={closeFromFinish}
+            />
+          )
         ) : (
         <>
         <h2 style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:16,letterSpacing:"-0.3px"}}>{isResubmit?"Edit & Resubmit":"Log Result"}</h2>
