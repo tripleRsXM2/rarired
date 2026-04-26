@@ -31,6 +31,7 @@ import {
   tierFromSkill,
 } from "../services/mapService.js";
 import { nearbySkillLevels, AGE_BRACKET_BY_ID } from "../../../lib/constants/domain.js";
+import StepProgressBar from "./StepProgressBar.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { track } from "../../../lib/analytics.js";
 
@@ -636,10 +637,12 @@ export default function MapPlayerOverlay({
         )}
       </div>
 
-      {/* BOTTOM PROMPT — same spot/size as Choose court, truly
-          centered (back chevron is absolute-left so the title
-          isn't pushed off-axis). Morphs into a Continue button
-          once ≥ 1 player is selected. */}
+      {/* BOTTOM PROMPT — composition:
+            StepProgressBar (4-segment, 'players' is step 2)
+            ← Title  (inline-flex pair, chevron immediately left
+                      of the words so the back-affordance reads as
+                      part of the step rather than detached)
+          Morphs into a Continue button once ≥1 player is picked. */}
       <div style={{
         position:"absolute",
         bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
@@ -648,48 +651,56 @@ export default function MapPlayerOverlay({
         pointerEvents:"none",
       }}>
         <div className="fade-up" style={{
-          position:"relative",
           maxWidth: 720,
           margin:"0 auto",
-          padding: isMobile ? "0 56px" : "0 64px",
+          padding: isMobile ? "0 14px" : "0 22px",
           textAlign:"center",
         }}>
-          <button type="button"
-            onClick={function(){ onBack && onBack(); }}
-            aria-label="Back to court"
-            style={{
-              position:"absolute",
-              left: isMobile ? 8 : 12,
-              top:"50%",
-              transform:"translateY(-50%)",
-              pointerEvents:"auto",
-              background:"transparent", border:"none", cursor:"pointer",
-              color: fg,
-              padding: 6,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              filter: mapDark
-                ? "drop-shadow(0 1px 4px rgba(0,0,0,0.55))"
-                : "drop-shadow(0 1px 4px rgba(255,255,255,0.55))",
-            }}>
-            <svg width={isMobile ? 24 : 28} height={isMobile ? 24 : 28} viewBox="0 0 18 18" fill="none"
-                 stroke="currentColor" strokeWidth="1.8"
-                 strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 14L6 9l5-5"/>
-            </svg>
-          </button>
+          <StepProgressBar
+            isMobile={isMobile}
+            mapDark={mapDark}
+            total={4}
+            step={2}
+          />
+          <div style={{
+            display:"inline-flex",
+            alignItems:"center",
+            gap: isMobile ? 6 : 8,
+            pointerEvents:"none",
+          }}>
+            <button type="button"
+              onClick={function(){ onBack && onBack(); }}
+              aria-label="Back to court"
+              style={{
+                pointerEvents:"auto",
+                background:"transparent", border:"none", cursor:"pointer",
+                color: fg,
+                padding: 4,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                flexShrink: 0,
+                filter: mapDark
+                  ? "drop-shadow(0 1px 4px rgba(0,0,0,0.55))"
+                  : "drop-shadow(0 1px 4px rgba(255,255,255,0.55))",
+              }}>
+              <svg width={isMobile ? 22 : 26} height={isMobile ? 22 : 26} viewBox="0 0 18 18" fill="none"
+                   stroke="currentColor" strokeWidth="1.8"
+                   strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 14L6 9l5-5"/>
+              </svg>
+            </button>
 
-          {selectedIds.length === 0 ? (
-            <div style={{
-              fontSize: isMobile ? 30 : 40, fontWeight: 900,
-              letterSpacing:"0.02em", lineHeight: 1.05,
-              textTransform:"uppercase",
-              color: fg,
-              textShadow: halo,
-              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-            }}>
-              Pick {format === "singles" ? "a player" : "players"}
-            </div>
-          ) : (
+            {selectedIds.length === 0 ? (
+              <div style={{
+                fontSize: isMobile ? 30 : 40, fontWeight: 900,
+                letterSpacing:"0.02em", lineHeight: 1.05,
+                textTransform:"uppercase",
+                color: fg,
+                textShadow: halo,
+                fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+              }}>
+                Pick {format === "singles" ? "a player" : "players"}
+              </div>
+            ) : (
             <button type="button"
               onClick={handleContinue}
               style={{
@@ -713,7 +724,8 @@ export default function MapPlayerOverlay({
                 <path d="M4 9h10M10 5l4 4-4 4"/>
               </svg>
             </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </>

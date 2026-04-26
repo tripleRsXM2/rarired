@@ -49,7 +49,7 @@ import {
 
 var CATEGORIES = [
   { key: "result_reviews",    label: "Result reviews",     hint: "Disputes, counter-proposals, confirmations needed" },
-  { key: "match_invites",     label: "Match invites",      hint: "New challenges + open-court pacts" },
+  { key: "match_invites",     label: "Match invites",      hint: "New challenges + opponent invites" },
   { key: "match_updates",     label: "Match updates",      hint: "Confirmed, voided, expired, deleted" },
   { key: "league_updates",    label: "League updates",     hint: "Invites + standings movement" },
   { key: "tournament_updates",label: "Tournament updates", hint: "Match scheduled, deadline approaching" },

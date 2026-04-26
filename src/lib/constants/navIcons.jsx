@@ -42,19 +42,7 @@ export var NAV_ICONS = {
       </svg>
     );
   },
-  tindis: function(size){
-    // Two-player pact — a handshake-ish glyph. Kept SVG-only per the
-    // "no emoji as icons" rule.
-    var s = size || 17;
-    return (
-      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
-        <circle cx="5.5" cy="5" r="2" stroke="currentColor" strokeWidth="1.5"/>
-        <circle cx="12.5" cy="5" r="2" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M2 15c0.5-2 2-3.2 3.5-3.2M16 15c-0.5-2-2-3.2-3.5-3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <path d="M6 11.5l2 1.6 2-1.6 2 1.6" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" fill="none"/>
-      </svg>
-    );
-  },
+  // tindis icon retired with the Tindis match-pact feature.
   home: function(size){
     var s = size || 17;
     return (

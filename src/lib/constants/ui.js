@@ -3,10 +3,9 @@
 
 export const AV_COLORS = ["#4A90E2","#3D9970","#E67E22","#E74C3C","#8E44AD","#2980B9","#D35400"];
 
-// Phase 0 of the map-pivot: Tindis removed from the primary nav but
-// the /tindis route still resolves in App.jsx so existing notification
-// deep-links, bookmarks, and shared URLs don't 404 mid-pivot. The DB
-// schema (match_pacts + RLS + RPCs) stays — see product-principles.md v6.
+// Tindis (match-pacts) feature was retired pre-launch. Nav, route,
+// page, hook, service, table, and RPCs all gone. This comment is the
+// last archaeological trace.
 export const TABS = [
   {id:"home",        label:"Feed"},
   {id:"map",         label:"Map"},

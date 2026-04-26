@@ -258,8 +258,7 @@ function NotifRow({
     var t_ = n.type;
     if (t_ === "like" || t_ === "comment" || t_ === "match_deleted" ||
         t_ === "message" || t_ === "request_accepted" ||
-        t_ === "challenge_declined" || t_ === "challenge_expired" ||
-        t_ === "pact_cancelled") {
+        t_ === "challenge_declined" || t_ === "challenge_expired") {
       onDismiss();
     }
   }
@@ -356,20 +355,10 @@ function NotifRow({
     if (!n.read) onRead(n.id);
   }
 
-  function goTindis(e) {
-    if (e) e.stopPropagation();
-    track("notification_opened", { type: n.type, deep_link_target: "tindis" });
-    // Drop the viewer on the active sub-tab with the pact id in state so
-    // TindisTab can scroll-to + pulse the matching PactCard. pact_cancelled
-    // rows go to History because the active row is gone.
-    var pactId = n.entity_id || null;
-    var sub = n.type === "pact_cancelled" ? "history" : "active";
-    navigate("/tindis/" + sub,
-      pactId ? { state: { highlightPactId: pactId } } : undefined);
-    setShowNotifications(false);
-    if (!n.read) onRead(n.id);
-    dismissIfActivity();
-  }
+  // goTindis() retired — Tindis pact feature was removed pre-launch.
+  // Any legacy pact_* notification rows still in the table render as
+  // plain unactionable items (no CTAs); see the pact-CTA blocks below
+  // which were also removed.
 
   // Swipe hint: show a red strip behind the row when swiped
   var swipeProgress = Math.min(Math.abs(swipeX) / 80, 1);
@@ -605,25 +594,7 @@ function NotifRow({
             ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
           )}
 
-          {/* Tindis — pact deep-links. pact_proposed is "action" so it gets
-              primary styling; the other pact_* are "important" with more
-              muted CTAs. All of them carry entity_id = pact id in state. */}
-          {n.type === "pact_proposed" && primaryCta(t, t.accent, "Review pact →", function (e) {
-            if (!n.read) onRead(n.id);
-            goTindis(e);
-          })}
-          {n.type === "pact_claimed" && (
-            ctaButton(t, t.accent, true, "Re-affirm →", goTindis)
-          )}
-          {n.type === "pact_confirmed" && (
-            ctaButton(t, t.green, true, "Book it →", goTindis)
-          )}
-          {n.type === "pact_booked" && (
-            ctaButton(t, t.accent, true, "View split →", goTindis)
-          )}
-          {n.type === "pact_cancelled" && (
-            ctaButton(t, t.textSecondary, false, "View →", goTindis)
-          )}
+          {/* Tindis pact CTAs retired — feature removed pre-launch. */}
         </div>
 
         {/* Right col: unread dot + dismiss */}

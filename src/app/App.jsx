@@ -24,7 +24,7 @@ import { useNotifications } from "../features/notifications/hooks/useNotificatio
 import { useTournamentManager } from "../features/tournaments/hooks/useTournamentManager.js";
 import { useChallenges } from "../features/challenges/hooks/useChallenges.js";
 import { useLeagues } from "../features/leagues/hooks/useLeagues.js";
-import { usePacts } from "../features/pacts/hooks/usePacts.js";
+// usePacts hook retired alongside the Tindis match-pact feature.
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
@@ -33,7 +33,8 @@ import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
 import PlayerProfileView from "../features/profile/pages/PlayerProfileView.jsx";
 import AdminTab from "../features/admin/pages/AdminTab.jsx";
 import MapTab from "../features/map/pages/MapTab.jsx";
-import PactsTab from "../features/pacts/pages/PactsTab.jsx";
+// PactsTab retired — Tindis was removed before launch. Routes
+// landing on /tindis fall through to the home tab now.
 import { setHomeZone } from "../features/map/services/mapService.js";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
@@ -78,7 +79,10 @@ export default function App(){
   var navigate=useNavigate();
 
   // Derive active top-level tab from the URL path.
-  var validTabs=["tindis","home","map","tournaments","people","profile","admin"];
+  // 'tindis' removed from validTabs after the pact feature was
+  // retired pre-launch. Old deep links land here, fail validation,
+  // and default-redirect to the home tab below.
+  var validTabs=["home","map","tournaments","people","profile","admin"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -182,7 +186,7 @@ export default function App(){
   });
   var challenges=useChallenges({ authUser:auth.authUser });
   var leagues=useLeagues({ authUser:auth.authUser });
-  var pacts=usePacts({ authUser:auth.authUser, profile:currentUser.profile });
+  // var pacts = ... — retired with Tindis.
 
   var myId=auth.authUser?auth.authUser.id:"local-user";
 
@@ -689,15 +693,8 @@ export default function App(){
             </div>
           </div>
 
-          {/* Tab content */}
-          {tab==="tindis"&&(
-            <PactsTab
-              t={t} authUser={auth.authUser} profile={currentUser.profile}
-              pacts={pacts}
-              friends={social.friends}
-              openProfile={openProfile}
-            />
-          )}
+          {/* Tab content. (Tindis retired; old deep-links bounce
+              through validTabs above and land on home.) */}
           {tab==="home"&&(
             <HomeTab
               t={t} authUser={auth.authUser} profile={currentUser.profile} history={matchHistory.history}

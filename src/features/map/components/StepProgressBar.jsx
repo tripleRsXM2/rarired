@@ -1,25 +1,24 @@
 // src/features/map/components/StepProgressBar.jsx
 //
-// Segmented step indicator for the Play Match flow. Lives at the
-// very top of the map during play mode (zone → court → players →
-// when). Each of the four steps is a thin pill; finished + active
-// fill, future steps are hairline.
+// Segmented step indicator for the Play Match flow. Renders inline
+// — designed to sit DIRECTLY ABOVE the step title (e.g. "Choose
+// court") so the user reads the dots-and-title as a unit. Earlier
+// version pinned this to the top of the screen; user feedback was
+// that it floated too far away from the action.
 //
-// iOS-Stories-style row — small, deliberately quiet, theme-aware
-// halo so it reads on both light and dark basemaps without a
-// background card. Pointer-events disabled so it doesn't intercept
-// taps on the map underneath.
+// Pure typography styling — small filled / hairline pills, theme-
+// aware halo, no card chrome. Pointer-events:none so it never
+// intercepts taps.
 //
 // `step` is 0-indexed: 0 = zone, 1 = court, 2 = players, 3 = when.
+// `width` lets the caller cap the bar's width when embedded into
+// a centered prompt block (otherwise it stretches edge-to-edge).
 
 import React from "react";
 
-export default function StepProgressBar({ step, total, mapDark, isMobile }){
+export default function StepProgressBar({ step, total, mapDark, isMobile, width }){
   var n = total || 4;
   var active = Math.max(0, Math.min(n - 1, step | 0));
-  // Visual: filled segments for steps already reached (≤ active),
-  // hairline for the rest. Active segment gets a brighter colour to
-  // distinguish "currently here" from "already past."
   var filledOn   = mapDark ? "rgba(255,255,255,0.95)" : "rgba(20,18,17,0.90)";
   var filledPast = mapDark ? "rgba(255,255,255,0.55)" : "rgba(20,18,17,0.55)";
   var rail       = mapDark ? "rgba(255,255,255,0.18)" : "rgba(20,18,17,0.15)";
@@ -33,17 +32,20 @@ export default function StepProgressBar({ step, total, mapDark, isMobile }){
       aria-valuemin={1}
       aria-valuemax={n}
       style={{
-        position:"absolute",
-        top: "calc(env(safe-area-inset-top, 0px) + " + (isMobile ? 10 : 14) + "px)",
-        left: isMobile ? 14 : 22,
-        right: isMobile ? 14 : 22,
-        zIndex: 555,
-        display:"flex", alignItems:"center", gap: 6,
+        display:"flex",
+        alignItems:"center",
+        gap: isMobile ? 4 : 6,
+        // Cap the bar at a sensible width so on a wide desktop it
+        // doesn't span the entire viewport. The caller usually wants
+        // it to match the title's width feel, ~200-300px.
+        width: width || (isMobile ? 140 : 200),
+        margin: "0 auto",
+        marginBottom: isMobile ? 10 : 14,
         pointerEvents:"none",
       }}>
       {Array.from({length:n}).map(function(_, i){
         var bg;
-        if(i < active)       bg = filledPast;
+        if(i < active)        bg = filledPast;
         else if(i === active) bg = filledOn;
         else                  bg = rail;
         return (

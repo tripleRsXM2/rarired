@@ -20,9 +20,7 @@ var PUSH_WORTHY_TYPES = {
   challenge_declined:         1, challenge_expired:        1,
   friend_request:             1, request_accepted:         1,
   league_invite:              1, league_joined:            1,
-  pact_proposed:              1, pact_claimed:             1,
-  pact_confirmed:             1, pact_booked:              1,
-  pact_cancelled:             1,
+  // pact_* notification types retired with the Tindis feature.
   message_request:            1, message_request_accepted: 1,
   // Module 9 — opponent-invite events that close the loop on the
   // logger's side. Both are action-worthy: the claimed event signals

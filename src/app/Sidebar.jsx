@@ -9,8 +9,9 @@ import { PresenceDot } from "../features/people/components/PresenceIndicator.jsx
 // Label overrides — the TABS constant is the canonical nav order/ids/labels;
 // Sidebar can override the label text where it wants (e.g. "Feed" over the
 // generic label) without diverging from that order.
-// Phase 0 of the map-pivot: Tindis removed from the primary nav but
-// the /tindis route still resolves in App.jsx. See product-principles.md v6.
+// Tindis (match-pacts) feature was removed pre-launch — both nav
+// and route are gone; old /tindis deep links bounce through
+// App.jsx validTabs and land on home.
 var NAV_ITEMS = [
   { id: "home",        label: "Feed",     icon: NAV_ICONS.home },
   { id: "map",         label: "Map",      icon: NAV_ICONS.map },

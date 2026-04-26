@@ -13,8 +13,7 @@ var ACTION_TYPES = new Set([
   "message_request",
   // Module 4: incoming challenge needs a yes/no response.
   "challenge_received",
-  // Tindis: a pact proposed to you needs Agree / Cancel.
-  "pact_proposed",
+  // (pact_proposed retired with Tindis.)
 ]);
 
 var IMPORTANT_TYPES = new Set([
@@ -30,10 +29,7 @@ var IMPORTANT_TYPES = new Set([
   // Module 7: leagues.
   "league_invite",   // invited to a private league — respond from the row
   "league_joined",   // someone accepted an invite → positive social signal
-  // Tindis: downstream pact events you want the deep-link CTA for.
-  "pact_confirmed",
-  "pact_booked",
-  "pact_claimed",
+  // (pact_* downstream types retired with Tindis.)
   // Module 9: opponent claimed an invite you sent. The match has now
   // moved to pending_confirmation — they'll separately fire match_tag
   // for the confirm/dispute action, so this row is informational
@@ -83,12 +79,8 @@ export function getNotifLabel(n) {
     // Module 7 — leagues
     case "league_invite":              return name + " invited you to a private league.";
     case "league_joined":              return name + " joined your league.";
-    // Tindis — match pacts
-    case "pact_proposed":              return name + " sent you a match pact — agree to confirm.";
-    case "pact_confirmed":             return name + " agreed to the match pact — ready to book.";
-    case "pact_booked":                return name + " booked the pact — see the split and pay your share.";
-    case "pact_cancelled":             return name + " cancelled the pact.";
-    case "pact_claimed":               return name + " claimed your open court — re-confirm to lock it in.";
+    // (pact_* notification copy retired with Tindis. Stale rows
+    // already in the table fall through to "New notification.")
     // Module 9 — opponent invites
     case "match_invite_claimed":       return name + " joined CourtSync and claimed the match — they'll confirm or dispute next.";
     case "match_invite_declined":      return name + " marked your invite as 'not me' — you can re-issue or void the match.";
@@ -140,12 +132,7 @@ var TYPE_URGENCY_BONUS = {
   // Module 7 — leagues
   league_invite:              90,  // inbox signal to review + join
   league_joined:              25,  // positive, non-urgent
-  // Tindis
-  pact_proposed:             310,  // action — partner must agree
-  pact_claimed:              260,  // someone grabbed your open court — re-affirm
-  pact_confirmed:             80,  // go-ahead, book it
-  pact_booked:                75,  // payment + logistics
-  pact_cancelled:             20,  // activity
+  // (pact_* urgency entries retired with Tindis.)
   // Module 9.1.5 — informational. Sits in Activity, low urgency:
   // the recipient might want to glance, but nothing's at stake.
   // Below match_confirmed (50) so it doesn't outrank a legitimate
