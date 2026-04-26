@@ -135,12 +135,13 @@ async function probe() {
     var afterClick = await u.page.evaluate(function(){
       var leaflet = document.querySelector(".leaflet-container");
       var courtLabels = document.querySelectorAll(".cs-play-label");
-      var connectorLines = document.querySelectorAll(".cs-play-line");
+      // Diagonal connectors are SVG <line> inside each marker.
+      var svgLines = document.querySelectorAll(".cs-play-court svg line");
       var dots = document.querySelectorAll(".cs-play-dot");
       return {
         playModeAttr: leaflet ? leaflet.getAttribute("data-play-mode") : null,
         courtLabelCount: courtLabels.length,
-        connectorLineCount: connectorLines.length,
+        connectorLineCount: svgLines.length,
         dotCount: dots.length,
       };
     });
@@ -163,6 +164,15 @@ async function probe() {
     } else {
       log("✗ stuck in " + afterClick.playModeAttr + " — bug not fixed");
     }
+
+    // Snap a screenshot in court mode so we can verify the diagonal
+    // label spread visually.
+    try {
+      var fs = await import("node:fs/promises");
+      await fs.mkdir("scripts/_screens", { recursive: true });
+      await u.page.screenshot({ path: "scripts/_screens/play-match-court.png", fullPage: false });
+      log("screenshot → scripts/_screens/play-match-court.png");
+    } catch(_){}
 
     var errs = u.errs.filter(function(e){ return !/401/.test(e); });
     log("errs: " + errs.length);

@@ -58,6 +58,24 @@ function zoneNameLabelHtml(z, isDark){
   );
 }
 
+// Shorten verbose venue names for tight on-map labels. We're already
+// in a tennis app + the "tennis" context is implied by being on the
+// map, so dropping " Tennis Centre" / " Tennis Courts" / " Tennis"
+// suffixes typically halves the label width without losing meaning.
+function shortenCourtName(name){
+  if(!name) return "";
+  // Parenthetical first so a name like "Foo Tennis Centre (The Ark)"
+  // becomes "Foo Tennis Centre" and the suffix strip below catches
+  // it on the next pass.
+  return String(name)
+    .replace(/\s+\(.*?\)$/, "")
+    .replace(/\s+Tennis Centre$/i, "")
+    .replace(/\s+Tennis Courts$/i, "")
+    .replace(/\s+Tennis Club$/i, "")
+    .replace(/\s+Tennis$/i, "")
+    .trim();
+}
+
 var COURT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="17" y1="9" x2="17" y2="15"/></svg>';
 
 // (HOME_SVG retired — the home indicator is now baked directly into
@@ -455,26 +473,59 @@ export default function LeafletMap({
     playCourtsRef.current.forEach(function(m){ if(map.hasLayer(m)) map.removeLayer(m); });
     playCourtsRef.current = [];
     if(inPlayCourt){
+      // 8 placements cycle through to spread labels around each dot.
+      // Each entry: dot anchor (in icon pixels) + SVG line endpoints
+      // + label position. Icon is 220×100.
+      // Label box sits OUTSIDE the dot's quadrant, away from the
+      // anchor. With 8 directions there's enough variety that even
+      // tight clusters end up legible.
+      //   0 NE  · 1 NW  · 2 SE  · 3 SW
+      //   4 N   · 5 S   · 6 E   · 7 W
+      var DIRS = [
+        // Diagonal long
+        { name:"NE", anchor:[20,80], lineTo:[110,28], labelX:120, labelY:14 },
+        { name:"NW", anchor:[200,80], lineTo:[110,28], labelX: 14, labelY:14, rightAlign:true },
+        { name:"SE", anchor:[20,20], lineTo:[110,72], labelX:120, labelY:60 },
+        { name:"SW", anchor:[200,20], lineTo:[110,72], labelX: 14, labelY:60, rightAlign:true },
+        // Cardinal long
+        { name:"N",  anchor:[110,82], lineTo:[110,18], labelX:110, labelY: 4, centreLabel:true },
+        { name:"S",  anchor:[110,18], lineTo:[110,82], labelX:110, labelY:90, centreLabel:true },
+        { name:"E",  anchor:[20,50], lineTo:[100,50],  labelX:108, labelY:42 },
+        { name:"W",  anchor:[200,50], lineTo:[120,50], labelX: 12, labelY:42, rightAlign:true },
+      ];
       var zoneCourts = COURTS.filter(function(c){ return c.zone === playZoneId; });
-      zoneCourts.forEach(function(c){
-        // Custom labeled stack — label, thin connector, dot. Single
-        // divIcon (no Leaflet tooltip) so we control the connector
-        // line precisely. Anchor at the dot's centre so click hit-
-        // testing maps to the venue's actual lat/lng.
+      zoneCourts.forEach(function(c, i){
+        var d = DIRS[i % DIRS.length];
+        var label = shortenCourtName(c.name);
+        // Position the label box. centreLabel = anchor on horizontal
+        // centre (for N/S). rightAlign = label sits on the LEFT of
+        // the anchor (anchor is right edge of label).
+        var labelStyle =
+          "position:absolute;top:" + d.labelY + "px;" +
+          (d.centreLabel
+            ? "left:" + d.labelX + "px;transform:translateX(-50%);"
+            : (d.rightAlign
+                ? "right:" + (220 - d.labelX) + "px;"
+                : "left:" + d.labelX + "px;")) +
+          "white-space:nowrap;";
         var html =
-          '<div class="cs-play-stack" style="display:flex;flex-direction:column;align-items:center;cursor:pointer">' +
-            '<div class="cs-play-label">' + c.name + '</div>' +
-            '<div class="cs-play-line"></div>' +
-            '<div class="cs-play-dot"></div>' +
+          '<div style="position:relative;width:220px;height:100px;cursor:pointer">' +
+            '<svg width="220" height="100" style="position:absolute;inset:0;pointer-events:none">' +
+              '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
+                    'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
+                    'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
+                    'style="filter:drop-shadow(0 0 2px rgba(255,255,255,0.6))"/>' +
+            '</svg>' +
+            '<div class="cs-play-dot" style="position:absolute;' +
+              'left:' + (d.anchor[0] - 5) + 'px;top:' + (d.anchor[1] - 5) + 'px;"></div>' +
+            '<div class="cs-play-label" style="' + labelStyle + '">' + label + '</div>' +
           '</div>';
-        // Stack height ~ 22 (label) + 18 (line) + 12 (dot) = ~52
-        // Anchor at the dot centre (y=46 from top).
         var m = L.marker([c.lat, c.lng], {
           icon: L.divIcon({
             className: "cs-play-court",
             html: html,
-            iconSize: [140, 52],
-            iconAnchor: [70, 46],
+            iconSize: [220, 100],
+            iconAnchor: d.anchor,
           }),
           zIndexOffset: 1500,
         });
@@ -486,23 +537,22 @@ export default function LeafletMap({
       });
       // Fit the map to the picked zone so the courts are spread out
       // enough that their labels don't pile on top of each other.
-      // fitBounds(bbox) with maxZoom 13 — guarantees the WHOLE zone
-      // is in frame. setView at fixed zoom 13 cropped Eastern Suburbs
-      // (Paddington → La Perouse runs ~14km tall; doesn't fit at 13).
-      // Compact zones (CBD) cap at 13 so they don't over-zoom into
-      // street-level. Tall narrow zones (Eastern Suburbs, Northern
-      // Beaches) take their natural ~12 zoom — they read smaller in
-      // the viewport but the whole shape is visible, which matches
-      // the user expectation of "everything in frame."
-      var zoneLayer = zoneLayersRef.current[playZoneId];
-      if(zoneLayer){
-        try {
-          map.fitBounds(zoneLayer.getBounds(), {
-            padding: [50, 50],
-            animate: false,
-            maxZoom: 13,
-          });
-        } catch(_){}
+      // setView at the zone's hand-tuned centre + zoom 13. User
+      // preferred this framing — compact zones (CBD, Inner West)
+      // read at the right scale even though tall zones (Eastern
+      // Suburbs) clip a bit at the bottom. (We trade "whole zone in
+      // frame" for "consistent visual scale".)
+      var zoneData = ZONE_BY_ID[playZoneId];
+      var zoneCenter = zoneData && zoneData.center
+        ? zoneData.center
+        : (zoneCentersRef.current[playZoneId] || null);
+      if(zoneCenter){
+        try { map.setView(zoneCenter, 13, { animate: false }); } catch(_){}
+      } else {
+        var zoneLayer = zoneLayersRef.current[playZoneId];
+        if(zoneLayer){
+          try { map.fitBounds(zoneLayer.getBounds(), { padding: [50, 50], animate: false, maxZoom: 13 }); } catch(_){}
+        }
       }
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);
