@@ -537,22 +537,20 @@ export default function LeafletMap({
       });
       // Fit the map to the picked zone so the courts are spread out
       // enough that their labels don't pile on top of each other.
-      // setView at the zone's hand-tuned centre + zoom 13. User
-      // preferred this framing — compact zones (CBD, Inner West)
-      // read at the right scale even though tall zones (Eastern
-      // Suburbs) clip a bit at the bottom. (We trade "whole zone in
-      // frame" for "consistent visual scale".)
-      var zoneData = ZONE_BY_ID[playZoneId];
-      var zoneCenter = zoneData && zoneData.center
-        ? zoneData.center
-        : (zoneCentersRef.current[playZoneId] || null);
-      if(zoneCenter){
-        try { map.setView(zoneCenter, 13, { animate: false }); } catch(_){}
-      } else {
-        var zoneLayer = zoneLayersRef.current[playZoneId];
-        if(zoneLayer){
-          try { map.fitBounds(zoneLayer.getBounds(), { padding: [50, 50], animate: false, maxZoom: 13 }); } catch(_){}
-        }
+      // fitBounds(bbox) with maxZoom 14 — the framing user liked
+      // before. Compact zones (CBD, Inner West) crop tightly to
+      // their bbox at zoom ~13-14 so the polygon fills the viewport.
+      // Tall zones (Eastern Suburbs, Northern Beaches) hit a lower
+      // natural zoom (~12) so the whole bbox is visible.
+      var zoneLayer = zoneLayersRef.current[playZoneId];
+      if(zoneLayer){
+        try {
+          map.fitBounds(zoneLayer.getBounds(), {
+            padding: [40, 40],
+            animate: false,
+            maxZoom: 14,
+          });
+        } catch(_){}
       }
     }
   },[showCourts, focusedCourtName, playMode, playZoneId]);
