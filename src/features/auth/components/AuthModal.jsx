@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import { inputStyle } from "../../../lib/theme.js";
 
@@ -16,6 +17,27 @@ export default function AuthModal({
   loadUserData,
 }) {
   var iStyle=inputStyle(t);
+
+  // Backdrop-close guard. Plain onClick on the backdrop closed the
+  // modal whenever the user dragged a text selection out of an input
+  // and released the mouse outside the card — the click event bubbled
+  // up because mouseup landed on the backdrop. We now require BOTH
+  // mousedown AND mouseup to happen on the backdrop itself before
+  // treating it as a dismiss gesture.
+  var backdropDownRef = useRef(false);
+  function onBackdropMouseDown(e){
+    backdropDownRef.current = (e.target === e.currentTarget);
+  }
+  function onBackdropMouseUp(e){
+    var down = backdropDownRef.current;
+    backdropDownRef.current = false;
+    if(!down || e.target !== e.currentTarget) return;
+    if(authStep==="set-password") return;
+    setShowAuth(false);
+    setAuthError("");
+    setAuthFieldErrors({});
+    setAuthStep("choose");
+  }
 
   function validateEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());}
   function validatePassword(pw){return pw.length>=6;}
@@ -84,7 +106,8 @@ export default function AuthModal({
 
   return (
     <div
-      onClick={function(){if(authStep==="set-password")return;setShowAuth(false);setAuthError("");setAuthFieldErrors({});setAuthStep("choose");}}
+      onMouseDown={onBackdropMouseDown}
+      onMouseUp={onBackdropMouseUp}
       style={{
         position:"fixed",inset:0,
         background:"rgba(0,0,0,0.4)",
