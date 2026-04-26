@@ -22,7 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ZONES } from "../data/zones.js";
 import { courtsInZone } from "../data/courts.js";
-import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchViewerMatchCountsBy } from "../services/mapService.js";
+import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchViewerMatchCountsBy, tierFromSkill } from "../services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
@@ -85,6 +85,26 @@ export default function PlayMatchWizard({
   var [format, setFormat] = useState("doubles"); // "singles" | "doubles"
   var maxSelect = format === "singles" ? 1 : 3;
 
+  // Step 2 filter state. Off by default; user opens via the filter
+  // button next to search. Filters compose with search and run
+  // client-side over the loaded `players` array.
+  //   genderFilter  — "any" | "male" | "female"
+  //                   (we deliberately don't expose nonbinary as a
+  //                   filter target; the user wanting tennis-format
+  //                   gendering is the m/f case. Nonbinary players
+  //                   are never excluded by gender filter unless
+  //                   "Men" or "Women" is selected, which then hides
+  //                   them — same treatment as null gender.)
+  //   skillFilter   — "any" | "same" | "tier"
+  //                   "same" = exact skill string match
+  //                   "tier" = same broad tier (Beginner/Intermediate/Advanced)
+  var [filtersOpen, setFiltersOpen] = useState(false);
+  var [genderFilter, setGenderFilter] = useState("any");
+  var [skillFilter, setSkillFilter] = useState("any");
+  var activeFilterCount =
+    (genderFilter !== "any" ? 1 : 0) +
+    (skillFilter !== "any" ? 1 : 0);
+
   // Tracks whether a mouse-press started on the backdrop. Used to
   // distinguish "user clicked the dim area" from "user drag-selected
   // text inside the modal and overshot". See backdrop onMouseDown +
@@ -110,6 +130,9 @@ export default function PlayMatchWizard({
     setScope("zone");
     setFormat("doubles");
     setPlayerQuery("");
+    setFiltersOpen(false);
+    setGenderFilter("any");
+    setSkillFilter("any");
     setWhenMode("week");
     setPickedDays([]);
     setTimeOfDay("anytime");
@@ -630,7 +653,9 @@ export default function PlayMatchWizard({
                   already-loaded array so there's no server round-trip
                   per keystroke. */}
               {!loading && players.length >= 6 && (
-                <div style={{ position:"relative", marginBottom: 10 }}>
+                <>
+                <div style={{ display:"flex", gap: 8, marginBottom: filtersOpen ? 8 : 10 }}>
+                <div style={{ position:"relative", flex: 1 }}>
                   <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
                        stroke="currentColor" strokeWidth="1.7"
                        strokeLinecap="round" strokeLinejoin="round"
@@ -679,6 +704,139 @@ export default function PlayMatchWizard({
                     </button>
                   )}
                 </div>
+
+                {/* Filters button — discreet 38×38 icon button with a
+                    badge showing how many filters are active. Same
+                    height as the search input so they sit on a clean
+                    baseline. Pressed state when drawer is open. */}
+                <button type="button"
+                  onClick={function(){ setFiltersOpen(function(v){ return !v; }); }}
+                  aria-label={filtersOpen ? "Hide filters" : "Show filters"}
+                  aria-expanded={filtersOpen}
+                  style={{
+                    position:"relative",
+                    width: 38, height: 38, borderRadius: 10,
+                    flexShrink: 0,
+                    background: filtersOpen
+                      ? t.text
+                      : hexToRgba(t.bgCard, 0.78),
+                    border: "1px solid " + (filtersOpen ? t.text : t.border),
+                    color: filtersOpen ? t.bg : t.textSecondary,
+                    cursor:"pointer",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    transition: "background 0.15s, color 0.15s",
+                  }}>
+                  <svg width="16" height="16" viewBox="0 0 18 18" fill="none"
+                       stroke="currentColor" strokeWidth="1.7"
+                       strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 5h12M5 9h8M7 13h4"/>
+                  </svg>
+                  {activeFilterCount > 0 && (
+                    <span style={{
+                      position:"absolute", top: -5, right: -5,
+                      minWidth: 16, height: 16, padding:"0 4px",
+                      borderRadius: 8,
+                      background: t.accent, color: t.accentText || "#fff",
+                      fontSize: 9, fontWeight: 900,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      letterSpacing:"0.04em",
+                    }}>
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+                </div>
+
+                {/* Filters drawer — collapses when filtersOpen=false.
+                    Renders a tight stack of pill rows (Gender, Skill).
+                    Each row has an "Any" reset chip in the lead position.
+                    Filter changes apply live (no apply/cancel). */}
+                {filtersOpen && (
+                  <div style={{
+                    background: hexToRgba(t.bgCard, 0.78),
+                    border: "1px solid " + t.border,
+                    borderRadius: 12,
+                    padding: "12px 14px",
+                    marginBottom: 10,
+                  }}>
+                    {/* Gender row */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, letterSpacing:"0.14em",
+                        textTransform:"uppercase", color: t.textTertiary,
+                        marginBottom: 6,
+                      }}>Gender</div>
+                      <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
+                        {[
+                          { id:"any",    label:"Any" },
+                          { id:"male",   label:"Men" },
+                          { id:"female", label:"Women" },
+                        ].map(function(opt){
+                          var on = genderFilter === opt.id;
+                          return (
+                            <button key={opt.id} type="button"
+                              onClick={function(){ setGenderFilter(opt.id); }}
+                              style={{
+                                padding:"6px 12px", borderRadius: 999,
+                                background: on ? t.text : "transparent",
+                                color: on ? t.bg : t.textSecondary,
+                                border: "1px solid " + (on ? t.text : t.border),
+                                cursor: "pointer",
+                                fontSize: 11, fontWeight: on ? 700 : 600,
+                                letterSpacing:"0.02em",
+                                transition: "background 0.15s, color 0.15s",
+                              }}>
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {genderFilter !== "any" && (
+                        <div style={{
+                          fontSize: 10, color: t.textTertiary,
+                          marginTop: 6, lineHeight: 1.4,
+                        }}>
+                          Players who haven't set gender are hidden while this filter is on.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Skill row */}
+                    <div>
+                      <div style={{
+                        fontSize: 9, fontWeight: 800, letterSpacing:"0.14em",
+                        textTransform:"uppercase", color: t.textTertiary,
+                        marginBottom: 6,
+                      }}>Skill match</div>
+                      <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
+                        {[
+                          { id:"any",  label:"Any level" },
+                          { id:"same", label:"Same level" },
+                          { id:"tier", label:"Same tier" },
+                        ].map(function(opt){
+                          var on = skillFilter === opt.id;
+                          return (
+                            <button key={opt.id} type="button"
+                              onClick={function(){ setSkillFilter(opt.id); }}
+                              style={{
+                                padding:"6px 12px", borderRadius: 999,
+                                background: on ? t.text : "transparent",
+                                color: on ? t.bg : t.textSecondary,
+                                border: "1px solid " + (on ? t.text : t.border),
+                                cursor: "pointer",
+                                fontSize: 11, fontWeight: on ? 700 : 600,
+                                letterSpacing:"0.02em",
+                                transition: "background 0.15s, color 0.15s",
+                              }}>
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                </>
               )}
 
               {/* Selection counter — reads against the live cap so the
@@ -713,28 +871,72 @@ export default function PlayMatchWizard({
                   )}
                 </div>
               ) : (() => {
-                // Apply the search filter once. Selection state is
-                // tracked against the underlying `players` array (by
-                // id), so filtering for render is safe — picks survive
-                // a query change.
+                // Compose filters: search → gender → skill. Selection
+                // state is tracked against the underlying `players`
+                // array (by id), so filtering for render is safe —
+                // picks survive any filter toggle.
                 var q = (playerQuery || "").trim().toLowerCase();
-                var visible = q
-                  ? players.filter(function(p){
-                      var name = (p.name || p.username || p.full_name || "").toLowerCase();
-                      return name.indexOf(q) !== -1;
-                    })
-                  : players;
+                var viewerSkill = (authUser && authUser.profile && authUser.profile.skill) || null;
+                var viewerTier  = viewerSkill ? tierFromSkill(viewerSkill) : null;
+                var visible = players.filter(function(p){
+                  // Search.
+                  if(q){
+                    var name = (p.name || p.username || p.full_name || "").toLowerCase();
+                    if(name.indexOf(q) === -1) return false;
+                  }
+                  // Gender filter — when applied, candidates without
+                  // a matching gender (including null/"prefer_not_to_say")
+                  // are hidden. The drawer copy says so explicitly.
+                  if(genderFilter !== "any"){
+                    if(p.gender !== genderFilter) return false;
+                  }
+                  // Skill filter.
+                  if(skillFilter !== "any"){
+                    if(!viewerSkill || !p.skill) return false;
+                    if(skillFilter === "same"){
+                      if(p.skill !== viewerSkill) return false;
+                    } else if(skillFilter === "tier"){
+                      var pt = tierFromSkill(p.skill);
+                      if(!pt || !viewerTier || pt !== viewerTier) return false;
+                    }
+                  }
+                  return true;
+                });
                 if(visible.length === 0) {
+                  // Diagnose what's actually filtering the list to
+                  // empty so the recovery action lines up with the
+                  // user's last toggle, not a generic "clear all."
+                  var msg, action, actionLabel;
+                  if(q && activeFilterCount > 0){
+                    msg = "No matches with these filters.";
+                    actionLabel = "Clear search & filters";
+                    action = function(){
+                      setPlayerQuery("");
+                      setGenderFilter("any");
+                      setSkillFilter("any");
+                    };
+                  } else if(activeFilterCount > 0){
+                    msg = "No players match these filters.";
+                    actionLabel = "Clear filters";
+                    action = function(){
+                      setGenderFilter("any");
+                      setSkillFilter("any");
+                    };
+                  } else {
+                    msg = "No players match \"" + playerQuery + "\".";
+                    actionLabel = "Clear search";
+                    action = function(){ setPlayerQuery(""); };
+                  }
                   return (
                     <div style={{ padding:"24px 0", textAlign:"center", color: t.textTertiary, fontSize: 12 }}>
-                      No players match "{playerQuery}".
+                      {msg}
                       <div style={{ marginTop:8 }}>
-                        <button type="button" onClick={function(){ setPlayerQuery(""); }}
+                        <button type="button" onClick={action}
                           style={{
                             background:"transparent", border:"none", color: t.accent,
                             fontSize: 12, fontWeight: 700, cursor:"pointer",
                           }}>
-                          Clear search
+                          {actionLabel}
                         </button>
                       </div>
                     </div>

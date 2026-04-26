@@ -296,6 +296,42 @@ export default function SettingsScreen({
                 </svg>
               </div>
             </div>
+            {/* Gender (optional) — feeds the Play Match player-picker
+                filter ("show me men" / "show me women"). Stored as a
+                CHECK-constrained text column on profiles; null means
+                "not set." Frame is informational, not gating — the
+                user can always pick "Prefer not to say" or leave the
+                whole row alone. */}
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,display:"block",marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                Gender (optional)
+              </label>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {[
+                  { v:"male",              l:"Man" },
+                  { v:"female",             l:"Woman" },
+                  { v:"nonbinary",          l:"Non-binary" },
+                  { v:"prefer_not_to_say",  l:"Prefer not to say" },
+                ].map(function(opt){
+                  var on = (profileDraft.gender || "") === opt.v;
+                  return (
+                    <button key={opt.v} type="button"
+                      onClick={function(){
+                        // Tap a selected pill again to clear it back to null.
+                        setProfileDraft(function(d){
+                          return Object.assign({},d,{ gender: on ? null : opt.v });
+                        });
+                      }}
+                      style={{padding:"7px 12px",borderRadius:7,border:"1px solid "+(on?t.accent:t.border),background:on?t.accentSubtle:"transparent",color:on?t.accent:t.textSecondary,fontSize:12,fontWeight:on?600:400}}>
+                      {opt.l}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:10,color:t.textTertiary,marginTop:6,lineHeight:1.4}}>
+                Used so partners can filter their player picker (e.g. for women's doubles). Visible to others only when they apply that filter. You can change or clear this any time.
+              </div>
+            </div>
             {/* Payment handle — opt-in. Fills the Tindis split deep-links.
                 We never receive or transmit money; the handle is purely a
                 reminder string rendered back to the partner when they owe. */}
@@ -442,6 +478,10 @@ export default function SettingsScreen({
                   played_courts: profileDraft.played_courts || [],
                   payment_handle: profileDraft.payment_handle || null,
                   payment_method: profileDraft.payment_method || null,
+                  // Gender is optional — null when the user hasn't chosen.
+                  // The DB CHECK constraint accepts only the four allowed
+                  // values or NULL.
+                  gender:        profileDraft.gender || null,
                   avatar:       init2,
                 });
                 setProfile(nd);
@@ -464,6 +504,7 @@ export default function SettingsScreen({
                     played_courts: nd.played_courts || [],
                     payment_handle: nd.payment_handle,
                     payment_method: nd.payment_method,
+                    gender:         nd.gender,
                   };
                   if (!profile.skill_level_locked) {
                     payload.skill = nd.skill || "Intermediate 1";
