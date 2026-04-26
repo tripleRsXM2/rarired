@@ -856,18 +856,79 @@ export default function PlayMatchWizard({
                   Loading players…
                 </div>
               ) : players.length === 0 ? (
-                <div style={{ padding:"24px 0", textAlign:"center", color: t.textTertiary, fontSize: 12 }}>
-                  No players found {scope === "zone" ? "in this zone" : "yet"}.
-                  {scope === "zone" && (
-                    <div style={{ marginTop:8 }}>
-                      <button type="button" onClick={function(){ setScope("everywhere"); setSelectedIds([]); }}
-                        style={{
-                          background:"transparent", border:"none", color: t.accent,
-                          fontSize: 12, fontWeight: 700, cursor:"pointer",
+                // Empty-state hero — illustrative, not a toast. Distinct
+                // copy + actions per scope so the user knows whether
+                // they should widen the search (zone-only) or accept
+                // they're early to the network (everywhere).
+                <div style={{
+                  padding:"24px 8px 12px", textAlign:"center",
+                  display:"flex", flexDirection:"column", alignItems:"center", gap: 14,
+                }}>
+                  {/* Decorative tennis-ball-on-line illustration. Per
+                      CLAUDE.md icon rule, large hero illustrations in
+                      empty-states are OK. Drawn as currentColor so it
+                      tints to the theme. */}
+                  <svg width="96" height="64" viewBox="0 0 96 64" fill="none"
+                       stroke={t.textTertiary} strokeWidth="1.5"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    {/* baseline */}
+                    <path d="M6 52h84" strokeDasharray="2 4" opacity="0.5"/>
+                    {/* ball — circle + curved seams */}
+                    <circle cx="48" cy="36" r="14"/>
+                    <path d="M34 36c4-8 24-8 28 0M34 36c4 8 24 8 28 0"/>
+                    {/* arc trail */}
+                    <path d="M14 50C18 28 36 14 48 14" opacity="0.4"/>
+                  </svg>
+
+                  {scope === "zone" ? (
+                    <>
+                      <div>
+                        <div style={{
+                          fontSize: 16, fontWeight: 800,
+                          color: t.text, letterSpacing:"-0.02em",
+                          marginBottom: 4,
                         }}>
-                        Try Everywhere →
+                          You're first in this zone
+                        </div>
+                        <div style={{
+                          fontSize: 12, color: t.textSecondary,
+                          lineHeight: 1.45, maxWidth: 320, margin:"0 auto",
+                          letterSpacing:"-0.05px",
+                        }}>
+                          Nobody's set this zone as their home yet. Widen the search to find players nearby, or invite someone to join.
+                        </div>
+                      </div>
+                      <button type="button"
+                        onClick={function(){ setScope("everywhere"); setSelectedIds([]); setPlayerQuery(""); }}
+                        style={{
+                          padding:"11px 20px", borderRadius: 10,
+                          background: t.text, color: t.bg,
+                          border:"none", cursor:"pointer",
+                          fontSize: 12, fontWeight: 800,
+                          letterSpacing:"0.04em", textTransform:"uppercase",
+                        }}>
+                        Try Everywhere
                       </button>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <div style={{
+                          fontSize: 16, fontWeight: 800,
+                          color: t.text, letterSpacing:"-0.02em",
+                          marginBottom: 4,
+                        }}>
+                          You're early
+                        </div>
+                        <div style={{
+                          fontSize: 12, color: t.textSecondary,
+                          lineHeight: 1.45, maxWidth: 320, margin:"0 auto",
+                          letterSpacing:"-0.05px",
+                        }}>
+                          Nobody's signed up in your network yet. Bring a friend over and you'll have someone to play with.
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               ) : (() => {
