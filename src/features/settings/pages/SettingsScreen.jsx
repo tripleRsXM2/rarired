@@ -22,6 +22,7 @@ import { THEME_OPTIONS } from "../../../lib/theme.js";
 import { track } from "../../../lib/analytics.js";
 import { useEffect } from "react";
 import PushSettingsCard from "../../notifications/components/PushSettingsCard.jsx";
+import PrivacyStorageCard from "../components/PrivacyStorageCard.jsx";
 
 export default function SettingsScreen({
   t, authUser, profile, setProfile,
@@ -40,6 +41,12 @@ export default function SettingsScreen({
   // App-level toast emitter — fires on Save success so the user gets
   // visible confirmation rather than a silent button press.
   toast,
+  // Module 9.2 — sign-out funnel that disables push on this device
+  // before invalidating the Supabase session. See
+  // useAuthController.signOutAndCleanup for the threat model.
+  // Falls back to direct supabase.auth.signOut() only if the prop
+  // wasn't passed (defensive — should never happen in production).
+  signOutAndCleanup,
 }) {
   var navigate=useNavigate();
 
@@ -558,6 +565,9 @@ export default function SettingsScreen({
           )}
         </div>
 
+        {/* ── Privacy & Storage (Module 9.2) ─────────────────────────────────── */}
+        <PrivacyStorageCard t={t} />
+
         {/* ── Profile Privacy ────────────────────────────────────────────────── */}
         <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,overflow:"hidden",marginBottom:12}}>
           <div style={{padding:"14px 16px",borderBottom:"1px solid "+t.border}}>
@@ -674,7 +684,21 @@ export default function SettingsScreen({
             {/* Friend requests row removed — duplicates the People tab.
                 Direct your inbox to /people/requests if you want it. */}
             <button
-              onClick={function(){supabase.auth.signOut();onClose();}}
+              onClick={async function () {
+                // Module 9.2 — route through the auth-controller cleanup
+                // helper so this device's push subscription is disabled
+                // BEFORE the Supabase session is invalidated. Direct
+                // supabase.auth.signOut() leaves the endpoint subscribed,
+                // which leaks pushes to the next user on a shared device.
+                if (signOutAndCleanup) {
+                  await signOutAndCleanup();
+                } else {
+                  // Defensive fallback — should never hit in production
+                  // because App.jsx always passes the prop.
+                  await supabase.auth.signOut();
+                }
+                onClose();
+              }}
               style={{width:"100%",padding:"14px 16px",border:"none",background:"transparent",color:t.red,fontSize:13,fontWeight:600,textAlign:"left",cursor:"pointer"}}>
               Sign out
             </button>
