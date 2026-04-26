@@ -607,28 +607,27 @@ function FeedCard({
                 } else {
                   wonSet = false;
                 }
-                // Inner tiebreak read — tennis convention "7-6 (3)":
-                // the parenthesised digit is the LOSER's tb score and
-                // it sits next to the WINNER's "7". So we render it
-                // on the winner's row, not the loser's. (Earlier
-                // builds put it on the loser's row, which read as
-                // "6³" and broke convention — the user expectation
-                // is to find the digit attached to the winning side.)
+                // Inner tiebreak read — render BOTH players' tb scores,
+                // each on their own row, so the full tiebreak result
+                // (e.g. 7-0) is visible at a glance. The single-digit
+                // "7-6 (3)" broadcast notation hides one side of the
+                // story — fine on TV, ambiguous in a stat list.
+                //
+                // Mapping: row 0 always reads s.you / tieBreak.you
+                // (the submitter's frame), row 1 always reads s.them
+                // / tieBreak.them. Built earlier in this same render
+                // block at lines 537-555.
                 var setObj = (m.sets || [])[i];
                 var tbSuper = null;
                 if (setObj && setObj.tieBreak && hasMine && hasOpp) {
                   var hi = Math.max(Number(score), Number(opp));
                   var lo = Math.min(Number(score), Number(opp));
-                  if (hi === 7 && lo === 6 && wonSet) {
-                    // This is the WINNER's row in a 7-6 tb set.
-                    // The superscript shows the loser's tb points
-                    // (Math.min of the inner pair), regardless of
-                    // which side of the tieBreak object the loser
-                    // happens to live on.
-                    var tbY = Number(setObj.tieBreak.you);
-                    var tbT = Number(setObj.tieBreak.them);
-                    if (Number.isFinite(tbY) && Number.isFinite(tbT)) {
-                      tbSuper = Math.min(tbY, tbT);
+                  if (hi === 7 && lo === 6) {
+                    var myTbKey = ri === 0 ? 'you' : 'them';
+                    var myTbRaw = setObj.tieBreak[myTbKey];
+                    if (myTbRaw != null && myTbRaw !== '') {
+                      var myTbNum = Number(myTbRaw);
+                      if (Number.isFinite(myTbNum)) tbSuper = myTbNum;
                     }
                   }
                 }
