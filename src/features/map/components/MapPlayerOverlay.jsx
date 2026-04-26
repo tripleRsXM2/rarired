@@ -75,11 +75,17 @@ export default function MapPlayerOverlay({
   var [filtersOpen, setFiltersOpen] = useState(false);
   var [genderFilter, setGenderFilter] = useState("any");
   var [skillFilter, setSkillFilter]   = useState("any");
+  // Age range — multi-select bracket ids (matches domain.AGE_BRACKETS).
+  // Empty array = no filter. Includes/excludes purely by stored bracket;
+  // null age_brackets are hidden whenever any age is selected (same
+  // honesty rule as the gender filter).
+  var [ageFilter, setAgeFilter] = useState([]);
 
   var maxSelect = format === "singles" ? 1 : 3;
   var activeFilterCount =
     (genderFilter !== "any" ? 1 : 0) +
-    (skillFilter !== "any" ? 1 : 0);
+    (skillFilter !== "any" ? 1 : 0) +
+    (ageFilter.length > 0 ? 1 : 0);
 
   // Load players whenever the inputs change. Same merge + sort logic
   // as the wizard's step 2 — pulls the zone roster + court roster,
@@ -161,10 +167,17 @@ export default function MapPlayerOverlay({
           if(!pt || !viewerTier || pt !== viewerTier) return false;
         }
       }
+      // Age filter — when ANY bracket is picked, players must have
+      // a matching age_bracket. Players with null age_bracket are
+      // hidden when this filter is on (same explicit-honesty rule
+      // as gender — see drawer copy below).
+      if(ageFilter.length > 0){
+        if(!p.age_bracket || ageFilter.indexOf(p.age_bracket) === -1) return false;
+      }
       return true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[players, genderFilter, skillFilter, authUser]);
+  },[players, genderFilter, skillFilter, ageFilter, authUser]);
 
   function togglePlayer(p){
     setSelectedIds(function(prev){
@@ -233,12 +246,12 @@ export default function MapPlayerOverlay({
               setSelectedIds(function(prev){ return prev.slice(0, newCap); });
             }}
             style={{
-              padding: isMobile ? "6px 12px" : "8px 18px",
+              padding: isMobile ? "5px 10px" : "8px 18px",
               borderRadius: 999,
               background: on ? fg : "transparent",
               color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
               border:"none", cursor: on ? "default" : "pointer",
-              fontSize: isMobile ? 11 : 12, fontWeight: 800,
+              fontSize: isMobile ? 10 : 12, fontWeight: 800,
               letterSpacing:"0.06em", textTransform:"uppercase",
               transition:"background 0.15s, color 0.15s",
             }}>
@@ -309,14 +322,14 @@ export default function MapPlayerOverlay({
         </button>
       </div>
 
-      {/* MOBILE — Singles/Doubles slot. Sits directly above the
-          title prompt with the same visual gap as scope tabs have
-          to the player carousel above (≈ 16-18px). Hidden on
-          desktop (rendered in the top chrome row instead). */}
+      {/* MOBILE — Singles/Doubles slot. Stacked ABOVE the scope
+          tabs and ABOVE the player cards. Order top→bottom on
+          mobile: top chrome (cog/card), Singles/Doubles, In zone/
+          Everywhere, Cards, Title. */}
       {isMobile && (
         <div style={{
           position:"absolute",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 100px)",
+          top: "calc(env(safe-area-inset-top, 0px) + 64px)",
           left: 0, right: 0,
           zIndex: 545,
           display:"flex", justifyContent:"center",
@@ -328,14 +341,13 @@ export default function MapPlayerOverlay({
 
       {/* Scope tabs — In zone / Everywhere.
             • Desktop: directly below the format toggle (top chrome).
-            • Mobile : just below the player cards (above the format
-              toggle which sits above the title). Slightly tighter
-              gap to the cards than before — user feedback was the
-              previous bottom:110 read too far away.
-          Quiet underline-tabs styling so they read as secondary. */}
+            • Mobile : just below the Singles/Doubles slot above,
+              and just above the player cards. Smaller fontSize
+              than desktop so the row reads as quiet secondary
+              chrome. */}
       <div style={isMobile ? {
         position:"absolute",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 158px)",
+        top: "calc(env(safe-area-inset-top, 0px) + 102px)",
         left: 0, right: 0,
         zIndex: 545,
         display:"flex", justifyContent:"center",
@@ -349,8 +361,9 @@ export default function MapPlayerOverlay({
         pointerEvents:"none",
       }}>
         <div className="fade-up" style={{
-          display:"inline-flex", gap: 22,
-          padding: "8px 18px", borderRadius: 999,
+          display:"inline-flex", gap: isMobile ? 16 : 22,
+          padding: isMobile ? "5px 14px" : "8px 18px",
+          borderRadius: 999,
           background: glassBg,
           backdropFilter:"blur(20px) saturate(140%)",
           WebkitBackdropFilter:"blur(20px) saturate(140%)",
@@ -370,7 +383,7 @@ export default function MapPlayerOverlay({
                   padding:"4px 0", background:"transparent", border:"none",
                   borderBottom: "2px solid " + (on ? fg : "transparent"),
                   color: on ? fg : (mapDark ? "rgba(255,255,255,0.55)" : "rgba(20,18,17,0.45)"),
-                  fontSize: 11, fontWeight: on ? 800 : 600,
+                  fontSize: isMobile ? 10 : 11, fontWeight: on ? 800 : 600,
                   letterSpacing:"0.06em", textTransform:"uppercase",
                   cursor: on ? "default" : "pointer",
                   transition:"color 0.15s, border-color 0.15s",
@@ -484,6 +497,61 @@ export default function MapPlayerOverlay({
                 </div>
               )}
             </div>
+
+            {/* Age range — multi-select chips. Tap to add / remove
+                a bracket; empty selection = no filter. Hidden behind
+                the same drawer as the others; the filter cog badge
+                counts this row alongside gender + skill match. */}
+            <div style={{ marginTop: 10 }}>
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing:"0.14em",
+                textTransform:"uppercase", color: fg, opacity: 0.55,
+                marginBottom: 6,
+              }}>Age range</div>
+              <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
+                {[
+                  { id:"u18",     label:"Under 18" },
+                  { id:"18_24",   label:"18 – 24"  },
+                  { id:"25_34",   label:"25 – 34"  },
+                  { id:"35_44",   label:"35 – 44"  },
+                  { id:"45_54",   label:"45 – 54"  },
+                  { id:"55_plus", label:"55+"      },
+                ].map(function(opt){
+                  var on = ageFilter.indexOf(opt.id) !== -1;
+                  return (
+                    <button key={opt.id} type="button"
+                      onClick={function(){
+                        setAgeFilter(function(prev){
+                          return prev.indexOf(opt.id) === -1
+                            ? prev.concat([opt.id])
+                            : prev.filter(function(x){ return x !== opt.id; });
+                        });
+                      }}
+                      style={{
+                        padding:"6px 10px", borderRadius: 999,
+                        background: on ? fg : "transparent",
+                        color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
+                        border: "1px solid " + (on ? fg : (mapDark ? "rgba(255,255,255,0.22)" : "rgba(20,18,17,0.18)")),
+                        cursor:"pointer",
+                        fontSize: 11, fontWeight: on ? 800 : 600,
+                        letterSpacing:"0.02em",
+                        whiteSpace:"nowrap",
+                      }}>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {ageFilter.length > 0 && (
+                <div style={{
+                  fontSize: 10, color: fg, opacity: 0.55,
+                  marginTop: 6, lineHeight: 1.4,
+                }}>
+                  Players who haven't set their age are hidden while this filter is on.
+                </div>
+              )}
+            </div>
+
             {/* Scope tabs (In zone / Everywhere) live in the top
                 chrome now, not in this sheet — see the standalone
                 scope-tabs block above the filter button. */}
@@ -530,16 +598,30 @@ export default function MapPlayerOverlay({
               : "No players match these filters."}
           </div>
         ) : (
+          // Outer scroll container — full width, horizontal overflow.
+          // Inner inline-flex auto-centers via margin:auto when its
+          // width is less than the container, and aligns flush-left
+          // when it exceeds (so overflowing carousels still scroll
+          // from the leftmost card without it being clipped).
           <div
             style={{
-              display:"flex", gap: 10,
               overflowX:"auto", overflowY:"hidden",
-              scrollSnapType:"x mandatory",
               WebkitOverflowScrolling:"touch",
               padding: "6px 16px 10px",
               pointerEvents:"auto",
               // Hide scrollbar — feels native on phones.
               scrollbarWidth: "none",
+            }}>
+            <div style={{
+              display:"inline-flex",
+              gap: 10,
+              scrollSnapType:"x mandatory",
+              // margin:auto on a flex/inline-flex inside a wider
+              // overflow-auto parent centers the row; if the row
+              // is wider than the parent, scrollLeft 0 sees the
+              // first card flush-left (no clipped left edge).
+              margin: "0 auto",
+              minWidth: "min-content",
             }}>
             {visible.map(function(p){
               var isSel = selectedIds.indexOf(p.id) !== -1;
@@ -650,6 +732,7 @@ export default function MapPlayerOverlay({
                 </button>
               );
             })}
+            </div>
           </div>
         )}
       </div>

@@ -448,11 +448,15 @@ export default function MapTab({
         var wrapStyle = pinTopLeft
           ? {
               position:"absolute",
-              top: "calc(env(safe-area-inset-top, 0px) + " + (isMobile ? 14 : 30) + "px)",
+              top: "calc(env(safe-area-inset-top, 0px) + 14px)",
               left: 14,
-              maxWidth: 220,
+              // Tighter card on mobile-pinned: less width, less gap
+              // between elements, smaller heading. The card is now
+              // the smaller-sister of the desktop card on purpose —
+              // user feedback was 'a bit smaller on mobile'.
+              maxWidth: 180,
               zIndex:500, pointerEvents:"none",
-              display:"flex", flexDirection:"column", gap: 6,
+              display:"flex", flexDirection:"column", gap: 4,
               fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
             }
           : {
@@ -463,9 +467,9 @@ export default function MapTab({
               fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
             };
         // When pinned top-left we tighten typography so the card
-        // doesn't crowd the progress bar / format toggle.
+        // doesn't crowd the chrome above/around it.
         if(pinTopLeft){
-          labelStyle = Object.assign({}, labelStyle, { fontSize: 22 });
+          labelStyle = Object.assign({}, labelStyle, { fontSize: 18 });
         } else if(isMobile){
           labelStyle = Object.assign({}, labelStyle, { fontSize: 24 });
         }
@@ -495,13 +499,16 @@ export default function MapTab({
               <span style={labelStyle}>{displayName}</span>
               {courtZone && (
                 <div style={{
-                  width: 56, height: 3,
+                  width: pinTopLeft ? 36 : 56,
+                  height: pinTopLeft ? 2 : 3,
                   background: courtZone.color,
                   borderRadius: 2,
                   boxShadow: "0 1px 4px " + courtZone.color + "55",
                 }}/>
               )}
-              <div style={subStyle}>{subParts.join(" · ")}</div>
+              <div style={pinTopLeft ? Object.assign({}, subStyle, {fontSize:11}) : subStyle}>
+                {subParts.join(" · ")}
+              </div>
             </div>
           );
         }
@@ -525,13 +532,16 @@ export default function MapTab({
                 touch that anchors the name without re-introducing
                 a left border on a card. */}
             <div style={{
-              width: 56, height: 3,
+              width: pinTopLeft ? 36 : 56,
+              height: pinTopLeft ? 2 : 3,
               background: h.color,
               borderRadius: 2,
               boxShadow: "0 1px 4px " + h.color + "55",
             }}/>
             {h.blurb && (
-              <div style={subStyle}>{h.blurb}</div>
+              <div style={pinTopLeft ? Object.assign({}, subStyle, {fontSize:11}) : subStyle}>
+                {h.blurb}
+              </div>
             )}
           </div>
         );
