@@ -174,6 +174,10 @@ export default function LeafletMap({
   // Map-native play-court-mode markers — one per court in the
   // chosen zone, each with a permanent name tooltip.
   var playCourtsRef = useRef([]);
+  // Marker-cluster group used in court mode so dense areas show
+  // the same "N" bubble pattern as the main map. Individual courts
+  // (when not clustered) render with a dot + caps label below.
+  var playZoneClusterRef = useRef(null);
   // Mirrors playMode for any deferred callback (setTimeout from
   // zoomend, etc.) so they read the CURRENT mode rather than the
   // stale closure value at the time they were scheduled. Without
@@ -514,187 +518,74 @@ export default function LeafletMap({
     // playMode === "court" so the user sees individual venues with
     // their names floating beside them. Tooltips have a built-in
     // pointer that connects label → marker.
-    // Detach any zoom listener bound by a previous render pass.
-    if(playCourtsRef.current.__unbind){
-      try { playCourtsRef.current.__unbind(); } catch(_){}
+    // Tear down the previous court-mode cluster group (if any) before
+    // either re-rendering or leaving court mode entirely.
+    if(playZoneClusterRef.current){
+      try { map.removeLayer(playZoneClusterRef.current); } catch(_){}
+      playZoneClusterRef.current = null;
     }
-    playCourtsRef.current.forEach(function(m){ if(map.hasLayer(m)) map.removeLayer(m); });
     playCourtsRef.current = [];
     if(inPlayCourt){
-      // Collision + cluster-aware rendering.
-      //   • Compute each court's screen pixel after fitBounds / zoom.
-      //   • If a court has ANY neighbour within ~80px, mark crowded.
-      //   • Group crowded courts into CLUSTERS via flood-fill on the
-      //     collision graph, then deterministically distribute the 3
-      //     line-length variants WITHIN each cluster. Random hash
-      //     assignment was putting cluster mates on the same variant
-      //     and stacking them; cluster-aware ensures variant 0/1/2
-      //     are spread across each tight group.
+      // Court-mode rendering uses leaflet.markercluster — same plugin
+      // as the main map's city-zoom court bubbles. Dense areas (e.g.
+      // Eastern Suburbs) collapse into an "N" count badge until the
+      // user zooms in past 15; sparse zones show individual dots +
+      // caps labels straight away. This replaces the bespoke
+      // collision-detection / variant-line rendering, which was
+      // visually busy at city zoom.
       var zoneCourts = COURTS.filter(function(c){ return c.zone === playZoneId; });
-      var renderTimer = null;
-      function renderCourtsLayer(){
-        var map2 = mapRef.current;
-        // Read the LIVE play-mode from a ref (not the closure)
-        // — pending setTimeouts from zoom/pan events that fire
-        // after the user has backed out would otherwise see the
-        // stale "court" value and re-add markers.
-        if(!map2 || playModeRef.current !== "court") return;
-        // Clear any markers from a previous render pass (e.g. after
-        // zoom) — keeps the layer fresh without piling up duplicates.
-        playCourtsRef.current.forEach(function(m){
-          if(map2.hasLayer(m)) map2.removeLayer(m);
-        });
-        // Preserve the __unbind so we don't lose the zoom listener
-        // when we wipe the array.
-        var unbind = playCourtsRef.current.__unbind;
-        playCourtsRef.current = [];
-        if(unbind) playCourtsRef.current.__unbind = unbind;
-        var pts = zoneCourts.map(function(c){
-          return { c: c, pt: map2.latLngToContainerPoint([c.lat, c.lng]) };
-        });
-        var COLLISION_PX = 80;
-        pts.forEach(function(a, i){ a.idx = i; });
-        pts.forEach(function(a){
-          a.crowded = pts.some(function(b){
-            if(b === a) return false;
-            var dx = a.pt.x - b.pt.x;
-            var dy = a.pt.y - b.pt.y;
-            return (dx*dx + dy*dy) < (COLLISION_PX * COLLISION_PX);
+      var cluster = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        spiderfyOnMaxZoom: true,
+        disableClusteringAtZoom: 15,
+        maxClusterRadius: 60,
+        iconCreateFunction: function(c2){
+          var n = c2.getChildCount();
+          // Match the main map cluster bubble — solid dark fill,
+          // white tabular-nums. Same 28×28 size so the visual
+          // language is consistent across modes.
+          return L.divIcon({
+            className: "cs-court-cluster",
+            html:
+              '<div style="box-sizing:border-box;width:28px;height:28px;border-radius:50%;' +
+                'background:#14110f;color:#fff;' +
+                'display:flex;align-items:center;justify-content:center;' +
+                'box-shadow:0 2px 8px rgba(0,0,0,0.22);' +
+                'font:700 12px/1 ui-sans-serif,system-ui,sans-serif;' +
+                'font-variant-numeric:tabular-nums;letter-spacing:-0.02em">' + n + '</div>',
+            iconSize: [28, 28], iconAnchor: [14, 14],
           });
+        },
+      });
+      zoneCourts.forEach(function(c){
+        var labelText = shortenCourtName(c.name).toUpperCase();
+        // Each leaf marker = white dot + caps label below. Same
+        // visual as before, just contributed to the cluster group
+        // so leaflet.markercluster collapses tight neighbours into
+        // a single count badge until zoom-in.
+        var html =
+          '<div style="position:relative;width:160px;height:48px;cursor:pointer">' +
+            '<div class="cs-play-dot" style="position:absolute;left:75px;top:0"></div>' +
+            '<div class="cs-play-name" style="position:absolute;top:16px;left:0;right:0;text-align:center">' +
+              labelText +
+            '</div>' +
+          '</div>';
+        var m = L.marker([c.lat, c.lng], {
+          icon: L.divIcon({ className:"cs-play-court", html: html, iconSize:[160,48], iconAnchor:[80,5] }),
+          zIndexOffset: 1500,
         });
-        // Flood-fill cluster membership across the collision graph.
-        var clusterId = pts.map(function(){ return -1; });
-        var nextCluster = 0;
-        function neighbours(idx){
-          var a = pts[idx], out = [];
-          pts.forEach(function(b, j){
-            if(j === idx) return;
-            var dx = a.pt.x - b.pt.x;
-            var dy = a.pt.y - b.pt.y;
-            if(dx*dx + dy*dy < COLLISION_PX*COLLISION_PX) out.push(j);
-          });
-          return out;
-        }
-        pts.forEach(function(p, i){
-          if(!p.crowded || clusterId[i] !== -1) return;
-          var stack = [i];
-          while(stack.length){
-            var k = stack.pop();
-            if(clusterId[k] !== -1) continue;
-            clusterId[k] = nextCluster;
-            neighbours(k).forEach(function(n){
-              if(clusterId[n] === -1 && pts[n].crowded) stack.push(n);
-            });
-          }
-          nextCluster++;
+        m.on("click", function(){
+          if(courtSelectRef.current) courtSelectRef.current(c);
         });
-        // Assign variant index within each cluster (round-robin so
-        // no two cluster mates share a variant unless the cluster
-        // exceeds VARIANTS.length).
-        var perClusterCount = {};
-        pts.forEach(function(p, i){
-          if(!p.crowded){ p.variantIdx = 0; return; }
-          var ci = clusterId[i];
-          var pos = perClusterCount[ci] || 0;
-          p.variantIdx = pos;
-          perClusterCount[ci] = pos + 1;
-        });
-        // (Earlier clear at the top of renderCourtsLayer already
-        // wiped + preserved __unbind. This second clear was a
-        // remnant from the original single-pass implementation; it
-        // re-set playCourtsRef.current = [] WITHOUT preserving
-        // __unbind, so on zoom the zoom-listener was orphaned and a
-        // subsequent "back" couldn't detach it — courts stayed
-        // visible after exiting court mode.)
-
-        // Crowded labels — all in NE direction (up-right) per user.
-        // Three line-length variants cycle so cluster mates stagger
-        // along the same diagonal. Label halo (-webkit-text-stroke
-        // in CSS) acts as a buffer so any line crossing near a
-        // label appears to pass BEHIND the text instead of cutting
-        // through letters.
-        var VARIANTS = [
-          { anchor:[15,110], lineTo:[40,82],  labelX:45, labelY:71 },  // NE short
-          { anchor:[15,110], lineTo:[62,55],  labelX:67, labelY:44 },  // NE medium
-          { anchor:[15,110], lineTo:[90,25],  labelX:95, labelY:14 },  // NE long
-        ];
-
-        pts.forEach(function(p, i){
-          var c = p.c;
-          var labelText = shortenCourtName(c.name).toUpperCase();
-          var html, iconSize, iconAnchor;
-
-          // User pick: always show the simple "dot + label below"
-          // structure regardless of crowdedness or device. The
-          // diagonal-with-line approach is retired — even though it
-          // solved overlap, the lines "sticking out" felt visually
-          // busy. Trade-off: dense clusters (e.g. Eastern Suburbs)
-          // will have some label overlap. Acceptable per user.
-          if(false){
-            var d = VARIANTS[(p.variantIdx || 0) % VARIANTS.length];
-            html =
-              '<div style="position:relative;width:180px;height:120px;cursor:pointer">' +
-                '<svg width="180" height="120" style="position:absolute;inset:0;pointer-events:none">' +
-                  '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
-                        'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
-                        'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
-                        'style="filter:drop-shadow(0 0 2px rgba(255,255,255,0.7))"/>' +
-                '</svg>' +
-                '<div class="cs-play-dot" style="position:absolute;' +
-                  'left:' + (d.anchor[0] - 5) + 'px;top:' + (d.anchor[1] - 5) + 'px;"></div>' +
-                '<div class="cs-play-name" style="position:absolute;' +
-                  'left:' + d.labelX + 'px;top:' + d.labelY + 'px;white-space:nowrap">' +
-                  labelText +
-                '</div>' +
-              '</div>';
-            iconSize = [180, 120];
-            iconAnchor = d.anchor;
-          } else {
-            // Calm: dot + caps name 4px below. Same name class.
-            html =
-              '<div style="position:relative;width:160px;height:48px;cursor:pointer">' +
-                '<div class="cs-play-dot" style="position:absolute;left:75px;top:0"></div>' +
-                '<div class="cs-play-name" style="position:absolute;top:16px;left:0;right:0;text-align:center">' +
-                  labelText +
-                '</div>' +
-              '</div>';
-            iconSize = [160, 48];
-            iconAnchor = [80, 5];
-          }
-
-          var m = L.marker([c.lat, c.lng], {
-            icon: L.divIcon({ className:"cs-play-court", html: html, iconSize: iconSize, iconAnchor: iconAnchor }),
-            zIndexOffset: 1500,
-          });
-          m.on("click", function(){
-            if(courtSelectRef.current) courtSelectRef.current(c);
-          });
-          m.addTo(map2);
-          playCourtsRef.current.push(m);
-        });
-      }
-      // Initial paint after fitBounds settles.
-      renderTimer = setTimeout(renderCourtsLayer, 50);
-      // Re-render when the user zooms — pixel positions change so
-      // the cluster + variant assignments need to update too.
-      function onZoom(){
-        if(renderTimer) clearTimeout(renderTimer);
-        renderTimer = setTimeout(renderCourtsLayer, 60);
-      }
-      map.on("zoomend moveend", onZoom);
-      // Stash an unbinder so the cleanup branch (when leaving court
-      // mode) can detach the listener.
-      playCourtsRef.current.__unbind = function(){
-        map.off("zoomend moveend", onZoom);
-        if(renderTimer) clearTimeout(renderTimer);
-      };
-      // Fit the map to the picked zone so the courts are spread out
-      // enough that their labels don't pile on top of each other.
-      // fitBounds(bbox) with maxZoom 14 — the framing user liked
-      // before. Compact zones (CBD, Inner West) crop tightly to
-      // their bbox at zoom ~13-14 so the polygon fills the viewport.
-      // Tall zones (Eastern Suburbs, Northern Beaches) hit a lower
-      // natural zoom (~12) so the whole bbox is visible.
+        cluster.addLayer(m);
+      });
+      cluster.addTo(map);
+      playZoneClusterRef.current = cluster;
+      // Fit the map to the picked zone so the courts are spread
+      // out enough that their labels don't pile on top of each
+      // other. fitBounds(bbox) with maxZoom 14 — same framing as
+      // before; clusters now handle the "too many in one spot"
+      // problem at lower zooms.
       var zoneLayer = zoneLayersRef.current[playZoneId];
       if(zoneLayer){
         try {
