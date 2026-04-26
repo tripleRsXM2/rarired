@@ -501,13 +501,23 @@ export default function LeafletMap({
         playCourtsRef.current.forEach(function(m){ if(map2.hasLayer(m)) map2.removeLayer(m); });
         playCourtsRef.current = [];
 
-        // Single direction for crowded labels — NE diagonal. User
-        // call: when labels split off in different directions in a
-        // dense cluster the eye gets confused. Same direction for
-        // every crowded court is calmer and reads as a system.
-        // Icon size 140×70, dot at bottom-left (anchor), label
-        // sitting up-and-right with a short connector line.
-        var NE = { anchor:[15,55], lineTo:[55,25], labelX:60, labelY:14 };
+        // Single direction for crowded labels (NE diagonal) — calmer
+        // than 8-way splay. But identical-length lines stack labels
+        // in dense clusters (e.g. Eastern Suburbs around Coogee/
+        // Maroubra). Solution from cartography: vary the LEADER LINE
+        // LENGTH while keeping the direction constant. Three variants
+        // cycle: short / medium / long. Labels in a 3-court cluster
+        // land at three different positions along the same diagonal.
+        // Icon size 180×100; dot anchored bottom-left (always at the
+        // same offset from the lat/lng).
+        var NE_VARIANTS = [
+          // Short — line ends ~30px from dot
+          { anchor:[15,90], lineTo:[40,65], labelX:45, labelY:54 },
+          // Medium — line ends ~52px from dot
+          { anchor:[15,90], lineTo:[60,45], labelX:65, labelY:34 },
+          // Long — line ends ~80px from dot
+          { anchor:[15,90], lineTo:[88,18], labelX:93, labelY: 8 },
+        ];
 
         pts.forEach(function(p, i){
           var c = p.c;
@@ -515,13 +525,13 @@ export default function LeafletMap({
           var html, iconSize, iconAnchor;
 
           if(p.crowded){
-            // Crowded: dot + NE diagonal connector + caps name.
-            // Same direction every time — a unified cluster reads
-            // calm even when packed.
-            var d = NE;
+            // Crowded: dot + NE connector + caps name. Cycle through
+            // three line-lengths so cluster labels stagger along the
+            // diagonal instead of stacking.
+            var d = NE_VARIANTS[i % NE_VARIANTS.length];
             html =
-              '<div style="position:relative;width:140px;height:70px;cursor:pointer">' +
-                '<svg width="140" height="70" style="position:absolute;inset:0;pointer-events:none">' +
+              '<div style="position:relative;width:180px;height:100px;cursor:pointer">' +
+                '<svg width="180" height="100" style="position:absolute;inset:0;pointer-events:none">' +
                   '<line x1="' + d.anchor[0] + '" y1="' + d.anchor[1] + '" ' +
                         'x2="' + d.lineTo[0] + '" y2="' + d.lineTo[1] + '" ' +
                         'stroke="rgba(20,18,17,0.55)" stroke-width="1" ' +
@@ -534,7 +544,7 @@ export default function LeafletMap({
                   labelText +
                 '</div>' +
               '</div>';
-            iconSize = [140, 70];
+            iconSize = [180, 100];
             iconAnchor = d.anchor;
           } else {
             // Calm: dot + caps name 4px below. Same name class.
