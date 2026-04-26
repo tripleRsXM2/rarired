@@ -5,6 +5,7 @@ import * as M from "../services/matchService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
 import { validateMatchScore, serializeSetForDb } from "../utils/tennisScoreValidation.js";
+import { createMatchInvite } from "../services/inviteService.js";
 import { track } from "../../../lib/analytics.js";
 
 // Translate a Supabase/Postgres error into a user-facing string. We prefer
@@ -271,13 +272,24 @@ export function useMatchHistory(opts){
     var clean=scoreDraft.sets.filter(function(s){return s.you!==""||s.them!=="";});
     var matchDate=scoreDraft.date||new Date().toISOString().slice(0,10);
     var isVerified=!!opponentId;
+    // Module 9: when the user logs a freetext-opponent match and toggles
+    // "Invite this person to confirm", the match goes in as ranked +
+    // pending_opponent_claim. opponent_id stays null until the invitee
+    // claims via claim_match_invite. Toggle is only honoured when there's
+    // no linked opponent already (a friend-tagged match doesn't need an
+    // invite — the existing match_tag flow handles confirmation).
+    var inviteFlow = !!scoreDraft.inviteOpponent && !opponentId;
+
     // Core product rule (2026-04-25): match_type drives Elo + lifecycle.
     // Default derives from opponent linkage (linked → 'ranked', freetext
     // → 'casual'); ScoreModal lets the user explicitly override to
     // 'casual' even when the opponent is linked. Defensive clamp:
     // 'ranked' with no opponent can't actually affect Elo, so demote.
     var matchType = scoreDraft.matchType || (isVerified ? 'ranked' : 'casual');
-    if (matchType === 'ranked' && !opponentId) matchType = 'casual';
+    if (matchType === 'ranked' && !opponentId && !inviteFlow) matchType = 'casual';
+    // Invite-flow rows are always ranked (they're meant to become rated
+    // once claimed + confirmed).
+    if (inviteFlow) matchType = 'ranked';
 
     // ── Module 7.7: uninitialised-rating gate ────────────────────────────
     // A ranked match changes the player's CourtSync Rating, so the user
@@ -331,7 +343,12 @@ export function useMatchHistory(opts){
     // / dispute). Casual matches go straight to confirmed regardless of
     // opponent linkage — there's no Elo to argue about.
     var needsConfirmation = isVerified && matchType === 'ranked';
-    var status = needsConfirmation ? 'pending_confirmation' : 'confirmed';
+    // Module 9: invite-flow rows wait in pending_opponent_claim until
+    // someone claims via claim_match_invite — that RPC promotes them
+    // to pending_confirmation and patches opponent_id.
+    var status = inviteFlow
+      ? 'pending_opponent_claim'
+      : (needsConfirmation ? 'pending_confirmation' : 'confirmed');
     // Tournament flow: tournament name takes precedence. Casual flow:
     // tourn_name is the human display label and tracks match_type.
     var tournName = scoreModal.casual
@@ -378,7 +395,10 @@ export function useMatchHistory(opts){
     if(opponentId) payload.opponent_id=opponentId;
     if(hash) payload.match_hash=hash;
     // 72h expiry only on rows that need confirmation — confirmed-immediately
-    // casual matches have nothing to expire.
+    // casual matches have nothing to expire. Invite-flow rows skip this
+    // window too; the claim RPC sets a fresh 72h clock when promoting
+    // the row to pending_confirmation, and the invite itself has its
+    // own 30-day expiry independently.
     if(needsConfirmation) payload.expires_at=new Date(Date.now()+72*60*60*1000).toISOString();
     // Module 7 — optional league tag. Server trigger (validate_match_league)
     // enforces the hard rules (both players active members, league active,
@@ -395,20 +415,45 @@ export function useMatchHistory(opts){
 
     var matchId=ins.data.id;
     setHistory(function(h){return h.map(function(m){return m.id===localId?Object.assign({},m,{id:matchId}):m;});});
+
+    // Module 9: invite-flow rows generate a secure share-link token
+    // here. The RPC returns the raw token exactly once — we surface it
+    // to the caller so the InviteShareCard can render it. Failure to
+    // create the invite leaves the match row in pending_opponent_claim;
+    // the user can retry / revoke / re-issue from the feed card.
+    var invite = null;
+    if (inviteFlow) {
+      var invRes = await createMatchInvite(matchId, oppName, scoreDraft.invitedContact || null, 720);
+      if (invRes && !invRes.error && invRes.data) {
+        invite = {
+          inviteId:  invRes.data.invite_id,
+          token:     invRes.data.token,
+          expiresAt: invRes.data.expires_at,
+        };
+        track("opponent_invite_created", { match_id: matchId });
+      } else {
+        // Non-fatal — the row is in pending_opponent_claim and the user
+        // can re-issue. Surfaces in the toast / share card UI.
+        if (invRes && invRes.error) console.warn("[invite] create failed:", invRes.error.message || invRes.error);
+      }
+    }
+
     // Only ranked matches need confirmation, so only ranked matches fire
     // match_tag (the "X logged a match with you — confirm or dispute" nag).
     // Casual matches with linked opponents are auto-confirmed; the opponent
     // can still see them in the feed but doesn't need to act.
+    // Invite-flow rows skip match_tag — there's no opponent_id yet; the
+    // notification path fires when the recipient claims via claim_match_invite.
     if(needsConfirmation&&sendNotification){
       await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
     }
-    track("match_logged",{match_id:matchId,is_ranked:matchType==='ranked',match_type:matchType,has_opponent_linked:!!opponentId,sets:clean.length,result:scoreDraft.result});
+    track("match_logged",{match_id:matchId,is_ranked:matchType==='ranked',match_type:matchType,has_opponent_linked:!!opponentId,is_invite_flow:!!inviteFlow,sets:clean.length,result:scoreDraft.result});
     // Module 4: convert accepted challenge → completed when this match was
     // logged via the "Log result" CTA on an accepted challenge.
     if(scoreModal.sourceChallengeId && onMatchLoggedFromChallenge){
       onMatchLoggedFromChallenge(scoreModal.sourceChallengeId, matchId);
     }
-    return {error:null, matchId, status};
+    return {error:null, matchId, status, invite: invite};
   }
 
   // Opponent confirms — DB function handles both players atomically.

@@ -303,10 +303,17 @@ export default function ScoreModal({
     // Slice 3: pop into the finish moment. The card auto-dismisses
     // after ~1.5s (handled inside MatchFinishMoment), at which point
     // closeFromFinish() runs and the modal closes for real.
+    //
+    // Module 9: when submitMatch returns res.invite, the finish moment
+    // hands off to an InviteShareCard (slice 4) instead of auto-
+    // dismissing — the user needs to actually share the link before
+    // the match can become verified.
     setFinish({
       status: res && res.status ? res.status : "confirmed",
       result: scoreDraft.result,
       opponentName: oppName,
+      invite: res && res.invite ? res.invite : null,
+      matchId: res && res.matchId ? res.matchId : null,
     });
   }
 
@@ -438,6 +445,70 @@ export default function ScoreModal({
                     {effectiveMatchType === 'ranked'
                       ? 'Counts toward ELO — opponent will confirm to lock it in.'
                       : 'Logged for records only — no ELO or W/L impact.'}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Module 9 — Invite-to-confirm toggle. Only shown when the
+                opponent is a freetext name (no friend linked yet). When
+                on, the match goes in as ranked + pending_opponent_claim;
+                we generate a secure share-link they can send to the
+                opponent. The match doesn't affect rating or league
+                standings until the recipient signs in, claims the
+                invite, and explicitly confirms. */}
+            {casualOppName.trim() && !isVerified && (function () {
+              var on = !!scoreDraft.inviteOpponent;
+              return (
+                <div style={{
+                  marginTop: 14,
+                  paddingTop: 12, paddingBottom: 12,
+                  borderTop: "1px solid " + t.border,
+                  display: "flex", flexDirection: "column", gap: 6,
+                }}>
+                  <button type="button"
+                    onClick={function () {
+                      setScoreDraft(function (d) {
+                        return Object.assign({}, d, { inviteOpponent: !on });
+                      });
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      background: "transparent", border: "none",
+                      padding: 0, cursor: "pointer",
+                    }}>
+                    <span style={{
+                      flexShrink: 0,
+                      width: 42, height: 24, borderRadius: 12,
+                      border: "1px solid " + (on ? t.accent : t.border),
+                      background: on ? t.accent : "transparent",
+                      position: "relative",
+                      transition: "background 0.15s, border-color 0.15s",
+                    }}>
+                      <span style={{
+                        position: "absolute",
+                        top: 2, left: on ? 20 : 2,
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: on ? "#fff" : t.textSecondary,
+                        transition: "left 0.15s, background 0.15s",
+                      }}/>
+                    </span>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800,
+                      color: t.text, letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                    }}>
+                      Invite {casualOppName.trim()} to confirm
+                    </span>
+                  </button>
+                  <div style={{
+                    fontSize: 11, color: t.textSecondary,
+                    lineHeight: 1.5, letterSpacing: "-0.1px",
+                    paddingLeft: 52,
+                  }}>
+                    {on
+                      ? "We'll generate a secure link you can share. They sign in, claim it, then confirm or dispute. The match doesn't affect rating until they confirm."
+                      : "Without an invite, this match logs as a casual record only — no rating impact, no verification."}
                   </div>
                 </div>
               );
