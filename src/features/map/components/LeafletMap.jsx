@@ -161,6 +161,16 @@ export default function LeafletMap({
   // reads the latest callback — otherwise the first render's closure sticks.
   var courtSelectRef = useRef(onCourtSelect);
   courtSelectRef.current = onCourtSelect;
+  // Same closure-fix pattern for onSelect + onHover. Polygon click
+  // handlers are wired once in init; without the ref they'd hold a
+  // stale onSelect — the parent's handleSelect captures `playMode`
+  // in its closure, so a stale handleSelect sees playMode="off"
+  // forever and the play-mode branch never fires. THIS was the
+  // "click does nothing" bug in the map-native flow.
+  var selectRef = useRef(onSelect);
+  selectRef.current = onSelect;
+  var hoverRef = useRef(onHover);
+  hoverRef.current = onHover;
 
   // Init map once. Re-render policy: don't destroy/recreate on theme change;
   // swap the tile layers in place in a separate effect below.
@@ -202,9 +212,9 @@ export default function LeafletMap({
         smoothFactor: 0.5,
       }).addTo(map);
       allZoneLayers.push(poly);
-      poly.on("mouseover", function(){ onHover && onHover(z.id); });
-      poly.on("mouseout",  function(){ onHover && onHover(null); });
-      poly.on("click",     function(){ onSelect && onSelect(z.id); });
+      poly.on("mouseover", function(){ if(hoverRef.current) hoverRef.current(z.id); });
+      poly.on("mouseout",  function(){ if(hoverRef.current) hoverRef.current(null); });
+      poly.on("click",     function(){ if(selectRef.current) selectRef.current(z.id); });
       zoneLayersRef.current[z.id] = poly;
 
       // Derive the label position from the actual rendered shape's bbox
