@@ -137,7 +137,7 @@ export default function Providers({ t, theme, children }){
         // outline is rendered first so the black fill draws on top
         // (otherwise the stroke eats the glyph). Combined with the
         // soft outer halo for legibility on busy basemap.
-        "-webkit-text-stroke:3px #fff;" +
+        "-webkit-text-stroke:2px #fff;" +
         "paint-order:stroke fill;" +
         "text-shadow:0 1px 2px rgba(255,255,255,0.85)," +
         "0 0 6px rgba(255,255,255,0.6)}",
