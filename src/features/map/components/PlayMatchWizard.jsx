@@ -48,6 +48,16 @@ export default function PlayMatchWizard({
   authUser, blockedUserIds,
   initialZoneId,
   initialCourtName,
+  // Map-native player picker (MapPlayerOverlay) hands off the
+  // resolved partner profiles + chosen format so the wizard can
+  // skip the player-pick step and land directly on When+Send.
+  initialPartners,
+  initialFormat,
+  // Optional. When set AND the wizard was opened at step 3 via the
+  // map flow, the back button on step 3 calls this instead of
+  // walking back into the modal player picker (which the map flow
+  // is supposed to replace).
+  onBackToPicker,
   onClose, onSendInvite,
 }){
   // Steps: 0 zone, 1 court, 2 players, 3 confirm.
@@ -114,21 +124,30 @@ export default function PlayMatchWizard({
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
     if(!open) return;
-    // Smart skip: if both zone AND court are pre-filled (map-native
-    // flow handed both off), jump straight to step 2 (player picker).
-    // If only zone is pre-filled, start at step 1 (court picker).
-    // Otherwise step 0 (zone picker).
-    // Smart skip: with both zone+court pre-filled (map flow) start
-    // at step 2 (player picker). Map flow skips zone+court because
-    // they're picked on the map.
-    var startStep = (initialZoneId && initialCourtName) ? 2
+    // Smart skip:
+    //   • zone + court + partners → jump to step 3 (When + Send).
+    //     Player picking happened on the map (MapPlayerOverlay).
+    //   • zone + court (no partners) → step 2 (legacy in-modal picker).
+    //   • zone only → step 1 (court picker).
+    //   • nothing → step 0 (zone picker).
+    var hasPartners = Array.isArray(initialPartners) && initialPartners.length > 0;
+    var startStep = (initialZoneId && initialCourtName && hasPartners) ? 3
+                  : (initialZoneId && initialCourtName) ? 2
                   : initialZoneId ? 1 : 0;
     setStep(startStep);
     setZoneId(initialZoneId || null);
     setCourtName(initialCourtName || null);
-    setSelectedIds([]);
+    // Seed the player list + selected ids from the map-native picker
+    // so the When step's invite preview reads the right names.
+    if(hasPartners){
+      setPlayers(initialPartners);
+      setSelectedIds(initialPartners.map(function(p){ return p.id; }));
+      if(initialFormat) setFormat(initialFormat);
+    } else {
+      setSelectedIds([]);
+    }
     setScope("zone");
-    setFormat("doubles");
+    if(!hasPartners) setFormat("doubles");
     setPlayerQuery("");
     setFiltersOpen(false);
     setGenderFilter("any");
@@ -285,6 +304,14 @@ export default function PlayMatchWizard({
   }
   function back(){
     if(step === 0) return cancel();
+    // Map-native flow: back from step 3 (When+Send) returns to the
+    // map player picker, NOT the wizard's modal step 2 (which is
+    // unreachable in the map flow).
+    var hadPartners = Array.isArray(initialPartners) && initialPartners.length > 0;
+    if(step === 3 && hadPartners && onBackToPicker){
+      onBackToPicker();
+      return;
+    }
     go(step - 1);
   }
   function cancel(){

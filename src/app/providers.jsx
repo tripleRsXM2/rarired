@@ -98,7 +98,8 @@ export default function Providers({ t, theme, children }){
       // the basemap should recede subtly, not feel "off". Reduced
       // ~30% from the original 2.5px → 1.75px.
       ".leaflet-container[data-play-mode='zone'] .leaflet-tile-pane," +
-        ".leaflet-container[data-play-mode='court'] .leaflet-tile-pane{" +
+        ".leaflet-container[data-play-mode='court'] .leaflet-tile-pane," +
+        ".leaflet-container[data-play-mode='players'] .leaflet-tile-pane{" +
         "filter:blur(1.75px);" +
         "transition:filter 0.35s ease}",
 

@@ -14,6 +14,7 @@ import LeafletMap from "../components/LeafletMap.jsx";
 import ZoneSidePanel from "../components/ZoneSidePanel.jsx";
 import CourtInfoCard from "../components/CourtInfoCard.jsx";
 import PlayMatchWizard from "../components/PlayMatchWizard.jsx";
+import MapPlayerOverlay from "../components/MapPlayerOverlay.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
 import { fetchZoneActivity } from "../services/mapService.js";
 import { track } from "../../../lib/analytics.js";
@@ -79,17 +80,25 @@ export default function MapTab({
   // any zone already selected on the map (skips step 1 if so).
   var [wizardOpen,setWizardOpen]=useState(false);
   var [wizardInitialCourt,setWizardInitialCourt]=useState(null);
+  // Player picks handed off from the map-native MapPlayerOverlay
+  // (playMode="players") to the wizard's When step. Array of full
+  // profile objects; null when the wizard is opened without a
+  // pre-selected partner set.
+  var [wizardInitialPartners,setWizardInitialPartners]=useState(null);
+  var [wizardInitialFormat,setWizardInitialFormat]=useState(null);
 
-  // Map-native Play Match flow. Instead of popping a modal for steps
-  // 1+2 (zone and court), drive them directly on the map: dim other
-  // zones, float a bold prompt, and let the user tap. Modes:
-  //   "off"   — no play flow active
-  //   "zone"  — picking a zone, all polygons interactive but slightly dimmed
-  //   "court" — zone chosen, map zoomed in, courts get permanent labels
-  // Step 3 (player picker) still uses the wizard modal (player list
-  // doesn't naturally fit on the map).
+  // Map-native Play Match flow. Every step is driven directly on the
+  // map — no modal — until the final When+Send confirmation. Modes:
+  //   "off"     — no play flow active
+  //   "zone"    — picking a zone, polygons interactive
+  //   "court"   — zone chosen, map zoomed in, courts get labels
+  //   "players" — court chosen, blurred map + floating Singles/Doubles
+  //               toggle + horizontal-scroll player cards (see
+  //               MapPlayerOverlay). On Continue we open the wizard
+  //               at the final When+Send step.
   var [playMode,setPlayMode]=useState("off");
   var [playZoneId,setPlayZoneId]=useState(null);
+  var [playCourtName,setPlayCourtName]=useState(null);
   // When the zone changes, drop any panel-court selection so we don't
   // leak a stale venue name into a different zone's panel.
   useEffect(function(){ setPanelCourtName(null); },[selected]);
@@ -197,14 +206,13 @@ export default function MapTab({
     }
   }
   function handleCourtSelect(court){
-    // In map-native play mode (step 2), tapping a court hands off to
-    // the wizard for step 3 (player picker) — the player list
-    // doesn't naturally fit on the map surface.
+    // In map-native play mode (step 2 → step 3), tapping a court
+    // moves us to the player picker — also map-native (see
+    // MapPlayerOverlay). We stash the court name on `playCourtName`
+    // so the overlay can fetch the right roster.
     if(playMode === "court" && court && court.zone === playZoneId){
-      setSelected(playZoneId);          // wizard reads selected for initialZoneId
-      setWizardInitialCourt(court.name);
-      setPlayMode("off");
-      setWizardOpen(true);
+      setPlayCourtName(court.name);
+      setPlayMode("players");
       track("play_match_court_picked", { zone_id: playZoneId, court_name: court.name });
       track("play_match_step_entered", { step: 2 });
       return;
@@ -215,12 +223,14 @@ export default function MapTab({
     }
   }
   function exitPlayMode(){
+    var step = playMode === "zone" ? 0 : playMode === "court" ? 1 : 2;
     track("play_match_cancelled", {
-      step: playMode === "zone" ? 0 : 1,
-      last_completed: playMode === "zone" ? -1 : 0,
+      step: step,
+      last_completed: step - 1,
     });
     setPlayMode("off");
     setPlayZoneId(null);
+    setPlayCourtName(null);
   }
   function handleSetHome(zoneId){
     if(onSetHomeZone) onSetHomeZone(zoneId);
@@ -483,7 +493,10 @@ export default function MapTab({
           Lives at the top-centre of the map during steps 1 and 2.
           The CTA below is hidden while play mode is active so we
           don't double-stack interactive surfaces. */}
-      {playMode !== "off" && (
+      {/* Players step has its own self-contained chrome (see
+          MapPlayerOverlay) so we suppress the generic prompt+back
+          when playMode === 'players'. */}
+      {playMode !== "off" && playMode !== "players" && (
         <>
           {/* Bold prompt at the bottom + inline back arrow.
               Pure typography, no box, theme-inverted with a halo
@@ -546,6 +559,40 @@ export default function MapTab({
             </div>
           </div>
         </>
+      )}
+
+      {/* Map-native player picker (step 3). Renders only while
+          playMode === 'players'. Owns its own state; on Continue
+          we receive the partner profiles and open the wizard at
+          the When+Send step. On Back we return to court-pick. */}
+      {playMode === "players" && playZoneId && (
+        <MapPlayerOverlay
+          t={t}
+          mapDark={mapDark}
+          authUser={authUser}
+          blockedUserIds={blockedUserIds}
+          zoneId={playZoneId}
+          courtName={playCourtName}
+          onBack={function(){
+            // Step back to court-pick. Keep the zone, drop the court.
+            setPlayCourtName(null);
+            setPlayMode("court");
+          }}
+          onContinue={function(picks){
+            // Hand the resolved partner profiles + format off to the
+            // wizard's When step. Wizard reads `selected` for zone
+            // and `wizardInitialCourt` for court, then jumps to the
+            // When step via the smart-skip when initialPartners is
+            // present.
+            setSelected(playZoneId);
+            setWizardInitialCourt(playCourtName);
+            setWizardInitialPartners(picks.partners || []);
+            setWizardInitialFormat(picks.format || "doubles");
+            setPlayMode("off");
+            setWizardOpen(true);
+            track("play_match_step_entered", { step: 3 });
+          }}
+        />
       )}
 
       {/* Court info modal — opens on court marker tap */}
@@ -667,14 +714,29 @@ export default function MapTab({
         blockedUserIds={blockedUserIds}
         initialZoneId={selected}
         initialCourtName={wizardInitialCourt}
+        initialPartners={wizardInitialPartners}
+        initialFormat={wizardInitialFormat}
+        onBackToPicker={function(){
+          // Map-native flow only — close the wizard and return to
+          // the player overlay. Picks are reset (the overlay starts
+          // fresh) which is acceptable: the user explicitly stepped
+          // back to change them.
+          setWizardOpen(false);
+          setWizardInitialPartners(null);
+          setWizardInitialFormat(null);
+          setPlayMode("players");
+        }}
         onClose={function(){
           // Tear down the whole play flow — without this, `selected`
           // stays set to the picked zone and the right-side panel
           // (sidePanelZone) pops back in once playMode falls to "off".
           setWizardOpen(false);
           setWizardInitialCourt(null);
+          setWizardInitialPartners(null);
+          setWizardInitialFormat(null);
           setPlayMode("off");
           setPlayZoneId(null);
+          setPlayCourtName(null);
           setSelected(null);
         }}
         onSendInvite={function(partners, ctx){
@@ -693,8 +755,11 @@ export default function MapTab({
           // the wizard closes on send.
           setWizardOpen(false);
           setWizardInitialCourt(null);
+          setWizardInitialPartners(null);
+          setWizardInitialFormat(null);
           setPlayMode("off");
           setPlayZoneId(null);
+          setPlayCourtName(null);
           setSelected(null);
         }}
       />
