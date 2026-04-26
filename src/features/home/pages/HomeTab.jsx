@@ -503,7 +503,7 @@ function FeedCard({
               {(m.sets || []).map(function(_, i) {
                 return (
                   <div key={i} style={{
-                    width: 24, textAlign: "center",
+                    width: 28, textAlign: "center",
                     fontSize: 8, fontWeight: 600, color: t.textTertiary,
                     letterSpacing: "0.04em",
                   }}>S{i + 1}</div>
@@ -630,7 +630,7 @@ function FeedCard({
                 }
                 return (
                   <div key={i} style={{
-                    width: 24, textAlign: "center",
+                    width: 28, textAlign: "center",
                     fontSize: 14, fontWeight: wonSet ? 600 : 400,
                     color: wonSet ? t.text : t.textTertiary,
                     fontVariantNumeric: "tabular-nums",
@@ -640,12 +640,21 @@ function FeedCard({
                   }}>
                     {score !== undefined && score !== "" ? score : "–"}
                     {tbSuper != null && (
+                      // Tennis convention: "7-6 (3)" — the parenthesised
+                      // number is the LOSER's tiebreak score. Rendered as
+                      // a clear superscript so it's actually readable
+                      // (was 8px / textTertiary which read as a degree
+                      // mark when the loser scored 0). 11px in the same
+                      // colour as the cell + tabular-nums keeps it
+                      // precise without growing the cell footprint.
                       <span style={{
                         position: "absolute",
-                        top: -4, right: -1,
-                        fontSize: 8, fontWeight: 700,
-                        color: t.textTertiary,
+                        top: -3, right: -8,
+                        fontSize: 10, fontWeight: 700,
+                        color: t.textSecondary,
                         letterSpacing: 0,
+                        fontVariantNumeric: "tabular-nums",
+                        lineHeight: 1,
                       }}>{tbSuper}</span>
                     )}
                   </div>
