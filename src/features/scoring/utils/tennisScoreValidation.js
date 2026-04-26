@@ -244,6 +244,28 @@ export function validateSetScore(set, options) {
   return { ok: true, code: CODES.OK, message: "" };
 }
 
+// Auto-derive match format from the sets count when the caller didn't
+// supply one. A non-league match doesn't have a stored match_format,
+// so the validator + winner-check would otherwise default to
+// 'best_of_3' and reject any single-set submission as INCOMPLETE — even
+// though the rating writer (apply_match_outcome / getMatchFormatWeight)
+// already classifies a 1-set submission as a valid one_set @ 0.60×
+// weight. This helper keeps the validator and writer aligned.
+//
+// Rules:
+//   - 1 set                → 'one_set'
+//   - 2+ sets              → 'best_of_3'   (BO3 finished in 2 or 3,
+//                                           or split 1-1 incomplete —
+//                                           the match-level winner
+//                                           check downstream classifies)
+// Caller can always pass an explicit `matchFormat` to override (used
+// by league matches where league.match_format is authoritative).
+function resolveFormat(matchFormat, sets) {
+  if (matchFormat) return matchFormat;
+  if (Array.isArray(sets) && sets.length === 1) return "one_set";
+  return "best_of_3";
+}
+
 // ── Public: deriveMatchWinner ───────────────────────────────────────────────
 // Returns 'submitter' | 'opponent' | null. Only counts COMPLETED sets in
 // the given format. For partial / time-limited matches, returns the leader
@@ -251,7 +273,7 @@ export function validateSetScore(set, options) {
 
 export function deriveMatchWinner(sets, options) {
   options = options || {};
-  var format = options.matchFormat || "best_of_3";
+  var format = resolveFormat(options.matchFormat, sets);
   var finalSetFormat = options.finalSetFormat || "normal_set";
   if (!Array.isArray(sets) || sets.length === 0) return null;
 
@@ -297,7 +319,12 @@ export function validateMatchScore(sets, options) {
   options = options || {};
   var matchType         = options.matchType || "ranked";
   var completionType    = options.completionType || "completed";
-  var format            = options.matchFormat || "best_of_3";
+  // matchFormat auto-derives from sets count when not supplied — a
+  // non-league one-set submission was previously rejected as
+  // "best-of-3 incomplete" because the default was hardcoded. League
+  // matches still pass an explicit format from league.match_format
+  // and override this auto-derivation.
+  var format            = resolveFormat(options.matchFormat, sets);
   var finalSetFormat    = options.finalSetFormat || "normal_set";
   var allowPartial      = !!options.allowPartialScores;
   var leagueMode        = options.leagueMode || null;

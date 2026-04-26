@@ -322,7 +322,10 @@ export function useMatchHistory(opts){
     var validation = validateMatchScore(clean, {
       matchType: matchType,
       completionType: scoreDraft.completionType || 'completed',
-      matchFormat: scoreDraft.matchFormat || 'best_of_3',
+      // null lets validateMatchScore auto-derive from sets count.
+      // ScoreDraft only carries an explicit format when a league is
+      // tagged (and matched against league.match_format upstream).
+      matchFormat: scoreDraft.matchFormat || null,
       finalSetFormat: scoreDraft.finalSetFormat || 'normal_set',
       allowPartialScores: !!scoreDraft.allowPartialScores,
       // Service-layer mirror of the ScoreModal liveValidation rule:
@@ -653,7 +656,9 @@ export function useMatchHistory(opts){
     var resubVal = validateMatchScore(clean, {
       matchType: 'ranked',
       completionType: 'completed',
-      matchFormat: 'best_of_3',
+      // null lets validateMatchScore auto-derive — a 1-set resubmit
+      // (uncommon but valid) shouldn't be blocked as best_of_3 incomplete.
+      matchFormat: null,
       finalSetFormat: 'normal_set',
       allowPartialScores: false,
       // Resubmission is always ranked+completed → tiebreak details

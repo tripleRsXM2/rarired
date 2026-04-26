@@ -516,6 +516,84 @@ describe("formatMatchScore", () => {
   it("non-array → empty", () => { expect(formatMatchScore(null)).toBe(""); });
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Regression: validator auto-derives format from sets count when no
+// explicit matchFormat is supplied (Module 7.7 follow-up).
+// ─────────────────────────────────────────────────────────────────────
+
+describe("validateMatchScore — auto-derived format", () => {
+  function ranked(sets, opts) {
+    return validateMatchScore(sets, Object.assign({
+      matchType: "ranked",
+      completionType: "completed",
+      // matchFormat omitted on purpose — this is the regression case:
+      // a non-league submission must be treated as one_set when a
+      // single completed set is provided, NOT rejected as
+      // best-of-3 incomplete.
+    }, opts || {}));
+  }
+  function casual(sets) {
+    return validateMatchScore(sets, {
+      matchType: "casual", completionType: "completed",
+    });
+  }
+
+  it("ranked 1 set 6-4 → ok (was RANKED_REQUIRES_COMPLETED)", () => {
+    expect(ranked([{ you: 6, them: 4 }]).ok).toBe(true);
+  });
+  it("ranked 1 set 7-5 → ok", () => {
+    expect(ranked([{ you: 7, them: 5 }]).ok).toBe(true);
+  });
+  it("ranked 1 set 7-6 with valid TB → ok", () => {
+    expect(ranked([{ you: 7, them: 6, tieBreak: { you: 7, them: 4 } }]).ok).toBe(true);
+  });
+  it("ranked 1 set 7-6 (8-6) — TB ≥7 win-by-2 → ok", () => {
+    expect(ranked([{ you: 7, them: 6, tieBreak: { you: 8, them: 6 } }]).ok).toBe(true);
+  });
+  it("ranked 1 set 7-6 (12-10) → ok", () => {
+    expect(ranked([{ you: 7, them: 6, tieBreak: { you: 12, them: 10 } }]).ok).toBe(true);
+  });
+  it("ranked 1 set 7-6 without TB → still requires TB details", () => {
+    var r = ranked([{ you: 7, them: 6 }], { requireTiebreakDetails: true });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe(CODES.TIEBREAK_DETAILS_REQUIRED);
+  });
+  it("casual 1 set 6-4 completed → ok (was INCOMPLETE_MATCH)", () => {
+    expect(casual([{ you: 6, them: 4 }]).ok).toBe(true);
+  });
+  it("casual 1 set 7-6 completed → ok", () => {
+    expect(casual([{ you: 7, them: 6 }]).ok).toBe(true);
+  });
+
+  it("BO3 ranked 6-4 6-3 → ok (auto-derives best_of_3 from 2 sets)", () => {
+    expect(ranked([{ you: 6, them: 4 }, { you: 6, them: 3 }]).ok).toBe(true);
+  });
+  it("BO3 ranked split 1-1 → REJECTS as incomplete", () => {
+    var r = ranked([{ you: 6, them: 4 }, { you: 3, them: 6 }]);
+    expect(r.ok).toBe(false);
+  });
+  it("BO3 ranked 3-set → ok (auto-derives best_of_3 from 3 sets)", () => {
+    expect(ranked([{ you: 6, them: 4 }, { you: 3, them: 6 }, { you: 7, them: 5 }]).ok).toBe(true);
+  });
+
+  it("explicit format=one_set still works (league override)", () => {
+    var r = validateMatchScore([{ you: 6, them: 4 }], {
+      matchType: "ranked",
+      completionType: "completed",
+      matchFormat: "one_set",
+    });
+    expect(r.ok).toBe(true);
+  });
+  it("explicit format=best_of_3 with 1 set still rejects (league forces BO3)", () => {
+    var r = validateMatchScore([{ you: 6, them: 4 }], {
+      matchType: "ranked",
+      completionType: "completed",
+      matchFormat: "best_of_3",
+    });
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe("normalizeSetFromDb / serializeSetForDb round-trip", () => {
   it("game-only set survives round-trip", () => {
     var n = normalizeSetFromDb({ you: 6, them: 3 });

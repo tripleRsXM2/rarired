@@ -83,7 +83,10 @@ export default function ScoreModal({
     return validateMatchScore(clean, {
       matchType: matchType,
       completionType: completionType,
-      matchFormat: (league && league.match_format) || 'best_of_3',
+      // null lets the validator auto-derive format from sets count
+      // (1 set → one_set, 2+ sets → best_of_3). Leagues still win
+      // when present because league.match_format is explicit.
+      matchFormat: (league && league.match_format) || null,
       finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
         ? 'match_tiebreak' : 'normal_set',
       allowPartialScores: allowPartial,
@@ -174,7 +177,10 @@ export default function ScoreModal({
       // ScoreModal supports up to 5 sets in the UI today. Best-of-3 is
       // the dominant amateur format and matches the Elo + league
       // pipeline. When a league is tagged, defer to its match_format.
-      matchFormat: (league && league.match_format) || 'best_of_3',
+      // null lets the validator auto-derive format from sets count
+      // (1 set → one_set, 2+ sets → best_of_3). Leagues still win
+      // when present because league.match_format is explicit.
+      matchFormat: (league && league.match_format) || null,
       finalSetFormat: (league && league.tiebreak_format === 'super_tiebreak_final')
         ? 'match_tiebreak' : 'normal_set',
       allowPartialScores: !!forceCasual,
