@@ -16,6 +16,7 @@ import CourtInfoCard from "../components/CourtInfoCard.jsx";
 import PlayMatchWizard from "../components/PlayMatchWizard.jsx";
 import MapPlayerOverlay from "../components/MapPlayerOverlay.jsx";
 import { ZONE_BY_ID } from "../data/zones.js";
+import { COURTS } from "../data/courts.js";
 import { fetchZoneActivity } from "../services/mapService.js";
 import { track } from "../../../lib/analytics.js";
 
@@ -395,12 +396,83 @@ export default function MapTab({
           IS the on-map zone identifier when nothing is selected. Larger
           type, accent stripe, drop-shadow + slide-in animation. */}
       {(function(){
-        // Card resolves which zone to show in three states:
-        //   1. Court mode → ALWAYS show the picked zone (persistent
-        //      context: "you're inside Eastern Suburbs").
-        //   2. Zone mode → show the hovered zone (preview).
-        //   3. Default mode → show the hovered zone if user is
-        //      hovering and nothing is otherwise selected.
+        // Bottom-left context card. Composes one of two layouts:
+        //
+        //   • COURT card — used during playMode === "players". The
+        //     picked court is the foreground subject; we show its
+        //     name, the zone-coloured accent rule, and a small line
+        //     reading "<suburb>, Sydney · N courts". Hover input is
+        //     suppressed in this mode (the hover card would compete
+        //     with the player overlay's own context).
+        //
+        //   • ZONE card — every other state. Resolves the zone in
+        //     three states:
+        //       1. Court mode → ALWAYS show the picked zone
+        //          (persistent context: "you're inside Eastern Suburbs").
+        //       2. Zone mode → show the hovered zone (preview).
+        //       3. Default mode → show the hovered zone if user is
+        //          hovering and nothing is otherwise selected.
+        var labelStyle = {
+          fontSize: 30, fontWeight: 900,
+          letterSpacing: "-0.025em", lineHeight: 1.05,
+          color: mapDark ? "#ffffff" : "#14110f",
+          textShadow: mapDark
+            ? "0 2px 14px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
+            : "0 2px 14px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
+        };
+        var subStyle = {
+          fontSize: 12, lineHeight: 1.4,
+          color: mapDark ? "rgba(255,255,255,0.82)" : "rgba(20,18,17,0.7)",
+          textShadow: mapDark
+            ? "0 1px 4px rgba(0,0,0,0.55)"
+            : "0 1px 4px rgba(255,255,255,0.55)",
+          fontWeight: 500,
+        };
+        var wrapStyle = {
+          position:"absolute", left:18, bottom:18,
+          maxWidth: 360,
+          zIndex:500, pointerEvents:"none",
+          display:"flex", flexDirection:"column", gap: 8,
+          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+        };
+
+        // ── COURT card (players mode) ─────────────────────────────
+        if(playMode === "players" && playCourtName){
+          var court = COURTS.find(function(c){
+            return c.name === playCourtName
+              || (c.aliases && c.aliases.indexOf(playCourtName) !== -1);
+          });
+          if(!court) return null;
+          var courtZone = ZONE_BY_ID[court.zone];
+          // Strip the "Tennis Centre / Tennis Courts / Tennis"
+          // suffix since the context already implies tennis.
+          var displayName = String(court.name)
+            .replace(/\s+\(.*?\)$/, "")
+            .replace(/\s+Tennis Centre$/i, "")
+            .replace(/\s+Tennis Courts$/i, "")
+            .replace(/\s+Tennis Club$/i, "")
+            .replace(/\s+Tennis$/i, "")
+            .trim();
+          var subParts = [];
+          if(court.suburb) subParts.push(court.suburb + ", Sydney");
+          subParts.push((court.courts || 1) + " " + ((court.courts === 1) ? "court" : "courts"));
+          return (
+            <div className="fade-up" style={wrapStyle}>
+              <span style={labelStyle}>{displayName}</span>
+              {courtZone && (
+                <div style={{
+                  width: 56, height: 3,
+                  background: courtZone.color,
+                  borderRadius: 2,
+                  boxShadow: "0 1px 4px " + courtZone.color + "55",
+                }}/>
+              )}
+              <div style={subStyle}>{subParts.join(" · ")}</div>
+            </div>
+          );
+        }
+
+        // ── ZONE card ─────────────────────────────────────────────
         var which = (playMode === "court" && playZoneId) ? playZoneId
                   : (playMode === "zone"  && hovered)    ? hovered
                   : (hovered && !selected)               ? hovered
@@ -408,39 +480,12 @@ export default function MapTab({
         if(!which) return null;
         var h = ZONE_BY_ID[which];
         if(!h) return null;
-        var a = zoneActivity[which];
-        // Hover card — boxless, typography-led. Nike Run vibe:
-        // big bold name, thin accent rule in the zone's own colour,
-        // tiny blurb. No card chrome (no border, no fill, no
-        // shadow box). Theme-inverted text with a soft halo so it
-        // reads on any basemap. "Zone N" eyebrow + "Tap to open
-        // zone" copy retired — both were redundant.
         return (
-          <div className="fade-up"
-            style={{
-              position:"absolute", left:18, bottom:18,
-              maxWidth: 360,
-              zIndex:500, pointerEvents:"none",
-              display:"flex", flexDirection:"column", gap: 8,
-              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-            }}>
+          <div className="fade-up" style={wrapStyle}>
             <div style={{
               display:"flex", alignItems:"center", gap: 10, flexWrap:"wrap",
             }}>
-              <span style={{
-                fontSize: 30, fontWeight: 900,
-                letterSpacing: "-0.025em", lineHeight: 1.05,
-                color: mapDark ? "#ffffff" : "#14110f",
-                textShadow: mapDark
-                  ? "0 2px 14px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
-                  : "0 2px 14px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
-              }}>
-                {h.name}
-              </span>
-              {/* Activity flame chip retired from the hover card per
-                  user — kept the visual quieter. The flame still
-                  shows on the map's centroid badges via the layers
-                  panel toggle. */}
+              <span style={labelStyle}>{h.name}</span>
             </div>
             {/* Thin accent rule in the zone colour — a designer
                 touch that anchors the name without re-introducing
@@ -452,16 +497,7 @@ export default function MapTab({
               boxShadow: "0 1px 4px " + h.color + "55",
             }}/>
             {h.blurb && (
-              <div style={{
-                fontSize: 12, lineHeight: 1.4,
-                color: mapDark ? "rgba(255,255,255,0.82)" : "rgba(20,18,17,0.7)",
-                textShadow: mapDark
-                  ? "0 1px 4px rgba(0,0,0,0.55)"
-                  : "0 1px 4px rgba(255,255,255,0.55)",
-                fontWeight: 500,
-              }}>
-                {h.blurb}
-              </div>
+              <div style={subStyle}>{h.blurb}</div>
             )}
           </div>
         );
