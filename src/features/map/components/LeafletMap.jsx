@@ -121,6 +121,13 @@ export default function LeafletMap({
   // the cluster group is hidden and only that one venue's marker
   // is shown. Driven by the side panel's inline court selection.
   focusedCourtName = null,
+  // Map-native Play Match flow.
+  //   "off"   — normal map
+  //   "zone"  — picking a zone; non-hovered zones dim slightly
+  //   "court" — zone picked; other zones heavy-dim, fit to that
+  //             zone, courts get permanent name labels
+  playMode = "off",
+  playZoneId = null,
   // Map basemap override: "auto" follows app theme (default), "light"
   // forces positron, "dark" forces dark-matter. Lives in the cog
   // panel so users can read a dark map in a light app and vice versa.
@@ -146,6 +153,9 @@ export default function LeafletMap({
   // Solo highlight marker shown when focusedCourtName is set —
   // cluster hides, this single marker takes over.
   var soloMarkerRef = useRef(null);
+  // Map-native play-court-mode markers — one per court in the
+  // chosen zone, each with a permanent name tooltip.
+  var playCourtsRef = useRef([]);
 
   // Stash onCourtSelect in a ref so the init effect (which runs once) always
   // reads the latest callback — otherwise the first render's closure sticks.
@@ -359,21 +369,20 @@ export default function LeafletMap({
     });
   },[showZoneNames, theme, mapThemeOverride]);
 
-  // Court visibility — coordinates two independent toggles:
+  // Court visibility — coordinates THREE toggles:
   //   1. showCourts (layers panel) — hide the whole layer entirely
   //   2. focusedCourtName (side panel pin) — show ONLY that venue
-  // Effective state:
-  //   - showCourts off                      → both hidden
-  //   - showCourts on, no focus             → cluster shown
-  //   - showCourts on, focus = "Foo Park"   → cluster hidden,
-  //                                           solo highlight marker
+  //   3. playMode === "court" — hide cluster, show all courts in
+  //      the chosen zone with permanent name labels (map-native
+  //      step-2 of the Play Match flow)
   useEffect(function(){
     var map = mapRef.current;
     var cluster = courtClusterRef.current;
     if(!map || !cluster) return;
 
-    var inFocus = !!focusedCourtName;
-    var showCluster = showCourts && !inFocus;
+    var inFocus    = !!focusedCourtName;
+    var inPlayCourt = playMode === "court" && !!playZoneId;
+    var showCluster = showCourts && !inFocus && !inPlayCourt;
     var showSolo    = showCourts && inFocus;
 
     // Cluster visibility
@@ -421,12 +430,47 @@ export default function LeafletMap({
         soloMarkerRef.current = m;
       }
     }
-  },[showCourts, focusedCourtName]);
 
-  // Restyle zones when hover / selected change. Zone colors are always
-  // shown — they're identifying chrome, not a heat overlay. (The earlier
-  // "heat off fades polygons to 0" branch was a regression: it removed
-  // the very thing that tells users which suburb they're looking at.)
+    // Play-court-mode markers — one per court in the picked zone,
+    // each with a permanent name label. Replaces the cluster while
+    // playMode === "court" so the user sees individual venues with
+    // their names floating beside them. Tooltips have a built-in
+    // pointer that connects label → marker.
+    playCourtsRef.current.forEach(function(m){ if(map.hasLayer(m)) map.removeLayer(m); });
+    playCourtsRef.current = [];
+    if(inPlayCourt){
+      var zoneCourts = COURTS.filter(function(c){ return c.zone === playZoneId; });
+      zoneCourts.forEach(function(c){
+        var html =
+          '<div style="box-sizing:border-box;width:14px;height:14px;border-radius:50%;background:#fff;' +
+            'box-shadow:0 1px 3px rgba(0,0,0,0.32),0 0 0 1px rgba(20,18,17,0.22);"></div>';
+        var m = L.marker([c.lat, c.lng], {
+          icon: L.divIcon({ className:"cs-play-court", html: html, iconSize:[14,14], iconAnchor:[7,7] }),
+          zIndexOffset: 1500,
+        });
+        m.bindTooltip(
+          '<div style="font:700 11.5px/1.2 ui-sans-serif,system-ui,sans-serif;letter-spacing:-0.01em">' + c.name + '</div>',
+          { permanent: true, direction: "top", offset: [0, -8], opacity: 1, className: "cs-play-court-tip" }
+        );
+        m.on("click", function(){
+          if(courtSelectRef.current) courtSelectRef.current(c);
+        });
+        m.addTo(map);
+        playCourtsRef.current.push(m);
+      });
+      // Fit the map to the picked zone so the courts are spread out
+      // enough that their labels don't pile on top of each other.
+      var zoneLayer = zoneLayersRef.current[playZoneId];
+      if(zoneLayer){
+        try { map.fitBounds(zoneLayer.getBounds(), { padding: [60, 60] }); } catch(_){}
+      }
+    }
+  },[showCourts, focusedCourtName, playMode, playZoneId]);
+
+  // Restyle zones when hover / selected / play-mode change. Zone
+  // colours are always shown unless we're in court-pick play mode
+  // (where everything except the chosen zone fades hard so the
+  // chosen zone leads the eye).
   useEffect(function(){
     Object.keys(zoneLayersRef.current).forEach(function(id){
       var layer = zoneLayersRef.current[id];
@@ -434,6 +478,34 @@ export default function LeafletMap({
       if(!layer || !z) return;
       var isHover = hovered === id;
       var isSel   = selected === id;
+
+      // Play mode COURT: only the chosen zone is bright. Everything
+      // else fades to a hairline.
+      if(playMode === "court" && playZoneId){
+        var isPlay = id === playZoneId;
+        layer.setStyle({
+          color: z.color,
+          weight: isPlay ? 3 : 1,
+          opacity: isPlay ? 1 : 0.18,
+          fillColor: z.color,
+          fillOpacity: isPlay ? 0.55 : 0.05,
+        });
+        return;
+      }
+      // Play mode ZONE: every zone is interactive but slightly dimmed
+      // (compared to default) so the user reads "pick one of these".
+      // Hovered zone gets a subtle lift.
+      if(playMode === "zone"){
+        layer.setStyle({
+          color: z.color,
+          weight: isHover ? 3 : 2,
+          opacity: 0.9,
+          fillColor: z.color,
+          fillOpacity: isHover ? 0.62 : 0.30,
+        });
+        return;
+      }
+      // Default mode (no play flow active)
       if(isSel){
         layer.setStyle({ color: z.color, weight: 3, opacity: 1, fillColor: z.color, fillOpacity: 0.62 });
       } else if(isHover){
@@ -442,7 +514,7 @@ export default function LeafletMap({
         layer.setStyle({ color: z.color, weight: 2, opacity: 0.9, fillColor: z.color, fillOpacity: 0.42 });
       }
     });
-  },[hovered, selected]);
+  },[hovered, selected, playMode, playZoneId]);
 
   // Update zone label HTML when activity streams in — the flame badge is
   // attached to the zone number/name stack so it follows the polygon

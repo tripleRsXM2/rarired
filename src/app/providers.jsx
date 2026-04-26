@@ -93,6 +93,17 @@ export default function Providers({ t, theme, children }){
       ".cs-map-frame{position:relative;overflow:hidden;min-height:360px;isolation:isolate;" +
         "height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))}",
 
+      // Map-native Play Match — permanent court labels in step 2.
+      // Override Leaflet's default yellow tooltip so it reads as a
+      // floating glass chip, with a thin connector arrow to the
+      // marker (the closest we get to a "graphic" line without a
+      // custom SVG layer).
+      ".cs-play-court-tip{background:rgba(255,255,255,0.96)!important;" +
+        "border:none!important;box-shadow:0 4px 14px rgba(20,18,17,0.18)!important;" +
+        "border-radius:10px!important;padding:6px 10px!important;color:#14110f!important;" +
+        "backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}",
+      ".cs-play-court-tip:before{border-top-color:rgba(255,255,255,0.96)!important}",
+
       // Zoom-aware label visibility — at broad zoom (city-fit) zone
       // names + activity flames hide so they don't collide with
       // cluster number bubbles. The layers panel toggles still
