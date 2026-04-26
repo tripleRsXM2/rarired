@@ -206,17 +206,23 @@ export default function MapPlayerOverlay({
   // ─────────────────────────────────────────────────────────────
   return (
     <>
-      {/* TOP — Singles/Doubles toggle (centre) + Filter cog (right).
-          Scope tabs (In zone / Everywhere) sit immediately below as
-          quiet underline tabs — surfaces the most common roster
-          decision without taking space from the format pill. */}
+      {/* TOP — Singles/Doubles toggle + Filter cog. Layout differs
+          by viewport so the chrome doesn't fight the bottom-left
+          context card on a tight phone screen.
+            • Desktop: pill centred, cog absolute-right.
+            • Mobile : pill + cog right-aligned (court card lives
+              top-left in players mode on mobile, so we surrender
+              the centre to keep things uncluttered).
+          Scope tabs render in a different slot per viewport too —
+          see the standalone scope-tabs block below. */}
       <div style={{
         position: "absolute",
-        top: "calc(env(safe-area-inset-top, 0px) + 16px)",
+        top: "calc(env(safe-area-inset-top, 0px) + " + (isMobile ? 28 : 16) + "px)",
         left: 16, right: 16,
         zIndex: 545,
-        display:"flex", alignItems:"center", justifyContent:"center",
-        gap: 12,
+        display:"flex", alignItems:"center",
+        justifyContent: isMobile ? "flex-end" : "center",
+        gap: isMobile ? 8 : 12,
         pointerEvents:"none",
       }}>
         {/* Singles/Doubles segmented toggle. Pure-glass pill so the
@@ -245,11 +251,12 @@ export default function MapPlayerOverlay({
                   setSelectedIds(function(prev){ return prev.slice(0, newCap); });
                 }}
                 style={{
-                  padding: "8px 18px", borderRadius: 999,
+                  padding: isMobile ? "6px 12px" : "8px 18px",
+                  borderRadius: 999,
                   background: on ? fg : "transparent",
                   color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
                   border:"none", cursor: on ? "default" : "pointer",
-                  fontSize: 12, fontWeight: 800,
+                  fontSize: isMobile ? 11 : 12, fontWeight: 800,
                   letterSpacing:"0.06em", textTransform:"uppercase",
                   transition:"background 0.15s, color 0.15s",
                 }}>
@@ -259,15 +266,17 @@ export default function MapPlayerOverlay({
           })}
         </div>
 
-        {/* Filter cog — top-right (absolutely positioned within
-            the same top row so it doesn't disturb the centred toggle). */}
+        {/* Filter cog. On desktop it's absolutely positioned so the
+            centred format pill keeps its visual primacy; on mobile
+            it's inline at the end of the right-aligned chrome row. */}
         <button type="button"
           onClick={function(){ setFiltersOpen(function(v){ return !v; }); }}
           aria-label={filtersOpen ? "Hide filters" : "Show filters"}
           style={{
-            position:"absolute", right: 0, top: 0,
+            position: isMobile ? "static" : "absolute", right: 0, top: 0,
             pointerEvents:"auto",
-            width: 40, height: 40, borderRadius: 999,
+            width: isMobile ? 36 : 40, height: isMobile ? 36 : 40,
+            borderRadius: 999,
             background: filtersOpen ? fg : glassBg,
             color: filtersOpen ? (mapDark ? "#14110f" : "#ffffff") : fg,
             border: filtersOpen ? "none" : glassBorder,
@@ -298,11 +307,22 @@ export default function MapPlayerOverlay({
         </button>
       </div>
 
-      {/* Scope tabs — In zone / Everywhere. Surfaces directly below
-          the format toggle so the user sees both axes at a glance.
-          Quiet underline-tabs styling so they read as secondary to
-          the format pill. */}
-      <div style={{
+      {/* Scope tabs — In zone / Everywhere.
+            • Desktop: directly below the format toggle (top chrome).
+            • Mobile : just above the bottom prompt. The mobile top
+              is already crowded with the court card + format pill
+              + cog; relocating the scope tabs near the bottom
+              prompt keeps them paired with the player roster they
+              control.
+          Quiet underline-tabs styling so they read as secondary. */}
+      <div style={isMobile ? {
+        position:"absolute",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 110px)",
+        left: 0, right: 0,
+        zIndex: 545,
+        display:"flex", justifyContent:"center",
+        pointerEvents:"none",
+      } : {
         position:"absolute",
         top: "calc(env(safe-area-inset-top, 0px) + 64px)",
         left: 0, right: 0,

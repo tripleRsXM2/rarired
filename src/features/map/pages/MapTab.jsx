@@ -437,13 +437,38 @@ export default function MapTab({
             : "0 1px 4px rgba(255,255,255,0.55)",
           fontWeight: 500,
         };
-        var wrapStyle = {
-          position:"absolute", left:18, bottom:18,
-          maxWidth: 360,
-          zIndex:500, pointerEvents:"none",
-          display:"flex", flexDirection:"column", gap: 8,
-          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-        };
+        // Position rule:
+        //   • Desktop OR (mobile + zone-hover): bottom-left, classic
+        //     hover-preview slot.
+        //   • Mobile + court/players mode: top-left so the bottom of
+        //     the screen stays clear for the prompt + Continue button
+        //     and the player cards. Top placement clears the step
+        //     progress bar (which sits at top:~10px / 3px tall).
+        var pinTopLeft = isMobile && (playMode === "court" || playMode === "players");
+        var wrapStyle = pinTopLeft
+          ? {
+              position:"absolute",
+              top: "calc(env(safe-area-inset-top, 0px) + 30px)",
+              left: 14,
+              maxWidth: 220,
+              zIndex:500, pointerEvents:"none",
+              display:"flex", flexDirection:"column", gap: 6,
+              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+            }
+          : {
+              position:"absolute", left: isMobile ? 14 : 18, bottom: isMobile ? 14 : 18,
+              maxWidth: isMobile ? 240 : 360,
+              zIndex:500, pointerEvents:"none",
+              display:"flex", flexDirection:"column", gap: 8,
+              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+            };
+        // When pinned top-left we tighten typography so the card
+        // doesn't crowd the progress bar / format toggle.
+        if(pinTopLeft){
+          labelStyle = Object.assign({}, labelStyle, { fontSize: 22 });
+        } else if(isMobile){
+          labelStyle = Object.assign({}, labelStyle, { fontSize: 24 });
+        }
 
         // ── COURT card (players mode) ─────────────────────────────
         if(playMode === "players" && playCourtName){
