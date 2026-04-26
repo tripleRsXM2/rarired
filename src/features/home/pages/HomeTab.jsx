@@ -167,6 +167,11 @@ function FeedCard({
   var isPendingReconf = status === "pending_reconfirmation";
   var isVoided       = status === "voided";
   var isConfirmed    = status === "confirmed";
+  // Module 9: row is awaiting an opponent invite claim. Treat similar
+  // to pending_confirmation visually but with a distinct "AWAITING
+  // OPPONENT" badge — the user knows the next step is "share the link",
+  // not "wait for them to confirm".
+  var isAwaitingClaim = status === "pending_opponent_claim";
   var isOpponentView = isPending && m.isTagged;
   var isInDispute    = isDisputed || isPendingReconf;
   var needsMyAction  = isInDispute && authUser && m.pendingActionBy === authUser.id;
@@ -323,7 +328,8 @@ function FeedCard({
   })();
 
   // Compact status pill shown in the header top-right.
-  var statusPill = isPending && !isOpponentView ? { label: "Pending",    color: t.orange,       bg: t.orangeSubtle }
+  var statusPill = isAwaitingClaim              ? { label: "Awaiting opponent", color: t.orange, bg: t.orangeSubtle }
+                  : isPending && !isOpponentView ? { label: "Pending",    color: t.orange,       bg: t.orangeSubtle }
                   : isDisputed                  ? { label: "Disputed",   color: t.red,          bg: t.redSubtle }
                   : isPendingReconf             ? { label: "Re-proposed",color: t.orange,       bg: t.orangeSubtle }
                   : isExpired                   ? { label: "Unverified", color: t.textTertiary, bg: t.bgTertiary }
@@ -337,7 +343,7 @@ function FeedCard({
   //     a thicker border so the user's attention is drawn immediately
   var needsAction = isOpponentView || needsMyAction;
   var statusColor = isDisputed ? t.red
-                   : (isPending || isPendingReconf) ? t.orange
+                   : (isPending || isPendingReconf || isAwaitingClaim) ? t.orange
                    : null;
   // Ranked integrity: 'ranked' matches affect Elo + leaderboard. Once
   // submitted, the submitter can no longer delete one unilaterally from

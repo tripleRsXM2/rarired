@@ -34,6 +34,14 @@ var IMPORTANT_TYPES = new Set([
   "pact_confirmed",
   "pact_booked",
   "pact_claimed",
+  // Module 9: opponent claimed an invite you sent. The match has now
+  // moved to pending_confirmation — they'll separately fire match_tag
+  // for the confirm/dispute action, so this row is informational
+  // ("they're on it"), not action-required for the logger.
+  "match_invite_claimed",
+  // Module 9: someone marked your invite as "not me". Logger needs
+  // to either re-issue or void.
+  "match_invite_declined",
 ]);
 
 export function getNotifType(n) {
@@ -81,6 +89,9 @@ export function getNotifLabel(n) {
     case "pact_booked":                return name + " booked the pact — see the split and pay your share.";
     case "pact_cancelled":             return name + " cancelled the pact.";
     case "pact_claimed":               return name + " claimed your open court — re-confirm to lock it in.";
+    // Module 9 — opponent invites
+    case "match_invite_claimed":       return name + " joined CourtSync and claimed the match — they'll confirm or dispute next.";
+    case "match_invite_declined":      return name + " marked your invite as 'not me' — you can re-issue or void the match.";
     default:                           return "New notification.";
   }
 }

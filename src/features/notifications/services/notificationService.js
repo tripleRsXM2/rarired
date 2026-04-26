@@ -24,6 +24,11 @@ var PUSH_WORTHY_TYPES = {
   pact_confirmed:             1, pact_booked:              1,
   pact_cancelled:             1,
   message_request:            1, message_request_accepted: 1,
+  // Module 9 — opponent-invite events that close the loop on the
+  // logger's side. Both are action-worthy: the claimed event signals
+  // "they're verifying it now"; declined means "your invite was
+  // rejected — re-issue or void."
+  match_invite_claimed:       1, match_invite_declined:    1,
 };
 
 // Fire-and-forget push fan-out. The Edge Function handles category

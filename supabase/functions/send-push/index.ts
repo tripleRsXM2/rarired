@@ -140,6 +140,11 @@ const PUSH_TYPE_TO_CATEGORY: Record<string, string> = {
   pact_cancelled:               "match_updates",
   message_request:              "match_updates",
   message_request_accepted:     "match_updates",
+  // Module 9: opponent-invite outcomes — sit under match_updates
+  // because they're status changes on a match the logger already
+  // knows about (not a brand-new invite TO them).
+  match_invite_claimed:         "match_updates",
+  match_invite_declined:        "match_updates",
 };
 
 // Title + body + URL templates per type. Concise on purpose — payloads
@@ -300,6 +305,24 @@ function buildPayloadForType(type: string, fromName: string | null, entityId: st
         type, title: "Message request accepted",
         body:  `${safeName} accepted your message.`,
         url:   "/people/messages",
+        entityId,
+      };
+    case "match_invite_claimed":
+      // entityId here is the match_history.id (set by the SECURITY
+      // DEFINER claim_match_invite RPC). Land the logger on the feed
+      // with the match highlighted; the existing ActionReviewDrawer
+      // then takes over for confirm/dispute.
+      return {
+        type, title: "Opponent joined CourtSync",
+        body:  `${safeName} claimed your match. They'll confirm or dispute next.`,
+        url:   "/home" + (entityId ? `?highlightMatchId=${encodeURIComponent(entityId)}` : ""),
+        entityId,
+      };
+    case "match_invite_declined":
+      return {
+        type, title: "Invite declined",
+        body:  `${safeName} marked your invite as 'not me'. Re-issue or void the match.`,
+        url:   "/home" + (entityId ? `?highlightMatchId=${encodeURIComponent(entityId)}` : ""),
         entityId,
       };
     default:
