@@ -78,6 +78,18 @@ export default function MapTab({
   // user through zone → court → player(s) → send invite. Respects
   // any zone already selected on the map (skips step 1 if so).
   var [wizardOpen,setWizardOpen]=useState(false);
+  var [wizardInitialCourt,setWizardInitialCourt]=useState(null);
+
+  // Map-native Play Match flow. Instead of popping a modal for steps
+  // 1+2 (zone and court), drive them directly on the map: dim other
+  // zones, float a bold prompt, and let the user tap. Modes:
+  //   "off"   — no play flow active
+  //   "zone"  — picking a zone, all polygons interactive but slightly dimmed
+  //   "court" — zone chosen, map zoomed in, courts get permanent labels
+  // Step 3 (player picker) still uses the wizard modal (player list
+  // doesn't naturally fit on the map).
+  var [playMode,setPlayMode]=useState("off");
+  var [playZoneId,setPlayZoneId]=useState(null);
   // When the zone changes, drop any panel-court selection so we don't
   // leak a stale venue name into a different zone's panel.
   useEffect(function(){ setPanelCourtName(null); },[selected]);
@@ -90,6 +102,10 @@ export default function MapTab({
   var layersBtnRef = useRef(null);
   var layersPanelRef = useRef(null);
   var selectedZone = selected ? ZONE_BY_ID[selected] : null;
+  // The side panel must NOT render during the map-native play mode —
+  // it would cover the map and defeat the in-map experience.
+  var sidePanelZone = (playMode === "off") ? selectedZone : null;
+  var playZone = playZoneId ? ZONE_BY_ID[playZoneId] : null;
   var homeZone = profile && profile.home_zone;
 
   // Persist + emit analytics whenever a layer flips. One handler covers
@@ -153,6 +169,15 @@ export default function MapTab({
   // Wrap setters so we can emit analytics at selection time. Zone props
   // include the activity snapshot so funnel queries don't need a join.
   function handleSelect(zoneId){
+    // In map-native play mode, tapping a zone advances the flow
+    // rather than opening the side panel. Step 1 → step 2.
+    if(playMode === "zone" && zoneId){
+      setPlayZoneId(zoneId);
+      setPlayMode("court");
+      track("play_match_zone_picked", { zone_id: zoneId });
+      track("play_match_step_entered", { step: 1 });
+      return;
+    }
     setSelected(zoneId);
     if(zoneId){
       var a = zoneActivity[zoneId] || { matches_7d: 0, players_7d: 0 };
@@ -165,10 +190,30 @@ export default function MapTab({
     }
   }
   function handleCourtSelect(court){
+    // In map-native play mode (step 2), tapping a court hands off to
+    // the wizard for step 3 (player picker) — the player list
+    // doesn't naturally fit on the map surface.
+    if(playMode === "court" && court && court.zone === playZoneId){
+      setSelected(playZoneId);          // wizard reads selected for initialZoneId
+      setWizardInitialCourt(court.name);
+      setPlayMode("off");
+      setWizardOpen(true);
+      track("play_match_court_picked", { zone_id: playZoneId, court_name: court.name });
+      track("play_match_step_entered", { step: 2 });
+      return;
+    }
     setSelectedCourt(court);
     if(court){
       track("court_opened", { court_name: court.name, zone_id: court.zone });
     }
+  }
+  function exitPlayMode(){
+    track("play_match_cancelled", {
+      step: playMode === "zone" ? 0 : 1,
+      last_completed: playMode === "zone" ? -1 : 0,
+    });
+    setPlayMode("off");
+    setPlayZoneId(null);
   }
   function handleSetHome(zoneId){
     if(onSetHomeZone) onSetHomeZone(zoneId);
@@ -194,6 +239,8 @@ export default function MapTab({
         showZoneNames={layers.zoneNames}
         mapThemeOverride={layers.mapTheme}
         focusedCourtName={panelCourtName}
+        playMode={playMode}
+        playZoneId={playZoneId}
         onHover={setHovered}
         onSelect={handleSelect}
         onCourtSelect={handleCourtSelect}
@@ -328,50 +375,66 @@ export default function MapTab({
         var h = ZONE_BY_ID[hovered];
         if(!h) return null;
         var a = zoneActivity[hovered];
+        // Hover card — boxless, typography-led. Nike Run vibe:
+        // big bold name, thin accent rule in the zone's own colour,
+        // tiny blurb. No card chrome (no border, no fill, no
+        // shadow box). Theme-inverted text with a soft halo so it
+        // reads on any basemap. "Zone N" eyebrow + "Tap to open
+        // zone" copy retired — both were redundant.
         return (
           <div className="fade-up"
             style={{
-              position:"absolute", left:14, bottom:14,
-              background: t.bgCard, color: t.text,
-              border: "1px solid " + t.border,
-              borderLeft: "4px solid " + h.color,
-              padding:"12px 16px", borderRadius:10,
-              minWidth: 240, maxWidth: 320,
+              position:"absolute", left:18, bottom:18,
+              maxWidth: 360,
               zIndex:500, pointerEvents:"none",
-              boxShadow:"0 8px 28px rgba(0,0,0,0.18)",
-              display:"flex", flexDirection:"column", gap:4,
+              display:"flex", flexDirection:"column", gap: 8,
+              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
             }}>
             <div style={{
-              fontSize:9, fontWeight:800, letterSpacing:"0.12em",
-              textTransform:"uppercase", color: h.color,
+              display:"flex", alignItems:"center", gap: 10, flexWrap:"wrap",
             }}>
-              Zone {h.num}
-            </div>
-            <div style={{
-              display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
-            }}>
-              <span style={{ fontSize:16, fontWeight:800, color:t.text, letterSpacing:"-0.3px" }}>
+              <span style={{
+                fontSize: 30, fontWeight: 900,
+                letterSpacing: "-0.025em", lineHeight: 1.05,
+                color: mapDark ? "#ffffff" : "#14110f",
+                textShadow: mapDark
+                  ? "0 2px 14px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
+                  : "0 2px 14px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
+              }}>
                 {h.name}
               </span>
               {a && a.matches_7d > 0 && (
                 <span style={{
-                  fontSize:10, fontWeight:800, letterSpacing:"0.04em",
-                  color:"#fff", background:"rgba(239,68,68,0.95)",
-                  padding:"2px 8px", borderRadius:12,
+                  fontSize: 11, fontWeight: 900, letterSpacing: "0.06em",
+                  color: "#fff", background: "rgba(239,68,68,0.95)",
+                  padding: "3px 9px", borderRadius: 999,
+                  textTransform: "uppercase",
                 }}>
-                  🔥 {a.matches_7d}
+                  {a.matches_7d} this week
                 </span>
               )}
             </div>
-            <div style={{ fontSize:11.5, color:t.textSecondary, lineHeight:1.4 }}>
-              {h.blurb}
-            </div>
+            {/* Thin accent rule in the zone colour — a designer
+                touch that anchors the name without re-introducing
+                a left border on a card. */}
             <div style={{
-              fontSize:10, color:t.textTertiary, marginTop:4,
-              letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:600,
-            }}>
-              Tap to open zone
-            </div>
+              width: 56, height: 3,
+              background: h.color,
+              borderRadius: 2,
+              boxShadow: "0 1px 4px " + h.color + "55",
+            }}/>
+            {h.blurb && (
+              <div style={{
+                fontSize: 12, lineHeight: 1.4,
+                color: mapDark ? "rgba(255,255,255,0.82)" : "rgba(20,18,17,0.7)",
+                textShadow: mapDark
+                  ? "0 1px 4px rgba(0,0,0,0.55)"
+                  : "0 1px 4px rgba(255,255,255,0.55)",
+                fontWeight: 500,
+              }}>
+                {h.blurb}
+              </div>
+            )}
           </div>
         );
       })()}
@@ -379,8 +442,9 @@ export default function MapTab({
       {/* Side panel — primary workspace when a zone is selected.
           Selection-then-action pattern: user highlights a court, then
           1+ players, then fires a batched Message or a single Challenge. */}
+      {sidePanelZone && (
       <ZoneSidePanel
-        t={t} zone={selectedZone} onClose={function(){ setSelected(null); }}
+        t={t} zone={sidePanelZone} onClose={function(){ setSelected(null); }}
         authUser={authUser} profile={profile}
         homeZone={homeZone}
         activity={selectedZone ? zoneActivity[selectedZone.id] : null}
@@ -401,6 +465,76 @@ export default function MapTab({
           if(onMessagePlayer) onMessagePlayer(partners, ctx);
         }}
       />
+      )}
+
+      {/* Map-native Play Match flow — bold prompt + back button.
+          Lives at the top-centre of the map during steps 1 and 2.
+          The CTA below is hidden while play mode is active so we
+          don't double-stack interactive surfaces. */}
+      {playMode !== "off" && (
+        <>
+          {/* Bold prompt at the bottom + inline back arrow.
+              Pure typography, no box, theme-inverted with a halo
+              shadow. The back ← sits LEFT of the title as a thin
+              chevron (no button chrome) so it harmonises with the
+              type rather than overpowering it. Tappable padding
+              keeps it accessible without visual weight. */}
+          <div style={{
+            position:"absolute",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
+            left: 16, right: 16,
+            zIndex: 540,
+            display:"flex", justifyContent:"center", alignItems:"center",
+            pointerEvents:"none",
+          }}>
+            <div className="fade-up" style={{
+              display:"flex", alignItems:"center", gap: 14,
+              maxWidth: 720,
+            }}>
+              {/* Inline back arrow — chevron only, no button chrome.
+                  pointerEvents:auto on the wrapper button so it's
+                  tappable while the rest of the prompt stays
+                  pointer-transparent. */}
+              <button type="button"
+                onClick={function(){
+                  if(playMode === "court"){ setPlayZoneId(null); setPlayMode("zone"); return; }
+                  exitPlayMode();
+                }}
+                aria-label={playMode === "court" ? "Back to zones" : "Cancel"}
+                style={{
+                  pointerEvents: "auto",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: mapDark ? "#ffffff" : "#14110f",
+                  padding: 6,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  filter: mapDark
+                    ? "drop-shadow(0 1px 4px rgba(0,0,0,0.55))"
+                    : "drop-shadow(0 1px 4px rgba(255,255,255,0.55))",
+                }}>
+                <svg width="28" height="28" viewBox="0 0 18 18" fill="none"
+                     stroke="currentColor" strokeWidth="1.8"
+                     strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 14L6 9l5-5"/>
+                </svg>
+              </button>
+              <div style={{
+                fontSize: 40, fontWeight: 900,
+                letterSpacing: "0.02em",
+                lineHeight: 1.05,
+                textTransform: "uppercase",
+                color: mapDark ? "#ffffff" : "#14110f",
+                textShadow: mapDark
+                  ? "0 2px 16px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
+                  : "0 2px 16px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
+                fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+              }}>
+                {playMode === "zone" && "Choose your zone"}
+                {playMode === "court" && (playZone ? playZone.name : "Choose your court")}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Court info modal — opens on court marker tap */}
       {/* Play Match CTA — primary action of the map. Bottom-centre,
@@ -409,14 +543,24 @@ export default function MapTab({
           tap fires telemetry so we can see interest from day one
           (Mom-test: instrument before shipping the flow). Phase 2
           will swap the no-op for a guided 5-step wizard inside a
-          bottom sheet (zone → court → player(s) → send invite). */}
+          bottom sheet (zone → court → player(s) → send invite).
+          Hidden during play mode so it doesn't double-stack with
+          the floating prompt + back button up top. */}
+      {playMode === "off" && (
       <button type="button"
         onClick={function(){
           track("play_match_cta_tapped", {
             has_zone: !!selected,
             has_court: !!panelCourtName,
           });
-          setWizardOpen(true);
+          // Map-native flow: skip the wizard modal for steps 1+2,
+          // enter zone-pick mode on the map. Closes any existing
+          // side panel + clears prior court pin so the user gets a
+          // clean canvas.
+          setSelected(null);
+          setPanelCourtName(null);
+          setPlayZoneId(null);
+          setPlayMode("zone");
         }}
         aria-label="Play Match"
         style={{
@@ -469,6 +613,7 @@ export default function MapTab({
           opacity: 0.72, marginTop: 3,
         }}>MATCH</span>
       </button>
+      )}
 
       <CourtInfoCard t={t} court={selectedCourt}
         authUser={authUser}
@@ -509,7 +654,11 @@ export default function MapTab({
         authUser={authUser}
         blockedUserIds={blockedUserIds}
         initialZoneId={selected}
-        onClose={function(){ setWizardOpen(false); }}
+        initialCourtName={wizardInitialCourt}
+        onClose={function(){
+          setWizardOpen(false);
+          setWizardInitialCourt(null);
+        }}
         onSendInvite={function(partners, ctx){
           if(!partners || !partners.length){ setWizardOpen(false); return; }
           // Prefer the background-send path (Option A) when wired —
@@ -595,4 +744,17 @@ function LayerRow({ t, label, sub, checked, onChange }){
       </span>
     </button>
   );
+}
+
+// Convert a #rrggbb token into rgba(...) — used by the play-mode
+// glass overlays so we can take t.bgCard and dial it down to 94% alpha.
+function hexToRgba(hex, alpha){
+  if(!hex) return "rgba(255,255,255," + alpha + ")";
+  var h = String(hex).replace("#", "");
+  if(h.length === 3) h = h.split("").map(function(c){ return c + c; }).join("");
+  var r = parseInt(h.slice(0,2), 16);
+  var g = parseInt(h.slice(2,4), 16);
+  var b = parseInt(h.slice(4,6), 16);
+  if(isNaN(r) || isNaN(g) || isNaN(b)) return "rgba(255,255,255," + alpha + ")";
+  return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
 }

@@ -93,6 +93,31 @@ export default function Providers({ t, theme, children }){
       ".cs-map-frame{position:relative;overflow:hidden;min-height:360px;isolation:isolate;" +
         "height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))}",
 
+      // Map-native Play Match — basemap softens during play mode.
+      // Light blur only (no darken, no desat) per user feedback —
+      // the basemap should recede subtly, not feel "off". Reduced
+      // ~30% from the original 2.5px → 1.75px.
+      ".leaflet-container[data-play-mode='zone'] .leaflet-tile-pane," +
+        ".leaflet-container[data-play-mode='court'] .leaflet-tile-pane{" +
+        "filter:blur(1.75px);" +
+        "transition:filter 0.35s ease}",
+
+      // Map-native Play Match — court markers in step 2 use a 4-way
+      // diagonal-offset placement so labels don't stack on top of
+      // each other in dense clusters. Each marker is a 140×80 box
+      // with: an SVG diagonal connector line + a 10px white dot at
+      // the lat/lng anchor + a glassy white label pill at the
+      // diagonal offset. Direction cycles NE/NW/SE/SW per court.
+      ".cs-play-court{pointer-events:auto}",
+      ".cs-play-label{background:rgba(255,255,255,0.96);color:#14110f;" +
+        "padding:4px 10px;border-radius:6px;" +
+        "font:700 11px/1.2 ui-sans-serif,system-ui,sans-serif;" +
+        "letter-spacing:-0.01em;" +
+        "box-shadow:0 2px 8px rgba(20,18,17,0.18);" +
+        "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}",
+      ".cs-play-dot{width:10px;height:10px;border-radius:50%;background:#fff;" +
+        "box-shadow:0 1px 3px rgba(20,18,17,0.4),0 0 0 1px rgba(20,18,17,0.32)}",
+
       // Zoom-aware label visibility — at broad zoom (city-fit) zone
       // names + activity flames hide so they don't collide with
       // cluster number bubbles. The layers panel toggles still

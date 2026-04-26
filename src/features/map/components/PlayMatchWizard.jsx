@@ -44,12 +44,13 @@ export default function PlayMatchWizard({
   t, open,
   authUser, blockedUserIds,
   initialZoneId,
+  initialCourtName,
   onClose, onSendInvite,
 }){
   // Steps: 0 zone, 1 court, 2 players, 3 confirm.
   var [step, setStep]           = useState(0);
   var [zoneId, setZoneId]       = useState(initialZoneId || null);
-  var [courtName, setCourtName] = useState(null);
+  var [courtName, setCourtName] = useState(initialCourtName || null);
   var [scope, setScope]         = useState("zone"); // zone | everywhere
   var [selectedIds, setSelectedIds] = useState([]);
   var [players, setPlayers]     = useState([]);
@@ -77,10 +78,15 @@ export default function PlayMatchWizard({
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
     if(!open) return;
-    var startStep = initialZoneId ? 1 : 0;
+    // Smart skip: if both zone AND court are pre-filled (map-native
+    // flow handed both off), jump straight to step 2 (player picker).
+    // If only zone is pre-filled, start at step 1 (court picker).
+    // Otherwise step 0 (zone picker).
+    var startStep = (initialZoneId && initialCourtName) ? 2
+                  : initialZoneId ? 1 : 0;
     setStep(startStep);
     setZoneId(initialZoneId || null);
-    setCourtName(null);
+    setCourtName(initialCourtName || null);
     setSelectedIds([]);
     setScope("zone");
     setWhenMode("week");
