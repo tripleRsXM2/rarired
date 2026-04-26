@@ -607,23 +607,27 @@ function FeedCard({
                 } else {
                   wonSet = false;
                 }
-                // Inner tiebreak read — shown only on the LOSING row's
-                // cell (the side with 6 in a 7-6 set) when valid.
+                // Inner tiebreak read — tennis convention "7-6 (3)":
+                // the parenthesised digit is the LOSER's tb score and
+                // it sits next to the WINNER's "7". So we render it
+                // on the winner's row, not the loser's. (Earlier
+                // builds put it on the loser's row, which read as
+                // "6³" and broke convention — the user expectation
+                // is to find the digit attached to the winning side.)
                 var setObj = (m.sets || [])[i];
                 var tbSuper = null;
                 if (setObj && setObj.tieBreak && hasMine && hasOpp) {
                   var hi = Math.max(Number(score), Number(opp));
                   var lo = Math.min(Number(score), Number(opp));
-                  if (hi === 7 && lo === 6 && !wonSet) {
-                    // This is the loser's row — show their tiebreak
-                    // points (the smaller of the inner pair). Reading
-                    // off the original set object so we always get
-                    // *this row's* points regardless of orientation.
+                  if (hi === 7 && lo === 6 && wonSet) {
+                    // This is the WINNER's row in a 7-6 tb set.
+                    // The superscript shows the loser's tb points
+                    // (Math.min of the inner pair), regardless of
+                    // which side of the tieBreak object the loser
+                    // happens to live on.
                     var tbY = Number(setObj.tieBreak.you);
                     var tbT = Number(setObj.tieBreak.them);
                     if (Number.isFinite(tbY) && Number.isFinite(tbT)) {
-                      // The loser's row points are the LOSER's inner
-                      // score (Math.min of the inner pair).
                       tbSuper = Math.min(tbY, tbT);
                     }
                   }
