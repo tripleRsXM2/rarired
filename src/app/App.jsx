@@ -352,16 +352,24 @@ export default function App(){
   // Open the Log Match flow with a specific league pre-selected.
   // Used by LeaguesPanel's per-league "Log match" button so members
   // logging from inside a league don't have to re-pick it in the
-  // composer. match_type is forced to the league's mode (ranked /
-  // casual) so the league selector + match-type pills both arrive
-  // pre-set; validate_match_league still enforces the rule
-  // server-side.
+  // composer.
+  //
+  // Always opens in `casual:true` mode regardless of the league's
+  // mode — `casual:true` is the score-modal path that renders the
+  // OpponentPicker (free-text + linked-friend chips). The other
+  // path (`casual:false`) is the "verified resubmit" flow that
+  // assumes an opponent is already linked, and without one it
+  // falls through to a generic "Opponent" placeholder (the bug
+  // the user surfaced). The league's mode is preserved on the
+  // draft via `matchType`, so once the user picks a linked friend
+  // who's also in the league, the league selector shows up
+  // pre-selected and the match files as ranked/casual to match.
   function openLogMatchInLeague(league){
     if(!league||!league.id) { openLogMatch(); return; }
     var mode = league.mode === "casual" ? "casual" : "ranked";
     matchHistory.setCasualOppName("");
     matchHistory.setScoreModal({
-      casual:    mode === "casual",
+      casual:    true,
       oppName:   "",
       tournName: mode === "casual" ? "Casual Match" : "",
     });
