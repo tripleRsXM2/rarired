@@ -382,8 +382,8 @@ export default function MatchComposer({
             <label style={labelStyle(t)}>Match type</label>
             <div style={{ display: "flex", gap: 8 }}>
               {[
-                { id: 'ranked', label: 'Ranked', glyph: '✓' },
-                { id: 'casual', label: 'Casual', glyph: '○' },
+                { id: 'ranked', label: 'Ranked' },
+                { id: 'casual', label: 'Casual' },
               ].map(function (mt) {
                 var on = current === mt.id;
                 var color = on
@@ -405,9 +405,9 @@ export default function MatchComposer({
                       fontSize: 12, fontWeight: on ? 700 : 500,
                       cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center',
-                      justifyContent: 'center', gap: 6,
+                      justifyContent: 'center',
                     }}>
-                    <span>{mt.glyph}</span><span>{mt.label}</span>
+                    {mt.label}
                   </button>
                 );
               })}
