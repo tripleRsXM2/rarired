@@ -134,6 +134,10 @@ function RematchCard({ t, rematch, profileMap, onRematch }) {
         </div>
       </div>
 
+      {/* Outlined to match the Continue league card's "Open league"
+          CTA — both suggestion cards now read at the same visual
+          weight rather than the rematch CTA popping with accent
+          fill. */}
       <button
         onClick={handleClick}
         disabled={busy}
@@ -141,19 +145,19 @@ function RematchCard({ t, rematch, profileMap, onRematch }) {
           flexShrink:     0,
           minHeight:      36,
           padding:        "0 14px",
-          background:     t.accent,
-          color:          "#fff",
-          border:         "none",
+          background:     "transparent",
+          color:          t.text,
+          border:         "1px solid " + t.border,
           borderRadius:   10,
           fontSize:       11.5,
           fontWeight:     700,
           letterSpacing:  "0.04em",
           textTransform:  "uppercase",
           cursor:         busy ? "default" : "pointer",
-          opacity:        busy ? 0.7 : 1,
+          opacity:        busy ? 0.6 : 1,
           transition:     "opacity 0.15s",
         }}
-        onMouseEnter={function (e) { if (!busy) e.currentTarget.style.opacity = "0.85"; }}
+        onMouseEnter={function (e) { if (!busy) e.currentTarget.style.opacity = "0.7"; }}
         onMouseLeave={function (e) { if (!busy) e.currentTarget.style.opacity = "1"; }}>
         {busy ? "…" : "Challenge"}
       </button>
