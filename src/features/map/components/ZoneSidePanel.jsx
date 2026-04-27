@@ -421,36 +421,53 @@ export default function ZoneSidePanel({
         <div style={{ fontSize: isNarrow ? 11.5 : 12, color:t.textSecondary, marginTop: isNarrow ? 8 : 12, lineHeight:1.4 }}>{zone.blurb}</div>
       </div>
 
-      {/* Stats row */}
-      <div style={{
-        display:"grid",
-        gridTemplateColumns: activity && activity.matches_7d > 0 ? "1fr 1fr 1fr" : "1fr 1fr",
-        padding: isNarrow ? "10px 16px" : "14px 20px", borderBottom:"1px solid "+t.border, gap: isNarrow ? 10 : 12,
-      }}>
-        <div>
-          <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{courtsCellValue}</div>
-          <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>{courtsCellLabel}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{loading ? "…" : displayPlayers.length}</div>
-          <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>Players here</div>
-        </div>
-        {activity && activity.matches_7d > 0 && (
+      {/* Stats row — desktop only. User feedback (mobile-only): 'I
+          dont think you need to have the # players here.. that's
+          already IN Zone... we can also get rid of the # locations
+          and matches this week. You can keep the web as is, we have
+          lots of space to use'. So on mobile the player count moves
+          inline onto the 'In zone (N)' / 'Everywhere (N)' scope
+          tabs, the location count folds into the 'N Courts · tap
+          one…' header, and matches-this-week is dropped entirely.
+          Desktop keeps the original three-stat layout. */}
+      {!isNarrow && (
+        <div style={{
+          display:"grid",
+          gridTemplateColumns: activity && activity.matches_7d > 0 ? "1fr 1fr 1fr" : "1fr 1fr",
+          padding: "14px 20px", borderBottom:"1px solid "+t.border, gap: 12,
+        }}>
           <div>
-            <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:"#ef4444", lineHeight:1.1 }}>🔥 {activity.matches_7d}</div>
-            <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>
-              Matches · This week
-            </div>
+            <div style={{ fontSize: 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{courtsCellValue}</div>
+            <div style={{ fontSize: 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: 2 }}>{courtsCellLabel}</div>
           </div>
-        )}
-      </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{loading ? "…" : displayPlayers.length}</div>
+            <div style={{ fontSize: 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: 2 }}>Players here</div>
+          </div>
+          {activity && activity.matches_7d > 0 && (
+            <div>
+              <div style={{ fontSize: 20, fontWeight:700, color:"#ef4444", lineHeight:1.1 }}>🔥 {activity.matches_7d}</div>
+              <div style={{ fontSize: 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: 2 }}>
+                Matches · This week
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Scrollable body — courts + players */}
       <div style={{ flex:1, overflowY:"auto", padding:"14px 20px 20px" }}>
 
-        {/* Courts */}
+        {/* Courts — on mobile we fold the location count INTO the
+            header text ('6 Courts · tap one…') since the stats row
+            above is hidden. Desktop keeps the bare 'Courts · tap…'
+            because the stats row already shows the count. */}
         <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
-          {selectedCourt ? "Court · tap again to clear, or pick another" : "Courts · tap one to see who plays there"}
+          {selectedCourt
+            ? "Court · tap again to clear, or pick another"
+            : (isNarrow && courts.length > 0
+                ? (courts.length + " " + (courts.length === 1 ? "Court" : "Courts") + " · tap one to see who plays there")
+                : "Courts · tap one to see who plays there")}
         </div>
         {courts.length === 0 ? (
           <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
@@ -560,6 +577,15 @@ export default function ZoneSidePanel({
             { id:"everywhere", label:"Everywhere" },
           ].map(function(s){
             var on = scope === s.id;
+            // Mobile only: append the active-tab count inline so
+            // the user still sees how many players are in the
+            // current view without the (now-hidden) stats row.
+            // Desktop keeps the bare label since the stats row
+            // already surfaces the count above.
+            var label = s.label;
+            if (isNarrow && on) {
+              label = label + " (" + (loading ? "…" : displayPlayers.length) + ")";
+            }
             return (
               <button key={s.id} type="button"
                 onClick={function(){ if(!on){ setScope(s.id); setSelectedIds([]); } }}
@@ -575,7 +601,7 @@ export default function ZoneSidePanel({
                   cursor: on ? "default" : "pointer",
                   transition:"color 0.15s, border-color 0.15s",
                 }}>
-                {s.label}
+                {label}
               </button>
             );
           })}
