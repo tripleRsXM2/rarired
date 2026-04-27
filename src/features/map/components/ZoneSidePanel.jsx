@@ -312,10 +312,44 @@ export default function ZoneSidePanel({
           track("zone_swiped", { from: zone.id, to: zonesArr[next].id, direction: dx < 0 ? "left" : "right" });
         } : null}
         style={{
-          padding:"20px 20px 16px",
+          padding: isNarrow && onSelectZone ? "12px 20px 16px" : "20px 20px 16px",
           borderBottom:"1px solid "+t.border,
           touchAction: isNarrow && onSelectZone ? "pan-y" : "auto",
         }}>
+        {/* Mobile: progression bar at the top of the title block.
+            Six segments, one per zone in the canonical ZONES order;
+            the active zone fills, others are hairline. Tap any
+            segment to jump straight to that zone. Visual-and-tactile
+            cue that the title card is swipeable left/right. User:
+            'add a progression bar so people know you can swipe to
+            different zones.' Hidden on desktop (no swipe gesture). */}
+        {isNarrow && onSelectZone && (
+          <div style={{
+            display:"flex", gap: 4, marginBottom: 12,
+          }}>
+            {ZONES.map(function(z){
+              var on = z.id === zone.id;
+              return (
+                <button key={z.id} type="button"
+                  onClick={function(){ if(!on && onSelectZone) onSelectZone(z.id); }}
+                  aria-label={"Jump to " + z.name}
+                  aria-current={on ? "true" : "false"}
+                  style={{
+                    flex: 1,
+                    height: 4,
+                    minWidth: 0,
+                    padding: 0,
+                    borderRadius: 2,
+                    border: "none",
+                    background: on ? z.color : t.border,
+                    opacity: on ? 1 : 0.55,
+                    cursor: on ? "default" : "pointer",
+                    transition: "background 0.18s, opacity 0.18s",
+                  }}/>
+              );
+            })}
+          </div>
+        )}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
           <div style={{ display:"flex", gap:12, alignItems:"center", flex:1, minWidth:0 }}>
             <div style={{
@@ -363,17 +397,10 @@ export default function ZoneSidePanel({
               </div>
             </div>
           </div>
-          {/* Close affordance.
-                Desktop: '>' chevron — reads as 'collapse panel to
-                  the right' (and the map reframes back to city
-                  view). User feedback drove this from the harsh
-                  '✕' to a softer chevron.
-                Mobile: '✕' — the panel is full-bleed there, so
-                  'collapse to the right' isn't a meaningful
-                  metaphor; a conventional close glyph is clearer.
-                  User: 'make sure the > on the tab reframe is
-                  only on web.'
-              SVG line-art per the project's icon rule. */}
+          {/* Close affordance — '>' chevron on both platforms per
+              latest user feedback ('on mobile it has an X can you
+              make it a >'). SVG line-art per the project's icon
+              rule. */}
           <button onClick={onClose} aria-label="Close zone panel" style={{
             background:"transparent", border:"none", cursor:"pointer",
             color:t.textTertiary, padding:6, lineHeight:0,
@@ -382,9 +409,7 @@ export default function ZoneSidePanel({
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
                  stroke="currentColor" strokeWidth="1.7"
                  strokeLinecap="round" strokeLinejoin="round">
-              {isNarrow
-                ? <path d="M5 5l8 8M13 5l-8 8"/>
-                : <path d="M7 4l5 5-5 5"/>}
+              <path d="M7 4l5 5-5 5"/>
             </svg>
           </button>
         </div>
