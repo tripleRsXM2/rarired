@@ -502,82 +502,153 @@ export default function ZoneSidePanel({
                 : ("No one has set this as their home yet." + (canSetHome && !isHome ? " Be the first." : ""))}
           </div>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+          /* Horizontal-scroll player carousel — same swipe-friendly
+             pattern as MapPlayerOverlay's picker. Replaces the
+             vertical row list per user feedback ('add the player
+             cards instead of the icons... slide left or right').
+             Container has overflow-x:auto + flex centring so a
+             short row of cards visually anchors to the centre and
+             a long row scrolls; flex-shrink:0 on the cards stops
+             them from compressing. */
+          <div
+            style={{
+              display:"flex",
+              gap: 8,
+              justifyContent: displayPlayers.length <= 4 ? "center" : "flex-start",
+              overflowX:"auto",
+              overflowY:"hidden",
+              scrollSnapType:"x mandatory",
+              WebkitOverflowScrolling:"touch",
+              padding:"4px 2px 12px",
+              scrollbarWidth: "none",
+              marginRight: -4, // bleed past the panel padding so the trailing card has visual room
+            }}>
             {displayPlayers.map(function (p) {
               var isViewer = p.id === (authUser && authUser.id);
               var selected = selectedIds.indexOf(p.id) >= 0;
               var disabled = !authUser || isViewer || (!selected && selectedCount >= MAX_SELECT);
               return (
-                <div key={p.id} style={{
-                  display:"flex", alignItems:"center", gap:8,
-                  padding:"7px 8px", borderRadius:8,
-                  background: selected ? t.accentSubtle : "transparent",
-                  border:"1px solid "+(selected ? t.accent : "transparent"),
-                  opacity: disabled && !selected ? 0.55 : 1,
-                }}>
-                  {/* Checkbox affordance — full row toggles selection when clickable. */}
-                  <button
-                    onClick={function () { togglePlayer(p); }}
-                    disabled={disabled}
-                    title={isViewer ? "That's you" : (disabled ? "Max selected" : (selected ? "Unselect" : "Select for doubles"))}
-                    style={{
-                      display:"flex", alignItems:"center", gap:10,
-                      padding:0, background:"transparent", border:"none",
-                      textAlign:"left", cursor: disabled ? "not-allowed" : "pointer",
-                      flex:1, minWidth:0,
-                    }}>
-                    <span style={{
-                      width:18, height:18, borderRadius:4,
-                      border:"1.5px solid "+(selected ? t.accent : t.border),
-                      background: selected ? t.accent : "transparent",
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      flexShrink:0,
-                      color:"#fff", fontSize:10, fontWeight:900, lineHeight:1,
-                    }}>
-                      {selected ? "✓" : ""}
-                    </span>
-                    <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={30} blurred={!authUser}/>
-                    <div style={{ minWidth:0, flex:1 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
-                        <span style={{ fontSize:13, color:t.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0,
-                          filter: !authUser ? "blur(5px)" : "none" }}>
-                          {p.name}
-                          {isViewer && <span style={{ color:t.textTertiary, fontWeight:400 }}> · you</span>}
-                        </span>
-                        {p.playsHere && selectedCourt && (
-                          <span
-                            title={"Plays at " + selectedCourt}
-                            style={{
-                              display:"inline-flex", alignItems:"center", gap:3,
-                              color: t.accent, flexShrink:0,
-                            }}>
-                            {NAV_ICONS.homeCourt(12)}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize:11, color:t.textTertiary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {[(p.skill||""), (p.ranking_points ? p.ranking_points + " pts" : "")]
-                          .filter(Boolean).join(" · ")}
-                      </div>
-                    </div>
-                  </button>
-                  {/* Profile link — small chevron; separate from the
-                      checkbox toggle so the row's main hit region is
-                      the selection. */}
-                  {!isViewer && onOpenProfile && (
-                    <button
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={function () { togglePlayer(p); }}
+                  disabled={disabled}
+                  title={isViewer ? "That's you" : (disabled ? "Max selected" : (selected ? "Unselect" : "Select"))}
+                  style={{
+                    flexShrink: 0,
+                    scrollSnapAlign: "start",
+                    width: 108,
+                    padding: "10px 8px 12px",
+                    borderRadius: 14,
+                    background: selected ? t.accent : t.bgCard,
+                    color: selected ? (t.accentText || "#fff") : t.text,
+                    border: "1px solid " + (selected ? t.accent : t.border),
+                    cursor: disabled && !selected ? "not-allowed" : "pointer",
+                    opacity: disabled && !selected ? 0.55 : 1,
+                    display:"flex", flexDirection:"column",
+                    alignItems:"center", gap: 6,
+                    boxShadow: selected
+                      ? "0 8px 18px rgba(0,0,0,0.18)"
+                      : "0 1px 3px rgba(0,0,0,0.06)",
+                    transform: selected ? "translateY(-2px)" : "none",
+                    transition:"background 0.15s, transform 0.15s, box-shadow 0.15s",
+                    position:"relative",
+                  }}>
+                  {/* Profile chevron — sits inside the card top-right
+                      so a tap on the card body still toggles select.
+                      Suppressed on the viewer's own card (no profile
+                      to open). pointerEvents managed via stopPropagation. */}
+                  {!isViewer && onOpenProfile && authUser && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={"Open " + (p.name || "player") + " profile"}
                       onClick={function (e) { e.stopPropagation(); onOpenProfile(p.id); }}
-                      title="View profile"
+                      onKeyDown={function(e){
+                        if(e.key === "Enter" || e.key === " "){ e.stopPropagation(); onOpenProfile(p.id); }
+                      }}
                       style={{
-                        background:"transparent", border:"1px solid "+t.border,
-                        borderRadius:6, padding:"3px 8px",
-                        color:t.textSecondary, fontSize:10, fontWeight:600,
-                        cursor:"pointer", flexShrink:0,
+                        position:"absolute", top: 6, right: 6,
+                        width: 22, height: 22, borderRadius: "50%",
+                        background: selected ? "rgba(255,255,255,0.20)" : t.bgTertiary,
+                        color: selected ? (t.accentText || "#fff") : t.textSecondary,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        cursor:"pointer",
                       }}>
-                      Profile
-                    </button>
+                      <svg width="11" height="11" viewBox="0 0 18 18" fill="none"
+                           stroke="currentColor" strokeWidth="1.8"
+                           strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M7 4l5 5-5 5"/>
+                      </svg>
+                    </span>
                   )}
-                </div>
+
+                  {/* Avatar with selection ring */}
+                  <div style={{ position:"relative" }}>
+                    <PlayerAvatar
+                      name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url}
+                      size={50} blurred={!authUser}/>
+                    {selected && (
+                      <span style={{
+                        position:"absolute", bottom: -2, right: -2,
+                        width: 18, height: 18, borderRadius:"50%",
+                        background: "#fff", color: t.accent,
+                        border: "2px solid " + t.accent,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize: 10, fontWeight: 900, lineHeight: 1,
+                      }}>✓</span>
+                    )}
+                    {p.playsHere && selectedCourt && !selected && (
+                      <span
+                        title={"Plays at " + selectedCourt}
+                        aria-label={"Plays at " + selectedCourt}
+                        style={{
+                          position:"absolute", bottom: -2, right: -2,
+                          width: 18, height: 18, borderRadius: "50%",
+                          background: t.accent, color: "#fff",
+                          border: "2px solid " + t.bgCard,
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                        }}>
+                        {NAV_ICONS.homeCourt(10)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Name (with 'you' suffix when viewing yourself) */}
+                  <div style={{
+                    width: "100%",
+                    fontSize: 12, fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.15,
+                    textAlign:"center",
+                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                    filter: !authUser ? "blur(5px)" : "none",
+                  }}>
+                    {p.name || "Player"}
+                    {isViewer && <span style={{ opacity: 0.55, fontWeight: 500 }}> · you</span>}
+                  </div>
+
+                  {/* Skill / rating chip */}
+                  {(p.skill || p.ranking_points) && (
+                    <span style={{
+                      padding: "1px 7px", borderRadius: 999,
+                      background: selected
+                        ? "rgba(255,255,255,0.20)"
+                        : t.bgTertiary,
+                      color: selected
+                        ? (t.accentText || "#fff")
+                        : t.textSecondary,
+                      fontSize: 9, fontWeight: 800,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
+                      maxWidth: "100%",
+                      overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {p.skill ? p.skill : (p.ranking_points + " pts")}
+                    </span>
+                  )}
+                </button>
               );
             })}
           </div>
