@@ -164,7 +164,17 @@ export default function OpponentPicker({
 
         return (
           <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+            position: "absolute", top: "calc(100% + 4px)",
+            // Anchor to the input's right edge but allow the dropdown
+            // to extend leftward up to 280px. Without this the
+            // dropdown was only as wide as the narrow opponent input
+            // (≈170px on a 375 viewport), which clipped friend names
+            // to a single letter and made the VERIFIED badge collide
+            // with the name+skill block. min(...) keeps it inside the
+            // viewport on small screens.
+            right: 0,
+            width: "min(280px, calc(100vw - 32px))",
+            maxWidth: "100vw",
             background: t.bgCard, border: "1px solid " + t.border,
             borderRadius: 10,
             boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
@@ -202,13 +212,23 @@ export default function OpponentPicker({
                       {u.name}
                     </div>
                     {u.skill && (
-                      <div style={{ fontSize: 11, color: t.textTertiary }}>{u.skill}</div>
+                      <div style={{
+                        fontSize: 11, color: t.textTertiary,
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      }}>
+                        {u.skill}
+                      </div>
                     )}
                   </div>
+                  {/* The status badge MUST flex-shrink:0 so it can't
+                      eat into the name column and overlap when space
+                      is tight. whiteSpace:nowrap belt-and-braces. */}
                   <span style={{
+                    flexShrink: 0,
                     fontSize: 9, fontWeight: 800,
                     color: isFriend ? t.accent : t.textTertiary,
                     letterSpacing: "0.12em", textTransform: "uppercase",
+                    whiteSpace: "nowrap",
                   }}>
                     {isFriend ? "Verified" : "Suggested"}
                   </span>
