@@ -190,7 +190,13 @@ export default function ZoneSidePanel({
   if(!zone) return null;
 
   var courts = courtsInZone(zone.id);
-  var totalCourts = courts.reduce(function(n,c){ return n + c.courts; }, 0);
+  // Count of distinct venues in the zone — the user-facing 'how
+  // many places to play here' number. Was previously the sum of
+  // physical courts across venues, which read as a confusing
+  // double-counted value (each venue's row already shows its own
+  // physical-court count below). User: 'change # of courts to
+  // # of locations'.
+  var totalLocations = courts.length;
   // If the user picks a court via the panel that's beyond the
   // collapsed slice, auto-expand so the active row stays visible.
   var collapseActive = isNarrow && courts.length > COLLAPSE_THRESHOLD && !courtsExpanded;
@@ -211,8 +217,10 @@ export default function ZoneSidePanel({
   var pinnedCourt = selectedCourt
     ? courts.find(function(c){ return c.name === selectedCourt; })
     : null;
-  var courtsCellValue = pinnedCourt ? pinnedCourt.courts : totalCourts;
-  var courtsCellLabel = pinnedCourt ? "Courts here" : "Courts nearby";
+  var courtsCellValue = pinnedCourt ? pinnedCourt.courts : totalLocations;
+  // Pinned venue → 'Courts here' (physical court count at that
+  // venue). Default → 'Locations' (distinct venue count).
+  var courtsCellLabel = pinnedCourt ? "Courts here" : "Locations";
   var isHome = homeZone === zone.id;
   var canSetHome = !!authUser;
 
@@ -330,7 +338,7 @@ export default function ZoneSidePanel({
           <div>
             <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>🔥 {activity.matches_7d}</div>
             <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>
-              Matches · 7d
+              Matches · This week
             </div>
           </div>
         )}
