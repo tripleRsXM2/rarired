@@ -580,6 +580,7 @@ export default function MapTab({
       {sidePanelZone && (
       <ZoneSidePanel
         t={t} zone={sidePanelZone} onClose={function(){ setSelected(null); }}
+        onSelectZone={function(nextId){ setSelected(nextId); setPanelCourtName(null); }}
         authUser={authUser} profile={profile}
         homeZone={homeZone}
         activity={selectedZone ? zoneActivity[selectedZone.id] : null}
@@ -597,7 +598,18 @@ export default function MapTab({
         }}
         onMessageSelected={function(partners, ctx){
           if(!partners || !partners.length) return;
-          if(onMessagePlayer) onMessagePlayer(partners, ctx);
+          // Both court + people are already picked here, which is
+          // exactly the data set the wizard's When+Send step needs.
+          // Skip the legacy compose modal and route through step 4
+          // of Play Match instead. User: 'when in the zone tab
+          // and we pick a person and a venue and message, that
+          // was supposed to go to Step 4 of 4 in Play match.'
+          setSelected((ctx && ctx.zoneId) || selected);
+          setWizardInitialCourt((ctx && ctx.courtName) || null);
+          setWizardInitialPartners(partners);
+          setWizardInitialFormat(partners.length === 1 ? "singles" : "doubles");
+          setWizardOpen(true);
+          track("play_match_step_entered", { step: 3, source: "zone_panel" });
         }}
       />
       )}

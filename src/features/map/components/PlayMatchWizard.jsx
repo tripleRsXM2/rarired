@@ -27,6 +27,7 @@ import { nearbySkillLevels } from "../../../lib/constants/domain.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
+import useIsMobile from "../../../lib/hooks/useIsMobile.js";
 
 // Four steps:
 //   0 zone   1 court   2 player(s)   3 when + send
@@ -61,6 +62,10 @@ export default function PlayMatchWizard({
   onBackToPicker,
   onClose, onSendInvite,
 }){
+  // Phone breakpoint — drives the full-bleed modal layout on mobile
+  // (no map peek-through, no rounded corners, no backdrop dim).
+  var isMobile = useIsMobile();
+
   // Steps: 0 zone, 1 court, 2 players, 3 confirm.
   var [step, setStep]           = useState(0);
   var [zoneId, setZoneId]       = useState(initialZoneId || null);
@@ -331,14 +336,15 @@ export default function PlayMatchWizard({
         // not the whole viewport — the side nav stays visible to its
         // left and the wizard reads as part of the map surface.
         position:"absolute", inset:0, zIndex: 3000,
-        // Backdrop: dark + heavy blur so the map behind softens
-        // out — Nike Run / iOS sheet vibe. The map remains visible
-        // as a hint of where you came from.
-        background:"rgba(20,18,17,0.42)",
-        WebkitBackdropFilter: "blur(10px)",
-        backdropFilter: "blur(10px)",
+        // Mobile: solid fill, no map peek-through (the map behind
+        // adds nothing once you're committing to the When + Send
+        // step). Desktop: dark + blurred so the wizard reads as a
+        // sheet floating over the map.
+        background: isMobile ? t.bgCard : "rgba(20,18,17,0.42)",
+        WebkitBackdropFilter: isMobile ? "none" : "blur(10px)",
+        backdropFilter: isMobile ? "none" : "blur(10px)",
         display:"flex", alignItems:"center", justifyContent:"center",
-        padding: 12,
+        padding: isMobile ? 0 : 12,
       }}
       // Backdrop dismiss — track that the mousedown started on the
       // backdrop too, otherwise drag-selecting text inside the modal
@@ -353,20 +359,24 @@ export default function PlayMatchWizard({
         backdropDownRef.current = false;
       }}>
       <div style={{
-        // Translucent glass card — the boxy bordered modal is gone.
-        // Content is the design; chrome is invisible. Theme-aware
-        // bg so the wizard is readable on any palette (audit fix:
-        // rgba(255,255,255,0.96) was hardcoded white and caused text
-        // to wash out on dark themes).
-        background: hexToRgba(t.bgCard, 0.96),
-        WebkitBackdropFilter: "blur(40px) saturate(140%)",
-        backdropFilter: "blur(40px) saturate(140%)",
+        // Mobile: full-bleed solid sheet — fills the entire map
+        // frame, no rounded corners, no shadow, no glass blur. User:
+        // 'on mobile when you get to step 4 of 4 in map, can that
+        // window just take up the entire frame, and not see the map
+        // behind it?'
+        // Desktop: translucent glass card — content IS the design,
+        // chrome is invisible. Theme-aware bg so the wizard reads
+        // on any palette.
+        background: isMobile ? t.bgCard : hexToRgba(t.bgCard, 0.96),
+        WebkitBackdropFilter: isMobile ? "none" : "blur(40px) saturate(140%)",
+        backdropFilter: isMobile ? "none" : "blur(40px) saturate(140%)",
         color: t.text,
-        borderRadius: 22,
-        boxShadow: "0 24px 60px rgba(20,18,17,0.28)",
+        borderRadius: isMobile ? 0 : 22,
+        boxShadow: isMobile ? "none" : "0 24px 60px rgba(20,18,17,0.28)",
         width: "100%",
-        maxWidth: 460,
-        maxHeight: "calc(100dvh - 24px)",
+        maxWidth: isMobile ? "none" : 460,
+        height: isMobile ? "100%" : "auto",
+        maxHeight: isMobile ? "100%" : "calc(100dvh - 24px)",
         display: "flex", flexDirection: "column",
         overflow: "hidden",
         position: "relative",
@@ -1178,12 +1188,25 @@ export default function PlayMatchWizard({
             <div>
               {!loading && players.length > 0 && (
                 <div>
+                  {/* Sub-step 1 — pick a time. The circled-number
+                      glyph visually maps to the user's mental
+                      'first this, then that' mental model on the
+                      final step (1. When → 2. Send invite). */}
                   <div style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                    textTransform: "uppercase", color: t.textTertiary,
-                    marginBottom: 8,
+                    display:"flex", alignItems:"center", gap: 10,
+                    marginBottom: 12,
                   }}>
-                    When?
+                    <span style={{
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: t.accent, color: t.accentText || "#fff",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize: 12, fontWeight: 900, lineHeight: 1,
+                      flexShrink: 0,
+                    }}>1</span>
+                    <span style={{
+                      fontSize: 13, fontWeight: 800, letterSpacing: "0.04em",
+                      textTransform: "uppercase", color: t.text,
+                    }}>When?</span>
                   </div>
                   <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                     {[
@@ -1271,10 +1294,21 @@ export default function PlayMatchWizard({
                   </div>
 
                   {pickedCourt && pickedCourt.bookingUrl && (
+                    <>
+                    {/* Hairline rule above the booking link gives a
+                        clear visual separation from the time-of-day
+                        tabs that sit just above. Matches the rule
+                        below that splits us from the message
+                        preview. */}
+                    <div style={{
+                      height: 1, background: t.border,
+                      marginTop: 16, marginBottom: 14,
+                      opacity: 0.7,
+                    }}/>
                     <a href={pickedCourt.bookingUrl}
                       target="_blank" rel="noopener noreferrer"
                       style={{
-                        marginTop: 12, padding: "10px 12px", borderRadius: 12,
+                        padding: "10px 12px", borderRadius: 12,
                         background: hexToRgba(t.bgCard, 0.78),
                         color: t.text, textDecoration:"none",
                         display:"flex", alignItems:"center", gap: 10,
@@ -1295,31 +1329,65 @@ export default function PlayMatchWizard({
                         </svg>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
+                        {/* Three-line stack — action verb, venue name,
+                            quiet hint. Separating 'Check times' from
+                            the venue name reads less like a long
+                            sentence and more like a labelled link. */}
                         <div style={{
-                          fontSize: 12.5, fontWeight: 700, color: t.text,
-                          letterSpacing: "-0.01em",
-                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                          fontSize: 10.5, fontWeight: 800, color: t.textSecondary,
+                          letterSpacing: "0.10em", textTransform: "uppercase",
+                          lineHeight: 1.1,
                         }}>
-                          Check times at {pickedCourt.name}
+                          Check times
                         </div>
                         <div style={{
-                          fontSize: 10, color: t.textTertiary, marginTop: 2,
+                          fontSize: 13, fontWeight: 600, color: t.text,
+                          letterSpacing: "-0.01em",
+                          marginTop: 3, lineHeight: 1.2,
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        }}>
+                          {pickedCourt.name}
+                        </div>
+                        <div style={{
+                          fontSize: 10, color: t.textTertiary, marginTop: 4,
                           letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:700,
                         }}>
-                          Opens venue's booking site
+                          Open venue booking site
                         </div>
                       </div>
                     </a>
+                    {/* Bottom hairline mirrors the one above — visually
+                        anchors the booking link as its own block,
+                        separated from the message-preview sub-step
+                        below. */}
+                    <div style={{
+                      height: 1, background: t.border,
+                      marginTop: 14, marginBottom: 8,
+                      opacity: 0.7,
+                    }}/>
+                    </>
                   )}
 
                   {selectedIds.length > 0 && (
                     <div style={{ marginTop: 14 }}>
+                      {/* Sub-step 2 — send the invite. Same circled-
+                          number pattern as 'When?' above so the two
+                          actions read as a clear ordered pair. */}
                       <div style={{
-                        fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                        textTransform: "uppercase", color: t.textTertiary,
-                        marginBottom: 6,
+                        display:"flex", alignItems:"center", gap: 10,
+                        marginBottom: 10,
                       }}>
-                        Message preview
+                        <span style={{
+                          width: 22, height: 22, borderRadius: "50%",
+                          background: t.accent, color: t.accentText || "#fff",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontSize: 12, fontWeight: 900, lineHeight: 1,
+                          flexShrink: 0,
+                        }}>2</span>
+                        <span style={{
+                          fontSize: 13, fontWeight: 800, letterSpacing: "0.04em",
+                          textTransform: "uppercase", color: t.text,
+                        }}>Send message invite</span>
                       </div>
                       <div style={{
                         padding: "12px 14px",

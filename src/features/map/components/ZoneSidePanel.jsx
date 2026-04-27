@@ -21,17 +21,19 @@
 //   • "click court → open CourtInfoCard modal" (that modal is still
 //     reachable from the map pin if users want the detailed view)
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
+import { ZONES } from "../data/zones.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone } from "../services/mapService.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
+import ZoneShape from "./ZoneShape.jsx";
 
 var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
 
 export default function ZoneSidePanel({
-  t, zone, onClose,
+  t, zone, onClose, onSelectZone,
   authUser, profile, homeZone, onSetHome, onClearHome,
   onOpenProfile, activity,
   // onMessageSelected(partners[], slotHints) — array, supports doubles.
@@ -59,6 +61,10 @@ export default function ZoneSidePanel({
   }
 
   var [selectedIds, setSelectedIds]     = useState([]);
+  // Tracks where a touch swipe started so the gesture handler at
+  // the title card can decide on touchend whether the delta crossed
+  // the threshold to navigate to the next/previous zone.
+  var swipeStartRef = useRef(null);
   // Player list scope: "zone" (default, home_zone match in this zone)
   // or "everywhere" (whole user base, ranked the same way). Lets the
   // viewer pitch a match at a court to someone who isn't a local.
@@ -262,7 +268,12 @@ export default function ZoneSidePanel({
       width:"100%", maxWidth: isNarrow ? "none" : 360,
       background: t.bgCard,
       borderLeft: isNarrow ? "none" : ("1px solid " + t.border),
-      display:"flex", flexDirection:"column", zIndex:500,
+      display:"flex", flexDirection:"column",
+      // zIndex bumped from 500 → 1100 so the panel sits ABOVE
+      // Leaflet's attribution control (~z 800) on mobile. User
+      // feedback: 'OSM icon is still visible, can it hide when
+      // we are in that tab.'
+      zIndex: 1100,
       boxShadow: isNarrow ? "none" : "-8px 0 32px rgba(0,0,0,0.06)",
     }}>
 
@@ -271,19 +282,91 @@ export default function ZoneSidePanel({
           for what's a one-tap toggle). Same icon doubles as indicator
           and action: filled-accent when this zone is the viewer's home,
           outlined neutral otherwise. */}
-      <div style={{ padding:"20px 20px 16px", borderBottom:"1px solid "+t.border }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
-          <div style={{ display:"flex", gap:12, alignItems:"center", flex:1, minWidth:0 }}>
+      {(function(){
+        // Swipe gesture wiring — on mobile, dragging the title card
+        // left → next zone, right → previous zone. Threshold 48px so
+        // a small accidental drag doesn't navigate. Falls back to a
+        // no-op when isNarrow is false.
+        return null;
+      })()}
+      <div
+        onTouchStart={isNarrow && onSelectZone ? function(e){
+          var x = e.touches[0] ? e.touches[0].clientX : 0;
+          swipeStartRef.current = { x: x, t: Date.now() };
+        } : null}
+        onTouchEnd={isNarrow && onSelectZone ? function(e){
+          var s = swipeStartRef.current;
+          if(!s) return;
+          var endX = (e.changedTouches[0] || {}).clientX || 0;
+          var dx = endX - s.x;
+          var dt = Date.now() - s.t;
+          swipeStartRef.current = null;
+          if(Math.abs(dx) < 48) return;       // not a swipe
+          if(dt > 600) return;                 // too slow → probably a scroll
+          var zonesArr = ZONES;
+          var i = zonesArr.findIndex(function(z){ return z.id === zone.id; });
+          if(i < 0) return;
+          var next = dx < 0 ? (i + 1) % zonesArr.length
+                            : (i - 1 + zonesArr.length) % zonesArr.length;
+          onSelectZone(zonesArr[next].id);
+          track("zone_swiped", { from: zone.id, to: zonesArr[next].id, direction: dx < 0 ? "left" : "right" });
+        } : null}
+        style={{
+          // Mobile compacts the entire title block (incl. progression
+          // bar) so it doesn't crowd the courts list. User: 'top 2
+          // sections a tiny bit more compact'.
+          padding: isNarrow
+            ? (onSelectZone ? "8px 16px 10px" : "14px 16px 10px")
+            : "20px 20px 16px",
+          borderBottom:"1px solid "+t.border,
+          touchAction: isNarrow && onSelectZone ? "pan-y" : "auto",
+        }}>
+        {/* Mobile: progression bar at the top of the title block.
+            Six segments, one per zone in the canonical ZONES order;
+            the active zone fills, others are hairline. Tap any
+            segment to jump straight to that zone. Visual-and-tactile
+            cue that the title card is swipeable left/right. User:
+            'add a progression bar so people know you can swipe to
+            different zones.' Hidden on desktop (no swipe gesture). */}
+        {isNarrow && onSelectZone && (
+          <div style={{
+            display:"flex", gap: 4, marginBottom: 8,
+          }}>
+            {ZONES.map(function(z){
+              var on = z.id === zone.id;
+              return (
+                <button key={z.id} type="button"
+                  onClick={function(){ if(!on && onSelectZone) onSelectZone(z.id); }}
+                  aria-label={"Jump to " + z.name}
+                  aria-current={on ? "true" : "false"}
+                  style={{
+                    flex: 1,
+                    height: 4,
+                    minWidth: 0,
+                    padding: 0,
+                    borderRadius: 2,
+                    border: "none",
+                    background: on ? z.color : t.border,
+                    opacity: on ? 1 : 0.55,
+                    cursor: on ? "default" : "pointer",
+                    transition: "background 0.18s, opacity 0.18s",
+                  }}/>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap: isNarrow ? 8 : 12 }}>
+          <div style={{ display:"flex", gap: isNarrow ? 10 : 12, alignItems:"center", flex:1, minWidth:0 }}>
             <div style={{
-              width:36, height:36, borderRadius:"50%", background: zone.color,
+              width: isNarrow ? 32 : 36, height: isNarrow ? 32 : 36, borderRadius:"50%", background: zone.color,
               display:"flex", alignItems:"center", justifyContent:"center",
-              color:"#fff", fontWeight:700, fontSize:16, flexShrink:0,
+              color:"#fff", fontWeight:700, fontSize: isNarrow ? 14 : 16, flexShrink:0,
               boxShadow:"0 0 0 3px "+t.bgCard,
             }}>{zone.num}</div>
             <div style={{ minWidth:0, flex:1 }}>
-              <div style={{ fontSize:10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom:2 }}>Zone {zone.num}</div>
+              <div style={{ fontSize: isNarrow ? 9 : 10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom: isNarrow ? 1 : 2 }}>Zone {zone.num}</div>
               <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
-                <div style={{ fontSize:18, fontWeight:700, color:t.text, letterSpacing:"-0.02em", lineHeight:1.15, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+                <div style={{ fontSize: isNarrow ? 16 : 18, fontWeight:700, color:t.text, letterSpacing:"-0.02em", lineHeight:1.15, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
                   {zone.name}
                 </div>
                 {canSetHome && (
@@ -306,14 +389,23 @@ export default function ZoneSidePanel({
                     {NAV_ICONS.homeCourt(14)}
                   </button>
                 )}
+                {/* Zone shape glyph — bare SVG, no chip background.
+                    User: 'remove the cube with bevelled edges' that
+                    was sitting behind the silhouette. Sits at the
+                    trailing edge of the name row via marginLeft:auto. */}
+                <div style={{
+                  flexShrink: 0, marginLeft: "auto",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                }}>
+                  <ZoneShape zone={zone} size={isNarrow ? 34 : 42} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
+                </div>
               </div>
             </div>
           </div>
-          {/* Close affordance — user feedback: '✕ at the top corner
-              is a bit harsh, can you make it a > instead?' Read as
-              'collapse panel to the right' rather than a destructive
-              close. SVG line-art per the project's icon rule
-              (stroke=currentColor / strokeWidth 1.7 / no emoji). */}
+          {/* Close affordance — '>' chevron on both platforms per
+              latest user feedback ('on mobile it has an X can you
+              make it a >'). SVG line-art per the project's icon
+              rule. */}
           <button onClick={onClose} aria-label="Close zone panel" style={{
             background:"transparent", border:"none", cursor:"pointer",
             color:t.textTertiary, padding:6, lineHeight:0,
@@ -326,27 +418,27 @@ export default function ZoneSidePanel({
             </svg>
           </button>
         </div>
-        <div style={{ fontSize:12, color:t.textSecondary, marginTop:12, lineHeight:1.45 }}>{zone.blurb}</div>
+        <div style={{ fontSize: isNarrow ? 11.5 : 12, color:t.textSecondary, marginTop: isNarrow ? 8 : 12, lineHeight:1.4 }}>{zone.blurb}</div>
       </div>
 
       {/* Stats row */}
       <div style={{
         display:"grid",
         gridTemplateColumns: activity && activity.matches_7d > 0 ? "1fr 1fr 1fr" : "1fr 1fr",
-        padding:"14px 20px", borderBottom:"1px solid "+t.border, gap:12,
+        padding: isNarrow ? "10px 16px" : "14px 20px", borderBottom:"1px solid "+t.border, gap: isNarrow ? 10 : 12,
       }}>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{courtsCellValue}</div>
-          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>{courtsCellLabel}</div>
+          <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{courtsCellValue}</div>
+          <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>{courtsCellLabel}</div>
         </div>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading ? "…" : displayPlayers.length}</div>
-          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Players here</div>
+          <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{loading ? "…" : displayPlayers.length}</div>
+          <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>Players here</div>
         </div>
         {activity && activity.matches_7d > 0 && (
           <div>
-            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>🔥 {activity.matches_7d}</div>
-            <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>
+            <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:"#ef4444", lineHeight:1.1 }}>🔥 {activity.matches_7d}</div>
+            <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>
               Matches · This week
             </div>
           </div>
