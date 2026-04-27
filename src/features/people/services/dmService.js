@@ -3,12 +3,18 @@ import { supabase } from "../../../lib/supabase.js";
 
 // ── Conversations ──────────────────────────────────────────────────────────────
 
-export function fetchConversations(userId){
-  return supabase.from('conversations')
-    .select('*')
-    .or('user1_id.eq.'+userId+',user2_id.eq.'+userId)
-    .neq('status','declined')
-    .order('last_message_at',{ascending:false});
+// fetchConversations: backed by the fetch_my_conversations() RPC so it
+// returns N-party conversations as well. Each row carries
+// `participant_ids: uuid[]` in addition to the legacy user1/user2 columns.
+// Maintains the previous shape ({ data: ConversationRow[], error }) so
+// existing callers (useDMs, etc.) don't need to change in this phase.
+// The userId arg is unused — the RPC scopes to auth.uid() — but we keep
+// the parameter to avoid touching call sites in Phase 1.
+// eslint-disable-next-line no-unused-vars
+export async function fetchConversations(userId){
+  var r = await supabase.rpc('fetch_my_conversations');
+  if(r.error) return { data: null, error: r.error };
+  return { data: Array.isArray(r.data) ? r.data : [], error: null };
 }
 
 // Atomic, race-safe get-or-create for the canonical conversation between
@@ -18,6 +24,23 @@ export function fetchConversations(userId){
 // dm_canonical_conversation.sql.
 export function getOrCreateConversation(otherId){
   return supabase.rpc('get_or_create_conversation',{other_id:otherId}).single();
+}
+
+// Create an N-party group conversation. otherIds excludes the caller; the
+// SECURITY DEFINER RPC adds auth.uid() as a participant. On block conflict
+// (any pairwise block among members) the RPC raises with SQLSTATE P0001 and
+// message 'block_conflict' — we surface that as a stable error.code so
+// callers can show the right toast without string-matching.
+export async function createGroupConversation(otherIds){
+  var r = await supabase.rpc('create_group_conversation', { other_ids: otherIds });
+  if(r.error){
+    var msg = String(r.error.message || "");
+    if(msg.indexOf('block_conflict') !== -1){
+      return { data: null, error: { code: 'block_conflict', message: msg } };
+    }
+    return { data: null, error: r.error };
+  }
+  return { data: r.data, error: null };
 }
 
 export function updateConversationStatus(convId,status){
