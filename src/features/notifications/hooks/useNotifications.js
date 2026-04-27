@@ -1,9 +1,34 @@
 // src/features/notifications/hooks/useNotifications.js
+//
+// Module 11 (Slice 2) — DB-driven lifecycle. Retires the
+// sessionStorage seenIds badge logic in favour of a single canonical
+// filter (countsAsUnread) that reads from the new lifecycle columns
+// shipped by Slice 1's migration.
+//
+// Behaviour changes from prior version:
+//   - markOneRead writes read_at (+ legacy read=true mirror) instead
+//     of just `read`. Idempotent: a re-tap on an already-read row is
+//     a no-op (gated by `.is('read_at', null)` in the service layer).
+//   - dismissNotification writes dismissed_at instead of DELETE.
+//   - markSeen drops seenIds entirely. Opening the tray bulk-marks
+//     informational rows read so they fall out of the next centre
+//     query; actionable rows stay visible because isActiveForUser
+//     keeps them up while resolved_at is null.
+//   - acceptMatchTag no longer hard-deletes the notification — the
+//     server-side cleanup_match_notifs_trg flips it to resolved on
+//     the match_history.status transition (Slice 1 wiring), and the
+//     centre filter hides resolved rows on next render. Realtime
+//     UPDATE event live-removes it.
+//   - unreadCount uses countsAsUnread (registry-driven), so an
+//     opened-but-unresolved actionable still counts as "needs your
+//     attention" forever, while informational rows fall out the
+//     moment read_at lands.
+
 import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import * as N from "../services/notificationService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
-import { getNotifType } from "../utils/notifUtils.js";
+import { isActionable, countsAsUnread } from "../utils/notifUtils.js";
 
 // Notification types that should display a mini scorecard (sets + W/L)
 // inline in the tray. Covers every match lifecycle event where the
@@ -14,10 +39,6 @@ var MATCH_CARD_TYPES = [
   "match_counter_proposed", "match_voided", "match_deleted",
 ];
 
-// Fetch sets/result/participants for every match_id we'll render a card
-// for, then stitch the data onto the notification as `match`. Viewer
-// perspective is computed later in the UI (result is stored from the
-// submitter's view, so if the viewer is the opponent we invert it).
 async function enrichWithMatches(notifs, viewerId) {
   var ids = [...new Set(
     notifs
@@ -45,12 +66,16 @@ export function useNotifications(opts) {
 
   var [notifications, setNotifications] = useState([]);
   var [showNotifications, setShowNotifications] = useState(false);
-  // seenIds — purely in-memory; tracks which notification IDs were visible when
-  // the tray was opened. Cleared on mount/reload by design.
-  var [seenIds, setSeenIds] = useState(function () { return new Set(); });
 
   // ── Initial load ─────────────────────────────────────────────────────────────
+  // Module 11 Slice 1 added reconcile_my_notifications — call it on
+  // load so any rows the cleanup triggers missed (deploy race, dropped
+  // realtime event, etc.) are resolved before we render the centre.
+  // Best-effort: failure is logged + ignored so the tray still loads.
   async function loadNotifications(userId) {
+    try { await N.reconcileMyNotifications(); }
+    catch (e) { console.warn("[notifications] reconcile failed:", e && e.message); }
+
     var nr = await N.fetchRecentNotifications(userId);
     if (nr.data && nr.data.length) {
       var fromIds = [...new Set(nr.data.map(function (n) { return n.from_user_id; }).filter(Boolean))];
@@ -91,8 +116,6 @@ export function useNotifications(opts) {
         fromAvatar: senderProfile.avatar,
         fromAvatarUrl: senderProfile.avatar_url,
       });
-      // If this is a match-lifecycle notification, fetch the match row so
-      // the tray can render an inline mini-scorecard (sets + W/L).
       if (MATCH_CARD_TYPES.indexOf(enriched.type) >= 0) {
         var mid = enriched.match_id || enriched.entity_id;
         if (mid) {
@@ -110,11 +133,12 @@ export function useNotifications(opts) {
       });
     }
 
-    // Realtime: DELETE events let us live-remove rows the moment a
-    // cleanup trigger fires (e.g. conv deleted → message_request notif
-    // gone; match voided → match_tag notif gone; challenge expired →
-    // challenge_received notif gone). notifications is REPLICA IDENTITY
-    // FULL so payload.old carries user_id — we filter by that here.
+    // Module 11 Slice 1 — cleanup triggers now flip resolved_at via
+    // UPDATE rather than DELETE. The existing handleNotifChange path
+    // catches UPDATE events (subscribed below) and re-renders the row;
+    // isActiveForUser then filters it out at panel-time, so the
+    // "match resolved → notification disappears" flow keeps working
+    // without a separate DELETE-handler path.
     function handleNotifDelete(payload) {
       var old = payload.old || {};
       if (!old.id) return;
@@ -134,109 +158,122 @@ export function useNotifications(opts) {
   }, [authUser && authUser.id]);
 
   // ── Badge count ──────────────────────────────────────────────────────────────
-  // Shows items that are unread AND not yet seen in this session.
-  //
-  // Excludes `message` notifications — unread DMs surface via the People
-  // nav badge instead (Instagram-style), so showing them here too would
-  // double-count. The `message_request` + `message_request_accepted`
-  // types DO count here because they're friend-request-style events, not
-  // ongoing chat activity.
+  // Module 11 Slice 2: DB/lifecycle-driven, no sessionStorage. The
+  // canonical countsAsUnread() helper handles the registry lookup +
+  // the "read but unresolved actionable still counts" rule.
   function unreadCount() {
-    return notifications.filter(function (n) {
-      if (n.type === "message") return false;
-      return !n.read && !seenIds.has(n.id);
-    }).length;
+    return notifications.filter(countsAsUnread).length;
   }
 
   // ── markSeen ─────────────────────────────────────────────────────────────────
-  // Called when the tray opens. Adds all visible IDs to seenIds (clears badge
-  // locally). Also auto-reads non-action items in the DB so they don't
-  // re-appear in the badge after a page reload.
+  // Called when the tray opens. Bulk-marks INFORMATIONAL rows read so
+  // they vanish from the centre on next render (isActiveForUser hides
+  // informational + read). Actionable rows are deliberately NOT
+  // touched — they stay visible until the underlying entity resolves.
   async function markSeen() {
+    if (!authUser) return;
     var current = notifications;
-    setSeenIds(function (prev) {
-      var next = new Set(prev);
-      current.forEach(function (n) { next.add(n.id); });
-      return next;
-    });
     var toRead = current.filter(function (n) {
-      return !n.read && getNotifType(n) !== "action";
+      return !n.read_at && !isActionable(n);
     });
-    if (toRead.length && authUser) {
-      var ids = toRead.map(function (n) { return n.id; });
-      await N.markNotificationsReadByIds(ids);
-      setNotifications(function (ns) {
-        return ns.map(function (n) {
-          return ids.indexOf(n.id) !== -1 ? Object.assign({}, n, { read: true }) : n;
-        });
+    if (!toRead.length) return;
+    var ids = toRead.map(function (n) { return n.id; });
+    await N.markNotificationsReadByIds(ids);
+    var nowIso = new Date().toISOString();
+    setNotifications(function (ns) {
+      return ns.map(function (n) {
+        return ids.indexOf(n.id) !== -1
+          ? Object.assign({}, n, { read: true, read_at: nowIso })
+          : n;
       });
-    }
+    });
   }
 
   // ── markOneRead ──────────────────────────────────────────────────────────────
-  // Called when the user clicks a notification row.
+  // Called when the user clicks a notification row (informational or
+  // actionable). Sets read_at + legacy `read = true`. For informational
+  // rows this hides them on next render; for actionable rows the
+  // centre keeps showing them while resolved_at is null.
   async function markOneRead(id) {
     await N.markNotificationRead(id);
+    var nowIso = new Date().toISOString();
     setNotifications(function (ns) {
       return ns.map(function (n) {
-        return n.id === id ? Object.assign({}, n, { read: true }) : n;
+        return n.id === id
+          ? Object.assign({}, n, { read: true, read_at: n.read_at || nowIso })
+          : n;
       });
     });
   }
 
   // ── markAllRead ──────────────────────────────────────────────────────────────
-  // "Mark all read" button — intentionally skips action-type items so unresolved
-  // disputes / match tags are never silently cleared.
+  // "Mark all read" CTA — same rule as markSeen: only informational
+  // rows. Action items stay until resolved.
   async function markAllRead() {
+    if (!authUser) return;
     var toRead = notifications.filter(function (n) {
-      return !n.read && getNotifType(n) !== "action";
+      return !n.read_at && !isActionable(n);
     });
-    if (!toRead.length || !authUser) return;
+    if (!toRead.length) return;
     var ids = toRead.map(function (n) { return n.id; });
     await N.markNotificationsReadByIds(ids);
+    var nowIso = new Date().toISOString();
     setNotifications(function (ns) {
       return ns.map(function (n) {
-        return ids.indexOf(n.id) !== -1 ? Object.assign({}, n, { read: true }) : n;
+        return ids.indexOf(n.id) !== -1
+          ? Object.assign({}, n, { read: true, read_at: nowIso })
+          : n;
       });
     });
   }
 
   // ── dismissNotification ──────────────────────────────────────────────────────
-  // Deletes a single non-action notification from DB and local state.
+  // Module 11 Slice 2: writes dismissed_at, doesn't DELETE. Keeps the
+  // row in the table for the future history surface. Local state
+  // patches dismissed_at so the panel filter (isActiveForUser) drops
+  // it on next render.
   async function dismissNotification(id) {
-    await N.deleteNotification(id);
-    setNotifications(function (ns) { return ns.filter(function (n) { return n.id !== id; }); });
+    await N.deleteNotification(id);                  // service helper writes dismissed_at
+    var nowIso = new Date().toISOString();
+    setNotifications(function (ns) {
+      return ns.map(function (n) {
+        return n.id === id ? Object.assign({}, n, { dismissed_at: nowIso }) : n;
+      });
+    });
   }
 
-  // ── dismissNotifications (bulk) ──────────────────────────────────────────────
-  // Used to dismiss all notifications in a group/thread at once.
   async function dismissNotifications(ids) {
     if (!ids || !ids.length) return;
     await Promise.all(ids.map(function (id) { return N.deleteNotification(id); }));
+    var nowIso = new Date().toISOString();
     var idSet = new Set(ids);
-    setNotifications(function (ns) { return ns.filter(function (n) { return !idSet.has(n.id); }); });
+    setNotifications(function (ns) {
+      return ns.map(function (n) {
+        return idSet.has(n.id) ? Object.assign({}, n, { dismissed_at: nowIso }) : n;
+      });
+    });
   }
 
   // ── acceptMatchTag / declineMatchTag ─────────────────────────────────────────
-  // Accept uses the SECURITY DEFINER RPC (confirm_match_and_update_stats)
-  // because profile stats columns (ranking_points / wins / losses /
-  // matches_played / streak_*) are locked from user writes by a trigger
-  // (profiles_locked_columns_guard). Only the server can update them, and
-  // the RPC calls apply_match_outcome internally to run the real ELO.
-  //
-  // The old path did a direct UPDATE on match_history + a client-side
-  // bump on profiles, which fails with "profiles.ranking_points is not
-  // user-writable" the moment the locked-columns guard is in place.
+  // Slice 2: post-RPC delete is gone. The cleanup_match_notifs_trg
+  // (Slice 1) flips resolved_at on the match_history.status →
+  // 'confirmed' transition; realtime UPDATE event arrives and the
+  // panel filter naturally hides the now-resolved row. Local state
+  // is also patched so the UI updates instantly without waiting for
+  // realtime.
   async function acceptMatchTag(n) {
     var rpc = await supabase.rpc('confirm_match_and_update_stats', { p_match_id: n.match_id });
     if (rpc.error) {
       console.error('[acceptMatchTag] confirm RPC failed:', rpc.error);
       return { error: rpc.error };
     }
-    // Fetch the now-confirmed row so the caller can wire it into local state
     var mr = await supabase.from('match_history').select('*').eq('id', n.match_id).maybeSingle();
-    await N.deleteNotification(n.id);
-    setNotifications(function (ns) { return ns.filter(function (x) { return x.id !== n.id; }); });
+    var nowIso = new Date().toISOString();
+    setNotifications(function (ns) {
+      return ns.map(function (x) {
+        return x.id === n.id ? Object.assign({}, x, { resolved_at: nowIso }) : x;
+      });
+    });
     setShowNotifications(false);
     if (mr.data && onMatchTagAccepted) onMatchTagAccepted(mr.data);
     return { error: null };
@@ -245,14 +282,20 @@ export function useNotifications(opts) {
   async function declineMatchTag(n) {
     if (!updateMatchTagStatus) return;
     await updateMatchTagStatus(n.match_id, "declined", false);
-    await N.deleteNotification(n.id);
-    setNotifications(function (ns) { return ns.filter(function (x) { return x.id !== n.id; }); });
+    // Decline transitions the match away from pending_confirmation;
+    // the cleanup trigger will resolve the notification. Patch local
+    // state immediately for snappy UX.
+    var nowIso = new Date().toISOString();
+    setNotifications(function (ns) {
+      return ns.map(function (x) {
+        return x.id === n.id ? Object.assign({}, x, { resolved_at: nowIso }) : x;
+      });
+    });
   }
 
   function resetNotifications() {
     setNotifications([]);
     setShowNotifications(false);
-    setSeenIds(new Set());
   }
 
   return {

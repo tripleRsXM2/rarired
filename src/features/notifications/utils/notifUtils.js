@@ -1,58 +1,96 @@
 // src/features/notifications/utils/notifUtils.js
-// Phase 2 — type classification, priority scoring, smart demotion, grouping,
-// copy, and clearing rules. No React, no side-effects.
+//
+// Module 11 (Slice 2) — single canonical lifecycle filter + grouping.
+//
+// Replaces the prior category-classification / smart-demotion / priority-
+// scoring logic with a much smaller surface. The whole "what's in the
+// notification centre" question now collapses to: isActiveForUser(n).
+//
+// Read paths:
+//   - useNotifications hook (badge count + tray rendering filter)
+//   - NotificationsPanel (single newest-first list, grouping inside)
+//
+// Removed:
+//   - ACTION_TYPES / IMPORTANT_TYPES sets (replaced by NOTIF_TYPES registry)
+//   - applySmartDemotion (server-side resolved_at handles this now)
+//   - getEffectiveType / _demoted flag (no longer needed)
+//   - computePriorityScore + sortNotifications (replaced by sortByCreatedAt)
+//   - TYPE_BASE_SCORE / TYPE_URGENCY_BONUS (registry-driven)
+//
+// What stays:
+//   - getNotifLabel / getThreadContextLabel / notifTimeLabel (copy)
+//   - groupNotifications (dispute-thread + like_group + comment_group
+//     collapsing, per Slice 2 product sign-off)
+//   - matchKey / canDismiss / canDismissItem / getItemIds (helpers)
 
-// ── Type classification ────────────────────────────────────────────────────────
-var ACTION_TYPES = new Set([
-  "match_tag",
-  "match_disputed",
-  "match_correction_requested",
-  "match_counter_proposed",
-  "match_reminder",
-  "friend_request",
-  "message_request",
-  // Module 4: incoming challenge needs a yes/no response.
-  "challenge_received",
-  // (pact_proposed retired with Tindis.)
-]);
+import { getTypeMeta, isVisibleInCentre } from "../types.js";
 
-var IMPORTANT_TYPES = new Set([
-  "request_accepted",
-  "message_request_accepted",
-  "match_confirmed",
-  "match_voided",
-  "match_expired",
-  // Module 4: outcomes of a challenge you sent.
-  "challenge_accepted",
-  "challenge_declined",
-  "challenge_expired",
-  // Module 7: leagues.
-  "league_invite",   // invited to a private league — respond from the row
-  "league_joined",   // someone accepted an invite → positive social signal
-  // (pact_* downstream types retired with Tindis.)
-  // Module 9: opponent claimed an invite you sent. The match has now
-  // moved to pending_confirmation — they'll separately fire match_tag
-  // for the confirm/dispute action, so this row is informational
-  // ("they're on it"), not action-required for the logger.
-  "match_invite_claimed",
-  // Module 9: someone marked your invite as "not me". Logger needs
-  // to either re-issue or void.
-  "match_invite_declined",
-]);
+// ─── Lifecycle helpers ───────────────────────────────────────────────────────
 
-export function getNotifType(n) {
-  if (ACTION_TYPES.has(n.type)) return "action";
-  if (IMPORTANT_TYPES.has(n.type)) return "important";
-  return "activity";
+// True if this notification owes the recipient an action (and that
+// action hasn't been resolved). Action_required is read from the
+// central registry; resolved_at comes from Slice 1's lifecycle column.
+export function isActionable(n) {
+  if (!n) return false;
+  if (n.resolved_at) return false;
+  return getTypeMeta(n.type).action_required === true;
 }
 
-// getEffectiveType respects smart demotion (_demoted flag set by applySmartDemotion).
-export function getEffectiveType(n) {
-  if (n._demoted) return "important";
-  return getNotifType(n);
+// THE canonical "is this row visible in the notification centre right
+// now?" filter. Used by the panel render, the badge count, every
+// future "active notifications" surface. If you need a different
+// filter somewhere, talk to the team — duplicating the rule here is
+// the single biggest source of badge / inbox mismatch.
+//
+// Returns true when:
+//   - row is for the currently-relevant audience (not the filtered-out 'message')
+//   - row is not resolved (server-side action complete)
+//   - row is not dismissed (user manually hid it)
+//   - row is not expired (time window passed)
+//   - row is either:
+//       (a) an unresolved actionable (stays visible past read), OR
+//       (b) an unread informational (hides on first read)
+//
+// Note: read_at takes precedence over the legacy `read` boolean.
+// During Slice 2's transition we write both — `read = true` plus
+// `read_at = now()` — but reads only consult read_at so a row whose
+// `read` was set by old code without read_at still behaves correctly
+// once it's read by new code.
+export function isActiveForUser(n) {
+  if (!n) return false;
+  if (!isVisibleInCentre(n.type)) return false;     // 'message' never shows
+  if (n.dismissed_at) return false;
+  if (n.resolved_at) return false;
+  if (n.expires_at && new Date(n.expires_at) <= new Date()) return false;
+
+  if (isActionable(n)) {
+    // Actionable + unresolved: always visible (read or unread).
+    return true;
+  }
+  // Informational: visible only until first read.
+  // Treat legacy `read = true` rows without read_at as read for safety.
+  return !n.read_at && !n.read;
 }
 
-// ── Human-readable copy ────────────────────────────────────────────────────────
+// True if the row counts toward the unread badge. Slightly different
+// from isActiveForUser:
+//   - actionable + unresolved: counts as "needs attention" forever,
+//     even after the user has opened it (read_at set)
+//   - informational: counts only while unread
+// Resolved / dismissed / expired rows never count.
+export function countsAsUnread(n) {
+  if (!n) return false;
+  if (!isVisibleInCentre(n.type)) return false;
+  if (n.dismissed_at) return false;
+  if (n.resolved_at) return false;
+  if (n.expires_at && new Date(n.expires_at) <= new Date()) return false;
+
+  if (isActionable(n)) return true;          // unresolved action always counts
+  return !n.read_at && !n.read;              // informational counts while unread
+}
+
+// ─── Copy ────────────────────────────────────────────────────────────────────
+
 export function getNotifLabel(n) {
   var name = n.fromName || "Someone";
   switch (n.type) {
@@ -72,27 +110,19 @@ export function getNotifLabel(n) {
     case "match_reminder":             return "A pending match is expiring soon — check your feed.";
     case "like":                       return name + " liked your match.";
     case "comment":                    return name + " commented on your match.";
-    case "challenge_received":         return name + " challenged you to a match.";
+    case "challenge_received":         return name + " challenged you to play.";
     case "challenge_accepted":         return name + " accepted your challenge — log the result when you've played.";
     case "challenge_declined":         return name + " declined your challenge.";
     case "challenge_expired":          return "Your challenge to " + name + " expired without a response.";
-    // Module 7 — leagues
-    case "league_invite":              return name + " invited you to a private league.";
+    case "league_invite":              return name + " invited you to a league.";
     case "league_joined":              return name + " joined your league.";
-    // (pact_* notification copy retired with Tindis. Stale rows
-    // already in the table fall through to "New notification.")
-    // Module 9 — opponent invites
     case "match_invite_claimed":       return name + " joined CourtSync and claimed the match — they'll confirm or dispute next.";
     case "match_invite_declined":      return name + " marked your invite as 'not me' — you can re-issue or void the match.";
-    // Module 9.1.5 — closes the casual-match trust gap. Informational
-    // only (Activity bucket): the match is already in the recipient's
-    // feed; this is just the heads-up that it was logged.
     case "casual_match_logged":        return name + " logged a casual match with you.";
     default:                           return "New notification.";
   }
 }
 
-// Compact label for thread context lines (no trailing punctuation for readability).
 export function getThreadContextLabel(n) {
   var name = n.fromName || "Someone";
   switch (n.type) {
@@ -106,129 +136,58 @@ export function getThreadContextLabel(n) {
   }
 }
 
-// ── Priority scoring ───────────────────────────────────────────────────────────
-// Replaces pure bucket + date sort. Keeps natural action → important → activity
-// grouping while elevating urgency and recency within buckets.
-
-var TYPE_BASE_SCORE = { action: 3000, important: 2000, activity: 1000 };
-
-var TYPE_URGENCY_BONUS = {
-  match_disputed:             450,
-  match_counter_proposed:     400,
-  match_correction_requested: 380,
-  match_tag:                  320,
-  match_reminder:             280,
-  friend_request:             220,
-  message_request:            180,
-  message_request_accepted:   60,
-  match_confirmed:            50,
-  match_voided:               40,
-  match_expired:              30,
-  // Module 4
-  challenge_received:        300,  // ranked just below match_tag — needs response
-  challenge_accepted:         70,  // positive, prompts log-result
-  challenge_declined:         20,
-  challenge_expired:          15,
-  // Module 7 — leagues
-  league_invite:              90,  // inbox signal to review + join
-  league_joined:              25,  // positive, non-urgent
-  // (pact_* urgency entries retired with Tindis.)
-  // Module 9.1.5 — informational. Sits in Activity, low urgency:
-  // the recipient might want to glance, but nothing's at stake.
-  // Below match_confirmed (50) so it doesn't outrank a legitimate
-  // ranked outcome.
-  casual_match_logged:        35,
-};
-
-export function computePriorityScore(n) {
-  var effectiveType = getEffectiveType(n);
-  var base    = TYPE_BASE_SCORE[effectiveType] || 1000;
-  var urgency = TYPE_URGENCY_BONUS[n.type] || 0;
-  var unread  = n.read ? 0 : 80;
-  // Recency decay over 7 days (0–200 points)
-  var ageMs   = Date.now() - new Date(n.created_at || Date.now()).getTime();
-  var ageDays = ageMs / (1000 * 60 * 60 * 24);
-  var recency = Math.max(0, Math.round(200 * (1 - Math.min(ageDays / 7, 1))));
-  return base + urgency + unread + recency;
-}
-
-// ── Sorting ────────────────────────────────────────────────────────────────────
-export function sortNotifications(notifications) {
-  return notifications.slice().sort(function (a, b) {
-    return computePriorityScore(b) - computePriorityScore(a);
-  });
-}
-
-// ── Match key helper ──────────────────────────────────────────────────────────
-// Notifications use match_id for match-related types, entity_id for social
-// (friend_request, conversation). Use this everywhere to avoid confusion.
+// Match-id helper — handles the legacy match_id column + the newer
+// entity_id uuid column transparently. Used to bucket notifications
+// by the match they relate to.
 export function matchKey(n) {
   return n.match_id || n.entity_id || null;
 }
 
-// ── Smart demotion ─────────────────────────────────────────────────────────────
-// When a match has been confirmed or voided, lingering dispute notifications
-// for the same match are demoted from "action" to "important". They remain
-// visible (for context) but no longer assert urgency.
-
-var DEMOTABLE_DISPUTE_TYPES = new Set([
-  "match_disputed",
-  "match_correction_requested",
-  "match_counter_proposed",
-]);
-
-export function applySmartDemotion(notifications) {
-  var resolvedIds = new Set();
-  notifications.forEach(function (n) {
-    if ((n.type === "match_confirmed" || n.type === "match_voided") && matchKey(n)) {
-      resolvedIds.add(matchKey(n));
-    }
-  });
-  if (!resolvedIds.size) return notifications;
-  return notifications.map(function (n) {
-    if (matchKey(n) && resolvedIds.has(matchKey(n)) && DEMOTABLE_DISPUTE_TYPES.has(n.type)) {
-      return Object.assign({}, n, { _demoted: true });
-    }
-    return n;
+// ─── Sorting ──────────────────────────────────────────────────────────────────
+//
+// Slice 2 collapses the prior priority-scored sort to "newest first".
+// Unresolved actionables get a soft pin to the top so they don't drift
+// behind a flurry of recent informational rows — but the visual
+// remains a single list, no section headers.
+function sortByActiveThenDate(notifications) {
+  return notifications.slice().sort(function (a, b) {
+    var aPin = isActionable(a) ? 1 : 0;
+    var bPin = isActionable(b) ? 1 : 0;
+    if (aPin !== bPin) return bPin - aPin;
+    var aT = a.created_at ? new Date(a.created_at).getTime() : 0;
+    var bT = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bT - aT;
   });
 }
 
-// ── Smart grouping ─────────────────────────────────────────────────────────────
-// Returns an array of "display items" for the panel renderer:
+// ─── Grouping ────────────────────────────────────────────────────────────────
 //
-//   { kind: "single",     n,                       score }
-//   { kind: "thread",     primary, context: [n…],  score }  ← dispute threads
-//   { kind: "like_group", items: [n…],              score }  ← likes on same match
+// Same display-item shapes as before — the panel keeps thread / like_group
+// / comment_group collapsing inside the unified list (per Slice 2 sign-off:
+// "keep grouping if it reduces noise, but inside the single list").
 //
-// Rules:
-//   - action-required notifications are NEVER hidden — they always appear as
-//     the primary of their thread or as a standalone single.
-//   - Dispute-family types for the same entity_id form a thread; the highest-
-//     priority item is the primary.
-//   - Multiple likes on the same match collapse into one like_group item.
+// Filter happens FIRST: only active rows can group.
 
-var DISPUTE_FAMILY = new Set([
-  "match_tag",
-  "match_disputed",
-  "match_correction_requested",
-  "match_counter_proposed",
-  "match_voided",
-  "match_confirmed",
-]);
+var DISPUTE_FAMILY = {
+  match_tag: 1, match_disputed: 1, match_correction_requested: 1,
+  match_counter_proposed: 1, match_voided: 1, match_confirmed: 1,
+};
 
 export function groupNotifications(rawNotifications) {
-  var ns = applySmartDemotion(rawNotifications);
-  var sorted = sortNotifications(ns);
+  // 1. Drop everything that's not active in the centre right now.
+  var visible = (rawNotifications || []).filter(isActiveForUser);
 
-  // Bucket into: threads, like groups, comment groups, singles
-  var threadBuckets  = {};   // matchKey → [n]
-  var likeBuckets    = {};   // matchKey → [n]
-  var commentBuckets = {};   // matchKey → [n] (Module 6)
+  // 2. Stable sort: actionables on top, otherwise newest first.
+  var sorted = sortByActiveThenDate(visible);
+
+  var threadBuckets  = {};
+  var likeBuckets    = {};
+  var commentBuckets = {};
   var singles        = [];
 
   sorted.forEach(function (n) {
     var key = matchKey(n);
-    if (DISPUTE_FAMILY.has(n.type) && key) {
+    if (DISPUTE_FAMILY[n.type] && key) {
       if (!threadBuckets[key]) threadBuckets[key] = [];
       threadBuckets[key].push(n);
     } else if (n.type === "like" && key) {
@@ -238,62 +197,55 @@ export function groupNotifications(rawNotifications) {
       if (!commentBuckets[key]) commentBuckets[key] = [];
       commentBuckets[key].push(n);
     } else {
-      singles.push({ kind: "single", n: n, score: computePriorityScore(n) });
+      singles.push({ kind: "single", n: n });
     }
   });
 
-  // Flatten thread buckets → display items
+  // Threads: primary = first row (already sorted with actionables on top),
+  // rest become context.
   var threadItems = Object.values(threadBuckets).map(function (group) {
-    // Primary = highest-priority notification in the thread
-    var by_score = group.slice().sort(function (a, b) {
-      return computePriorityScore(b) - computePriorityScore(a);
-    });
-    var primary = by_score[0];
-    var context = by_score.slice(1); // older / lower-priority events for context
-    return {
-      kind: "thread",
-      primary: primary,
-      context: context,
-      score: computePriorityScore(primary),
-    };
+    var primary = group[0];
+    var context = group.slice(1);
+    return { kind: "thread", primary: primary, context: context };
   });
 
-  // Flatten like buckets → display items
+  // Likes / comments: collapse multiple-on-same-match into a group;
+  // a single one stays as a normal row.
   var likeItems = Object.values(likeBuckets).map(function (group) {
-    var byDate = group.slice().sort(function (a, b) {
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
-    if (byDate.length === 1) {
-      return { kind: "single", n: byDate[0], score: computePriorityScore(byDate[0]) };
-    }
-    return { kind: "like_group", items: byDate, score: computePriorityScore(byDate[0]) };
+    if (group.length === 1) return { kind: "single", n: group[0] };
+    return { kind: "like_group", items: group };
   });
-
-  // Module 6: comment groups — same shape as like_group but rendered with a
-  // "comment" verb. Single comments stay as their own row.
   var commentItems = Object.values(commentBuckets).map(function (group) {
-    var byDate = group.slice().sort(function (a, b) {
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
-    if (byDate.length === 1) {
-      return { kind: "single", n: byDate[0], score: computePriorityScore(byDate[0]) };
-    }
-    return { kind: "comment_group", items: byDate, score: computePriorityScore(byDate[0]) };
+    if (group.length === 1) return { kind: "single", n: group[0] };
+    return { kind: "comment_group", items: group };
   });
 
-  // Merge and sort all display items by score
-  return singles.concat(threadItems).concat(likeItems).concat(commentItems)
-    .sort(function (a, b) { return b.score - a.score; });
+  // Merge into one list. Use the primary row's date for thread/group
+  // sort so groups float with their newest content, with the same
+  // actionable-pin rule applied at the item level.
+  function itemSortKey(item) {
+    var refRow = item.kind === "single"        ? item.n
+              : item.kind === "thread"         ? item.primary
+              : /* like_group / comment_group */  item.items[0];
+    return refRow;
+  }
+  var merged = singles.concat(threadItems).concat(likeItems).concat(commentItems);
+  return merged.sort(function (a, b) {
+    var aRow = itemSortKey(a);
+    var bRow = itemSortKey(b);
+    var aPin = isActionable(aRow) ? 1 : 0;
+    var bPin = isActionable(bRow) ? 1 : 0;
+    if (aPin !== bPin) return bPin - aPin;
+    var aT = aRow.created_at ? new Date(aRow.created_at).getTime() : 0;
+    var bT = bRow.created_at ? new Date(bRow.created_at).getTime() : 0;
+    return bT - aT;
+  });
 }
 
-// ── Clearing rules ─────────────────────────────────────────────────────────────
-// Every notification is dismissable. Deleting the notification row never
-// affects the underlying object (match, dispute, challenge) — it just
-// removes the nag from the inbox. If the user has already resolved the
-// action elsewhere (or simply wants to declutter), let them clear it.
+// ─── Display-item helpers (kept for panel) ───────────────────────────────────
+
 export function canDismiss(n) { return !!n; }
 
-// Can an entire display item be dismissed? All four kinds are dismissable.
 export function canDismissItem(item) {
   if (item.kind === "single")        return canDismiss(item.n);
   if (item.kind === "thread")        return canDismiss(item.primary);
@@ -302,7 +254,6 @@ export function canDismissItem(item) {
   return false;
 }
 
-// All notification IDs that make up a display item.
 export function getItemIds(item) {
   if (item.kind === "single")        return [item.n.id];
   if (item.kind === "thread")        return [item.primary].concat(item.context).map(function (n) { return n.id; });
@@ -311,31 +262,45 @@ export function getItemIds(item) {
   return [];
 }
 
-// Section (action / important / activity) for a display item.
-export function getItemSection(item) {
-  if (item.kind === "single")        return getEffectiveType(item.n);
-  if (item.kind === "thread")        return getEffectiveType(item.primary);
-  if (item.kind === "like_group")    return "activity";
-  if (item.kind === "comment_group") return "activity";
-  return "activity";
-}
-
-// ── Type accent colour ─────────────────────────────────────────────────────────
+// ─── Per-row visual accent ───────────────────────────────────────────────────
+// Keep a single function so the panel can stay declarative. Drives the
+// left-edge bar colour: actionable → accent (draw the eye), informational
+// → muted.
 export function notifAccentColor(n, t) {
-  var type = getEffectiveType(n);
-  if (type === "action")    return t.accent;
-  if (type === "important") return t.green;
-  return t.border;
+  if (!t) return null;
+  return isActionable(n) ? t.accent : t.border;
 }
 
-// ── Relative time label ────────────────────────────────────────────────────────
+// ─── Time label ──────────────────────────────────────────────────────────────
 export function notifTimeLabel(isoString) {
+  if (!isoString) return "";
   var now  = Date.now();
   var then = new Date(isoString).getTime();
   var diff = Math.floor((now - then) / 1000);
-  if (diff < 60)    return "just now";
-  if (diff < 3600)  return Math.floor(diff / 60) + "m ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+  if (diff < 60)     return "just now";
+  if (diff < 3600)   return Math.floor(diff / 60)   + "m ago";
+  if (diff < 86400)  return Math.floor(diff / 3600) + "h ago";
   if (diff < 604800) return Math.floor(diff / 86400) + "d ago";
   return new Date(isoString).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+}
+
+// ─── Backward-compat shims ───────────────────────────────────────────────────
+//
+// Keep these tiny surface-area exports so legacy imports don't break
+// while NotificationsPanel finishes migrating.
+//
+// All three reduce to: "is this an unresolved actionable?".
+
+export function getNotifType(n) {
+  // Coarse legacy 3-bucket label. Dispute family + action types → "action".
+  // Everything else is "activity" because we no longer surface
+  // "important" as a separate UI bucket. Kept only for any third-party
+  // import that hasn't migrated yet.
+  return isActionable(n) ? "action" : "activity";
+}
+export function getEffectiveType(n) { return getNotifType(n); }
+export function getItemSection(item) {
+  if (item.kind === "single")  return getNotifType(item.n);
+  if (item.kind === "thread")  return getNotifType(item.primary);
+  return "activity";
 }
