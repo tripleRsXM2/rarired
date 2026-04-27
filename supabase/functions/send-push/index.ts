@@ -42,7 +42,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 // @negrel/webpush is published on JSR (jsr.io/@negrel/webpush). The
 // esm.sh JSR proxy resolves it for the Deno bundler. The bare
 // `https://esm.sh/@negrel/webpush@0.3.0` (npm namespace) returns 404.
-import * as webpush from "https://esm.sh/jsr/@negrel/webpush@0.3.0";
+//
+// Bumped from 0.3.0 → 0.5.0 because 0.3.0 throws inside
+// importVapidKeys on the current Supabase Edge Runtime:
+//   "Failed to execute 'importKey' on 'SubtleCrypto': Argument 2
+//    can not be converted to a dictionary"
+// (Captured via push_subscriptions.last_failure_reason after the
+// diagnostic patch landed.)
+import * as webpush from "https://esm.sh/jsr/@negrel/webpush@0.5.0";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
