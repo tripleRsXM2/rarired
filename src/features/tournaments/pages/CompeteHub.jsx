@@ -27,6 +27,8 @@ import { useNavigate } from "react-router-dom";
 import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
 import { isActive }    from "../../leagues/utils/leagueLifecycle.js";
 import CompeteHero               from "../components/hub/CompeteHero.jsx";
+import CompeteFeaturedBand,
+  { selectFeaturedLeague }      from "../components/hub/CompeteFeaturedBand.jsx";
 import ActiveNowSection          from "../components/hub/ActiveNowSection.jsx";
 import StartSomethingSection     from "../components/hub/StartSomethingSection.jsx";
 import PastCompetitionsSection   from "../components/hub/PastCompetitionsSection.jsx";
@@ -170,6 +172,20 @@ export default function CompeteHub({
     tournaments && tournaments.isEntered, tournaments && tournaments.tournStatus,
   ]);
 
+  // Design pass: pick the league to feature in the dark band, if any.
+  // Selection runs against the same data as the cards so they stay
+  // in sync — featured league appears in the band; the same league
+  // is filtered out of the cards below to avoid double-rendering.
+  var featuredSelection = useMemo(function () {
+    return selectFeaturedLeague(leagues.leagues, leagues.detailCache, viewerId);
+  }, [leagues.leagues, leagues.detailCache, viewerId]);
+  var excludeCardIds = useMemo(function () {
+    if (!featuredSelection) return [];
+    // The active-league card id is "league_active_<uuid>" — see
+    // competeNormalize.normalizeActiveLeague.
+    return ["league_active_" + featuredSelection.league.id];
+  }, [featuredSelection]);
+
   // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="fade-up" style={{
@@ -187,7 +203,21 @@ export default function CompeteHub({
         onCreateLeague={function () { setShowCreateLeague(true); }}
       />
 
-      <ActiveNowSection t={t} cards={activeNowCards} />
+      {/* Design pass: dark editorial band sibling of HomeLeagueBand.
+          Renders only when a qualifying active league has standings
+          loaded (see selectFeaturedLeague). When it renders, the
+          corresponding card is excluded from ActiveNowSection so the
+          same league doesn't appear twice. */}
+      <CompeteFeaturedBand
+        t={t}
+        authUser={authUser}
+        leagues={leagues.leagues}
+        detailCache={leagues.detailCache}
+        profileMap={leagues.profileMap || {}}
+        onOpenLeague={goLeague}
+      />
+
+      <ActiveNowSection t={t} cards={activeNowCards} excludeCardIds={excludeCardIds} />
 
       <StartSomethingSection
         t={t}

@@ -14,7 +14,10 @@ export default function SectionHeader({ t, label, count, action }) {
   return (
     <div style={{
       display: "flex", alignItems: "baseline", justifyContent: "space-between",
-      gap: 12, marginBottom: 10,
+      // Design pass: marginBottom 10 → clamp(12, 1.5vw, 16). Slight
+      // breathing under the section header so the cards below don't
+      // crowd the label.
+      gap: 12, marginBottom: "clamp(12px, 1.5vw, 16px)",
     }}>
       <div style={{
         fontSize: 10, fontWeight: 800,

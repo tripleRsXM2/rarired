@@ -14,14 +14,24 @@
 import ActiveCompetitionCard from "./ActiveCompetitionCard.jsx";
 import SectionHeader, { HUB_SECTION_MB } from "./SectionHeader.jsx";
 
-export default function ActiveNowSection({ t, cards }) {
+export default function ActiveNowSection({ t, cards, excludeCardIds }) {
+  // Design pass: when CompeteFeaturedBand surfaces a card above us,
+  // its id lands in excludeCardIds so we don't double-render the
+  // same competition. The section count adjusts to match — "Active
+  // now · 1" reads honestly when one of the two active items is in
+  // the featured band.
+  var excluded = excludeCardIds || [];
+  var visible = excluded.length === 0
+    ? cards
+    : cards.filter(function (c) { return excluded.indexOf(c.id) < 0; });
+
   return (
     <section style={{ marginBottom: HUB_SECTION_MB }}>
-      <SectionHeader t={t} label="Active now" count={cards.length || null} />
-      {cards.length === 0 ? (
+      <SectionHeader t={t} label="Active now" count={visible.length || null} />
+      {visible.length === 0 ? (
         <ActiveNowEmpty t={t} />
       ) : (
-        cards.map(function (item) {
+        visible.map(function (item) {
           return <ActiveCompetitionCard key={item.id} t={t} item={item} />;
         })
       )}

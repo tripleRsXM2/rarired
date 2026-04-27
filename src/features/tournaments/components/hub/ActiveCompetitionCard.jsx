@@ -48,7 +48,11 @@ export default function ActiveCompetitionCard({ t, item }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 14, fontWeight: 700, color: t.text,
-            letterSpacing: "-0.15px", lineHeight: 1.3,
+            // Design pass: tighter letter-spacing on titles ties the
+            // card typography to the editorial scale used by the
+            // featured dark band ("-0.02em" on the band's title;
+            // -0.2px sits cleanly between that and the page title).
+            letterSpacing: "-0.2px", lineHeight: 1.3,
             // No ellipsis cap — the card is never inside a horizontally
             // constrained container, and clipping titles makes invites
             // genuinely confusing ("…ague invite" reads as garbage).
@@ -75,11 +79,14 @@ export default function ActiveCompetitionCard({ t, item }) {
         </div>
 
         {/* Status pill — flex-shrink:0 keeps it from squeezing the title.
-            Same chrome as league lifecycle pills for visual continuity. */}
+            Design pass: sharp-corner squares (radius 0) match the
+            recent-form chips and result pills used across HomeHero /
+            HomeLeaguesStrip. The previous rounded-pellet shape
+            (radius 20) read as a different visual language. */}
         <span style={{
           flexShrink: 0,
           fontSize: 9, fontWeight: 700, color: toneFg, background: toneBg,
-          padding: "3px 8px", borderRadius: 20,
+          padding: "4px 8px", borderRadius: 0,
           letterSpacing: "0.12em", textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}>

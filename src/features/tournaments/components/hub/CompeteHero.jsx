@@ -17,14 +17,22 @@ export default function CompeteHero({ t, onChallenge, onCreateLeague }) {
       padding: "8px 0 10px",
     }}>
       <div style={{
-        fontSize: 20, fontWeight: 800, color: t.text,
-        letterSpacing: "-0.4px", lineHeight: 1.1,
+        // Design pass: editorial scale matching HomeHero's greeting
+        // pattern (clamp(22px, 3.4vw, 32px) for the greeting, with a
+        // tighter ceiling here since "Compete" is a single word and
+        // doesn't need to grow as much as "Hi, Mikey"). Tighter
+        // letter-spacing (-0.6px) reads as more confident, less
+        // app-shell.
+        fontSize: "clamp(22px, 3.6vw, 28px)",
+        fontWeight: 800, color: t.text,
+        letterSpacing: "-0.6px", lineHeight: 1.05,
       }}>
         Compete
       </div>
       <div style={{
-        fontSize: 12.5, color: t.textSecondary,
-        marginTop: 3, lineHeight: 1.4,
+        fontSize: 13, color: t.textSecondary,
+        marginTop: 4, lineHeight: 1.4,
+        letterSpacing: "0.005em",
       }}>
         Your leagues, challenges, and competitions in one place.
       </div>
