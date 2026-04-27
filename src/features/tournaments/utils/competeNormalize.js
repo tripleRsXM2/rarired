@@ -41,6 +41,34 @@ export var CARD_TYPE = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
+// Featured-band slide shape (carousel band)
+// ─────────────────────────────────────────────────────────────────────
+//
+// The Active now band is a horizontal carousel where every slide
+// shares the same editorial template (eyebrow → headline → optional
+// big-stat → caption → meta line → action button(s)). Per-type
+// content varies but the slot structure is fixed so the band code
+// can render without branching on type.
+//
+// Slide shape:
+//   {
+//     id:           string,
+//     type:         CARD_TYPE.*,
+//     priority:     1 | 2,
+//     eyebrow:      'ACTIVE LEAGUE' | 'LEAGUE INVITE' | …
+//     headline:     string,                 // big title
+//     bigStat?:     { value, label } | null // e.g. {'#1', 'YOUR RANK'}
+//     caption?:     string | null,          // record / format / date
+//     metaLine?:    string | null,          // "Last match: Won vs X"
+//     metaTone?:    'win' | 'loss' | null,  // colorises a portion
+//     primary:      { label, onClick, kind: 'arrow' | 'filled' },
+//     secondary?:   { label, onClick, kind: 'outline' } | null,
+//   }
+//
+// Helpers below derive the slide from raw hook rows. They pair with
+// the existing card normalizers — same data, denser display surface.
+
+// ─────────────────────────────────────────────────────────────────────
 // Tiny formatting helpers
 // ─────────────────────────────────────────────────────────────────────
 
@@ -363,6 +391,209 @@ function humaniseTournamentFormat(format) {
   if (format === "league")   return "League";
   if (format === "ladder")   return "Ladder";
   return format;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Slide normalizers (carousel band)
+// ─────────────────────────────────────────────────────────────────────
+
+// Pick the viewer's most-recent confirmed match in this league —
+// powers the "Last match: Won/Lost vs X" caption on a league slide.
+function lastLeagueResultMeta(detail, leagueId, viewerId, profileMap) {
+  if (!detail || !detail.recent || !leagueId || !viewerId) return null;
+  var rows = detail.recent.filter(function (m) {
+    if (m.status !== "confirmed") return false;
+    if (m.league_id && m.league_id !== leagueId) return false;
+    return m.user_id === viewerId || m.opponent_id === viewerId;
+  });
+  rows.sort(function (a, b) {
+    var ad = a.confirmed_at ? new Date(a.confirmed_at).getTime() : 0;
+    var bd = b.confirmed_at ? new Date(b.confirmed_at).getTime() : 0;
+    return bd - ad;
+  });
+  var last = rows[0];
+  if (!last) return null;
+  var viewerIsSubmitter = last.user_id === viewerId;
+  var iWon = viewerIsSubmitter ? (last.result === "win") : (last.result === "loss");
+  var oppId = viewerIsSubmitter ? last.opponent_id : last.user_id;
+  var oppP = profileMap && profileMap[oppId];
+  var oppName = (oppP && oppP.name) || null;
+  var line = "Last match: " + (iWon ? "Won" : "Lost") + (oppName ? (" vs " + oppName) : "");
+  return { line: line, tone: iWon ? "win" : "loss" };
+}
+
+export function buildLeagueInviteSlide(lg, handlers, opts) {
+  opts = opts || {};
+  return {
+    id:        "slide_league_invite_" + lg.id,
+    type:      CARD_TYPE.LEAGUE_INVITE,
+    priority:  1,
+    eyebrow:   "League invite",
+    headline:  lg.name || "League invite",
+    bigStat:   null,
+    caption:   (opts.memberCount ? (opts.memberCount + " " + pluralize(opts.memberCount, "player")) : null),
+    metaLine:  lg.mode === "casual" ? "Casual league" : "Ranked league",
+    primary:   { kind: "filled",  label: "Accept",  onClick: function () { return handlers.acceptInvite(lg.id); } },
+    secondary: { kind: "outline", label: "Decline", onClick: function () { return handlers.declineInvite(lg.id, lg.name); } },
+  };
+}
+
+export function buildIncomingChallengeSlide(ch, handlers, profileMap) {
+  var fromName = (profileMap && profileMap[ch.challenger_id] && profileMap[ch.challenger_id].name) || "Someone";
+  var captionParts = [];
+  if (ch.match_format) captionParts.push(ch.match_format === "best_of_3" ? "Best of 3" : (ch.match_format === "one_set" ? "One set" : ch.match_format));
+  if (ch.proposed_at)  captionParts.push("Proposed " + cheapDate(ch.proposed_at));
+  return {
+    id:        "slide_challenge_incoming_" + ch.id,
+    type:      CARD_TYPE.CHALLENGE_INCOMING,
+    priority:  1,
+    eyebrow:   "Challenge",
+    headline:  fromName + " challenged you",
+    bigStat:   null,
+    caption:   captionParts.join(" · ") || null,
+    metaLine:  null,
+    primary:   { kind: "filled",  label: "Accept",  onClick: function () { return handlers.acceptChallenge(ch); } },
+    secondary: { kind: "outline", label: "Decline", onClick: function () { return handlers.declineChallenge(ch); } },
+  };
+}
+
+export function buildActiveLeagueSlide(lg, handlers, opts) {
+  opts = opts || {};
+  var standing    = opts.viewerStanding || null;
+  var memberCount = opts.memberCount || null;
+  var rank        = standing && standing.rank;
+  var record      = standing
+    ? (standing.wins != null ? standing.wins : 0) + "-" + (standing.losses != null ? standing.losses : 0)
+    : null;
+  var meta        = opts.lastMeta || null;
+  var captionParts = [];
+  if (record)        captionParts.push(record);
+  if (memberCount)   captionParts.push(memberCount + " " + pluralize(memberCount, "player"));
+  return {
+    id:        "slide_league_active_" + lg.id,
+    type:      CARD_TYPE.LEAGUE_ACTIVE,
+    priority:  2,
+    eyebrow:   "Active league",
+    headline:  lg.name || "League",
+    bigStat:   rank ? { value: "#" + rank, label: "Your rank" } : null,
+    caption:   captionParts.join(" · ") || null,
+    metaLine:  meta && meta.line,
+    metaTone:  meta && meta.tone,
+    primary:   { kind: "arrow", label: "Open league", onClick: function () { return handlers.openLeague(lg.id); } },
+    secondary: null,
+  };
+}
+
+export function buildAcceptedChallengeSlide(ch, handlers, profileMap, viewerId) {
+  var oppId   = ch.challenger_id === viewerId ? ch.challenged_id : ch.challenger_id;
+  var oppName = (profileMap && profileMap[oppId] && profileMap[oppId].name) || "Opponent";
+  var captionParts = ["Accepted"];
+  if (ch.match_format) captionParts.push(ch.match_format === "best_of_3" ? "Best of 3" : (ch.match_format === "one_set" ? "One set" : ch.match_format));
+  return {
+    id:        "slide_challenge_ready_" + ch.id,
+    type:      CARD_TYPE.CHALLENGE_READY,
+    priority:  2,
+    eyebrow:   "Ready to play",
+    headline:  "You vs " + oppName,
+    bigStat:   null,
+    caption:   captionParts.join(" · "),
+    metaLine:  "Log result when played",
+    primary:   { kind: "arrow", label: "Log result", onClick: function () { return handlers.logChallenge(ch); } },
+    secondary: null,
+  };
+}
+
+export function buildActiveTournamentSlide(tn, handlers, opts) {
+  opts = opts || {};
+  var statusInfo  = opts.statusInfo || { label: "" };
+  var entrants    = (tn.entrants || []).length;
+  var size        = tn.size || null;
+  var bigVal      = entrants && size ? (entrants + "/" + size) : (entrants ? String(entrants) : null);
+  return {
+    id:        "slide_tournament_active_" + tn.id,
+    type:      CARD_TYPE.TOURNAMENT_ACTIVE,
+    priority:  2,
+    eyebrow:   "Tournament",
+    headline:  tn.name || "Tournament",
+    bigStat:   bigVal ? { value: bigVal, label: "Entered" } : null,
+    caption:   [statusInfo.label, tn.format && humaniseTournamentFormat(tn.format)].filter(Boolean).join(" · ") || null,
+    metaLine:  null,
+    primary:   { kind: "arrow", label: "Open tournament", onClick: function () { return handlers.openTournament(tn.id); } },
+    secondary: null,
+  };
+}
+
+// Composition: build all slides priority-sorted. Same comparator
+// as the cards use so the band order matches the natural priority
+// rhythm. Returns [] when no active items exist — caller renders
+// an empty state in that case.
+export function buildFeaturedSlides(args) {
+  var leagues       = args.leagues       || [];
+  var challenges    = args.challenges    || [];
+  var tournaments   = args.tournaments   || [];
+  var profileMap    = args.profileMap    || {};
+  var detailCache   = args.detailCache   || {};
+  var viewerId      = args.viewerId;
+  var handlers      = args.handlers      || {};
+  var isEntered     = args.isEntered     || function () { return false; };
+  var tournStatus   = args.tournStatus   || function () { return { label: "" }; };
+
+  var slides = [];
+
+  leagues.forEach(function (lg) {
+    if (lg.my_status !== "invited") return;
+    var detail   = detailCache[lg.id];
+    var memberCount = detail && (detail.members || []).filter(function (m) { return m.status === "active"; }).length;
+    slides.push(buildLeagueInviteSlide(lg, handlers, { memberCount: memberCount || null }));
+  });
+
+  challenges.forEach(function (ch) {
+    if (ch.status !== "pending" || ch.challenged_id !== viewerId) return;
+    slides.push(buildIncomingChallengeSlide(ch, handlers, profileMap));
+  });
+
+  leagues.forEach(function (lg) {
+    if (lg.my_status !== "active" || !isActive(lg)) return;
+    var detail      = detailCache[lg.id] || null;
+    var standing    = detail && (detail.standings || []).find(function (s) { return s.user_id === viewerId; });
+    var memberCount = detail && (detail.members || []).filter(function (m) { return m.status === "active"; }).length;
+    var lastMeta    = detail && lastLeagueResultMeta(detail, lg.id, viewerId, profileMap);
+    slides.push(buildActiveLeagueSlide(lg, handlers, {
+      viewerStanding: standing || null,
+      memberCount:    memberCount || null,
+      lastMeta:       lastMeta || null,
+    }));
+  });
+
+  challenges.forEach(function (ch) {
+    if (ch.status !== "accepted") return;
+    if (ch.challenger_id !== viewerId && ch.challenged_id !== viewerId) return;
+    slides.push(buildAcceptedChallengeSlide(ch, handlers, profileMap, viewerId));
+  });
+
+  tournaments.forEach(function (tn) {
+    if (!isEntered(tn.id)) return;
+    if (tn.status === "completed" || tn.status === "cancelled") return;
+    slides.push(buildActiveTournamentSlide(tn, handlers, { statusInfo: tournStatus(tn) }));
+  });
+
+  return slides.sort(compareCards);
+}
+
+// Same cheap relative date as the card path, exported via the
+// lower-down formatRelativeDate? — duplicated locally so the slide
+// builders are independent of the card builders. Trivial cost.
+function cheapDate(iso) {
+  if (!iso) return "";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  var diffD = Math.round((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (diffD === 0)  return "today";
+  if (diffD === 1)  return "tomorrow";
+  if (diffD === -1) return "yesterday";
+  if (diffD > 1 && diffD < 7)   return "in " + diffD + " days";
+  if (diffD < -1 && diffD > -7) return Math.abs(diffD) + " days ago";
+  return d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 }
 
 // Cheap relative-date formatter — keep dependencies out. "today" /
