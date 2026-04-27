@@ -405,31 +405,28 @@ export default function MapTab({
           IS the on-map zone identifier when nothing is selected. Larger
           type, accent stripe, drop-shadow + slide-in animation. */}
       {(function(){
-        // Bottom-left context card. Composes one of two layouts:
-        //
-        //   • COURT card — used during playMode === "players". The
-        //     picked court is the foreground subject; we show its
-        //     name, the zone-coloured accent rule, and a small line
-        //     reading "<suburb>, Sydney · N courts". Hover input is
-        //     suppressed in this mode (the hover card would compete
-        //     with the player overlay's own context).
-        //
-        //   • ZONE card — every other state. Resolves the zone in
-        //     three states:
-        //       1. Court mode → ALWAYS show the picked zone
-        //          (persistent context: "you're inside Eastern Suburbs").
-        //       2. Zone mode → show the hovered zone (preview).
-        //       3. Default mode → show the hovered zone if user is
-        //          hovering and nothing is otherwise selected.
-        var labelStyle = {
-          fontSize: 30, fontWeight: 900,
+        // BOTTOM-LEFT slot — hover preview only. The persistent
+        // zone-during-court-mode card and court-during-players-mode
+        // card moved to the TOP-LEFT slot below (replacing the
+        // CourtSync card in those modes per user feedback).
+        // Hover preview shows when:
+        //   • Zone-pick mode + a zone is hovered
+        //   • Default mode + a zone is hovered AND nothing selected
+        var hoverWhich = (playMode === "zone" && hovered) ? hovered
+                       : (playMode === "off" && hovered && !selected) ? hovered
+                       : null;
+        if(!hoverWhich) return null;
+        var hZone = ZONE_BY_ID[hoverWhich];
+        if(!hZone) return null;
+        var hLabelStyle = {
+          fontSize: isMobile ? 24 : 30, fontWeight: 900,
           letterSpacing: "-0.025em", lineHeight: 1.05,
           color: mapDark ? "#ffffff" : "#14110f",
           textShadow: mapDark
             ? "0 2px 14px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
             : "0 2px 14px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
         };
-        var subStyle = {
+        var hSubStyle = {
           fontSize: 12, lineHeight: 1.4,
           color: mapDark ? "rgba(255,255,255,0.82)" : "rgba(20,18,17,0.7)",
           textShadow: mapDark
@@ -437,97 +434,28 @@ export default function MapTab({
             : "0 1px 4px rgba(255,255,255,0.55)",
           fontWeight: 500,
         };
-        // Position rule (revised):
-        //   The CourtSync identity card lives at TOP-LEFT permanently
-        //   in a separate slot (rendered as its own element below).
-        //   This bottom-left slot is reserved for HOVER previews and
-        //   for the persistent zone/court info during play modes —
-        //   per user 'hover stuff is supposed to stay bottom left'.
-        //   pinTopLeft logic retired.
-        var pinTopLeft = false;
-        var wrapStyle = {
+        var hWrapStyle = {
           position:"absolute", left: isMobile ? 14 : 18, bottom: isMobile ? 14 : 18,
           maxWidth: isMobile ? 240 : 360,
           zIndex:500, pointerEvents:"none",
           display:"flex", flexDirection:"column", gap: 8,
           fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
         };
-        // When pinned top-left we tighten typography so the card
-        // doesn't crowd the chrome above/around it.
-        if(pinTopLeft){
-          labelStyle = Object.assign({}, labelStyle, { fontSize: 18 });
-        } else if(isMobile){
-          labelStyle = Object.assign({}, labelStyle, { fontSize: 24 });
-        }
-
-        // ── COURT card (players mode) ─────────────────────────────
-        if(playMode === "players" && playCourtName){
-          var court = COURTS.find(function(c){
-            return c.name === playCourtName
-              || (c.aliases && c.aliases.indexOf(playCourtName) !== -1);
-          });
-          if(!court) return null;
-          var courtZone = ZONE_BY_ID[court.zone];
-          // Strip the "Tennis Centre / Tennis Courts / Tennis"
-          // suffix since the context already implies tennis.
-          var displayName = String(court.name)
-            .replace(/\s+\(.*?\)$/, "")
-            .replace(/\s+Tennis Centre$/i, "")
-            .replace(/\s+Tennis Courts$/i, "")
-            .replace(/\s+Tennis Club$/i, "")
-            .replace(/\s+Tennis$/i, "")
-            .trim();
-          var subParts = [];
-          if(court.suburb) subParts.push(court.suburb + ", Sydney");
-          subParts.push((court.courts || 1) + " " + ((court.courts === 1) ? "court" : "courts"));
-          return (
-            <div className="fade-up" style={wrapStyle}>
-              <span style={labelStyle}>{displayName}</span>
-              {courtZone && (
-                <div style={{
-                  width: pinTopLeft ? 36 : 56,
-                  height: pinTopLeft ? 2 : 3,
-                  background: courtZone.color,
-                  borderRadius: 2,
-                  boxShadow: "0 1px 4px " + courtZone.color + "55",
-                }}/>
-              )}
-              <div style={pinTopLeft ? Object.assign({}, subStyle, {fontSize:11}) : subStyle}>
-                {subParts.join(" · ")}
-              </div>
-            </div>
-          );
-        }
-
-        // ── ZONE card ─────────────────────────────────────────────
-        var which = (playMode === "court" && playZoneId) ? playZoneId
-                  : (playMode === "zone"  && hovered)    ? hovered
-                  : (hovered && !selected)               ? hovered
-                  : null;
-        if(!which) return null;
-        var h = ZONE_BY_ID[which];
-        if(!h) return null;
         return (
-          <div className="fade-up" style={wrapStyle}>
+          <div className="fade-up" style={hWrapStyle}>
             <div style={{
               display:"flex", alignItems:"center", gap: 10, flexWrap:"wrap",
             }}>
-              <span style={labelStyle}>{h.name}</span>
+              <span style={hLabelStyle}>{hZone.name}</span>
             </div>
-            {/* Thin accent rule in the zone colour — a designer
-                touch that anchors the name without re-introducing
-                a left border on a card. */}
             <div style={{
-              width: pinTopLeft ? 36 : 56,
-              height: pinTopLeft ? 2 : 3,
-              background: h.color,
+              width: 56, height: 3,
+              background: hZone.color,
               borderRadius: 2,
-              boxShadow: "0 1px 4px " + h.color + "55",
+              boxShadow: "0 1px 4px " + hZone.color + "55",
             }}/>
-            {h.blurb && (
-              <div style={pinTopLeft ? Object.assign({}, subStyle, {fontSize:11}) : subStyle}>
-                {h.blurb}
-              </div>
+            {hZone.blurb && (
+              <div style={hSubStyle}>{hZone.blurb}</div>
             )}
           </div>
         );
@@ -543,11 +471,64 @@ export default function MapTab({
           for visual consistency. Red accent rule by design — the
           identity colour, not a zone tint. */}
       {(function(){
+        // TOP-LEFT slot — context-aware. Renders ONE of:
+        //   • Default / zone-pick mode → CourtSync identity card
+        //   • Court-pick mode          → picked-zone card
+        //   • Players mode             → picked-court card
+        // All three use the same size dictionary so the visual
+        // weight is consistent across steps. The slot is hidden in
+        // default mode when a zone is selected (side panel takes
+        // over the workspace).
         if(playMode === "off" && selected) return null;
-        var brandRed = (t && t.red) || "#ef4444";
         var size = isMobile
-          ? { heading: 18, subFont: 11, ruleW: 36, ruleH: 2, gap: 4, maxW: 200, top: 14, left: 14 }
-          : { heading: 28, subFont: 12, ruleW: 56, ruleH: 3, gap: 6, maxW: 320, top: 22, left: 22 };
+          ? { heading: 18, subFont: 11, ruleW: 36, ruleH: 2, gap: 4, maxW: 220, top: 8,  left: 10 }
+          : { heading: 28, subFont: 12, ruleW: 56, ruleH: 3, gap: 6, maxW: 360, top: 22, left: 22 };
+
+        // Resolve which card to render + its (heading, ruleColor, sub).
+        var card = null;
+
+        if(playMode === "players" && playCourtName){
+          var court = COURTS.find(function(c){
+            return c.name === playCourtName
+              || (c.aliases && c.aliases.indexOf(playCourtName) !== -1);
+          });
+          if(court){
+            var courtZone = ZONE_BY_ID[court.zone];
+            var displayName = String(court.name)
+              .replace(/\s+\(.*?\)$/, "")
+              .replace(/\s+Tennis Centre$/i, "")
+              .replace(/\s+Tennis Courts$/i, "")
+              .replace(/\s+Tennis Club$/i, "")
+              .replace(/\s+Tennis$/i, "")
+              .trim();
+            var subParts = [];
+            if(court.suburb) subParts.push(court.suburb + ", Sydney");
+            subParts.push((court.courts || 1) + " " + ((court.courts === 1) ? "court" : "courts"));
+            card = {
+              heading: displayName,
+              ruleColor: courtZone ? courtZone.color : "#14110f",
+              sub: subParts.join(" · "),
+            };
+          }
+        } else if(playMode === "court" && playZoneId){
+          var zoneObj = ZONE_BY_ID[playZoneId];
+          if(zoneObj){
+            card = {
+              heading: zoneObj.name,
+              ruleColor: zoneObj.color,
+              sub: zoneObj.blurb || "",
+            };
+          }
+        }
+        if(!card){
+          // Default / zone-pick mode → CourtSync identity card.
+          card = {
+            heading: "CourtSync",
+            ruleColor: (t && t.red) || "#ef4444",
+            sub: "Sydney\u2019s social tennis network.",
+          };
+        }
+
         var headLabel = {
           fontSize: size.heading, fontWeight: 900,
           letterSpacing: "-0.025em", lineHeight: 1.05,
@@ -567,21 +548,28 @@ export default function MapTab({
         return (
           <div className="fade-up" style={{
             position:"absolute",
-            top: "calc(env(safe-area-inset-top, 0px) + " + size.top + "px)",
+            // No env(safe-area-inset-top) on mobile — the cs-map-frame
+            // is already below the sticky cs-mob-nav (which itself
+            // accounts for the safe area). Adding the inset again
+            // here was double-counting and pushing the card off the
+            // top edge of small viewports.
+            top: isMobile
+              ? size.top + "px"
+              : "calc(env(safe-area-inset-top, 0px) + " + size.top + "px)",
             left: size.left,
             maxWidth: size.maxW,
-            zIndex: 500, pointerEvents:"none",
+            zIndex: 600, pointerEvents:"none",
             display:"flex", flexDirection:"column", gap: size.gap,
             fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
           }}>
-            <span style={headLabel}>CourtSync</span>
+            <span style={headLabel}>{card.heading}</span>
             <div style={{
               width: size.ruleW, height: size.ruleH,
-              background: brandRed,
+              background: card.ruleColor,
               borderRadius: 2,
-              boxShadow: "0 1px 4px " + brandRed + "55",
+              boxShadow: "0 1px 4px " + card.ruleColor + "55",
             }}/>
-            <div style={subLabel}>Sydney&rsquo;s social tennis network.</div>
+            {card.sub && <div style={subLabel}>{card.sub}</div>}
           </div>
         );
       })()}
