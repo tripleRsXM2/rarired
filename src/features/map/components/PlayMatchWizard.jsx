@@ -1308,18 +1308,30 @@ export default function PlayMatchWizard({
                         </svg>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
+                        {/* Three-line stack — action verb, venue name,
+                            quiet hint. Separating 'Check times' from
+                            the venue name reads less like a long
+                            sentence and more like a labelled link. */}
                         <div style={{
-                          fontSize: 12.5, fontWeight: 700, color: t.text,
-                          letterSpacing: "-0.01em",
-                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                          fontSize: 12.5, fontWeight: 800, color: t.text,
+                          letterSpacing: "0.04em", textTransform: "uppercase",
+                          lineHeight: 1.1,
                         }}>
-                          Check times at {pickedCourt.name}
+                          Check times
                         </div>
                         <div style={{
-                          fontSize: 10, color: t.textTertiary, marginTop: 2,
+                          fontSize: 13, fontWeight: 600, color: t.text,
+                          letterSpacing: "-0.01em",
+                          marginTop: 3, lineHeight: 1.2,
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        }}>
+                          {pickedCourt.name}
+                        </div>
+                        <div style={{
+                          fontSize: 10, color: t.textTertiary, marginTop: 4,
                           letterSpacing:"0.04em", textTransform:"uppercase", fontWeight:700,
                         }}>
-                          Opens venue's booking site
+                          Open venue booking site
                         </div>
                       </div>
                     </a>
