@@ -197,19 +197,19 @@ export default function ZoneSidePanel({
   // physical-court count below). User: 'change # of courts to
   // # of locations'.
   var totalLocations = courts.length;
-  // If the user picks a court via the panel that's beyond the
-  // collapsed slice, auto-expand so the active row stays visible.
-  var collapseActive = isNarrow && courts.length > COLLAPSE_THRESHOLD && !courtsExpanded;
-  var selectedIdx = selectedCourt ? courts.findIndex(function(c){ return c.name === selectedCourt; }) : -1;
-  if (collapseActive && selectedIdx >= COLLAPSED_VISIBLE) {
-    collapseActive = false;
-    // setState in render is fine here because it's idempotent and
-    // the auto-expand only happens when a hidden court gets selected.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    if (!courtsExpanded) setCourtsExpanded(true);
-  }
-  var visibleCourts = collapseActive ? courts.slice(0, COLLAPSED_VISIBLE) : courts;
-  var hiddenCount = courts.length - visibleCourts.length;
+  // Mobile: show ALL courts in a fixed-height scrollable list (~5
+  // rows visible) instead of the old slice + expand-button. User
+  // feedback: 'on mobile id like to show 5 courts but have a scroll
+  // instead, and if its numbered you can follow it better'.
+  // visibleCourts is always the full list now; the previous
+  // COLLAPSE_THRESHOLD / COLLAPSED_VISIBLE / courtsExpanded /
+  // setCourtsExpanded plumbing is intentionally retained as no-op
+  // state to avoid breaking any external refs but is no longer
+  // read in render.
+  var visibleCourts = courts;
+  // Approximate row height: 7px+12.5px line-height+7px padding ≈ 30px;
+  // plus 2px gap. Cap ~5 rows worth = 180px on mobile.
+  var coursListMaxH = isNarrow && courts.length > 5 ? 180 : null;
   // When a venue is pinned in the panel, the stat-row "Courts" cell
   // switches from the zone total to that venue's own court count
   // (e.g. "6 · Courts here") so the user sees the playable size of
@@ -354,9 +354,25 @@ export default function ZoneSidePanel({
         {courts.length === 0 ? (
           <div style={{ fontSize:12, color:t.textTertiary, marginBottom:16 }}>No curated courts yet.</div>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:2, marginBottom:18 }}>
-            {visibleCourts.map(function (c) {
+          <div style={{
+            display:"flex", flexDirection:"column", gap:2, marginBottom:18,
+            // Mobile: cap the list height to ~5 rows and let it scroll
+            // internally. Desktop: render the full list uncapped.
+            maxHeight: coursListMaxH ? coursListMaxH + "px" : null,
+            overflowY: coursListMaxH ? "auto" : "visible",
+            // Hide the scrollbar on iOS-style devices for a cleaner
+            // look — the row count is short enough that absent
+            // scrollbar still reads as scrollable.
+            scrollbarWidth: "thin",
+          }}>
+            {visibleCourts.map(function (c, idx) {
               var selected = selectedCourt === c.name;
+              // Two-digit row number — '01' / '02' / etc. Lets the
+              // user track which court they're looking at when the
+              // list scrolls on mobile, and gives the desktop list a
+              // consistent rhythm down the left edge. tabular-nums
+              // keeps the digits perfectly aligned.
+              var rowNum = String(idx + 1).padStart(2, "0");
               // Flat row — no border, no card chrome. Selection state
               // = soft accent-tinted bg filling the whole row + bolded
               // accent-coloured text. Booking icon ghost on the right
@@ -370,11 +386,20 @@ export default function ZoneSidePanel({
                   background: selected ? t.accentSubtle : "transparent",
                   transition:"background 0.15s",
                 }}>
+                  <span aria-hidden="true" style={{
+                    width: 28, flexShrink: 0,
+                    paddingLeft: 8,
+                    fontSize: 10.5, fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    letterSpacing: "0.04em",
+                    color: selected ? t.accent : t.textTertiary,
+                    opacity: selected ? 0.85 : 0.55,
+                  }}>{rowNum}</span>
                   <button
                     onClick={function () { toggleCourt(c); }}
                     style={{
                       flex:1, minWidth:0, textAlign:"left",
-                      padding:"7px 10px", background:"transparent", border:"none",
+                      padding:"7px 10px 7px 4px", background:"transparent", border:"none",
                       color: selected ? t.accent : t.text,
                       fontSize: 12.5,
                       fontWeight: selected ? 700 : 500,
@@ -406,39 +431,9 @@ export default function ZoneSidePanel({
                 </div>
               );
             })}
-            {isNarrow && courts.length > COLLAPSE_THRESHOLD && (
-              <button type="button"
-                onClick={function(){
-                  var next = !courtsExpanded;
-                  setCourtsExpanded(next);
-                  // Track expansion so we can validate the collapsed
-                  // default — if 80%+ expand we picked the wrong cap;
-                  // if <20% the list past 4 is rarely valued.
-                  if(next) track("map_courts_expanded", { zone_id: zone && zone.id, total: courts.length });
-                }}
-                style={{
-                  marginTop: 6, padding: "10px 12px",
-                  background: t.accentSubtle,
-                  border: "1px solid " + t.border,
-                  borderRadius: 8,
-                  color: t.accent, fontSize: 12.5,
-                  fontWeight: 700, letterSpacing: "0.01em",
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  transition: "background 0.15s",
-                }}>
-                <span>{courtsExpanded ? "Show fewer" : "Show all " + courts.length + " courts"}</span>
-                <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
-                     stroke="currentColor" strokeWidth="2"
-                     strokeLinecap="round" strokeLinejoin="round"
-                     style={{
-                       transform: courtsExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                       transition: "transform 0.18s ease",
-                     }}>
-                  <path d="M4 7l5 5 5-5"/>
-                </svg>
-              </button>
-            )}
+            {/* Show-fewer / show-all expand button retired — mobile
+                now scrolls the list inline (~5 rows visible) so
+                every venue is reachable without an extra tap. */}
           </div>
         )}
 
