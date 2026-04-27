@@ -156,6 +156,16 @@ export default function ActiveNowBand({ slides }) {
                   width:           "100%",
                   flexShrink:      0,
                   scrollSnapAlign: "start",
+                  // Horizontal padding when arrows render — the
+                  // 44px arrow hit area sits flush with the inner
+                  // rail's edges and the SVG visual extends ~20px
+                  // into the rail's content area. Without padding
+                  // here, slide text near the edges (eyebrow, big
+                  // rank, action label) sits underneath the arrow
+                  // glyph. 36px clears the 12px hit-area inset +
+                  // 20px visual + 4px breathing.
+                  paddingLeft:     hasMany ? 36 : 0,
+                  paddingRight:    hasMany ? 36 : 0,
                   boxSizing:       "border-box",
                 }}>
                 <Slide slide={s} />
