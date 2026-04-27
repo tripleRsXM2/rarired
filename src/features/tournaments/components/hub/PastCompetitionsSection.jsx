@@ -20,7 +20,7 @@ import { useState } from "react";
 import {
   isPastLifecycle, LIFECYCLE_LABELS, lifecyclePillTokens,
 } from "../../../leagues/utils/leagueLifecycle.js";
-import SectionHeader from "./SectionHeader.jsx";
+import SectionHeader, { HUB_SECTION_MB } from "./SectionHeader.jsx";
 
 // Slightly larger than the typical "small phone" breakpoint so the
 // 430px iPhone-Pro-Max viewport still defaults to collapsed (the
@@ -50,7 +50,7 @@ export default function PastCompetitionsSection({ t, leagues, onOpenLeague }) {
   if (rows.length === 0) return <PastEmpty t={t} />;
 
   return (
-    <section style={{ marginBottom: 24 }}>
+    <section style={{ marginBottom: HUB_SECTION_MB }}>
       <SectionHeader
         t={t}
         label="Past competitions"
@@ -64,7 +64,9 @@ export default function PastCompetitionsSection({ t, leagues, onOpenLeague }) {
               minHeight: 28,
               background: "transparent",
               border: "1px solid " + t.border,
-              borderRadius: 0,
+              // Slice 2: gently rounded — keeps the toggle subtle but
+              // visually consistent with the rounded card chrome below.
+              borderRadius: 8,
               color: t.textSecondary,
               fontSize: 11, fontWeight: 700,
               letterSpacing: "0.04em", textTransform: "uppercase",
@@ -171,7 +173,7 @@ function humaniseReason(reason) {
 // kept very compact since it's a low-priority surface.
 function PastEmpty({ t }) {
   return (
-    <section style={{ marginBottom: 24 }}>
+    <section style={{ marginBottom: HUB_SECTION_MB }}>
       <SectionHeader t={t} label="Past competitions" />
       <div style={{
         background: t.bgCard,

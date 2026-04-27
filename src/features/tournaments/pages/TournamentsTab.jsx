@@ -573,51 +573,69 @@ export default function TournamentsTab(props) {
 
   var t = props.t;
 
-  function setSub(newSub) {
-    // Clear any drilled-into tournament detail when changing sub-tabs.
-    if (props.setSelectedTournId) props.setSelectedTournId(null);
-    navigate("/tournaments/" + newSub);
-  }
+  // Slice 2: setSub() is gone — the sub-tab bar is replaced by a
+  // back link that returns to the hub. Sub-page navigation now
+  // happens from the hub's Explore cards or from deep-links
+  // (notifications, feed cards, profile callouts).
 
   var challenges = props.challenges;
   var leagues    = props.leagues;
   var friends    = props.friends || [];
 
-  var chCounts   = (challenges && challenges.counts) ? challenges.counts() : { incoming: 0, outgoing: 0, accepted: 0 };
-  var chBadge    = chCounts.incoming + chCounts.accepted;
-  var lgBadge    = (leagues && leagues.counts) ? leagues.counts().pendingInvites : 0;
-
-  var tabs = [
-    { id: "list",       label: "Tournaments", count: null },
-    { id: "challenges", label: "Challenges",  count: chBadge || null },
-    { id: "leagues",    label: "Leagues",     count: lgBadge || null },
-  ];
+  // Module 13 Slice 2 — the legacy sub-tab bar (Tournaments /
+  // Challenges / Leagues) is gone. The CompeteHub at /tournaments
+  // is now the canonical entry into competitive surfaces. Direct
+  // deep-links and Explore-card clicks still resolve to the same
+  // sub-pages here, but the tab bar would compete with the hub for
+  // navigation framing — so we replace it with a simple "← Compete"
+  // back link that returns the user to the hub.
+  //
+  // Why a back link instead of removing all chrome: deep-links can
+  // arrive from notifications, feed cards, profile callouts, the
+  // Explore cards on the hub, etc. The user needs a clear escape
+  // back to the hub without relying on the browser back button.
+  var subPageLabel = (
+    sub === "list"       ? "Tournaments" :
+    sub === "challenges" ? "Challenges" :
+    sub === "leagues"    ? "Leagues" :
+    null
+  );
 
   return (
     <div>
-      {/* Sub-tab bar — matches the People tab's visual style. */}
-      <div style={{ display: "flex", borderBottom: "1px solid " + t.border, padding: "0 20px", overflowX: "auto" }}>
-        {tabs.map(function (tb) {
-          var on = sub === tb.id;
-          return (
-            <button key={tb.id} onClick={function () { setSub(tb.id); }}
-              style={{
-                padding: "10px 0", marginRight: 20, border: "none", background: "transparent",
-                color: on ? t.accent : t.textTertiary, fontSize: 13, fontWeight: on ? 700 : 400,
-                borderBottom: "2px solid " + (on ? t.accent : "transparent"),
-                marginBottom: "-1px", display: "flex", gap: 5, alignItems: "center", flexShrink: 0,
-                cursor: "pointer",
-              }}>
-              {tb.label}
-              {tb.count > 0 && (
-                <span style={{ fontSize: 10, fontWeight: 800, color: on ? t.accent : t.textTertiary,
-                  background: on ? t.accentSubtle : t.bgTertiary, padding: "1px 6px", borderRadius: 10 }}>
-                  {tb.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "10px clamp(20px, 4vw, 32px) 0",
+        maxWidth: 720, margin: "0 auto",
+      }}>
+        <button
+          onClick={function () {
+            if (props.setSelectedTournId) props.setSelectedTournId(null);
+            navigate("/tournaments");
+          }}
+          style={{
+            padding: "6px 12px",
+            background: "transparent",
+            border: "1px solid " + t.border,
+            borderRadius: 10,
+            color: t.textSecondary,
+            fontSize: 12, fontWeight: 600,
+            letterSpacing: "0.02em",
+            cursor: "pointer",
+            transition: "opacity 0.15s",
+          }}
+          onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+          onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
+          ← Compete
+        </button>
+        {subPageLabel && (
+          <span style={{
+            fontSize: 11, fontWeight: 800, color: t.textTertiary,
+            textTransform: "uppercase", letterSpacing: "0.16em",
+          }}>
+            {subPageLabel}
+          </span>
+        )}
       </div>
 
       {sub === "list"       && <TournamentList {...props}/>}

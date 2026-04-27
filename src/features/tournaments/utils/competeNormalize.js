@@ -36,6 +36,8 @@ export var CARD_TYPE = {
   CHALLENGE_INCOMING: "challenge_incoming",
   LEAGUE_ACTIVE:      "league_active",
   CHALLENGE_READY:    "challenge_ready",
+  // Slice 2 addition.
+  TOURNAMENT_ACTIVE:  "tournament_active",
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -118,14 +120,36 @@ export function normalizeIncomingChallenge(ch, handlers, profileMap) {
 // Priority 2 — ongoing
 // ─────────────────────────────────────────────────────────────────────
 
-// Active league the viewer is a member of. Subtitle stays terse in
-// Slice 1 — richer "next opponent" / "rank N" data lives in the
-// league detail surface. Slice 2 can layer on detail-cache derived
-// content here once we settle the lazy-load policy.
-export function normalizeActiveLeague(lg, handlers) {
+// Active league the viewer is a member of.
+//
+// Slice 2: when the league's detail cache is populated (members +
+// standings already loaded by the hub's lazy-fetch effect), the
+// subtitle gets a richer "Rank N · X matches played" line derived
+// from league_standings. Without the cache we keep the terse Slice 1
+// subtitle — the cache typically warms within a few hundred ms of
+// hub mount, so most users see the rich version on second render.
+//
+// `viewerStanding` is the viewer's row from league_standings, or
+// null if the cache hasn't loaded yet.
+// `memberCount` is the number of `active` league_members.
+export function normalizeActiveLeague(lg, handlers, opts) {
+  opts = opts || {};
+  var viewerStanding = opts.viewerStanding || null;
+  var memberCount    = (opts.memberCount != null) ? opts.memberCount : null;
+
   var subtitleParts = [];
-  if (lg.mode)         subtitleParts.push(lg.mode === "casual" ? "Casual league" : "Ranked league");
-  if (lg.match_format) subtitleParts.push(formatMatchFormat(lg.match_format));
+  if (viewerStanding && viewerStanding.rank) {
+    subtitleParts.push(rankText(viewerStanding.rank) + " of " + (memberCount || "—"));
+  }
+  if (viewerStanding && typeof viewerStanding.played === "number") {
+    subtitleParts.push(viewerStanding.played + " " + pluralize(viewerStanding.played, "match", "matches") + " played");
+  }
+  // Fallback when the detail cache hasn't filled yet — terse but
+  // honest, no fake numbers.
+  if (subtitleParts.length === 0) {
+    if (lg.mode)         subtitleParts.push(lg.mode === "casual" ? "Casual league" : "Ranked league");
+    if (lg.match_format) subtitleParts.push(formatMatchFormat(lg.match_format));
+  }
 
   return {
     id:          "league_active_" + lg.id,
@@ -139,6 +163,51 @@ export function normalizeActiveLeague(lg, handlers) {
     primaryCta: {
       label: "Open league",
       onClick: function () { return handlers.openLeague(lg.id); },
+    },
+  };
+}
+
+// Active tournament the viewer is entered in.
+// Predicate (validated against useTournamentManager — see hub):
+//   isEntered(t.id) && t.status !== 'completed'
+// covers both enrolling (status null/undefined) and active (live).
+//
+// Subtitle uses entrant count + tournStatus().label so users see a
+// coherent "Live · 8/16 entered" or "Open · 4 entered" line. The
+// status pill carries the same tournStatus().label so they read
+// together without redundancy (pill = state, subtitle = headcount).
+export function normalizeActiveTournament(tournament, handlers, opts) {
+  opts = opts || {};
+  var statusInfo  = opts.statusInfo || { label: "", color: null };
+  var entrantCount = (tournament.entrants || []).length;
+  var size = tournament.size || null;
+
+  // Tone derivation:
+  //   Live   → green (it's running)
+  //   Open / N left → accent (recruiting; you're in)
+  //   else   → neutral
+  var tone =
+    statusInfo.label === "Live" ? "green" :
+    (statusInfo.label === "Open" || /\sleft$/.test(statusInfo.label || "")) ? "accent" :
+    "neutral";
+
+  var subtitleParts = [];
+  if (entrantCount && size)        subtitleParts.push(entrantCount + " / " + size + " entered");
+  else if (entrantCount)           subtitleParts.push(entrantCount + " entered");
+  if (tournament.format)           subtitleParts.push(humaniseTournamentFormat(tournament.format));
+
+  return {
+    id:          "tournament_active_" + tournament.id,
+    type:        CARD_TYPE.TOURNAMENT_ACTIVE,
+    priority:    2,
+    title:       tournament.name || "Tournament",
+    subtitle:    subtitleParts.join(" · ") || "Tournament",
+    statusLabel: statusInfo.label || "Tournament",
+    statusTone:  tone,
+    accentLeft:  null,
+    primaryCta: {
+      label: "Open tournament",
+      onClick: function () { return handlers.openTournament(tournament.id); },
     },
   };
 }
@@ -193,16 +262,21 @@ export function compareCards(a, b) {
   return 0;
 }
 
-// Convenience: build the full Active now card list for Slice 1's
-// data sources (leagues + challenges). Tournaments deferred per the
-// Slice 1 plan. Returns a new array — does not mutate inputs.
+// Convenience: build the full Active now card list across leagues,
+// challenges, and (Slice 2) tournaments. Returns a new array — does
+// not mutate inputs.
 export function buildActiveNowCards(args) {
   var leagues       = args.leagues       || [];
   var challenges    = args.challenges    || [];
+  var tournaments   = args.tournaments   || [];
   var profileMap    = args.profileMap    || {};
   var detailCache   = args.detailCache   || {};
   var viewerId      = args.viewerId;
   var handlers      = args.handlers      || {};
+  // Slice 2: tournament predicate + status helpers. Passed in by the
+  // hub from useTournamentManager so this util stays React-free.
+  var isEntered      = args.isEntered      || function () { return false; };
+  var tournStatus    = args.tournStatus    || function () { return { label: "", color: null }; };
 
   var cards = [];
 
@@ -223,10 +297,17 @@ export function buildActiveNowCards(args) {
   // Active leagues (priority 2). Voided leagues are pre-filtered at
   // the useLeagues hook boundary — defensive `isActive` here too in
   // case a future caller passes the unfiltered list.
+  //
+  // Slice 2: when the detail cache has the league's standings +
+  // members, derive the viewer's rank + played count for a richer
+  // subtitle. Cache hits are best-effort — terse fallback otherwise.
   leagues.forEach(function (lg) {
     if (lg.my_status !== "active") return;
     if (!isActive(lg)) return;
-    cards.push(normalizeActiveLeague(lg, handlers));
+    var detail   = detailCache[lg.id] || null;
+    var standing = detail && (detail.standings || []).find(function (s) { return s.user_id === viewerId; });
+    var memberCount = detail && (detail.members || []).filter(function (m) { return m.status === "active"; }).length;
+    cards.push(normalizeActiveLeague(lg, handlers, { viewerStanding: standing || null, memberCount: memberCount || null }));
   });
 
   // Accepted challenges ready to play (priority 2).
@@ -234,6 +315,18 @@ export function buildActiveNowCards(args) {
     if (ch.status !== "accepted") return;
     if (ch.challenger_id !== viewerId && ch.challenged_id !== viewerId) return;
     cards.push(normalizeAcceptedChallenge(ch, handlers, profileMap, viewerId));
+  });
+
+  // Active tournaments (priority 2). Predicate audit (Slice 2):
+  //   isEntered(t.id) AND status !== 'completed' AND status !== 'cancelled'
+  // Covers the three live states: enrolling (no status set), 'active',
+  // and any other non-terminal value. Verified against
+  // useTournamentManager.tournStatus + isEntered.
+  tournaments.forEach(function (tn) {
+    if (!isEntered(tn.id)) return;
+    if (tn.status === "completed" || tn.status === "cancelled") return;
+    var statusInfo = tournStatus(tn);
+    cards.push(normalizeActiveTournament(tn, handlers, { statusInfo: statusInfo }));
   });
 
   return cards.sort(compareCards);
@@ -248,6 +341,28 @@ function formatMatchFormat(mf) {
   if (mf === "best_of_3")  return "Best of 3";
   if (mf === "best_of_5")  return "Best of 5";
   return mf;
+}
+
+// "1st", "2nd", "3rd", "4th"... Used in the rich active-league
+// subtitle ("2nd of 8 · 3 matches played"). Cheap inline impl
+// rather than pulling a date-fns / numeral dep.
+function rankText(rank) {
+  if (rank == null) return "";
+  var n = parseInt(rank, 10);
+  if (isNaN(n)) return String(rank);
+  var mod10  = n % 10;
+  var mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return n + "st";
+  if (mod10 === 2 && mod100 !== 12) return n + "nd";
+  if (mod10 === 3 && mod100 !== 13) return n + "rd";
+  return n + "th";
+}
+
+function humaniseTournamentFormat(format) {
+  if (format === "knockout") return "Knockout";
+  if (format === "league")   return "League";
+  if (format === "ladder")   return "Ladder";
+  return format;
 }
 
 // Cheap relative-date formatter — keep dependencies out. "today" /

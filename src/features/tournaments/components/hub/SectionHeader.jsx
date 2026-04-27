@@ -5,6 +5,11 @@
 // "leagues", etc., so the hub feels visually consistent with the
 // feed page.
 
+// Slice 2: shared vertical rhythm token used by every hub section.
+// Mirrors HomeTab's clamp() pattern so the spacing breathes
+// proportionally with the viewport instead of locking to 24px.
+export var HUB_SECTION_MB = "clamp(20px, 3vw, 32px)";
+
 export default function SectionHeader({ t, label, count, action }) {
   return (
     <div style={{

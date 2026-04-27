@@ -142,7 +142,10 @@ function CtaButton({ t, kind, label, onClick }) {
         minWidth: 0,
         minHeight: 44,
         padding: "10px 14px",
-        borderRadius: 0,
+        // Slice 2: round corners to 10 to match HomeNextAction +
+        // hub hero. Sharp 0-radius reads as the older app-shell
+        // button style we're moving away from.
+        borderRadius: 10,
         border: primary ? "none" : ("1px solid " + t.border),
         background: primary ? t.accent : "transparent",
         color: primary ? "#fff" : t.text,
@@ -150,7 +153,10 @@ function CtaButton({ t, kind, label, onClick }) {
         letterSpacing: "0.03em", textTransform: "uppercase",
         cursor: busy ? "default" : "pointer",
         opacity: busy ? 0.65 : 1,
-      }}>
+        transition: "opacity 0.15s",
+      }}
+      onMouseEnter={function (e) { if (!busy) e.currentTarget.style.opacity = "0.85"; }}
+      onMouseLeave={function (e) { if (!busy) e.currentTarget.style.opacity = "1"; }}>
       {busy ? "…" : label}
     </button>
   );

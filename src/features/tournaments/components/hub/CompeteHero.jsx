@@ -57,11 +57,18 @@ function HeroCta({ t, kind, label, onClick }) {
         background: primary ? t.accent : "transparent",
         color: primary ? "#fff" : t.text,
         border: primary ? "none" : ("1px solid " + t.border),
-        borderRadius: 0,
+        // Slice 2: round corners to 10 — matches HomeNextAction's
+        // PrimaryCTA. Reads as a sibling of the Feed's premium CTA
+        // shape rather than the older sharp-cornered button style
+        // that surfaces elsewhere in the app.
+        borderRadius: 10,
         fontSize: 12.5, fontWeight: 700, lineHeight: 1,
         letterSpacing: "0.03em", textTransform: "uppercase",
         cursor: "pointer",
-      }}>
+        transition: "opacity 0.15s",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+      onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
       {label}
     </button>
   );

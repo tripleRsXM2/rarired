@@ -9,11 +9,11 @@
 // empty this section becomes the visual anchor of the page; when
 // Active now has content this sits as a calm "what next" prompt.
 
-import SectionHeader from "./SectionHeader.jsx";
+import SectionHeader, { HUB_SECTION_MB } from "./SectionHeader.jsx";
 
 export default function StartSomethingSection({ t, onChallenge, onCreateLeague }) {
   return (
-    <section style={{ marginBottom: 24 }}>
+    <section style={{ marginBottom: HUB_SECTION_MB }}>
       <SectionHeader t={t} label="Start something" />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <StartCard
@@ -67,11 +67,12 @@ function StartCard({ t, title, body, ctaLabel, onClick }) {
         onClick={onClick}
         style={{
           minHeight: 44,
-          padding: "10px 16px",
+          padding: "10px 18px",
           background: t.accent,
           color: "#fff",
           border: "none",
-          borderRadius: 0,
+          // Slice 2: round corners to 10 (Home alignment).
+          borderRadius: 10,
           fontSize: 12.5, fontWeight: 700,
           letterSpacing: "0.03em", textTransform: "uppercase",
           cursor: "pointer",
@@ -79,7 +80,10 @@ function StartCard({ t, title, body, ctaLabel, onClick }) {
           // On really narrow viewports give the button room to grow
           // so it stays a reasonable tap target.
           minWidth: 160,
-        }}>
+          transition: "opacity 0.15s",
+        }}
+        onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+        onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
         {ctaLabel}
       </button>
     </div>

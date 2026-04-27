@@ -12,11 +12,11 @@
 // priority sort within.
 
 import ActiveCompetitionCard from "./ActiveCompetitionCard.jsx";
-import SectionHeader from "./SectionHeader.jsx";
+import SectionHeader, { HUB_SECTION_MB } from "./SectionHeader.jsx";
 
 export default function ActiveNowSection({ t, cards }) {
   return (
-    <section style={{ marginBottom: 24 }}>
+    <section style={{ marginBottom: HUB_SECTION_MB }}>
       <SectionHeader t={t} label="Active now" count={cards.length || null} />
       {cards.length === 0 ? (
         <ActiveNowEmpty t={t} />
@@ -30,27 +30,33 @@ export default function ActiveNowSection({ t, cards }) {
 }
 
 // ── Empty state ─────────────────────────────────────────────────
-// Stays small — the StartSomethingSection right below carries the
-// "what next" weight per Slice 1 spec adjustment. No fake suggestions.
+// Slice 2: matches HomeTab's "Nothing here yet" empty-state chrome
+// (radius 14, generous padding, tennis-ball motif, body max-width
+// 280). The CTA still lives in StartSomethingSection right below
+// — Home's empty state has its own primary button, but the hub's
+// composition makes that redundant, so we only carry the typography
+// + emoji premium feel here, not the button.
 function ActiveNowEmpty({ t }) {
   return (
     <div style={{
       background: t.bgCard,
       border: "1px solid " + t.border,
-      borderRadius: 10,
-      padding: "20px 18px",
+      borderRadius: 14,
+      padding: "40px 24px",
       textAlign: "center",
     }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>🎾</div>
       <div style={{
-        fontSize: 14, fontWeight: 700, color: t.text,
-        letterSpacing: "-0.15px",
+        fontSize: 17, fontWeight: 700, color: t.text,
+        letterSpacing: "-0.3px", marginBottom: 6,
       }}>
-        Nothing active right now.
+        Nothing active right now
       </div>
       <div style={{
-        fontSize: 12, color: t.textSecondary, marginTop: 6, lineHeight: 1.5,
+        fontSize: 13, color: t.textSecondary,
+        lineHeight: 1.6, maxWidth: 280, margin: "0 auto",
       }}>
-        Start something below.
+        Start a challenge or a league below to see it here.
       </div>
     </div>
   );

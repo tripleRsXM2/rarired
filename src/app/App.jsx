@@ -844,6 +844,12 @@ export default function App(){
                 t={t} authUser={auth.authUser}
                 challenges={challenges}
                 leagues={leagues}
+                /* Slice 2: pass the full tournaments hook bundle so
+                   the hub can read isEntered / tournStatus for the
+                   Active now predicate, navigate to a tournament
+                   detail via setSelectedTournId, and surface entered
+                   tournaments in the active list. */
+                tournaments={tournaments}
                 toast={toast}
               />
             ) : (

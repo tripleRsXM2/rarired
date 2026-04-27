@@ -22,14 +22,15 @@
 // empty-state friend picker handles target selection — Slice 2 may
 // inline a friend picker here once the UX is settled.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
+import { isActive }    from "../../leagues/utils/leagueLifecycle.js";
 import CompeteHero               from "../components/hub/CompeteHero.jsx";
 import ActiveNowSection          from "../components/hub/ActiveNowSection.jsx";
 import StartSomethingSection     from "../components/hub/StartSomethingSection.jsx";
 import PastCompetitionsSection   from "../components/hub/PastCompetitionsSection.jsx";
-import ExploreFooterLinks        from "../components/hub/ExploreFooterLinks.jsx";
+import ExploreCardsSection      from "../components/hub/ExploreCardsSection.jsx";
 import { buildActiveNowCards }   from "../utils/competeNormalize.js";
 
 export default function CompeteHub({
@@ -37,6 +38,10 @@ export default function CompeteHub({
   // Hook bundles (passed from App.jsx — same shape as TournamentsTab).
   challenges,
   leagues,
+  // Slice 2: tournament data flows through to Active now via the
+  // normalizer's predicate gate. The hub itself never owns
+  // tournament state — it just reads + routes.
+  tournaments,
   // Misc:
   toast,
 }) {
@@ -50,6 +55,16 @@ export default function CompeteHub({
   function goChallenges()  { navigate("/tournaments/challenges"); }
   function goTournaments() { navigate("/tournaments/list"); }
   function goLeague(id)    { navigate("/tournaments/leagues?id=" + id); }
+  function goTournament(id) {
+    // Tournaments don't currently use a query-id deep-link; instead
+    // the legacy TournamentsTab picks selectedTournId off the
+    // useTournamentManager hook. We set that and navigate to the
+    // list page — TournamentDetail then renders for the picked id.
+    if (tournaments && tournaments.setSelectedTournId) {
+      tournaments.setSelectedTournId(id);
+    }
+    navigate("/tournaments/list");
+  }
   function goLogChallenge(challenge) {
     // Reproduces ChallengesPanel's deep-link contract: route state
     // carries `logChallengeId` which the panel's effect picks up
@@ -101,34 +116,69 @@ export default function CompeteHub({
       },
       // Open a league's detail surface (existing route).
       openLeague:     function (id)        { goLeague(id); },
+      // Slice 2: open a tournament's detail surface.
+      openTournament: function (id)        { goTournament(id); },
       // Log result for an accepted challenge — deep-link with state.
       logChallenge:   function (challenge) { goLogChallenge(challenge); },
       // Generic deep-link into the legacy challenges page.
       openChallenges: function ()          { goChallenges(); },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leagues, challenges]);
+  }, [leagues, challenges, tournaments]);
 
   function reportError(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
+
+  // ── Slice 2: lazy-load detail for active leagues ───────────────
+  // Active league cards want a "Rank N · X matches played" subtitle,
+  // which lives in league_standings (loaded by useLeagues.loadLeagueDetail).
+  // We trigger the load once per visible active league IF its detail
+  // isn't already cached. The hook caches per-league forever (no TTL),
+  // so subsequent hub visits are zero-cost. Worst case on first load
+  // for a user with N active leagues: N parallel detail fetches; in
+  // practice N is 1–3.
+  useEffect(function () {
+    if (!leagues || !leagues.loadLeagueDetail) return;
+    var visibleActive = (leagues.leagues || []).filter(function (lg) {
+      return lg.my_status === "active" && isActive(lg);
+    });
+    visibleActive.forEach(function (lg) {
+      if (!leagues.detailCache || !leagues.detailCache[lg.id]) {
+        leagues.loadLeagueDetail(lg.id);
+      }
+    });
+    // We deliberately don't depend on `leagues.detailCache` so we
+    // don't re-trigger on the cache update we ourselves caused.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leagues.leagues]);
 
   // ── Build the Active now card list ─────────────────────────────
   var activeNowCards = useMemo(function () {
     return buildActiveNowCards({
       leagues:      leagues.leagues,                  // voided pre-filtered at hook
       challenges:   challenges.challenges,
+      tournaments:  (tournaments && tournaments.tournaments) || [],
       profileMap:   challenges.profileMap || {},
       detailCache:  leagues.detailCache,
       viewerId:     viewerId,
       handlers:     handlers,
+      isEntered:    tournaments && tournaments.isEntered,
+      tournStatus:  tournaments && tournaments.tournStatus,
     });
-  }, [leagues.leagues, challenges.challenges, challenges.profileMap, leagues.detailCache, viewerId, handlers]);
+  }, [
+    leagues.leagues, challenges.challenges, challenges.profileMap, leagues.detailCache,
+    tournaments && tournaments.tournaments, viewerId, handlers,
+    tournaments && tournaments.isEntered, tournaments && tournaments.tournStatus,
+  ]);
 
   // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="fade-up" style={{
-      // Match TournamentsTab's container padding so direct deep-links
-      // and the hub feel like the same surface.
-      padding: "16px 20px 100px",
+      // Slice 2: container padding mirrors HomeTab — fluid horizontal
+      // padding via clamp() so spacing scales smoothly from 375px up
+      // to wide desktops, instead of the fixed 20px gutter Slice 1
+      // shipped with. maxWidth keeps the rail at 720 (Home's
+      // constraint).
+      padding: "16px clamp(20px, 4vw, 32px) 100px",
       maxWidth: 720, margin: "0 auto",
     }}>
       <CompeteHero
@@ -145,17 +195,23 @@ export default function CompeteHub({
         onCreateLeague={function () { setShowCreateLeague(true); }}
       />
 
+      {/* Slice 2: Explore moved up between Past and the Past section
+          ordering is intentionally — Active now → Start something →
+          Explore (browse paths) → Past competitions (history). Keeps
+          historical content as the lowest-priority surface and gives
+          users a clear route into category pages without scrolling
+          past their archive. */}
+      <ExploreCardsSection
+        t={t}
+        onLeagues={goLeagues}
+        onChallenges={goChallenges}
+        onTournaments={goTournaments}
+      />
+
       <PastCompetitionsSection
         t={t}
         leagues={leagues.leagues}
         onOpenLeague={goLeague}
-      />
-
-      <ExploreFooterLinks
-        t={t}
-        onBrowseLeagues={goLeagues}
-        onBrowseChallenges={goChallenges}
-        onBrowseTournaments={goTournaments}
       />
 
       {showCreateLeague && (
