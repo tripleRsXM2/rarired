@@ -788,7 +788,15 @@ export default function MapTab({
             "0 14px 32px rgba(20,18,17,0.36), " +
             "0 4px 8px rgba(20,18,17,0.22)",
           display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
+          alignItems: "center",
+          // User feedback: 'lower everything in the play match button.
+          // Seems like its a bit unbalanced... Its too central.'
+          // Anchor the stack to the bottom with a touch of padding so
+          // the words + glyph sit visually anchored to the lower half
+          // of the circle (more deliberate than dead-centre).
+          justifyContent: "flex-end",
+          paddingBottom: 22,
+          paddingTop: 18,
           gap: 0,
           transition: "transform 0.12s ease, box-shadow 0.18s ease",
         }}
@@ -810,27 +818,39 @@ export default function MapTab({
           letterSpacing: "0.20em", lineHeight: 1,
           opacity: 0.72, marginTop: 3,
         }}>MATCH</span>
-        {/* Crossed-rackets glyph — both rackets pointing UP with
-            their handles crossing in an X shape at the bottom.
-            Two oval heads at the top corners, two handles arcing
-            down through the centre. currentColor + stroke so it
-            inverts cleanly on dark vs light basemap themes.
-            Per CLAUDE.md icon rule: SVG line-art only, stroke
-            currentColor, strokeWidth 1.5, no emoji. */}
+        {/* Crossed-rackets glyph — two real rackets pointing UP
+            with handles crossing in an X at the bottom. Heads are
+            now substantial ovals (was anaemic — user feedback:
+            'circle part is really small') and the handles connect
+            to the head with a tiny throat segment so they read as
+            actual rackets, not stick figures. Per CLAUDE.md icon
+            rule: SVG line-art only, stroke currentColor,
+            strokeWidth 1.6, no fill, no emoji. */}
         <svg
-          width="24" height="24" viewBox="0 0 24 24"
+          width="30" height="30" viewBox="0 0 30 30"
           fill="none" stroke="currentColor"
-          strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
           aria-hidden="true"
-          style={{ marginTop: 6, opacity: 0.92 }}>
-          {/* Racket A — head top-left, handle going down-right */}
-          <ellipse cx="6.5" cy="6.5" rx="3.2" ry="2.4"
-                   transform="rotate(-45 6.5 6.5)"/>
-          <line x1="9" y1="9" x2="20" y2="20"/>
-          {/* Racket B — head top-right, handle going down-left */}
-          <ellipse cx="17.5" cy="6.5" rx="3.2" ry="2.4"
-                   transform="rotate(45 17.5 6.5)"/>
-          <line x1="15" y1="9" x2="4" y2="20"/>
+          style={{ marginTop: 4, opacity: 0.92 }}>
+          {/* RACKET A — head top-left, throat + handle down-right.
+              Head is a wide oval rotated -45° so the major axis
+              points along the handle. Slight stringbed cross for
+              tennis-iconography clarity at this size. */}
+          <g transform="rotate(-45 8 8)">
+            <ellipse cx="8" cy="8" rx="5" ry="3.6"/>
+            <line x1="8" y1="3.6" x2="8" y2="12.4" opacity="0.55"/>
+            <line x1="3.4" y1="8" x2="12.6" y2="8" opacity="0.55"/>
+          </g>
+          {/* throat + handle from head A toward bottom-right corner */}
+          <line x1="11.3" y1="11.3" x2="25.5" y2="25.5"/>
+          {/* RACKET B — head top-right, mirror of A. */}
+          <g transform="rotate(45 22 8)">
+            <ellipse cx="22" cy="8" rx="5" ry="3.6"/>
+            <line x1="22" y1="3.6" x2="22" y2="12.4" opacity="0.55"/>
+            <line x1="17.4" y1="8" x2="26.6" y2="8" opacity="0.55"/>
+          </g>
+          {/* throat + handle from head B toward bottom-left corner */}
+          <line x1="18.7" y1="11.3" x2="4.5" y2="25.5"/>
         </svg>
       </button>
       )}

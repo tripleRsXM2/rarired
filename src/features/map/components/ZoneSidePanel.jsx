@@ -292,10 +292,22 @@ export default function ZoneSidePanel({
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{
+          {/* Close affordance — user feedback: '✕ at the top corner
+              is a bit harsh, can you make it a > instead?' Read as
+              'collapse panel to the right' rather than a destructive
+              close. SVG line-art per the project's icon rule
+              (stroke=currentColor / strokeWidth 1.7 / no emoji). */}
+          <button onClick={onClose} aria-label="Close zone panel" style={{
             background:"transparent", border:"none", cursor:"pointer",
-            color:t.textTertiary, fontSize:18, padding:4, lineHeight:1,
-          }}>✕</button>
+            color:t.textTertiary, padding:6, lineHeight:0,
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
+                 stroke="currentColor" strokeWidth="1.7"
+                 strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7 4l5 5-5 5"/>
+            </svg>
+          </button>
         </div>
         <div style={{ fontSize:12, color:t.textSecondary, marginTop:12, lineHeight:1.45 }}>{zone.blurb}</div>
       </div>
