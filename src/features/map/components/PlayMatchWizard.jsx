@@ -27,6 +27,7 @@ import { nearbySkillLevels } from "../../../lib/constants/domain.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
+import useIsMobile from "../../../lib/hooks/useIsMobile.js";
 
 // Four steps:
 //   0 zone   1 court   2 player(s)   3 when + send
@@ -61,6 +62,10 @@ export default function PlayMatchWizard({
   onBackToPicker,
   onClose, onSendInvite,
 }){
+  // Phone breakpoint — drives the full-bleed modal layout on mobile
+  // (no map peek-through, no rounded corners, no backdrop dim).
+  var isMobile = useIsMobile();
+
   // Steps: 0 zone, 1 court, 2 players, 3 confirm.
   var [step, setStep]           = useState(0);
   var [zoneId, setZoneId]       = useState(initialZoneId || null);
@@ -331,14 +336,15 @@ export default function PlayMatchWizard({
         // not the whole viewport — the side nav stays visible to its
         // left and the wizard reads as part of the map surface.
         position:"absolute", inset:0, zIndex: 3000,
-        // Backdrop: dark + heavy blur so the map behind softens
-        // out — Nike Run / iOS sheet vibe. The map remains visible
-        // as a hint of where you came from.
-        background:"rgba(20,18,17,0.42)",
-        WebkitBackdropFilter: "blur(10px)",
-        backdropFilter: "blur(10px)",
+        // Mobile: solid fill, no map peek-through (the map behind
+        // adds nothing once you're committing to the When + Send
+        // step). Desktop: dark + blurred so the wizard reads as a
+        // sheet floating over the map.
+        background: isMobile ? t.bgCard : "rgba(20,18,17,0.42)",
+        WebkitBackdropFilter: isMobile ? "none" : "blur(10px)",
+        backdropFilter: isMobile ? "none" : "blur(10px)",
         display:"flex", alignItems:"center", justifyContent:"center",
-        padding: 12,
+        padding: isMobile ? 0 : 12,
       }}
       // Backdrop dismiss — track that the mousedown started on the
       // backdrop too, otherwise drag-selecting text inside the modal
@@ -353,20 +359,24 @@ export default function PlayMatchWizard({
         backdropDownRef.current = false;
       }}>
       <div style={{
-        // Translucent glass card — the boxy bordered modal is gone.
-        // Content is the design; chrome is invisible. Theme-aware
-        // bg so the wizard is readable on any palette (audit fix:
-        // rgba(255,255,255,0.96) was hardcoded white and caused text
-        // to wash out on dark themes).
-        background: hexToRgba(t.bgCard, 0.96),
-        WebkitBackdropFilter: "blur(40px) saturate(140%)",
-        backdropFilter: "blur(40px) saturate(140%)",
+        // Mobile: full-bleed solid sheet — fills the entire map
+        // frame, no rounded corners, no shadow, no glass blur. User:
+        // 'on mobile when you get to step 4 of 4 in map, can that
+        // window just take up the entire frame, and not see the map
+        // behind it?'
+        // Desktop: translucent glass card — content IS the design,
+        // chrome is invisible. Theme-aware bg so the wizard reads
+        // on any palette.
+        background: isMobile ? t.bgCard : hexToRgba(t.bgCard, 0.96),
+        WebkitBackdropFilter: isMobile ? "none" : "blur(40px) saturate(140%)",
+        backdropFilter: isMobile ? "none" : "blur(40px) saturate(140%)",
         color: t.text,
-        borderRadius: 22,
-        boxShadow: "0 24px 60px rgba(20,18,17,0.28)",
+        borderRadius: isMobile ? 0 : 22,
+        boxShadow: isMobile ? "none" : "0 24px 60px rgba(20,18,17,0.28)",
         width: "100%",
-        maxWidth: 460,
-        maxHeight: "calc(100dvh - 24px)",
+        maxWidth: isMobile ? "none" : 460,
+        height: isMobile ? "100%" : "auto",
+        maxHeight: isMobile ? "100%" : "calc(100dvh - 24px)",
         display: "flex", flexDirection: "column",
         overflow: "hidden",
         position: "relative",
