@@ -5,6 +5,39 @@ import * as S from "../services/socialService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
 import { track } from "../../../lib/analytics.js";
+import { fetchTrustBadgesForUsers } from "../../trust/services/trustService.js";
+
+// Module 10 Slice 2 — Discover ranking weight by reliability badge.
+// Higher rank floats up. Ties (new / building / no badge) keep their
+// existing relative order — we don't displace fresh accounts, just
+// surface reliable ones first when there's a sensible signal.
+function badgeRank(badge) {
+  if (badge === "confirmed")  return 3;
+  if (badge === "reliable")   return 2;
+  if (badge === "responsive") return 1;
+  return 0;
+}
+
+// Stable sort: re-orders by reliability rank but preserves the input
+// order between ties. Attaches `_trustBadge` to each player object
+// so the rendering surface (PeopleTab Discover) can pull badge copy
+// without a second fetch.
+function sortAndAnnotate(players, badgeMap) {
+  if (!players || !players.length) return players;
+  return players
+    .map(function (p, i) {
+      var b = (badgeMap && badgeMap[p.id]) || null;
+      return Object.assign({}, p, {
+        _trustBadge: b ? b.public_badge : null,
+        _origIndex: i,
+      });
+    })
+    .sort(function (a, b) {
+      var diff = badgeRank(b._trustBadge) - badgeRank(a._trustBadge);
+      if (diff !== 0) return diff;
+      return a._origIndex - b._origIndex;
+    });
+}
 
 export function useSocialGraph(opts){
   var authUser=(opts&&opts.authUser)||null;
@@ -64,18 +97,29 @@ export function useSocialGraph(opts){
       ];
       var excludeIds=[userId,...friendIds,...pendingIds,...blockedIds];
       var sq=await S.fetchSuggestedPlayers(userId, (userProfile&&userProfile.suburb)||"Sydney", excludeIds);
-      setSuggestedPlayers(sq.data||[]);
+      var suggested = sq.data||[];
 
       // Same-skill discovery — excludes suggested suburb IDs as well so the
       // same person doesn't appear in two sections.
+      var sameSkill = [];
       if(userProfile&&userProfile.skill){
-        var suburbIds=(sq.data||[]).map(function(u){return u.id;});
+        var suburbIds=suggested.map(function(u){return u.id;});
         var skillExclude=excludeIds.concat(suburbIds);
         var sk=await S.fetchSameSkillPlayers(userId, userProfile.skill, skillExclude, 6);
-        setSameSkillPlayers(sk.data||[]);
-      } else {
-        setSameSkillPlayers([]);
+        sameSkill = sk.data || [];
       }
+
+      // Module 10 Slice 2 — Discover boost. Bulk-fetch reliability
+      // badges for both Discover sections at once, then re-sort each
+      // section in place. Stable sort preserves the existing skill /
+      // suburb relevance for ties, so new players still surface — they
+      // just don't outrank reliable ones with similar skill. Numeric
+      // scores never reach the client; we read the public view only.
+      var trustIds = suggested.map(function(u){return u.id;})
+        .concat(sameSkill.map(function(u){return u.id;}));
+      var badgeMap = await fetchTrustBadgesForUsers(trustIds);
+      setSuggestedPlayers(sortAndAnnotate(suggested, badgeMap));
+      setSameSkillPlayers(sortAndAnnotate(sameSkill, badgeMap));
     }catch(e){console.error('loadSocial',e);}
   }
 

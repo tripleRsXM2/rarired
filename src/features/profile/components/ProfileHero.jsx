@@ -28,6 +28,7 @@ import {
   calibrationProgressLabel,
 } from "../utils/profileStats.js";
 import RatingInfoIcon from "../../rating/components/RatingInfoIcon.jsx";
+import ReliabilityBadge from "../../trust/components/ReliabilityBadge.jsx";
 
 function trustLine(t, profile) {
   var prov = provisionalLabel(profile);
@@ -71,6 +72,10 @@ export default function ProfileHero({
   actionSlot,           // host-supplied — top-right (Edit)
   belowIdentitySlot,    // host-supplied — full-width below trust (Challenge CTA on public profile)
   recentFormHistory,    // viewer's match history; null on public profile (RLS)
+  // Module 10 Slice 2 — public reliability badge (one of new / building /
+  // responsive / reliable / confirmed). The badge component itself
+  // hides itself for new + building, so passing the raw value is safe.
+  trustBadge,
 }) {
   if (!profile) return null;
 
@@ -231,17 +236,34 @@ export default function ProfileHero({
         </div>
       )}
 
-      {/* Single trust caption */}
-      {trust && (
+      {/* Trust + Reliability captions — both render inline. The
+          rating-side trust line ("Provisional" / "Confirmed (X matches)")
+          comes from CourtSync Rating calibration; the Module 10
+          ReliabilityBadge is a separate positive-only signal that only
+          renders for responsive / reliable / confirmed users. They're
+          siblings: a brand-new user shows neither, a calibrated user
+          shows the rating line only, a reliable+calibrated user shows
+          both. */}
+      {(trust || trustBadge) && (
         <div style={{
           marginTop: 18,
-          fontSize: 11,
-          fontWeight: 700,
-          color: trust.color,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
+          display: "flex", flexWrap: "wrap",
+          alignItems: "center", gap: 12,
         }}>
-          {trust.text}
+          {trust && (
+            <div style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: trust.color,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}>
+              {trust.text}
+            </div>
+          )}
+          {trustBadge && (
+            <ReliabilityBadge t={t} badge={trustBadge} variant="inline" />
+          )}
         </div>
       )}
 

@@ -16,6 +16,7 @@ import {
 } from "../utils/profileStats.js";
 import { track } from "../../../lib/analytics.js";
 import ProfileHero from "../components/ProfileHero.jsx";
+import { fetchTrustBadge } from "../../trust/services/trustService.js";
 
 export default function PlayerProfileView({
   t, authUser, userId, viewerHistory, onBack, openChallenge, blockUser,
@@ -31,6 +32,20 @@ export default function PlayerProfileView({
       target_user_id: profile.id,
       is_self: false,
     });
+  }, [profile && profile.id]);
+
+  // Module 10 Slice 2 — fetch the public reliability badge (responsive /
+  // reliable / confirmed) for this profile. Surfaces under the rating
+  // line in ProfileHero. Best-effort: if the fetch fails we silently
+  // render nothing (badges are an enhancement, not a critical path).
+  var [trustBadge, setTrustBadge] = useState(null);
+  useEffect(function () {
+    if (!profile || !profile.id) return;
+    var alive = true;
+    fetchTrustBadge(profile.id).then(function (row) {
+      if (alive) setTrustBadge(row && row.public_badge);
+    });
+    return function () { alive = false; };
   }, [profile && profile.id]);
 
   // Loading / error / not-found shells — all styled the same as the real
@@ -96,6 +111,7 @@ export default function PlayerProfileView({
           viewerIsSelf={false}
           recentFormHistory={null}
           belowIdentitySlot={challengeBlock}
+          trustBadge={trustBadge}
         />
       </section>
 

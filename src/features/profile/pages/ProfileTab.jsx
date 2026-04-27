@@ -3,7 +3,7 @@
 // Public-facing profile view: stats, match history, achievements, availability.
 // Settings have been moved to SettingsScreen (accessible via top-bar avatar).
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { DAYS_SHORT } from "../../../lib/constants/domain.js";
 import {
@@ -16,6 +16,7 @@ import ProfileRivalry from "../components/ProfileRivalry.jsx";
 import ProfileStatsAccordion from "../components/ProfileStatsAccordion.jsx";
 import HomeLeaguesStrip from "../../home/components/HomeLeaguesStrip.jsx";
 import HomeActivityList from "../../home/components/HomeActivityList.jsx";
+import { fetchTrustBadge } from "../../trust/services/trustService.js";
 
 // ── ProfileMatchRow ──────────────────────────────────────────────────────────
 // Compact version of the feed scoreboard for use inside the profile (Recent
@@ -277,6 +278,19 @@ export default function ProfileTab({
     track("profile_viewed", { target_user_id: profile.id, is_self: true });
   }, [profile && profile.id]);
 
+  // Module 10 Slice 2 — own reliability badge. Fetched fresh on each
+  // profile load so the user sees their badge update after recalc.
+  // Best-effort; absence renders no chrome.
+  var [trustBadge, setTrustBadge] = useState(null);
+  useEffect(function () {
+    if (!profile || !profile.id) return;
+    var alive = true;
+    fetchTrustBadge(profile.id).then(function (row) {
+      if (alive) setTrustBadge(row && row.public_badge);
+    });
+    return function () { alive = false; };
+  }, [profile && profile.id]);
+
   return (
     <div style={{ width: "100%" }}>
 
@@ -290,6 +304,7 @@ export default function ProfileTab({
           profile={profile}
           viewerIsSelf={true}
           recentFormHistory={history}
+          trustBadge={trustBadge}
           actionSlot={authUser && (
             <button
               onClick={onOpenSettings}
