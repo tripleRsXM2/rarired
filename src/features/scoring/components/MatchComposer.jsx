@@ -100,6 +100,11 @@ export default function MatchComposer({
   // Lists
   friends, suggestedPlayers,
   myLeagues, opponentLeagueIds,
+  // When set, the score modal was opened locked to a specific league
+  // (LeaguesPanel "+ Log match" button). Renders the league as a
+  // read-only chip + hides the match-type picker (forced to the
+  // league's mode). See openLogMatchInLeague in App.jsx.
+  lockedLeague,
   // Validation / save signals
   liveValidation,
   saveError,
@@ -371,8 +376,11 @@ export default function MatchComposer({
       )}
 
       {/* MATCH TYPE — only when opponent is a linked friend (Module 7.5).
-          Freetext stays casual until the invite-to-confirm flow runs. */}
-      {!isResubmit && scoreModal.casual && casualOppName.trim() && isVerified && (function () {
+          Freetext stays casual until the invite-to-confirm flow runs.
+          Suppressed entirely when the modal is locked to a league —
+          the match-type is forced to the league's mode in that case
+          (see openLogMatchInLeague + scoreDraft.matchType setter). */}
+      {!isResubmit && scoreModal.casual && casualOppName.trim() && isVerified && !lockedLeague && (function () {
         var current = scoreDraft.matchType || 'ranked';
         function pick(mt) {
           setScoreDraft(function (d) { return Object.assign({}, d, { matchType: mt }); });
@@ -471,8 +479,46 @@ export default function MatchComposer({
         </div>
       )}
 
-      {/* LEAGUE selector. */}
-      {(function () {
+      {/* LEAGUE — locked chip when the modal opened from the
+          per-league "+ Log match" path. The user can't change which
+          league this match files into and can't drop it to "No
+          Competition". The chip mirrors the visual weight of an
+          input row so the form rhythm stays consistent. */}
+      {!isResubmit && lockedLeague && (
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle(t)}>League</label>
+          <div style={{
+            padding:        "10px 12px",
+            borderRadius:   8,
+            border:         "1px solid " + t.border,
+            background:     t.bgTertiary,
+            color:          t.text,
+            fontSize:       13,
+            fontWeight:     600,
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "space-between",
+            gap:            10,
+          }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {lockedLeague.name || "League"}
+            </span>
+            <span style={{
+              flexShrink:     0,
+              fontSize:       9,
+              fontWeight:     800,
+              color:          t.textTertiary,
+              letterSpacing:  "0.12em",
+              textTransform:  "uppercase",
+            }}>
+              Locked
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* LEAGUE selector — only when NOT locked to a specific league. */}
+      {!lockedLeague && (function () {
         if (isResubmit) return null;
         if (!isVerified) return null;
         var eligible = (myLeagues || []).filter(function (lg) {

@@ -477,28 +477,47 @@ function LeagueDetailView({
 
         {/* Inline action row.
             - "+ Invite member" is owner-only — owners run the league.
-            - "+ Log match" is open to any active member. Pre-selects
-              this league in the score modal so members logging from
-              the league page don't have to re-pick it. Same chrome as
-              Invite so the row reads as a coherent toolbar.
+            - "+ Log match" is open to any active member, but ONLY
+              when at least one other active member exists (you
+              can't log a match against yourself). Pre-selects
+              this league + scopes the opponent picker to league
+              members so the file lands in the right league
+              without footguns.
             Lifecycle transitions stay in the kebab menu next to the
             status pill above (owner-only). */}
-        {isActive(league) && (iAmOwner || (myMembership && myMembership.status === "active")) && (
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            {iAmOwner && (
-              <button onClick={function () { setInviteOpen(true); }}
-                style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
-                + Invite member
-              </button>
-            )}
-            {myMembership && myMembership.status === "active" && onLogMatchInLeague && (
-              <button onClick={function () { onLogMatchInLeague(league); }}
-                style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
-                + Log match
-              </button>
-            )}
-          </div>
-        )}
+        {(function () {
+          if (!isActive(league)) return null;
+          var iAmActive = myMembership && myMembership.status === "active";
+          if (!iAmActive && !iAmOwner) return null;
+
+          // Member ids the user can log against — active members
+          // excluding self. Drives both the visibility of the
+          // Log match button and the opponent-picker restriction.
+          var otherActiveMemberIds = ((detail && detail.members) || [])
+            .filter(function (m) { return m.status === "active" && m.user_id !== authUser.id; })
+            .map(function (m) { return m.user_id; });
+          var canLogHere = iAmActive
+            && otherActiveMemberIds.length > 0
+            && !!onLogMatchInLeague;
+
+          if (!iAmOwner && !canLogHere) return null;
+          return (
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {iAmOwner && (
+                <button onClick={function () { setInviteOpen(true); }}
+                  style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
+                  + Invite member
+                </button>
+              )}
+              {canLogHere && (
+                <button onClick={function () { onLogMatchInLeague(league, otherActiveMemberIds); }}
+                  style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
+                  + Log match
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Slice 4 — retention card: most-overdue league opponent */}

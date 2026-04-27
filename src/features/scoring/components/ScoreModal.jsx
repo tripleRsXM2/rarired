@@ -296,6 +296,21 @@ export default function ScoreModal({
     hasOpponentName: !!(casualOppName && casualOppName.trim()),
   });
 
+  // When the modal opens locked to a specific league (per-league
+  // "+ Log match" button), restrict the opponent picker to that
+  // league's active members only and suppress the suggested-players
+  // list so users can only file a match against someone in the
+  // league. The lock context lives on scoreModal.lockedLeague —
+  // see openLogMatchInLeague in App.jsx.
+  var lockedLeague = (scoreModal && scoreModal.lockedLeague) || null;
+  var lockedFriends = friends;
+  var lockedSuggested = suggestedPlayers;
+  if (lockedLeague && Array.isArray(lockedLeague.memberIds) && lockedLeague.memberIds.length > 0) {
+    var allowed = new Set(lockedLeague.memberIds);
+    lockedFriends = (friends || []).filter(function (f) { return allowed.has(f.id); });
+    lockedSuggested = [];
+  }
+
   return (
     <div
       onClick={backdropClick}
@@ -361,10 +376,11 @@ export default function ScoreModal({
               setCasualOppId={setCasualOppId}
               showOppDrop={showOppDrop}
               setShowOppDrop={setShowOppDrop}
-              friends={friends}
-              suggestedPlayers={suggestedPlayers}
+              friends={lockedFriends}
+              suggestedPlayers={lockedSuggested}
               myLeagues={myLeagues}
               opponentLeagueIds={opponentLeagueIds}
+              lockedLeague={lockedLeague}
               liveValidation={liveValidation}
               saveError={saveError}
               casualFallbackOffer={casualFallbackOffer}

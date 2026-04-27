@@ -349,22 +349,27 @@ export default function App(){
     matchHistory.setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10),venue:"",court:""});
   }
 
-  // Open the Log Match flow with a specific league pre-selected.
-  // Used by LeaguesPanel's per-league "Log match" button so members
-  // logging from inside a league don't have to re-pick it in the
-  // composer.
+  // Open the Log Match flow locked to a specific league. Used by
+  // LeaguesPanel's per-league "+ Log match" button. Three locks:
   //
-  // Always opens in `casual:true` mode regardless of the league's
-  // mode — `casual:true` is the score-modal path that renders the
-  // OpponentPicker (free-text + linked-friend chips). The other
-  // path (`casual:false`) is the "verified resubmit" flow that
-  // assumes an opponent is already linked, and without one it
-  // falls through to a generic "Opponent" placeholder (the bug
-  // the user surfaced). The league's mode is preserved on the
-  // draft via `matchType`, so once the user picks a linked friend
-  // who's also in the league, the league selector shows up
-  // pre-selected and the match files as ranked/casual to match.
-  function openLogMatchInLeague(league){
+  //   1. The opponent picker is restricted to active members of
+  //      this league only (memberIds passed by the caller). This
+  //      is enforced inside ScoreModal by filtering `friends` and
+  //      clearing `suggestedPlayers` when scoreModal.lockedLeague
+  //      is present.
+  //
+  //   2. The league selector inside MatchComposer is replaced by a
+  //      read-only chip — the user can't change which league this
+  //      match files into, and can't drop it to "No Competition".
+  //
+  //   3. matchType is locked to the league's mode so the match
+  //      files as ranked/casual matching the league. validate_match_league
+  //      enforces this server-side too.
+  //
+  // Always opens in `casual:true` mode (the score-modal path that
+  // renders the OpponentPicker). casual:false is the verified
+  // resubmit flow which expects a linked opponent already known.
+  function openLogMatchInLeague(league, memberIds){
     if(!league||!league.id) { openLogMatch(); return; }
     var mode = league.mode === "casual" ? "casual" : "ranked";
     matchHistory.setCasualOppName("");
@@ -372,6 +377,15 @@ export default function App(){
       casual:    true,
       oppName:   "",
       tournName: mode === "casual" ? "Casual Match" : "",
+      // Lock context — read by ScoreModal + MatchComposer to
+      // restrict opponent picker, lock the league selector, and
+      // hide the match-type picker.
+      lockedLeague: {
+        id:        league.id,
+        name:      league.name,
+        mode:      mode,
+        memberIds: Array.isArray(memberIds) ? memberIds.slice() : [],
+      },
     });
     matchHistory.setScoreDraft({
       sets:           [{you:"",them:""}],
