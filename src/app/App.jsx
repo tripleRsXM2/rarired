@@ -12,6 +12,7 @@ import { track } from "../lib/analytics.js";
 
 import Providers from "./providers.jsx";
 import Sidebar from "./Sidebar.jsx";
+import ServiceHealthBanner from "../components/ui/ServiceHealthBanner.jsx";
 import RightPanel from "../features/home/components/RightPanel.jsx";
 
 import { useAuthController } from "../features/auth/hooks/useAuthController.js";
@@ -532,6 +533,7 @@ export default function App(){
   if (invitePath) {
     return (
       <Providers t={t} theme={theme}>
+        <ServiceHealthBanner/>
         <InviteMatchPage
           t={t}
           token={invitePath}
@@ -565,6 +567,11 @@ export default function App(){
 
   return (
     <Providers t={t} theme={theme}>
+      {/* Service-health banner — sits above the shell, only renders
+          when supabase API is degraded/down. See lib/healthMonitor
+          for the state machine + lib/supabase for the wrapped fetch
+          that feeds it. */}
+      <ServiceHealthBanner/>
       {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
       <div className="cs-shell" style={{color:t.text}}>
 

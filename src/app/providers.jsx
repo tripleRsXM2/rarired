@@ -20,6 +20,10 @@ export default function Providers({ t, theme, children }){
       "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}",
       "@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}",
       "@keyframes reveal{from{clip-path:inset(100% 0 0 0)}to{clip-path:inset(0 0 0 0)}}",
+      // Health banner pulse — rendered when the Supabase API is
+      // degraded/down. Subtle scale + glow so the banner itself
+      // reads as 'live, still trying' rather than a static error.
+      "@keyframes cs-health-pulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.35);opacity:1}}",
       "@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}",
       // Brief accent ring pulse — used when deep-linking into a list to
       // visually guide the eye to the row that was just targeted (e.g.
