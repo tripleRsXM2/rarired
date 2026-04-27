@@ -29,6 +29,7 @@ import { useLeagues } from "../features/leagues/hooks/useLeagues.js";
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
+import CompeteHub      from "../features/tournaments/pages/CompeteHub.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
 import ProfileTab from "../features/profile/pages/ProfileTab.jsx";
 import PlayerProfileView from "../features/profile/pages/PlayerProfileView.jsx";
@@ -97,10 +98,14 @@ export default function App(){
   var profilePathId = (pathParts[0]==="profile"&&pathParts[1])?pathParts[1]:null;
 
   // Navigate to a top-level tab. Switching to "people" lands on /people/messages,
-  // switching to "tournaments" (Compete) lands on /tournaments/list.
+  // switching to "tournaments" (Compete) lands on the new CompeteHub at
+  // /tournaments (Module 13 Slice 1). The deeper /tournaments/list,
+  // /tournaments/challenges, and /tournaments/leagues routes still
+  // resolve to TournamentsTab below — direct deep-links and in-page
+  // navigation are unchanged.
   function setTab(x){
     if(x==="people") navigate("/people/messages");
-    else if(x==="tournaments") navigate("/tournaments/list");
+    else if(x==="tournaments") navigate("/tournaments");
     else navigate("/"+x);
   }
 
@@ -828,30 +833,45 @@ export default function App(){
             />
           )}
           {tab==="tournaments"&&(
-          <TournamentsTab
-            t={t} myId={myId} authUser={auth.authUser}
-            tournaments={tournaments.tournaments}
-            selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
-            tournDetailTab={tournaments.tournDetailTab} setTournDetailTab={tournaments.setTournDetailTab}
-            filterSkill={tournaments.filterSkill} setFilterSkill={tournaments.setFilterSkill}
-            isEntered={tournaments.isEntered} isWaitlisted={tournaments.isWaitlisted} waitlistPos={tournaments.waitlistPos}
-            enterTournament={tournaments.enterTournament} joinWaitlist={tournaments.joinWaitlist}
-            tournStatus={tournaments.tournStatus}
-            setScheduleModal={tournaments.setScheduleModal} setScheduleDraft={tournaments.setScheduleDraft}
-            setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
-            /* Sub-tabs — Challenges + Leagues moved out of People. */
-            challenges={challenges}
-            leagues={leagues}
-            friends={social.friends}
-            openProfile={openProfile}
-            openChallenge={openChallenge}
-            openConvertToMatch={openConvertToMatch}
-            toast={toast}
-            /* Slice 4 (design overhaul) — Leagues retention surfaces
-               (next opponent / rivalry / standings deltas) read the
-               viewer's match history filtered by league_id. */
-            history={matchHistory.history}
-          />
+            // Module 13 Slice 1 — `/tournaments` (no segment) renders
+            // the new CompeteHub. Any deeper segment
+            // (`/tournaments/list|challenges|leagues`) keeps rendering
+            // the existing TournamentsTab so deep-links from
+            // notifications, feed cards, and profile callouts stay
+            // unchanged.
+            !pathParts[1] ? (
+              <CompeteHub
+                t={t} authUser={auth.authUser}
+                challenges={challenges}
+                leagues={leagues}
+                toast={toast}
+              />
+            ) : (
+              <TournamentsTab
+                t={t} myId={myId} authUser={auth.authUser}
+                tournaments={tournaments.tournaments}
+                selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
+                tournDetailTab={tournaments.tournDetailTab} setTournDetailTab={tournaments.setTournDetailTab}
+                filterSkill={tournaments.filterSkill} setFilterSkill={tournaments.setFilterSkill}
+                isEntered={tournaments.isEntered} isWaitlisted={tournaments.isWaitlisted} waitlistPos={tournaments.waitlistPos}
+                enterTournament={tournaments.enterTournament} joinWaitlist={tournaments.joinWaitlist}
+                tournStatus={tournaments.tournStatus}
+                setScheduleModal={tournaments.setScheduleModal} setScheduleDraft={tournaments.setScheduleDraft}
+                setScoreModal={matchHistory.setScoreModal} setScoreDraft={matchHistory.setScoreDraft}
+                /* Sub-tabs — Challenges + Leagues moved out of People. */
+                challenges={challenges}
+                leagues={leagues}
+                friends={social.friends}
+                openProfile={openProfile}
+                openChallenge={openChallenge}
+                openConvertToMatch={openConvertToMatch}
+                toast={toast}
+                /* Slice 4 (design overhaul) — Leagues retention surfaces
+                   (next opponent / rivalry / standings deltas) read the
+                   viewer's match history filtered by league_id. */
+                history={matchHistory.history}
+              />
+            )
         )}
         {tab==="people"&&(
           <PeopleTab
