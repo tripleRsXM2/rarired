@@ -226,7 +226,14 @@ export default function ZoneSidePanel({
 
   function toggleCourt(c) {
     setSelectedCourt(function (prev) { return prev === c.name ? null : c.name; });
-    setSelectedIds([]); // resetting players when changing court avoids a stale "selected" chip for someone who isn't in the new list
+    // Used to wipe selectedIds here so a court-change couldn't leave
+    // a 'stale' selected player on the chip. That broke the
+    // player-then-court → message flow: user picks a player, sees
+    // the action bar, then picks a court → bar disappears. User:
+    // 'should work both ways, player then court = message'.
+    // Keep the selection. The fetchPlayersInZone/AtCourt merge
+    // always returns the picked players' rows, so they still
+    // render under the new court filter.
   }
 
   function togglePlayer(p) {
@@ -246,15 +253,17 @@ export default function ZoneSidePanel({
 
   return (
     <div className="slide-in-right" style={{
-      // Width caps at 360px on desktop and shrinks to fit narrow phones
-      // (~340–390px) without overflowing — fixed 360 used to bleed off
-      // the right edge on small screens, which is what made the page
-      // feel like it needed manual resizing.
+      // Width: full-bleed on mobile (covers the entire map — user
+      // 'the zone card that slides out should just cover the entire
+      // map, its weird we see a little sliver on the side'). Capped
+      // at 360px on desktop where the map needs to stay visible
+      // alongside the panel.
       position:"absolute", top:0, right:0, bottom:0,
-      width:"100%", maxWidth:360,
-      background: t.bgCard, borderLeft: "1px solid "+t.border,
+      width:"100%", maxWidth: isNarrow ? "none" : 360,
+      background: t.bgCard,
+      borderLeft: isNarrow ? "none" : ("1px solid " + t.border),
       display:"flex", flexDirection:"column", zIndex:500,
-      boxShadow:"-8px 0 32px rgba(0,0,0,0.06)",
+      boxShadow: isNarrow ? "none" : "-8px 0 32px rgba(0,0,0,0.06)",
     }}>
 
       {/* Header — inline home-toggle next to the title (council fix:
@@ -537,7 +546,11 @@ export default function ZoneSidePanel({
                   style={{
                     flexShrink: 0,
                     scrollSnapAlign: "start",
-                    width: 108,
+                    // 132px so 'Intermediate 2' / 'Advanced 1' etc.
+                    // fit on a single chip line without ellipsis
+                    // truncation. User: 'I want to make sure I
+                    // read they are intermediate 2'.
+                    width: 132,
                     padding: "10px 8px 12px",
                     borderRadius: 14,
                     background: selected ? t.accent : t.bgCard,
@@ -628,10 +641,13 @@ export default function ZoneSidePanel({
                     {isViewer && <span style={{ opacity: 0.55, fontWeight: 500 }}> · you</span>}
                   </div>
 
-                  {/* Skill / rating chip */}
+                  {/* Skill / rating chip — full text, never
+                      truncated. Card width is sized so 'INTERMEDIATE
+                      2' (the longest expected label) fits in one
+                      line. */}
                   {(p.skill || p.ranking_points) && (
                     <span style={{
-                      padding: "1px 7px", borderRadius: 999,
+                      padding: "2px 8px", borderRadius: 999,
                       background: selected
                         ? "rgba(255,255,255,0.20)"
                         : t.bgTertiary,
@@ -642,8 +658,6 @@ export default function ZoneSidePanel({
                       letterSpacing: "0.04em",
                       textTransform: "uppercase",
                       whiteSpace: "nowrap",
-                      maxWidth: "100%",
-                      overflow: "hidden", textOverflow: "ellipsis",
                     }}>
                       {p.skill ? p.skill : (p.ranking_points + " pts")}
                     </span>

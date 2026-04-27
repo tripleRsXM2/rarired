@@ -395,119 +395,159 @@ export default function MapPlayerOverlay({
         </div>
       </div>
 
-      {/* Filter sheet — floats below the top chrome when open. */}
-      {filtersOpen && (
-        <div className="fade-up" style={{
-          position:"absolute",
-          top: "calc(env(safe-area-inset-top, 0px) + 116px)",
-          left: 16, right: 16,
-          zIndex: 545,
-          display:"flex", justifyContent:"center",
-          pointerEvents:"none",
-        }}>
-          <div style={{
-            pointerEvents:"auto",
-            width: "100%", maxWidth: 360,
-            padding: "12px 14px",
-            borderRadius: 16,
-            background: glassBg,
-            backdropFilter: "blur(28px) saturate(140%)",
-            WebkitBackdropFilter: "blur(28px) saturate(140%)",
-            border: glassBorder,
-            boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
-          }}>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing:"0.14em",
-                textTransform:"uppercase", color: fg, opacity: 0.55,
-                marginBottom: 6,
-              }}>Gender</div>
+      {/* Filter sheet — uniform section layout (label / chips /
+          optional helper) with consistent paddings, type, and gaps.
+          Desktop: drops below the top chrome.
+          Mobile : pops centred in the viewport with a backdrop dim;
+                   feels like a modal so the small screen isn't half-
+                   covered by floating chrome. */}
+      {filtersOpen && (function(){
+        var sectionLabel = {
+          fontSize: 10, fontWeight: 800,
+          letterSpacing: "0.14em", textTransform: "uppercase",
+          color: fg, opacity: 0.6,
+          marginBottom: 8,
+        };
+        var helperLine = {
+          fontSize: 11, lineHeight: 1.45,
+          color: fg, opacity: 0.6,
+          marginTop: 8,
+        };
+        // Single chip renderer used by every row so paddings, fonts,
+        // borders, and hover states are guaranteed identical.
+        function Chip(props){
+          var on = props.on;
+          return (
+            <button type="button"
+              onClick={props.onClick}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: on ? fg : "transparent",
+                color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
+                border: "1px solid " + (on ? fg : (mapDark ? "rgba(255,255,255,0.22)" : "rgba(20,18,17,0.18)")),
+                cursor: "pointer",
+                fontSize: 11, fontWeight: on ? 800 : 600,
+                letterSpacing: "0.02em",
+                whiteSpace: "nowrap",
+              }}>
+              {props.label}
+            </button>
+          );
+        }
+        var hasActive = activeFilterCount > 0;
+        function resetAll(){
+          setGenderFilter("any");
+          setSkillFilter("any");
+          setAgeFilter([]);
+        }
+
+        var sheet = (
+          <div
+            role="dialog"
+            aria-label="Filters"
+            onClick={function(e){ e.stopPropagation(); }}
+            style={{
+              pointerEvents:"auto",
+              width: "100%",
+              maxWidth: 360,
+              padding: "16px 18px 18px",
+              borderRadius: 18,
+              background: glassBg,
+              backdropFilter: "blur(28px) saturate(140%)",
+              WebkitBackdropFilter: "blur(28px) saturate(140%)",
+              border: glassBorder,
+              boxShadow: "0 14px 36px rgba(0,0,0,0.22)",
+            }}>
+            {/* Header — title + reset/close. Aligns to the left so
+                the heading anchors the same edge as section labels
+                below it. */}
+            <div style={{
+              display:"flex", alignItems:"center", justifyContent:"space-between",
+              gap: 10, marginBottom: 14,
+            }}>
+              <span style={{
+                fontSize: 13, fontWeight: 800,
+                letterSpacing: "0.04em", textTransform:"uppercase",
+                color: fg,
+              }}>Filters</span>
+              <div style={{ display:"flex", alignItems:"center", gap: 6 }}>
+                {hasActive && (
+                  <button type="button"
+                    onClick={resetAll}
+                    style={{
+                      background:"transparent", border:"none", cursor:"pointer",
+                      color: fg, opacity: 0.7,
+                      padding: "4px 8px",
+                      fontSize: 10, fontWeight: 800,
+                      letterSpacing: "0.10em", textTransform:"uppercase",
+                    }}>
+                    Reset
+                  </button>
+                )}
+                <button type="button"
+                  onClick={function(){ setFiltersOpen(false); }}
+                  aria-label="Close filters"
+                  style={{
+                    background:"transparent", border:"none", cursor:"pointer",
+                    color: fg, opacity: 0.7,
+                    width: 28, height: 28,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                  }}>
+                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none"
+                       stroke="currentColor" strokeWidth="2"
+                       strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 5l8 8M13 5l-8 8"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* GENDER */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={sectionLabel}>Gender</div>
               <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                 {[
                   { id:"any",    label:"Any" },
                   { id:"male",   label:"Men" },
                   { id:"female", label:"Women" },
                 ].map(function(opt){
-                  var on = genderFilter === opt.id;
-                  return (
-                    <button key={opt.id} type="button"
-                      onClick={function(){ setGenderFilter(opt.id); }}
-                      style={{
-                        padding:"6px 12px", borderRadius: 999,
-                        background: on ? fg : "transparent",
-                        color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
-                        border: "1px solid " + (on ? fg : (mapDark ? "rgba(255,255,255,0.22)" : "rgba(20,18,17,0.18)")),
-                        cursor:"pointer",
-                        fontSize: 11, fontWeight: on ? 800 : 600,
-                        letterSpacing:"0.02em",
-                      }}>
-                      {opt.label}
-                    </button>
-                  );
+                  return <Chip key={opt.id}
+                    on={genderFilter === opt.id} label={opt.label}
+                    onClick={function(){ setGenderFilter(opt.id); }}/>;
                 })}
               </div>
             </div>
-            <div>
-              <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing:"0.14em",
-                textTransform:"uppercase", color: fg, opacity: 0.55,
-                marginBottom: 6,
-              }}>Skill match</div>
+
+            {/* SKILL */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={sectionLabel}>Skill match</div>
               <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                 {[
                   { id:"any",  label:"Any level" },
                   { id:"same", label:"My level" },
                   { id:"tier", label:"Similar" },
                 ].map(function(opt){
-                  var on = skillFilter === opt.id;
-                  return (
-                    <button key={opt.id} type="button"
-                      onClick={function(){ setSkillFilter(opt.id); }}
-                      style={{
-                        padding:"6px 12px", borderRadius: 999,
-                        background: on ? fg : "transparent",
-                        color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
-                        border: "1px solid " + (on ? fg : (mapDark ? "rgba(255,255,255,0.22)" : "rgba(20,18,17,0.18)")),
-                        cursor:"pointer",
-                        fontSize: 11, fontWeight: on ? 800 : 600,
-                        letterSpacing:"0.02em",
-                      }}>
-                      {opt.label}
-                    </button>
-                  );
+                  return <Chip key={opt.id}
+                    on={skillFilter === opt.id} label={opt.label}
+                    onClick={function(){ setSkillFilter(opt.id); }}/>;
                 })}
               </div>
-              {/* Quiet helper line — clarifies what each filter means.
-                  Hidden on "Any" so we don't add noise when the row
-                  is in its default state. */}
               {skillFilter === "same" && (
-                <div style={{
-                  fontSize: 10, color: fg, opacity: 0.55,
-                  marginTop: 6, lineHeight: 1.4,
-                }}>
+                <div style={helperLine}>
                   Your level ±1 rung (e.g. Intermediate 2 also matches Intermediate 1 and Advanced 1).
                 </div>
               )}
               {skillFilter === "tier" && (
-                <div style={{
-                  fontSize: 10, color: fg, opacity: 0.55,
-                  marginTop: 6, lineHeight: 1.4,
-                }}>
+                <div style={helperLine}>
                   Anyone in your broad tier (Beginner, Intermediate, or Advanced).
                 </div>
               )}
             </div>
 
-            {/* Age range — multi-select chips. Tap to add / remove
-                a bracket; empty selection = no filter. Hidden behind
-                the same drawer as the others; the filter cog badge
-                counts this row alongside gender + skill match. */}
-            <div style={{ marginTop: 10 }}>
-              <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing:"0.14em",
-                textTransform:"uppercase", color: fg, opacity: 0.55,
-                marginBottom: 6,
-              }}>Age range</div>
+            {/* AGE */}
+            <div>
+              <div style={sectionLabel}>Age range</div>
               <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                 {[
                   { id:"u18",     label:"Under 18" },
@@ -518,46 +558,61 @@ export default function MapPlayerOverlay({
                   { id:"55_plus", label:"55+"      },
                 ].map(function(opt){
                   var on = ageFilter.indexOf(opt.id) !== -1;
-                  return (
-                    <button key={opt.id} type="button"
-                      onClick={function(){
-                        setAgeFilter(function(prev){
-                          return prev.indexOf(opt.id) === -1
-                            ? prev.concat([opt.id])
-                            : prev.filter(function(x){ return x !== opt.id; });
-                        });
-                      }}
-                      style={{
-                        padding:"6px 10px", borderRadius: 999,
-                        background: on ? fg : "transparent",
-                        color: on ? (mapDark ? "#14110f" : "#ffffff") : fg,
-                        border: "1px solid " + (on ? fg : (mapDark ? "rgba(255,255,255,0.22)" : "rgba(20,18,17,0.18)")),
-                        cursor:"pointer",
-                        fontSize: 11, fontWeight: on ? 800 : 600,
-                        letterSpacing:"0.02em",
-                        whiteSpace:"nowrap",
-                      }}>
-                      {opt.label}
-                    </button>
-                  );
+                  return <Chip key={opt.id}
+                    on={on} label={opt.label}
+                    onClick={function(){
+                      setAgeFilter(function(prev){
+                        return prev.indexOf(opt.id) === -1
+                          ? prev.concat([opt.id])
+                          : prev.filter(function(x){ return x !== opt.id; });
+                      });
+                    }}/>;
                 })}
               </div>
               {ageFilter.length > 0 && (
-                <div style={{
-                  fontSize: 10, color: fg, opacity: 0.55,
-                  marginTop: 6, lineHeight: 1.4,
-                }}>
+                <div style={helperLine}>
                   Players who haven't set their age are hidden while this filter is on.
                 </div>
               )}
             </div>
-
-            {/* Scope tabs (In zone / Everywhere) live in the top
-                chrome now, not in this sheet — see the standalone
-                scope-tabs block above the filter button. */}
           </div>
-        </div>
-      )}
+        );
+
+        if(isMobile){
+          // Mobile: centred modal with a tap-outside-to-dismiss
+          // backdrop. Sits above the top chrome (z 700) so the
+          // format toggle / scope tabs don't bleed through.
+          return (
+            <div
+              onClick={function(){ setFiltersOpen(false); }}
+              style={{
+                position:"absolute", inset: 0,
+                zIndex: 700,
+                background: "rgba(0,0,0,0.42)",
+                backdropFilter: "blur(2px)",
+                WebkitBackdropFilter: "blur(2px)",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                padding: 16,
+                pointerEvents:"auto",
+              }}>
+              {sheet}
+            </div>
+          );
+        }
+        // Desktop: anchored to the top chrome below the cog.
+        return (
+          <div className="fade-up" style={{
+            position:"absolute",
+            top: "calc(env(safe-area-inset-top, 0px) + 116px)",
+            left: 16, right: 16,
+            zIndex: 545,
+            display:"flex", justifyContent:"center",
+            pointerEvents:"none",
+          }}>
+            {sheet}
+          </div>
+        );
+      })()}
 
       {/* PLAYER CARDS — horizontal-scroll carousel anchored to the
           vertical centre of the viewport. Cards float over the
