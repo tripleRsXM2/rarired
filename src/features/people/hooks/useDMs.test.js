@@ -88,7 +88,10 @@ vi.mock("../services/dmService.js", function () {
 });
 
 vi.mock("../services/socialService.js", function () {
-  return { fetchProfilesByIds: function () { return Promise.resolve({ data: [] }); } };
+  return {
+    fetchProfilesByIds: function () { return Promise.resolve({ data: [] }); },
+    fetchVisibleProfilesByIds: function () { return Promise.resolve({ data: [] }); },
+  };
 });
 
 vi.mock("../../notifications/services/notificationService.js", function () {

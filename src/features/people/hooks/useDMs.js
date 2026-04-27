@@ -18,7 +18,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../../lib/supabase.js";
 import * as D from "../services/dmService.js";
-import { fetchProfilesByIds } from "../services/socialService.js";
+import { fetchVisibleProfilesByIds } from "../services/socialService.js";
 import { insertNotification, upsertMessageNotification } from "../../notifications/services/notificationService.js";
 import { appendMessageIfNew, patchMessageById, validateDraft, previewify } from "../utils/messaging.js";
 
@@ -242,7 +242,12 @@ export function useDMs(opts) {
     // mutes come along for the ride.
     var empty = { data: [] };
     Promise.all([
-      allProfileIds.length ? fetchProfilesByIds(allProfileIds, PARTNER_FIELDS) : Promise.resolve(empty),
+      // Conversation-context fetch — uses the SECURITY DEFINER RPC so a
+      // group participant whose privacy='friends' (and isn't the viewer's
+      // friend) still resolves. Without this, the Phase 1 stub
+      // ("Loading…") sticks forever for that participant. See
+      // supabase/migrations/20260502_visible_profile_rpc.sql.
+      allProfileIds.length ? fetchVisibleProfilesByIds(allProfileIds) : Promise.resolve(empty),
       convIds.length       ? D.fetchReads(uid, convIds)                       : Promise.resolve(empty),
       convIds.length       ? D.fetchPartnerReadsForConvs(uid, convIds)        : Promise.resolve(empty),
     ]).then(function (parallel) {
@@ -259,8 +264,14 @@ export function useDMs(opts) {
         var participants;
         if (ids && ids.length) {
           participants = ids.map(function (id) {
-            return profileMap[id] || (c.participants || []).find(function(p){return p && p.id===id;}) ||
-              { id: id, name: id === uid ? "You" : "Player", avatar: "PL" };
+            if (profileMap[id]) return profileMap[id];
+            // Belt-and-braces: never let the Phase 1 "Loading…" stub leak
+            // into the rendered UI. If the RPC didn't return a row for
+            // this id (shouldn't happen now that we use the conv-context
+            // RPC, but defensive), fall back to a "Player" stub.
+            var prior = (c.participants || []).find(function(p){ return p && p.id===id; });
+            if (prior && prior.name && prior.name !== "Loading…") return prior;
+            return { id: id, name: id === uid ? "You" : "Player", avatar: "PL" };
           });
         } else {
           var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
@@ -801,7 +812,8 @@ export function useDMs(opts) {
       // exactly as it was.
       if (conv.is_group) return;
       var partnerId = conv.user1_id === uid ? conv.user2_id : conv.user1_id;
-      var pr = await fetchProfilesByIds([partnerId], PARTNER_FIELDS);
+      // Conv context — same reasoning as loadConversations Phase 2.
+      var pr = await fetchVisibleProfilesByIds([partnerId]);
       var partner = (pr.data && pr.data[0]) || { id: partnerId, name: "Player", avatar: "PL" };
 
       // Race: the DB emits three events in order when a draft materializes
@@ -961,8 +973,10 @@ export function useDMs(opts) {
       var partsRes = await supabase.from("conversation_participants")
         .select("user_id").eq("conversation_id", convId);
       var ids = ((partsRes && partsRes.data) || []).map(function (r) { return r.user_id; });
+      // Same conv-context RPC as loadConversations — friends-only group
+      // participants resolve here instead of falling back to "Player".
       var profilesRes = ids.length
-        ? await fetchProfilesByIds(ids, PARTNER_FIELDS)
+        ? await fetchVisibleProfilesByIds(ids)
         : { data: [] };
       var profileMap = {};
       ((profilesRes && profilesRes.data) || []).forEach(function (p) { profileMap[p.id] = p; });
