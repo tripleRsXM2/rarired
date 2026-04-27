@@ -214,8 +214,14 @@ function DismissBtn({ t, onClick }) {
       aria-label="Dismiss suggestion"
       title="Don't show this suggestion again"
       style={{
-        flexShrink:      0,
-        width:           24, height: 24,
+        // Absolute top-right corner so the dismiss × never eats
+        // horizontal space away from the title + CTA in the
+        // card's flex row. Hit area enlarged via padding without
+        // growing the visual.
+        position:        "absolute",
+        top:             4,
+        right:           4,
+        width:           28, height: 28,
         background:      "transparent",
         border:          "none",
         borderRadius:    999,
@@ -226,6 +232,7 @@ function DismissBtn({ t, onClick }) {
         alignItems:      "center",
         justifyContent:  "center",
         transition:      "color 0.15s",
+        zIndex:          1,
       }}
       onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
       onMouseLeave={function (e) { e.currentTarget.style.color = t.textTertiary; }}>
@@ -260,10 +267,15 @@ function RematchCard({ t, rematch, profileMap, onRematch, onDismiss }) {
 
   return (
     <div style={{
+      // position:relative so the dismiss × can absolute-position
+      // to the top-right corner without taking horizontal space
+      // away from the title + CTA. Right-side padding bumped a
+      // touch (32 instead of 14) so the title doesn't bump the ×.
+      position:     "relative",
       background:   t.bgCard,
       border:       "1px solid " + t.border,
       borderRadius: 10,
-      padding:      "12px 14px",
+      padding:      "12px 32px 12px 14px",
       display:      "flex",
       alignItems:   "center",
       gap:          12,
@@ -334,10 +346,15 @@ function ContinueLeagueCard({ t, continueLeague, onOpenLeague, onDismiss }) {
 
   return (
     <div style={{
+      // position:relative so the dismiss × can absolute-position
+      // to the top-right corner without taking horizontal space
+      // away from the title + CTA. Right-side padding bumped a
+      // touch (32 instead of 14) so the title doesn't bump the ×.
+      position:     "relative",
       background:   t.bgCard,
       border:       "1px solid " + t.border,
       borderRadius: 10,
-      padding:      "12px 14px",
+      padding:      "12px 32px 12px 14px",
       display:      "flex",
       alignItems:   "center",
       gap:          12,
