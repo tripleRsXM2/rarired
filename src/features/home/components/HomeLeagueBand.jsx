@@ -115,7 +115,17 @@ export default function HomeLeagueBand({
         position: "relative",
         maxWidth: 720,
         margin: "0 auto",
-        padding: "clamp(40px, 6vw, 64px) clamp(20px, 4vw, 32px)",
+        // When arrows render (hasMany), bump horizontal padding to
+        // clear the 44×44 hit-area that sits absolute at left:4 /
+        // right:4 of this rail. The arrow's SVG visual ends ~36px
+        // from the rail's outer edge; without ≥40px horizontal
+        // padding here the league name's first character ends up
+        // under the left chevron (same fix already shipped on
+        // Compete's ActiveNowBand). Original clamp(20-32) padding
+        // is kept when there's only one league and no arrows.
+        padding: hasMany
+          ? "clamp(40px, 6vw, 64px) clamp(44px, 6vw, 56px)"
+          : "clamp(40px, 6vw, 64px) clamp(20px, 4vw, 32px)",
       }}>
         {/* Eyebrow gains a "· N of M" indicator when the viewer has
             more than one active league, mirroring the Compete band. */}
