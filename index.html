@@ -6,8 +6,15 @@
          and bottom-bar regions instead of leaving a black strip.
          interactive-widget=resizes-content: Android Chrome resizes the
          layout when the keyboard opens instead of overlaying it (stops
-         the "have to resize the window" experience the user reported). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+         the "have to resize the window" experience the user reported).
+         maximum-scale=1.0 + user-scalable=no: locks pinch-zoom when
+         the site runs as an installed PWA (display:standalone,
+         launched from Home Screen). iOS Safari deliberately IGNORES
+         these flags in a regular browser tab for accessibility, so
+         users browsing the URL can still zoom — only the installed
+         app feels "native" with the lock. Same on Android Chrome in
+         standalone mode. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>CourtSync</title>
 
     <!-- Favicon (browser tab) -->
