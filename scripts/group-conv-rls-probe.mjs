@@ -4,13 +4,17 @@
  *
  * Phase 3 probe for the 20260430_group_conversations.sql migration.
  *
- * Three checks:
+ * Four checks:
  *   (a) Non-participant cannot read a group conv or its messages.
  *   (b) create_group_conversation raises 'block_conflict' when any pair of
  *       prospective members has a blocks row in either direction.
  *   (c) guard_dm_insert_block raises 'recipient_has_blocked_sender' when a
  *       block exists between the sender and ANY other participant of the
  *       group conv at insert time.
+ *   (d) After A creates a group with B + C, the notifications table contains
+ *       one 'group_added' row for each of B and C with from_user_id = A and
+ *       entity_id = the group conversation id. Locks the server-side fan-out
+ *       added in 20260501_group_added_notification.sql.
  *
  * Required env:
  *   SUPABASE_URL
@@ -89,6 +93,31 @@ async function main() {
     var groupId = grp.data;
     if (groupId) convsToCleanup.push(groupId);
 
+    // ----- Case (d) — group_added notifications fanned to B and C -----
+    console.log("[case d] group_added notifications fired to non-creators");
+    // Service-role bypasses RLS so we can read the notifications rows
+    // directly. Should be exactly two rows for this conv: one for B, one
+    // for C. A (the creator) must NOT have a row.
+    var notifs = await admin.from("notifications")
+      .select("user_id, type, from_user_id, entity_id, metadata")
+      .eq("type", "group_added")
+      .eq("entity_id", groupId);
+    ok("(d) admin can read group_added notifications for the new conv",
+       !notifs.error && Array.isArray(notifs.data), notifs.error);
+    var rows = notifs.data || [];
+    var byUser = {};
+    rows.forEach(function (r) { byUser[r.user_id] = r; });
+    ok("(d) B has a group_added row", !!byUser[B.id], { rows: rows });
+    ok("(d) C has a group_added row", !!byUser[C.id], { rows: rows });
+    ok("(d) A (creator) does NOT have a group_added row", !byUser[A.id], { rows: rows });
+    if (byUser[B.id]) {
+      ok("(d) B's row has from_user_id=A", byUser[B.id].from_user_id === A.id, byUser[B.id]);
+      ok("(d) B's row has entity_id=groupId", byUser[B.id].entity_id === groupId, byUser[B.id]);
+    }
+    if (byUser[C.id]) {
+      ok("(d) C's row has from_user_id=A", byUser[C.id].from_user_id === A.id, byUser[C.id]);
+    }
+
     // A inserts a message so direct_messages has something to deny D.
     var aMsg = await aClient.from("direct_messages").insert({
       conversation_id: groupId, sender_id: A.id, content: "hello group",
@@ -156,7 +185,7 @@ async function main() {
     console.error("[probe] FAILED");
     process.exit(process.exitCode);
   }
-  console.log("[probe] all 3 cases passed.");
+  console.log("[probe] all 4 cases passed.");
 }
 
 main().catch(function (e) { console.error("uncaught:", e); process.exit(1); });

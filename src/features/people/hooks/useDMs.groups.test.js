@@ -310,6 +310,93 @@ describe("useDMs — loadConversations hydrates isGroup + participants", functio
   });
 });
 
+describe("useDMs — group_added notification fan-out (Gap 1)", function () {
+  beforeEach(resetMocks);
+
+  // The group_added rows are inserted server-side inside the
+  // create_group_conversation RPC (see migration
+  // 20260501_group_added_notification.sql), so on the client side the
+  // contract is: createGroupConversation resolves successfully, no
+  // additional client-side notification calls are made for group_added,
+  // and the existing notifications realtime channel (subscribed by
+  // useNotifications) will surface the new rows. This test locks the
+  // client-side half of that contract: no extra insertNotification
+  // calls of type group_added fire from useDMs (avoids accidental
+  // double-fan-out if someone later "helpfully" adds a client write).
+  it("does not call insertNotification for group_added on the client", async function () {
+    mockCreateGroup.mockResolvedValueOnce({ data: "conv-grp-2", error: null });
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+
+    await act(async function () {
+      await hook.result.current.openConversationWith([p1, p2, p3], { draft: "" });
+    });
+
+    // The RPC was called — server fans out group_added rows.
+    expect(mockCreateGroup).toHaveBeenCalledTimes(1);
+    expect(mockCreateGroup).toHaveBeenCalledWith(["p1", "p2", "p3"]);
+    // No client-side group_added insert (server-only path).
+    var groupAddedCalls = mockInsertNotification.mock.calls.filter(function (call) {
+      return call[0] && call[0].type === "group_added";
+    });
+    expect(groupAddedCalls.length).toBe(0);
+  });
+});
+
+describe("useDMs — realtime conversations UPDATE bubbles to top (Gap 2)", function () {
+  beforeEach(resetMocks);
+
+  function makeConv(id, ts, partnerId) {
+    return {
+      id: id,
+      user1_id: "me-uid", user2_id: partnerId,
+      status: "accepted", is_group: false,
+      last_message_at: ts,
+      last_message_sender_id: partnerId,
+      participant_ids: ["me-uid", partnerId],
+      requester_id: "me-uid",
+    };
+  }
+
+  it("incoming UPDATE on the bottom conv bubbles it to the top of the list", async function () {
+    mockFetchConversations.mockResolvedValueOnce({
+      data: [
+        makeConv("c-A", "2026-04-27T12:00:00Z", "p1"),
+        makeConv("c-B", "2026-04-27T11:00:00Z", "p2"),
+        makeConv("c-C", "2026-04-27T10:00:00Z", "p3"),
+      ],
+    });
+    mockFetchProfilesByIds.mockResolvedValue({
+      data: [{ id: "p1", name: "Alex" }, { id: "p2", name: "Sam" }, { id: "p3", name: "Riley" }],
+    });
+
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+    await act(async function () { await Promise.resolve(); await Promise.resolve(); });
+
+    // Initial order: A, B, C (newest first).
+    var initial = hook.result.current.conversations.map(function (c) { return c.id; });
+    expect(initial).toEqual(["c-A", "c-B", "c-C"]);
+
+    // Fire a realtime UPDATE on c-C with a fresher timestamp.
+    await act(async function () {
+      fireRealtime("conversations", "UPDATE", {
+        new: {
+          id: "c-C",
+          user1_id: "me-uid", user2_id: "p3",
+          status: "accepted",
+          last_message_at: "2026-04-27T13:00:00Z",
+          last_message_preview: "fresh ping",
+          last_message_sender_id: "p3",
+        },
+      });
+      await Promise.resolve();
+    });
+
+    var after = hook.result.current.conversations.map(function (c) { return c.id; });
+    expect(after).toEqual(["c-C", "c-A", "c-B"]);
+  });
+});
+
 describe("useDMs — realtime conversation_participants INSERT", function () {
   beforeEach(resetMocks);
 

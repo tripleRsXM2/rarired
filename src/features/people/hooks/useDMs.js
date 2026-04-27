@@ -24,6 +24,21 @@ import { appendMessageIfNew, patchMessageById, validateDraft, previewify } from 
 
 var PARTNER_FIELDS = "id,name,avatar,avatar_url,skill,suburb,home_zone,last_active,show_online_status,show_last_seen";
 
+// Sort the conversations array newest-first by last_message_at. Used
+// by the realtime conversations UPDATE + conversation_participants
+// INSERT handlers to bubble a freshly-bumped conv to the top of the
+// list. Pinned-vs-unpinned partitioning happens in Messages.jsx via
+// `dms.pinnedConvIds` (the pinned section is rendered in stored
+// pin-order regardless of this array's order), so we don't need to
+// keep pinned rows separate here — sorting the whole list is correct.
+function sortConvsByLastMessageDesc(list) {
+  return list.slice().sort(function (a, b) {
+    var ta = a && a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+    var tb = b && b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+    return tb - ta;
+  });
+}
+
 export function useDMs(opts) {
   var authUser = (opts && opts.authUser) || null;
   var friends = (opts && opts.friends) || [];
@@ -865,7 +880,8 @@ export function useDMs(opts) {
             }
           }
           setConversations(function (cs) {
-            return cs.map(function (c) {
+            // Patch the matching row in place...
+            var patched = cs.map(function (c) {
               if (c.id !== conv.id) return c;
               var hasUnread = conv.status === "accepted" && conv.last_message_sender_id !== uid &&
                 (!c.lastReadAt || new Date(conv.last_message_at) > new Date(c.lastReadAt));
@@ -877,6 +893,13 @@ export function useDMs(opts) {
                 hasUnread: hasUnread,
               });
             });
+            // ...then re-sort newest-first by last_message_at so a fresh
+            // message bubbles the row to the top of the list. Pinned rows
+            // are partitioned by Messages.jsx via dms.pinnedConvIds in
+            // their stored order — they stay above the unpinned section
+            // regardless of this array's ordering. See Gap 2 in
+            // Mikey/group-notifs-live.
+            return sortConvsByLastMessageDesc(patched);
           });
           // Pending-incoming rows live in `requests`, not `conversations`.
           // When the requester sends their first DM, the DB trigger bumps
@@ -960,7 +983,11 @@ export function useDMs(opts) {
       });
       setConversations(function (cs) {
         if (cs.some(function (c) { return c.id === convId; })) return cs;
-        return [enriched].concat(cs);
+        // Newest-first sort so the freshly-hydrated conv lands at the
+        // top (or near the top, if it has an older last_message_at than
+        // existing convs — which won't be the case for a brand-new
+        // group, but the sort is defensive). See Gap 2.
+        return sortConvsByLastMessageDesc([enriched].concat(cs));
       });
     }
     var partsChannel = supabase.channel("participants:" + uid)
