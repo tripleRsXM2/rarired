@@ -89,6 +89,143 @@ import {
 var QUICK_REACTIONS = ["👍", "❤️", "😂", "😢", "🔥", "🎾"];
 var EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 min
 
+// ── Group conversation helpers ───────────────────────────────────────────
+// convTitle: stringify a conversation title for both inbox rows + thread
+// header. Groups list non-self participants, capped at 2 names + "& N
+// others". 1:1 falls back to the partner name.
+function convTitle(conv, me){
+  if (!conv) return "";
+  if (!conv.isGroup) return (conv.partner && conv.partner.name) || "Conversation";
+  var others = (conv.participants || []).filter(function(p){ return p && p.id !== me; });
+  if (others.length === 0) return "Group";
+  if (others.length === 1) return others[0].name;
+  if (others.length === 2) return others[0].name + " & " + others[1].name;
+  return others[0].name + ", " + others[1].name + " & " + (others.length - 2) + " other" + (others.length - 2 === 1 ? "" : "s");
+}
+
+// AvatarStack — overlapping circle avatars for group rows. Up to 3 visible,
+// each subsequent avatar offset ~40% of size so the leftmost reads first.
+// Stacked right-to-left (later DOM = lower z-index) with a small ring in
+// the card colour to lift each avatar off the previous one.
+function AvatarStack(props) {
+  var t = props.t;
+  var participants = props.participants || [];
+  var size = props.size || 36;
+  var visible = participants.slice(0, 3);
+  var overlap = Math.round(size * 0.4);
+  var totalW = size + overlap * Math.max(0, visible.length - 1);
+  return (
+    <div style={{ position: "relative", width: totalW, height: size, flexShrink: 0 }}>
+      {visible.map(function (p, i) {
+        // Render leftmost LAST so it sits on top via DOM order. Use
+        // reversed index for left offset.
+        var idx = visible.length - 1 - i;
+        var who = visible[idx];
+        return (
+          <div key={(who && who.id) || idx} style={{
+            position: "absolute",
+            left: idx * overlap,
+            top: 0,
+            width: size, height: size,
+            borderRadius: "50%",
+            boxShadow: "0 0 0 2px " + (t && t.bgCard ? t.bgCard : "#fff"),
+            zIndex: 10 - idx,
+            overflow: "hidden",
+          }}>
+            <PlayerAvatar
+              name={(who && who.name) || "?"}
+              avatar={who && who.avatar}
+              avatarUrl={who && who.avatar_url}
+              size={size}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// GroupDetailsDrawer — slide-up sheet (mobile) / right-anchored panel
+// (desktop). Lists each participant as a row with avatar + name, and a
+// chevron that opens their profile. Self has no chevron.
+function GroupDetailsDrawer(props) {
+  var t = props.t;
+  var conv = props.conv;
+  var me = props.me;
+  var openProfile = props.openProfile;
+  var onClose = props.onClose;
+  var participants = (conv && conv.participants) || [];
+  var isDesktop = typeof window !== "undefined" && window.innerWidth >= 700;
+  return createPortal((
+    <div
+      role="dialog" aria-modal="true" aria-label="Group details"
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 320,
+        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        alignItems: isDesktop ? "stretch" : "flex-end",
+        justifyContent: isDesktop ? "flex-end" : "center",
+      }}>
+      <div
+        onClick={function (e) { e.stopPropagation(); }}
+        style={isDesktop ? {
+          width: 360, maxWidth: "100%",
+          background: t.bgCard, borderLeft: "1px solid " + t.border,
+          padding: "20px",
+          height: "100%", overflowY: "auto",
+        } : {
+          width: "100%",
+          background: t.bgCard,
+          borderRadius: "20px 20px 0 0",
+          padding: "20px 20px calc(20px + env(safe-area-inset-bottom))",
+          maxHeight: "80vh", overflowY: "auto",
+        }}>
+        {!isDesktop && (
+          <div style={{ width: 32, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 16px" }} />
+        )}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: t.text }}>{convTitle(conv, me)}</div>
+          <button onClick={onClose} aria-label="Close"
+            style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 22, lineHeight: 1, cursor: "pointer", padding: "0 4px" }}>×</button>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+          Participants · {participants.length}
+        </div>
+        <div>
+          {participants.map(function (p) {
+            if (!p) return null;
+            var isSelf = p.id === me;
+            var canOpen = !isSelf && openProfile && p.id;
+            return (
+              <button key={p.id || p.name}
+                type="button"
+                onClick={canOpen ? function () { openProfile(p.id); } : undefined}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, width: "100%",
+                  padding: "10px 4px", border: "none", background: "transparent",
+                  textAlign: "left",
+                  cursor: canOpen ? "pointer" : "default",
+                  borderBottom: "1px solid " + t.border,
+                }}>
+                <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={36} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.name}{isSelf ? " (you)" : ""}
+                  </div>
+                </div>
+                {canOpen && (
+                  <span aria-hidden="true" style={{ color: t.textTertiary, fontSize: 18, lineHeight: 1, flexShrink: 0 }}>›</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  ), document.body);
+}
+
 // ── Inline SVG icons for the action menu. Match the rest of the app's
 // nav-icon style (18px, 1.5 stroke, rounded caps). currentColor means the
 // menu-item's text color drives the glyph. ────────────────────────────────
@@ -133,6 +270,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var [showSettings, setShowSettings] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   var [showDetails, setShowDetails] = useState(false);
+  // Group-thread participant drawer — opens when the user taps the
+  // header of a group conversation. 1:1 conversations open the partner
+  // profile via openProfile(); groups have multiple participants so a
+  // dedicated sheet replaces that single-tap target.
+  var [showGroupDetails, setShowGroupDetails] = useState(false);
   // Null when closed; a DOMRect when open. Capturing the rect at click
   // time (instead of reading through a ref at render time) avoids the
   // race where a just-mounted ref is still null, which made the picker
@@ -392,6 +534,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     var isActive = dms.activeConv && dms.activeConv.id === conv.id;
     var seenByPartner = conv.lastMsgSeenByPartner;
     var isMuted = (dms.mutedConvIds || []).indexOf(conv.id) >= 0;
+    var isGroup = !!conv.isGroup;
+    var rowTitle = convTitle(conv, myId);
+    var groupParticipantsForStack = isGroup
+      ? (conv.participants || []).filter(function (p) { return p && p.id !== myId; })
+      : [];
     // Live typing indicator (broadcast via dm-typing inbox channel).
     var isTyping = !!(dms.typingConvs && dms.typingConvs[conv.id]);
     var preview = isTyping
@@ -422,15 +569,21 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         onMouseEnter={function (e) { if (!isActive) e.currentTarget.style.background = t.bgTertiary; }}
         onMouseLeave={function (e) { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
         <div style={{ position: "relative", flexShrink: 0 }}>
-          <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={42} />
-          <PresenceDot profile={conv.partner} t={t} />
+          {isGroup ? (
+            <AvatarStack t={t} participants={groupParticipantsForStack} size={42} />
+          ) : (
+            <>
+              <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={42} />
+              <PresenceDot profile={conv.partner} t={t} />
+            </>
+          )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{
               fontSize: 14, fontWeight: hasUnread ? 700 : 600,
               color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{conv.partner.name}</span>
+            }}>{rowTitle}</span>
             {isPinnedFlag && <span style={{ color: t.textTertiary, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
             {isMuted && <span title="Muted" style={{ color: t.textTertiary, fontSize: 12, flexShrink: 0, lineHeight: 1 }}>🔕</span>}
             <span style={{ flex: 1 }}/>
@@ -452,7 +605,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             {/* Seen / sent indicator — only on rows where MY last message is
                 newest. Single tick = sent, double tick = seen. Matches
                 WhatsApp's convention so users read it instantly. */}
-            {isMeLast && !hasUnread && !isPending && (
+            {!isGroup && isMeLast && !hasUnread && !isPending && (
               <span
                 title={seenByPartner ? "Seen" : "Sent"}
                 style={{
@@ -613,7 +766,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
   var conv = dms.activeConv;
 
-  var isPending = conv && conv.status === "pending";
+  // Pending state is 1:1 only (groups skip the request flow per phase-1
+  // schema). Explicitly clamp to false on groups so any stale status
+  // value can't render the request banner.
+  var isPending = conv && !conv.isGroup && conv.status === "pending";
   var iAmSender = conv && conv.requester_id === myId;
   var presence = conv ? getPresence(conv.partner) : { online: false, hidden: true };
 
@@ -767,15 +923,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                   <span style={{ display: "inline-flex" }}><IconPin/></span>
                   <span>{isPinned ? "Unpin" : "Pin"} conversation</span>
                 </button>
-                <button onClick={onDelete} style={Object.assign({}, itemStyle, {
-                  borderTop: "1px solid " + t.border,
-                  color: t.red, fontWeight: 600,
-                })}
-                  onMouseEnter={function (e) { e.currentTarget.style.background = (t.redSubtle || "rgba(220,38,38,0.08)"); }}
-                  onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
-                  <span style={{ display: "inline-flex" }}><IconTrash/></span>
-                  <span>Delete conversation</span>
-                </button>
+                {/* Delete-conv is 1:1 only in v1 — groups don't expose
+                    a leave/delete affordance from this menu yet. */}
+                {!targetConv.isGroup && (
+                  <button onClick={onDelete} style={Object.assign({}, itemStyle, {
+                    borderTop: "1px solid " + t.border,
+                    color: t.red, fontWeight: 600,
+                  })}
+                    onMouseEnter={function (e) { e.currentTarget.style.background = (t.redSubtle || "rgba(220,38,38,0.08)"); }}
+                    onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ display: "inline-flex" }}><IconTrash/></span>
+                    <span>Delete conversation</span>
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -900,21 +1060,46 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         <button onClick={function () { dms.closeConversation(); setMenuState(null); setShowSettings(false); setShowInputEmoji(null); }}
           style={{ background: "transparent", border: "none", color: t.accent, fontSize: 22, lineHeight: 1, padding: "0 6px 0 0", flexShrink: 0, cursor: "pointer" }}
           aria-label="Back">←</button>
-        <div
-          onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
-          style={{ position: "relative", flexShrink: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
-          <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={36} />
-          <PresenceDot profile={conv.partner} t={t} size={10} />
-        </div>
-        <div
-          onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
-          style={{ flex: 1, minWidth: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
-          {dms.typingConvs && dms.typingConvs[conv.id]
-            ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
-            : (presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>)
-          }
-        </div>
+        {conv.isGroup ? (
+          <button
+            type="button"
+            onClick={function () { setShowGroupDetails(true); }}
+            aria-label="Group details"
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              background: "transparent", border: "none", padding: 0,
+              flex: 1, minWidth: 0, cursor: "pointer", textAlign: "left",
+            }}>
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <AvatarStack t={t} participants={(conv.participants || []).filter(function (p) { return p && p.id !== myId; })} size={36} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{convTitle(conv, myId)}</div>
+              {dms.typingConvs && dms.typingConvs[conv.id]
+                ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
+                : <div style={{ fontSize: 11, color: t.textTertiary }}>{((conv.participants || []).length) + " participants"}</div>
+              }
+            </div>
+          </button>
+        ) : (
+          <>
+            <div
+              onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
+              style={{ position: "relative", flexShrink: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
+              <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={36} />
+              <PresenceDot profile={conv.partner} t={t} size={10} />
+            </div>
+            <div
+              onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
+              style={{ flex: 1, minWidth: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
+              {dms.typingConvs && dms.typingConvs[conv.id]
+                ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
+                : (presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>)
+              }
+            </div>
+          </>
+        )}
         {/* Details drawer toggle — desktop-only (hidden below 1024px via
             .cs-dm-details-btn; the drawer itself would eat mobile width). */}
         <button
@@ -1078,7 +1263,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                     )}
                     <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 3, textAlign: mine ? "right" : "left" }}>
                       {formatMessageTime(msg.created_at)}
-                      {mine && idx === lastMineIdx && (
+                      {/* Seen/Sent receipt is 1:1 only for v1 — groups
+                          would need per-participant read tracking. */}
+                      {!conv.isGroup && mine && idx === lastMineIdx && (
                         idx === lastSeenByPartnerIdx
                           ? <span style={{ marginLeft: 6, color: t.accent, fontWeight: 600 }}>· Seen</span>
                           : <span style={{ marginLeft: 6, color: t.textTertiary }}>· Sent</span>
@@ -1341,12 +1528,14 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             ref={inputRef}
             rows={1}
             value={dms.msgDraft}
-            placeholder={"Message " + conv.partner.name + "…"}
+            placeholder={conv.isGroup ? "Message group…" : ("Message " + conv.partner.name + "…")}
             onChange={function (e) {
               dms.setMsgDraft(e.target.value);
               autoGrow(e.target);
               // Broadcast a typing event to the partner — throttled to
               // one every 2s so fast typists don't flood realtime.
+              // v1: typing indicator is 1:1 only — no fan-out for groups.
+              if (dms.activeConv && dms.activeConv.isGroup) return;
               var now = Date.now();
               if (!typingSentRef.current || now - typingSentRef.current > 2000) {
                 typingSentRef.current = now;
@@ -1401,6 +1590,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           t={t} conv={conv}
           onOpenProfile={openProfile}
           onClose={function () { setShowDetails(false); }}
+        />
+      )}
+
+      {/* Group participant drawer — slide-up sheet (mobile) /
+          right-anchored panel (desktop). Triggered by tapping the
+          group-thread header. */}
+      {showGroupDetails && conv && conv.isGroup && (
+        <GroupDetailsDrawer
+          t={t}
+          conv={conv}
+          me={myId}
+          openProfile={openProfile}
+          onClose={function () { setShowGroupDetails(false); }}
         />
       )}
 

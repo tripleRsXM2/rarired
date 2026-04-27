@@ -7,7 +7,9 @@ to onboard from here without reading the hook.
 
 Messaging is **lightweight coordination**, per `product-principles.md`. Not
 a generic chat platform. DMs exist to let two friends agree on a rematch or
-trade a quick note. Everything here is scoped to 1-to-1.
+trade a quick note. As of phase 4 (April 2026) DMs also support **small
+group conversations** (≥3 participants) for the doubles-invite flow — see
+the Groups section below for scope, schema, and v1 limitations.
 
 ## Current State
 
@@ -20,6 +22,8 @@ trade a quick note. Everything here is scoped to 1-to-1.
 | `message_reads` | Per-user-per-conv `last_read_at`. Written via `mark_conversation_read` RPC. | Security-definer RPC; client cannot write directly. |
 | `message_reactions` | `{id, message_id, user_id, emoji}`. Unique (message_id, user_id, emoji). | Client inserts/deletes with RLS. |
 | `conversation_pins` | `{user_id, conversation_id, pinned_at}` (compound PK). Per-user pin. | Client inserts/deletes with RLS (`user_id = auth.uid()`). |
+| `conversation_participants` | `{conversation_id, user_id, joined_at}` (compound PK). One row per (conv, member) for **groups**. 1:1 convs do NOT use this table — they continue to live off `user1_id` / `user2_id`. | Inserted by `create_group_conversation` RPC; client SELECTs filtered by `user_id = auth.uid()` and the conv-membership join. |
+| `conversations.is_group` | Boolean column added in phase 1. `false` for canonical 1:1, `true` for doubles/group threads. | Set by `create_group_conversation` RPC only. |
 | Storage bucket `dm-attachments` | Public read, per-user-folder write. 5 MB limit, image mimes only. Image DMs store the public URL inside `direct_messages.content` via `[img]` sentinel. | Upload via `uploadDMAttachment(userId, file)`. |
 
 ### Migrations (the important ones)
@@ -49,6 +53,7 @@ Defined in `useDMs.js`. All four subscribe on mount, unsubscribe on unmount.
 | `reads:<convId>` | `message_reads` INSERT/UPDATE `conversation_id=convId` | Partner's `last_read_at` for the "Seen" receipt on my sent messages. |
 | `rx:<convId>` | `message_reactions` INSERT/DELETE (filtered client-side to current thread's message ids) | Live reaction add/remove; dedupes optimistic placeholders by (user_id, emoji) pair. |
 | `pins:<uid>` | `conversation_pins` INSERT/DELETE `user_id=uid` | Multi-device pin sync — pinning on tab A immediately moves the conv on tab B. |
+| `participants:<uid>` | `conversation_participants` INSERT `user_id=uid` | Late-join sync for groups — when I'm added to a group conversation by another client, my inbox hydrates the new conv (and refetches its participants) without a full reload. 1:1 convs skip this channel entirely. |
 
 ### Notification types that touch messaging
 
@@ -126,6 +131,44 @@ Own, non-deleted messages are editable for 15 minutes after send.
 - Conversation-list preview renders "📷 Photo" for image messages.
 - **GIFs as animated images are supported** (image/gif). A Giphy-style in-app search is NOT built — punted.
 
+## Groups
+
+Group conversations are the doubles-invite flow's home: instead of fan-out
+1:1 DMs (one thread per partner), the inviter and all confirmed partners
+share a single thread. Scope is intentionally narrow for v1.
+
+### Schema
+
+- `conversations.is_group boolean default false` — discriminator. 1:1 convs leave this `false` and use the legacy `user1_id` / `user2_id` columns; groups set it `true` and live off `conversation_participants`.
+- `conversation_participants(conversation_id, user_id, joined_at)` — compound-PK membership table. RLS lets each user `SELECT` only the rows they belong to.
+- `pair_key` is a generated column on `conversations` and is `NULL` for groups (the canonical-pair uniqueness constraint applies to 1:1 only).
+
+### RPCs
+
+- `create_group_conversation(p_participant_ids uuid[])` — `SECURITY DEFINER`. Inserts the `conversations` row with `is_group=true`, then a `conversation_participants` row per id (caller automatically included). Refuses to create the conv if **any** pair of participants has an active block (`blocks` table) — see Block-conflict policy below. Returns the new `conversation_id`.
+- `fetch_group_conversation(p_conversation_id uuid)` — `SECURITY DEFINER`. Returns the conv row + participants array. Used by `useDMs` to hydrate a freshly-created or freshly-joined group.
+
+### Rendering rules
+
+- Inbox row + thread header use `convTitle(conv, me)` — non-self participants, capped at two names + "& N others" (e.g. *"Alex & Brett"*, *"Alex, Brett & 1 other"*).
+- Avatars use the `<AvatarStack>` primitive (`Messages.jsx`): up to 3 overlapping circles, leftmost on top, with a 2px ring in `t.bgCard` so each avatar lifts cleanly off the previous one.
+- Tapping a group thread header opens `<GroupDetailsDrawer>` (slide-up sheet on mobile, right-anchored panel on desktop). It lists every participant with a chevron that calls `openProfile(p.id)`. Self gets no chevron. **No "leave group" button in v1.**
+- 1:1 rendering is unchanged.
+
+### Block-conflict policy
+
+A group can only be created if no two participants currently block each other. `create_group_conversation` checks this server-side and refuses with a structured error; the doubles-invite flow surfaces the refusal copy *"That group can't be created right now. Try messaging them individually instead."* (see `notification-taxonomy.md`).
+
+**Caveat — post-creation blocks**: if user A blocks user B *after* the group already exists, the group is **not** auto-dissolved. A's outgoing messages will fail RLS (the existing `blocks`-aware insert policy still applies), but the thread stays visible to both. Documented limitation; revisit if it bites.
+
+### v1 scope (deliberate omissions)
+
+- No typing indicators inside group threads — `notifyTyping` is gated on `activeConv.isGroup`.
+- No per-message Seen receipts — would require per-participant read tracking. Hidden in groups.
+- No "leave group" / "delete conversation" affordance for groups in the conv-list right-click menu.
+- No `message_request*` flow — groups bypass the request gate (you're not asking permission to talk; you're being added).
+- No member add/remove UI after creation. Groups are created once with a fixed roster.
+
 ## Open questions / tracked follow-ups
 
 - **Out-of-order realtime delivery** — current list uses append-order, not re-sort-by-created_at. Hasn't caused a visible bug in practice. Tracked for a later fix.
@@ -136,3 +179,4 @@ Own, non-deleted messages are editable for 15 minutes after send.
 ## Last Updated By Module
 - v0 — 2026-04-23, Phase 1 of the messaging integration plan. Inventory of shipped state.
 - v1 — 2026-04-23, Phase 5 UI polish: pinned conversations (new `conversation_pins` table + realtime + UI section), tighter conversation rows, unread accent ring, in-thread date separators, optional desktop-only details drawer (pin toggle + "View profile" shortcut).
+- v2 — 2026-04-27, Group conversations phase 4: UI for `is_group` + `conversation_participants` (avatar stack, composed title, group-details drawer, gated typing/seen/delete). Phases 1-3 (migration + service + hook) shipped earlier; phase 4 is the rendering layer.

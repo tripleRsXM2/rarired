@@ -70,7 +70,8 @@ The event taxonomy registry. Every event the client writes to the `public.events
 | `play_match_zone_picked` | User picks a zone in step 1 | `zone_id` |
 | `play_match_court_picked` | User picks a court in step 2 | `zone_id`, `court_name` |
 | `play_match_player_picked` | User taps "Send invite →" on the player picker (fires alongside `play_match_invite_sent`) | `player_count`, `scope` ("zone"\|"everywhere") |
-| `play_match_invite_sent` | User taps "Send invite →" — wizard hands the partners + ctx to the DM pipeline | `zone_id`, `court_name`, `partner_count`, `scope`, `when_mode` ("week"\|"weekend"\|"days"), `day_count` (number of days picked when `when_mode="days"`, else `null`) |
+| `play_match_invite_sent` | User taps "Send invite →" — wizard hands the partners + ctx to the DM pipeline | `zone_id`, `court_name`, `partner_count`, `scope`, `when_mode` ("week"\|"weekend"\|"days"), `day_count` (number of days picked when `when_mode="days"`, else `null`). `partner_count` is preserved post-phase-4 specifically so we can split singles invites (`partner_count==1` → 1:1 DM) from doubles/group invites (`partner_count>=2` → group conversation via `create_group_conversation`). |
+| `group_conversation_created` | A new group conversation is created (currently only via the doubles-invite flow). Fires from `useDMs` after `create_group_conversation` resolves. | `source` ("doubles_invite"), `participant_count` (total members including self) |
 | `play_match_cancelled` | User dismisses the wizard via close, back, or backdrop | `step` (current), `last_completed` (step − 1) |
 
 ### Reserved (defined but not fired until later modules)
