@@ -46,6 +46,10 @@ export default function LeaguesPanel({
   friends,
   openProfile,
   toast,
+  // Per-league Log match — opens the score modal pre-filled with
+  // this league + the league's mode (ranked/casual). Active members
+  // tap this from the league detail header next to "+ Invite member".
+  onLogMatchInLeague,
   // Slice 4 (design overhaul) — viewer history + challenge composer
   // for the new retention surfaces inside the league detail view.
   history,
@@ -105,6 +109,7 @@ export default function LeaguesPanel({
         onCancel={cancelLeague}
         onVoid={voidLeague}
         onRespond={respondToInvite}
+        onLogMatchInLeague={onLogMatchInLeague}
         friends={friends}
         openProfile={openProfile}
         toast={toast}
@@ -364,6 +369,7 @@ function formatMatchFormat(mf) {
 function LeagueDetailView({
   t, authUser, league, detail, profileMap,
   onBack, onInvite, onRemove, onArchive, onComplete, onCancel, onVoid, onRespond,
+  onLogMatchInLeague,
   friends, openProfile, toast,
   // Slice 4: viewer's match history + challenge composer for the
   // new retention surfaces (next opponent / rivalry callout).
@@ -469,16 +475,28 @@ function LeagueDetailView({
           </div>
         )}
 
-        {/* Owner action — Invite still lives inline since it's the
-            primary action when the league is running. Lifecycle
-            transitions are tucked into the kebab menu next to the
-            status pill above. */}
-        {iAmOwner && isActive(league) && (
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button onClick={function () { setInviteOpen(true); }}
-              style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
-              + Invite member
-            </button>
+        {/* Inline action row.
+            - "+ Invite member" is owner-only — owners run the league.
+            - "+ Log match" is open to any active member. Pre-selects
+              this league in the score modal so members logging from
+              the league page don't have to re-pick it. Same chrome as
+              Invite so the row reads as a coherent toolbar.
+            Lifecycle transitions stay in the kebab menu next to the
+            status pill above (owner-only). */}
+        {isActive(league) && (iAmOwner || (myMembership && myMembership.status === "active")) && (
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            {iAmOwner && (
+              <button onClick={function () { setInviteOpen(true); }}
+                style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
+                + Invite member
+              </button>
+            )}
+            {myMembership && myMembership.status === "active" && onLogMatchInLeague && (
+              <button onClick={function () { onLogMatchInLeague(league); }}
+                style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
+                + Log match
+              </button>
+            )}
           </div>
         )}
       </div>

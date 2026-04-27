@@ -349,6 +349,35 @@ export default function App(){
     matchHistory.setScoreDraft({sets:[{you:"",them:""}],result:"win",notes:"",date:new Date().toISOString().slice(0,10),venue:"",court:""});
   }
 
+  // Open the Log Match flow with a specific league pre-selected.
+  // Used by LeaguesPanel's per-league "Log match" button so members
+  // logging from inside a league don't have to re-pick it in the
+  // composer. match_type is forced to the league's mode (ranked /
+  // casual) so the league selector + match-type pills both arrive
+  // pre-set; validate_match_league still enforces the rule
+  // server-side.
+  function openLogMatchInLeague(league){
+    if(!league||!league.id) { openLogMatch(); return; }
+    var mode = league.mode === "casual" ? "casual" : "ranked";
+    matchHistory.setCasualOppName("");
+    matchHistory.setScoreModal({
+      casual:    mode === "casual",
+      oppName:   "",
+      tournName: mode === "casual" ? "Casual Match" : "",
+    });
+    matchHistory.setScoreDraft({
+      sets:           [{you:"",them:""}],
+      result:         "win",
+      notes:          "",
+      date:           new Date().toISOString().slice(0,10),
+      venue:          "",
+      court:          "",
+      matchType:      mode,
+      completionType: "completed",
+      leagueId:       league.id,
+    });
+  }
+
   // Module 4: composer entry points.
   // openChallenge(targetUser, source, sourceMatch?) — used by profile & feed-card
   // "Challenge"/"Rematch" CTAs. For rematch we prefill venue/court from the source.
@@ -873,6 +902,10 @@ export default function App(){
             ) : (
               <TournamentsTab
                 t={t} myId={myId} authUser={auth.authUser}
+                /* LeaguesPanel uses this to open the score modal
+                   with the current league pre-selected when the
+                   user taps "Log match" inside league detail. */
+                openLogMatchInLeague={openLogMatchInLeague}
                 tournaments={tournaments.tournaments}
                 selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
                 tournDetailTab={tournaments.tournDetailTab} setTournDetailTab={tournaments.setTournDetailTab}

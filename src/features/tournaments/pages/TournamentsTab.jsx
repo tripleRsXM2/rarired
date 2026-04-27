@@ -707,6 +707,9 @@ export default function TournamentsTab(props) {
             friends={friends}
             openProfile={openProfilePreview}
             toast={props.toast}
+            /* Per-league Log match — opens the score modal with
+               this league pre-selected. App.jsx handler. */
+            onLogMatchInLeague={props.openLogMatchInLeague}
             /* Slice 4 — viewer's history (for league-scoped H2H +
                next-opponent suggestion) and challenge composer. */
             history={props.history}
