@@ -21,6 +21,27 @@ import * as D from "../services/dmService.js";
 import { fetchVisibleProfilesByIds } from "../services/socialService.js";
 import { insertNotification, upsertMessageNotification } from "../../notifications/services/notificationService.js";
 import { appendMessageIfNew, patchMessageById, validateDraft, previewify } from "../utils/messaging.js";
+import { getCachedProfile, setCachedProfiles } from "../../../lib/profileCache.js";
+
+// Build a Phase-1 stub from the local profile cache. If we've ever
+// resolved this user before in this browser, the row paints instantly
+// with their real name + avatar (Messenger / WhatsApp pattern). Only
+// genuinely never-seen ids fall back to "Loading…".
+function stubFromCache(id, isSelf) {
+  if (isSelf) return { id: id, name: "You", avatar: "?" };
+  var c = id ? getCachedProfile(id) : null;
+  if (c) {
+    return {
+      id: id,
+      name: c.name || "Loading…",
+      avatar: c.avatar || "?",
+      avatar_url: c.avatar_url || null,
+      skill: c.skill || null,
+      suburb: c.suburb || null,
+    };
+  }
+  return { id: id, name: "Loading…", avatar: "?" };
+}
 
 var PARTNER_FIELDS = "id,name,avatar,avatar_url,skill,suburb,home_zone,last_active,show_online_status,show_last_seen";
 
@@ -213,17 +234,19 @@ export function useDMs(opts) {
       var stubParticipants;
       if (ids && ids.length) {
         stubParticipants = ids.map(function (id) {
-          return { id: id, name: id === uid ? "You" : "Loading…", avatar: "?" };
+          return stubFromCache(id, id === uid);
         });
       } else {
         var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
         stubParticipants = [
-          { id: uid, name: "You", avatar: "?" },
-          { id: pid, name: "Loading…", avatar: "?" },
+          stubFromCache(uid, true),
+          stubFromCache(pid, false),
         ];
       }
-      var partnerStub = isGroup ? null
-        : { id: (ids && ids.length ? ids.filter(function(i){return i!==uid;})[0] : (c.user1_id === uid ? c.user2_id : c.user1_id)), name: "Loading…", avatar: "?" };
+      var partnerId = ids && ids.length
+        ? ids.filter(function (i) { return i !== uid; })[0]
+        : (c.user1_id === uid ? c.user2_id : c.user1_id);
+      var partnerStub = isGroup ? null : stubFromCache(partnerId, false);
       return Object.assign({}, c, {
         isGroup: isGroup,
         participants: stubParticipants,
@@ -253,6 +276,11 @@ export function useDMs(opts) {
     ]).then(function (parallel) {
       var profileMap = {};
       (parallel[0].data || []).forEach(function (p) { profileMap[p.id] = p; });
+      // Promote freshly-resolved profiles into the local cache so the
+      // next paint of any conv that mentions them is instant.
+      if (parallel[0].data && parallel[0].data.length) {
+        setCachedProfiles(parallel[0].data);
+      }
       var readMap = {};
       (parallel[1].data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
       var partnerReadMap = {};
@@ -814,6 +842,7 @@ export function useDMs(opts) {
       var partnerId = conv.user1_id === uid ? conv.user2_id : conv.user1_id;
       // Conv context — same reasoning as loadConversations Phase 2.
       var pr = await fetchVisibleProfilesByIds([partnerId]);
+      if (pr.data && pr.data.length) setCachedProfiles(pr.data);
       var partner = (pr.data && pr.data[0]) || { id: partnerId, name: "Player", avatar: "PL" };
 
       // Race: the DB emits three events in order when a draft materializes
@@ -978,6 +1007,9 @@ export function useDMs(opts) {
       var profilesRes = ids.length
         ? await fetchVisibleProfilesByIds(ids)
         : { data: [] };
+      if (profilesRes && profilesRes.data && profilesRes.data.length) {
+        setCachedProfiles(profilesRes.data);
+      }
       var profileMap = {};
       ((profilesRes && profilesRes.data) || []).forEach(function (p) { profileMap[p.id] = p; });
       var participants = ids.map(function (id) {

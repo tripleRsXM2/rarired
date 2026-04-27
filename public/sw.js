@@ -35,6 +35,15 @@
 var DEFAULT_ICON  = "/icons/icon-192.png";
 var DEFAULT_BADGE = "/icons/icon-192.png";
 
+// Bump on every shipping change to the SW or to defaults the page
+// expects from a fresh install. The activate handler nukes every
+// Cache-API entry NOT matching this version — defensive cleanup for
+// any prior build that may have populated caches[] under a different
+// name. We don't cache assets today (Vite-hashed filenames + Vercel
+// CDN handle that), so this is purely a "make sure nothing stale
+// pinned the user" guard rail.
+var CACHE_VERSION = "cs-sw-v3";
+
 // Lifecycle: take control immediately on install/activate so a fresh
 // version replaces the previous one without requiring a tab close.
 self.addEventListener("install", function () {
@@ -42,7 +51,23 @@ self.addEventListener("install", function () {
 });
 
 self.addEventListener("activate", function (event) {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(Promise.all([
+    self.clients.claim(),
+    // Sweep any caches left behind by a previous SW build. Harmless
+    // no-op on a fresh install (caches.keys() is empty) but ensures
+    // stale index.html / asset bundles can't survive a deploy.
+    (typeof caches !== "undefined") ? caches.keys().then(function (names) {
+      return Promise.all(names.filter(function (n) { return n !== CACHE_VERSION; }).map(function (n) { return caches.delete(n); }));
+    }) : Promise.resolve(),
+  ]));
+});
+
+// Allow the page to nudge a waiting SW to activate immediately. Pairs
+// with the postMessage({type:'SKIP_WAITING'}) call in src/main.jsx.
+self.addEventListener("message", function (event) {
+  if (event && event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("push", function (event) {

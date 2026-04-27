@@ -538,3 +538,87 @@ describe("useDMs — loadConversations uses fetch_visible_profiles RPC", functio
     expect(missing.name).not.toBe("Loading…");
   });
 });
+
+// Locks Mikey/instant-profile-cache. The Phase 1 stub in bareEnrich
+// must read from the local profileCache so previously-seen names paint
+// instantly — no "Loading…" flash on cold load. Pre-seed the cache,
+// then assert participants render with cached names BEFORE any RPC
+// mock has been allowed to resolve.
+describe("useDMs — bareEnrich uses profileCache for instant names", function () {
+  beforeEach(function () {
+    resetMocks();
+    localStorage.clear();
+  });
+
+  it("paints cached names synchronously without waiting on the visible-profiles RPC", async function () {
+    // Pre-seed the cache as if we'd previously resolved both partners.
+    var cacheMod = await import("../../../lib/profileCache.js");
+    cacheMod.setCachedProfiles([
+      { id: "p1", name: "Cached Alex", avatar: "CA" },
+      { id: "p2", name: "Cached Sam",  avatar: "CS" },
+    ]);
+
+    mockFetchConversations.mockResolvedValueOnce({
+      data: [{
+        id: "conv-cached",
+        user1_id: "me-uid", user2_id: "p1",
+        status: "accepted", is_group: true,
+        last_message_at: "2026-04-27T10:00:00Z",
+        last_message_sender_id: "p1",
+        participant_ids: ["me-uid", "p1", "p2"],
+        requester_id: "me-uid",
+      }],
+    });
+    // Make the RPC hang forever so we can prove Phase 1 is sourced
+    // from the cache, NOT from the network round-trip.
+    var rpcResolve;
+    mockFetchVisibleProfilesByIds.mockImplementationOnce(function () {
+      return new Promise(function (res) { rpcResolve = res; });
+    });
+
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+
+    // RPC has NOT resolved yet — the only way the names can be present
+    // is if Phase 1 read them from the cache.
+    var grp = hook.result.current.conversations.find(function (c) { return c.id === "conv-cached"; });
+    expect(grp).toBeTruthy();
+    var names = grp.participants.map(function (p) { return p.name; });
+    expect(names).not.toContain("Loading…");
+    expect(names).toContain("Cached Alex");
+    expect(names).toContain("Cached Sam");
+
+    // Drain the pending RPC so the test cleanly tears down.
+    rpcResolve({ data: [{ id: "p1", name: "Alex" }, { id: "p2", name: "Sam" }] });
+    await act(async function () { await Promise.resolve(); await Promise.resolve(); });
+  });
+
+  it("promotes Phase 2 RPC results into the cache for next load", async function () {
+    var cacheMod = await import("../../../lib/profileCache.js");
+
+    mockFetchConversations.mockResolvedValueOnce({
+      data: [{
+        id: "conv-promote",
+        user1_id: "me-uid", user2_id: "p1",
+        status: "accepted", is_group: false,
+        last_message_at: "2026-04-27T10:00:00Z",
+        last_message_sender_id: "p1",
+        participant_ids: ["me-uid", "p1"],
+        requester_id: "me-uid",
+      }],
+    });
+    mockFetchProfilesByIds.mockResolvedValue({
+      data: [{ id: "p1", name: "Fresh Alex", avatar: "FA" }],
+    });
+
+    expect(cacheMod.getCachedProfile("p1")).toBeNull();
+
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+    await act(async function () { await Promise.resolve(); await Promise.resolve(); });
+
+    var cached = cacheMod.getCachedProfile("p1");
+    expect(cached).toBeTruthy();
+    expect(cached.name).toBe("Fresh Alex");
+  });
+});
