@@ -977,7 +977,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {/* Header — paddingTop gives the 36px avatar breathing room from
           the tabs row above; without it the top of the circle clips
           (user feedback: 'players are cut off at the top'). */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 10, paddingBottom: 12, marginBottom: 4, borderBottom: "1px solid " + t.border }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 10, paddingBottom: 12, marginBottom: 4 }}>
         <button onClick={function () { dms.closeConversation(); setMenuState(null); setShowSettings(false); setShowInputEmoji(null); }}
           style={{ background: "transparent", border: "none", color: t.accent, fontSize: 22, lineHeight: 1, padding: "0 6px 0 0", flexShrink: 0, cursor: "pointer" }}
           aria-label="Back">←</button>
