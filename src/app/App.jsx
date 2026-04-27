@@ -632,7 +632,13 @@ export default function App(){
 
           {/* MOBILE top nav — hidden on desktop via .cs-mob-nav CSS */}
           <nav className="cs-mob-nav" style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>
-            <div style={{maxWidth:680,margin:"0 auto",padding:"0 20px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            {/* No maxWidth cap — content stretches edge-to-edge.
+                User feedback: 'when resizing the window, court sync
+                symbol at the top + profile picture/bell don't stick
+                to the side, there is a little gap sometimes.' Cap
+                used to be 680px which left a gutter on viewports
+                between 720px and 1023px (mobile-nav range). */}
+            <div style={{width:"100%",padding:"0 16px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:26,height:26,borderRadius:4,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:t.accentText,letterSpacing:"-0.5px",flexShrink:0}}>CS</div>
                 <span style={{fontSize:15,fontWeight:700,letterSpacing:"-0.5px",color:t.text}}>CourtSync</span>
@@ -705,7 +711,10 @@ export default function App(){
 
           {/* MOBILE bottom tab bar — icons only (hidden on desktop via CSS). */}
           <div className="cs-mob-tabs" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
-            <div style={{maxWidth:680,margin:"0 auto",display:"flex",padding:"6px 0 calc(6px + env(safe-area-inset-bottom))"}}>
+            {/* No maxWidth cap (same fix as the top nav) — bar
+                stretches edge-to-edge so the icons distribute
+                evenly across any mobile viewport. */}
+            <div style={{width:"100%",display:"flex",padding:"6px 0 calc(6px + env(safe-area-inset-bottom))"}}>
               {TABS.map(function(tb){
                 var on=tab===tb.id;
                 var Icon=NAV_ICONS[tb.id];
