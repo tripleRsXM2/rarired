@@ -1284,10 +1284,21 @@ export default function PlayMatchWizard({
                   </div>
 
                   {pickedCourt && pickedCourt.bookingUrl && (
+                    <>
+                    {/* Hairline rule above the booking link gives a
+                        clear visual separation from the time-of-day
+                        tabs that sit just above. Matches the rule
+                        below that splits us from the message
+                        preview. */}
+                    <div style={{
+                      height: 1, background: t.border,
+                      marginTop: 16, marginBottom: 14,
+                      opacity: 0.7,
+                    }}/>
                     <a href={pickedCourt.bookingUrl}
                       target="_blank" rel="noopener noreferrer"
                       style={{
-                        marginTop: 12, padding: "10px 12px", borderRadius: 12,
+                        padding: "10px 12px", borderRadius: 12,
                         background: hexToRgba(t.bgCard, 0.78),
                         color: t.text, textDecoration:"none",
                         display:"flex", alignItems:"center", gap: 10,
@@ -1313,8 +1324,8 @@ export default function PlayMatchWizard({
                             the venue name reads less like a long
                             sentence and more like a labelled link. */}
                         <div style={{
-                          fontSize: 12.5, fontWeight: 800, color: t.text,
-                          letterSpacing: "0.04em", textTransform: "uppercase",
+                          fontSize: 10.5, fontWeight: 800, color: t.textSecondary,
+                          letterSpacing: "0.10em", textTransform: "uppercase",
                           lineHeight: 1.1,
                         }}>
                           Check times
@@ -1335,10 +1346,20 @@ export default function PlayMatchWizard({
                         </div>
                       </div>
                     </a>
+                    {/* Bottom hairline mirrors the one above — visually
+                        anchors the booking link as its own block,
+                        separated from the message-preview sub-step
+                        below. */}
+                    <div style={{
+                      height: 1, background: t.border,
+                      marginTop: 14, marginBottom: 8,
+                      opacity: 0.7,
+                    }}/>
+                    </>
                   )}
 
                   {selectedIds.length > 0 && (
-                    <div style={{ marginTop: 22 }}>
+                    <div style={{ marginTop: 14 }}>
                       {/* Sub-step 2 — send the invite. Same circled-
                           number pattern as 'When?' above so the two
                           actions read as a clear ordered pair. */}
