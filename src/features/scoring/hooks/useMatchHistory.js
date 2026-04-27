@@ -513,12 +513,32 @@ export function useMatchHistory(opts){
     var storedResult=isOpponentView
       ?(formProposal.result==='win'?'loss':'win')
       :formProposal.result;
-    var cleanSets=(formProposal.sets||[])
+
+    // Frame normalisation. Both match.sets and current_proposal.sets
+    // are canonically stored in the SUBMITTER's frame (you = submitter
+    // score, them = opponent score) — see matchUtils.normalizeMatch's
+    // "sets stay in submitter frame" comment, and FeedCard's
+    // viewer-aware flip on render. When the OPPONENT writes this
+    // proposal (initial dispute, or counter-propose round 3+),
+    // formProposal.sets are in their own POV and must be flipped
+    // to submitter-frame before persisting. Without the flip, result
+    // ends up in submitter-frame (it gets flipped above) but sets
+    // stay in opponent-frame, producing a stored row where score and
+    // winner directly contradict (the original bug: score read
+    // "1-6" but result said the submitter won).
+    var rawCleanSets=(formProposal.sets||[])
       .filter(function(s){return s.you!==''||s.them!=='';})
       // Strip half-filled tiebreak halves before persisting the
       // proposal jsonb so the recipient's review drawer sees a
       // canonical shape (no {tieBreak:{you:'7', them:''}}).
       .map(serializeSetForDb).filter(Boolean);
+    var cleanSets=isOpponentView
+      ?rawCleanSets.map(function(s){
+        var out={you:s.them,them:s.you};
+        if(s.tieBreak)out.tieBreak={you:s.tieBreak.them,them:s.tieBreak.you};
+        return out;
+      })
+      :rawCleanSets;
     var proposal={
       result:storedResult,
       sets:cleanSets,
