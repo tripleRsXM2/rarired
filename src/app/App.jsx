@@ -850,6 +850,12 @@ export default function App(){
                    detail via setSelectedTournId, and surface entered
                    tournaments in the active list. */
                 tournaments={tournaments}
+                /* Slice 3: viewer's match history powers the rematch
+                   suggestion + the league next-opponent picker.
+                   openChallenge is the App-level composer launcher
+                   the hub fires from the Rematch CTA. */
+                history={matchHistory.history}
+                openChallenge={openChallenge}
                 toast={toast}
               />
             ) : (

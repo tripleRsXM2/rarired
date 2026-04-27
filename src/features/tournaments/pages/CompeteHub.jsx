@@ -40,9 +40,12 @@ import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
 import { isActive }    from "../../leagues/utils/leagueLifecycle.js";
 import CompeteHero               from "../components/hub/CompeteHero.jsx";
 import ActiveNowBand             from "../components/hub/ActiveNowBand.jsx";
+import SuggestedNextMovesSection from "../components/hub/SuggestedNextMovesSection.jsx";
 import PastCompetitionsSection   from "../components/hub/PastCompetitionsSection.jsx";
 import ExploreCardsSection       from "../components/hub/ExploreCardsSection.jsx";
 import { buildFeaturedSlides }   from "../utils/competeNormalize.js";
+import { pickRecentRematch,
+         pickContinueLeague }    from "../utils/competeSuggestions.js";
 
 // Reusable inner-rail wrapper. Keeps 720 max-width + horizontal
 // gutter so centered sections share the same vertical alignment as
@@ -66,6 +69,11 @@ export default function CompeteHub({
   challenges,
   leagues,
   tournaments,
+  // Slice 3: viewer's match history (rematch suggestion source) +
+  // the App-level openChallenge handler (composes a challenge with
+  // a target user + optional source match for venue/court prefill).
+  history,
+  openChallenge,
   toast,
 }) {
   var navigate = useNavigate();
@@ -147,13 +155,21 @@ export default function CompeteHub({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagues.leagues]);
 
+  // Merged profile map: leagues + challenges + the small subset
+  // useMatchHistory keeps internally on each row's avatar field.
+  // Keeping the merge in one place means the slides + suggestions
+  // share the same name/avatar resolution.
+  var mergedProfileMap = useMemo(function () {
+    return Object.assign({}, leagues.profileMap || {}, challenges.profileMap || {});
+  }, [leagues.profileMap, challenges.profileMap]);
+
   // ── Build slides for the carousel ──────────────────────────────
   var slides = useMemo(function () {
     return buildFeaturedSlides({
       leagues:      leagues.leagues,
       challenges:   challenges.challenges,
       tournaments:  (tournaments && tournaments.tournaments) || [],
-      profileMap:   Object.assign({}, leagues.profileMap || {}, challenges.profileMap || {}),
+      profileMap:   mergedProfileMap,
       detailCache:  leagues.detailCache,
       viewerId:     viewerId,
       handlers:     handlers,
@@ -161,10 +177,28 @@ export default function CompeteHub({
       tournStatus:  tournaments && tournaments.tournStatus,
     });
   }, [
-    leagues.leagues, challenges.challenges, challenges.profileMap, leagues.profileMap,
-    leagues.detailCache, tournaments && tournaments.tournaments, viewerId, handlers,
+    leagues.leagues, challenges.challenges, mergedProfileMap, leagues.detailCache,
+    tournaments && tournaments.tournaments, viewerId, handlers,
     tournaments && tournaments.isEntered, tournaments && tournaments.tournStatus,
   ]);
+
+  // ── Build suggestion cards (Slice 3) ───────────────────────────
+  // Both helpers fail closed — return null when data is missing or
+  // unreliable. The section component hides itself when both are
+  // null, so a user with no history + no leagues sees nothing.
+  var rematchSuggestion = useMemo(function () {
+    return pickRecentRematch(history || [], viewerId, mergedProfileMap);
+  }, [history, viewerId, mergedProfileMap]);
+
+  var continueLeagueSuggestion = useMemo(function () {
+    return pickContinueLeague({
+      leagues:     leagues.leagues || [],
+      detailCache: leagues.detailCache || {},
+      history:     history || [],
+      viewerId:    viewerId,
+      profileMap:  mergedProfileMap,
+    });
+  }, [leagues.leagues, leagues.detailCache, history, viewerId, mergedProfileMap]);
 
   // ── Render ─────────────────────────────────────────────────────
   return (
@@ -189,6 +223,22 @@ export default function CompeteHub({
         {slides.length === 0 && (
           <ActiveNowEmpty t={t} />
         )}
+
+        {/* Slice 3: real-data suggestions only. The section hides
+            itself when both helpers return null (no history with a
+            linked opponent + no active leagues). Sits between the
+            Active surface and Explore so it reads as a calm "what
+            next" prompt rather than primary content. */}
+        <SuggestedNextMovesSection
+          t={t}
+          rematch={rematchSuggestion}
+          continueLeague={continueLeagueSuggestion}
+          profileMap={mergedProfileMap}
+          onRematch={function (targetUser, sourceMatch) {
+            if (openChallenge) openChallenge(targetUser, "rematch", sourceMatch);
+          }}
+          onOpenLeague={goLeague}
+        />
 
         <ExploreCardsSection
           t={t}
