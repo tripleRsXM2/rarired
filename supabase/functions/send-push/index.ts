@@ -461,6 +461,12 @@ function buildPayloadForType(type: string, fromName: string | null, entityId: st
 
 // Encrypt + send a single push. Returns the raw push-service status
 // code so the caller can prune 404/410.
+//
+// `pushTextMessage` takes a STRING (it does the TextEncoder.encode
+// internally — see subscriber.ts in @negrel/webpush). Passing a
+// Uint8Array results in JavaScript's default toString coercion
+// ("123,45,67,89,…" — comma-separated byte values), which is what
+// landed on the iPhone as the notification body before this fix.
 async function sendOne(sub: Subscription, payload: PushPayload, ttl: number) {
   const server = await getVapid();
   const subscriber = server.subscribe(
@@ -469,8 +475,10 @@ async function sendOne(sub: Subscription, payload: PushPayload, ttl: number) {
       keys: { p256dh: sub.p256dh, auth: sub.auth },
     },
   );
-  const data = new TextEncoder().encode(JSON.stringify(payload));
-  return await subscriber.pushTextMessage(data, { urgency: "normal", ttl });
+  return await subscriber.pushTextMessage(
+    JSON.stringify(payload),
+    { urgency: "normal", ttl },
+  );
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────
