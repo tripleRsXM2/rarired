@@ -367,11 +367,17 @@ export default function ZoneSidePanel({
               </div>
             </div>
           </div>
-          {/* Close affordance — user feedback: '✕ at the top corner
-              is a bit harsh, can you make it a > instead?' Read as
-              'collapse panel to the right' rather than a destructive
-              close. SVG line-art per the project's icon rule
-              (stroke=currentColor / strokeWidth 1.7 / no emoji). */}
+          {/* Close affordance.
+                Desktop: '>' chevron — reads as 'collapse panel to
+                  the right' (and the map reframes back to city
+                  view). User feedback drove this from the harsh
+                  '✕' to a softer chevron.
+                Mobile: '✕' — the panel is full-bleed there, so
+                  'collapse to the right' isn't a meaningful
+                  metaphor; a conventional close glyph is clearer.
+                  User: 'make sure the > on the tab reframe is
+                  only on web.'
+              SVG line-art per the project's icon rule. */}
           <button onClick={onClose} aria-label="Close zone panel" style={{
             background:"transparent", border:"none", cursor:"pointer",
             color:t.textTertiary, padding:6, lineHeight:0,
@@ -380,7 +386,9 @@ export default function ZoneSidePanel({
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
                  stroke="currentColor" strokeWidth="1.7"
                  strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 4l5 5-5 5"/>
+              {isNarrow
+                ? <path d="M5 5l8 8M13 5l-8 8"/>
+                : <path d="M7 4l5 5-5 5"/>}
             </svg>
           </button>
         </div>
