@@ -4,7 +4,7 @@
  *
  * Phase 3 probe for the 20260430_group_conversations.sql migration.
  *
- * Four checks:
+ * Five checks:
  *   (a) Non-participant cannot read a group conv or its messages.
  *   (b) create_group_conversation raises 'block_conflict' when any pair of
  *       prospective members has a blocks row in either direction.
@@ -15,6 +15,10 @@
  *       one 'group_added' row for each of B and C with from_user_id = A and
  *       entity_id = the group conversation id. Locks the server-side fan-out
  *       added in 20260501_group_added_notification.sql.
+ *   (e) fetch_visible_profiles returns a friends-only co-participant of a
+ *       group conv (conv-context branch fires) AND does NOT return a
+ *       friends-only stranger the caller has no shared context with.
+ *       Locks the fix in 20260502_visible_profile_rpc.sql.
  *
  * Required env:
  *   SUPABASE_URL
@@ -167,6 +171,30 @@ async function main() {
 
     // Cleanup the case-(c) block.
     await admin.from("blocks").delete().match({ blocker_id: C.id, blocked_id: A.id });
+
+    // ----- Case (e) — fetch_visible_profiles conv-context branch -----
+    console.log("[case e] fetch_visible_profiles honors conv-context for friends-only");
+    // Force B's privacy to 'friends'. A is not friends with B, but A and
+    // B share `groupId` from case (a). The RPC's conv-context branch
+    // should still return B's row.
+    var pUp = await admin.from("profiles").update({ privacy: "friends" }).eq("id", B.id);
+    ok("(e) admin sets B.privacy='friends'", !pUp.error, pUp.error);
+    var rpcShared = await aClient.rpc("fetch_visible_profiles", { p_user_ids: [B.id] });
+    ok("(e) RPC succeeds for shared-conv friends-only target",
+       !rpcShared.error && Array.isArray(rpcShared.data),
+       rpcShared.error);
+    var sawB = (rpcShared.data || []).some(function (p) { return p.id === B.id; });
+    ok("(e) RPC returns friends-only B because A shares a conv with B",
+       sawB, { rows: rpcShared.data });
+    // Sanity: D shares no conversation with B and is not friends with B.
+    // The RPC must return zero rows for D asking about B.
+    var rpcStranger = await dClient.rpc("fetch_visible_profiles", { p_user_ids: [B.id] });
+    ok("(e) RPC succeeds for stranger query",
+       !rpcStranger.error && Array.isArray(rpcStranger.data),
+       rpcStranger.error);
+    var dSawB = (rpcStranger.data || []).some(function (p) { return p.id === B.id; });
+    ok("(e) RPC does NOT return friends-only B to stranger D",
+       !dSawB, { rows: rpcStranger.data });
   } finally {
     console.log("[probe] cleanup...");
     // Delete conversations we created (cascades to messages, participants).
@@ -185,7 +213,7 @@ async function main() {
     console.error("[probe] FAILED");
     process.exit(process.exitCode);
   }
-  console.log("[probe] all 4 cases passed.");
+  console.log("[probe] all 5 cases passed.");
 }
 
 main().catch(function (e) { console.error("uncaught:", e); process.exit(1); });

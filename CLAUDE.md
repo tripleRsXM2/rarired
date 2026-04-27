@@ -69,7 +69,7 @@ git checkout main && git merge Mikey/feature-name && git push origin main
 ## Key Infrastructure
 
 - `src/lib/supabase.js` — Supabase client singleton (import this, not the raw package)
-- `src/lib/db.js` — Shared db helpers (`fetchProfilesByIds`)
+- `src/lib/db.js` — Shared db helpers (`fetchProfilesByIds`, `fetchVisibleProfilesByIds` — RPC-backed, conv/zone context bypass for friends-only)
 - `src/lib/theme.js` — `makeTheme(name)` returns all design tokens
 - `src/app/App.jsx` — Root; owns all hooks, wires them into pages via props
 - `src/app/providers.jsx` — Global CSS / keyframes injected via `<style>`

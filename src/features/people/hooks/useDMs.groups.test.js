@@ -117,13 +117,28 @@ vi.mock("../services/dmService.js", function () {
 });
 
 var mockFetchProfilesByIds = vi.fn();
-vi.mock("../services/socialService.js", function () {
-  return { fetchProfilesByIds: function () { return mockFetchProfilesByIds.apply(null, arguments); } };
+// useDMs's profile fetch path was migrated to the SECURITY DEFINER RPC
+// helper (`fetchVisibleProfilesByIds`) on Mikey/profile-loading-fix.
+// We point both old + new exports at the same vi.fn so existing test
+// shapes don't have to change — every loadConversations enrichment and
+// every conv_participants INSERT hydration funnels through this mock.
+var mockFetchVisibleProfilesByIds = vi.fn(function (ids) {
+  return mockFetchProfilesByIds(ids);
 });
-// useDMs imports fetchProfilesByIds from "../services/socialService.js" — but
-// some flows (the participants channel) re-import; mock both in case.
+vi.mock("../services/socialService.js", function () {
+  return {
+    fetchProfilesByIds: function () { return mockFetchProfilesByIds.apply(null, arguments); },
+    fetchVisibleProfilesByIds: function () { return mockFetchVisibleProfilesByIds.apply(null, arguments); },
+  };
+});
+// useDMs imports fetchVisibleProfilesByIds from "../services/socialService.js"
+// — but some flows (the participants channel) re-import via lib/db.js;
+// mock both in case.
 vi.mock("../../../lib/db.js", function () {
-  return { fetchProfilesByIds: function () { return mockFetchProfilesByIds.apply(null, arguments); } };
+  return {
+    fetchProfilesByIds: function () { return mockFetchProfilesByIds.apply(null, arguments); },
+    fetchVisibleProfilesByIds: function () { return mockFetchVisibleProfilesByIds.apply(null, arguments); },
+  };
 });
 
 var mockUpsertMessageNotification = vi.fn();
@@ -143,9 +158,15 @@ function resetMocks() {
    mockFetchReactions, mockFetchReads, mockSendMessage, mockUpdateConvLastMsg,
    mockUpsertRead, mockFetchPartnerRead, mockUpdateStatus,
    mockFetchPartnerReadsForConvs, mockFetchPinned, mockUpdatePresence,
-   mockFetchProfilesByIds, mockUpsertMessageNotification, mockInsertNotification,
+   mockFetchProfilesByIds, mockFetchVisibleProfilesByIds, mockUpsertMessageNotification, mockInsertNotification,
    mockSelectFromConversations, mockPartsSelect]
     .forEach(function (m) { m.mockReset(); });
+  // After reset, restore the visible-profiles mock to delegate to
+  // mockFetchProfilesByIds so existing test fixtures (which only set up
+  // the latter) still drive enrichment.
+  mockFetchVisibleProfilesByIds.mockImplementation(function (ids) {
+    return mockFetchProfilesByIds(ids);
+  });
   mockFetchConversations.mockResolvedValue({ data: [] });
   mockFetchThread.mockResolvedValue({ data: [] });
   mockFetchReactions.mockResolvedValue({ data: [] });
@@ -439,5 +460,81 @@ describe("useDMs — realtime conversation_participants INSERT", function () {
     expect(landed).toBeTruthy();
     expect(landed.isGroup).toBe(true);
     expect(landed.participants.length).toBe(3);
+  });
+});
+
+// Locks the Mikey/profile-loading-fix change. Group convs used to render a
+// participant whose privacy='friends' (and isn't the viewer's friend) as a
+// permanent "Loading…" stub, because the strict profiles RLS hid them from
+// fetchProfilesByIds. The fix swaps to fetchVisibleProfilesByIds (RPC
+// `fetch_visible_profiles`), which the conv-context branch admits.
+describe("useDMs — loadConversations uses fetch_visible_profiles RPC", function () {
+  beforeEach(resetMocks);
+
+  it("calls the visible-profiles helper, never the bare profiles select, and never leaves 'Loading…' in participants", async function () {
+    mockFetchConversations.mockResolvedValueOnce({
+      data: [{
+        id: "conv-grp-rls",
+        user1_id: "me-uid", user2_id: "p1",
+        status: "accepted", is_group: true,
+        last_message_at: "2026-04-27T10:00:00Z",
+        last_message_sender_id: "p1",
+        participant_ids: ["me-uid", "p1", "p2"],
+        requester_id: "me-uid",
+      }],
+    });
+    // The RPC returns rows for both ids — including p2 who in the real
+    // DB has privacy='friends' and is invisible to the standard profiles
+    // RLS for the viewer.
+    mockFetchProfilesByIds.mockResolvedValue({
+      data: [{ id: "p1", name: "Alex" }, { id: "p2", name: "Sam" }],
+    });
+
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+    await act(async function () { await Promise.resolve(); await Promise.resolve(); });
+
+    // The RPC delegate fired (Phase 2 enrichment uses it).
+    expect(mockFetchVisibleProfilesByIds).toHaveBeenCalled();
+    var calledIds = mockFetchVisibleProfilesByIds.mock.calls[0][0];
+    expect(calledIds.sort()).toEqual(["p1", "p2"]);
+
+    var grp = hook.result.current.conversations.find(function (c) { return c.id === "conv-grp-rls"; });
+    expect(grp).toBeTruthy();
+    var names = grp.participants.map(function (p) { return p.name; });
+    // No participant should be left as the Phase 1 "Loading…" stub.
+    expect(names).not.toContain("Loading…");
+    expect(names).toContain("Alex");
+    expect(names).toContain("Sam");
+  });
+
+  it("missing profile from the RPC response falls back to 'Player', not 'Loading…'", async function () {
+    mockFetchConversations.mockResolvedValueOnce({
+      data: [{
+        id: "conv-grp-missing",
+        user1_id: "me-uid", user2_id: "p1",
+        status: "accepted", is_group: true,
+        last_message_at: "2026-04-27T10:00:00Z",
+        last_message_sender_id: "p1",
+        participant_ids: ["me-uid", "p1", "p-missing"],
+        requester_id: "me-uid",
+      }],
+    });
+    // RPC returns only p1; p-missing is omitted (e.g. account deleted
+    // mid-flight, or some unforeseen privacy edge case).
+    mockFetchProfilesByIds.mockResolvedValue({
+      data: [{ id: "p1", name: "Alex" }],
+    });
+
+    var hook = renderHook(function () { return useDMs({ authUser: authUser }); });
+    await act(async function () { await hook.result.current.loadConversations(); });
+    await act(async function () { await Promise.resolve(); await Promise.resolve(); });
+
+    var grp = hook.result.current.conversations.find(function (c) { return c.id === "conv-grp-missing"; });
+    expect(grp).toBeTruthy();
+    var missing = grp.participants.find(function (p) { return p.id === "p-missing"; });
+    expect(missing).toBeTruthy();
+    expect(missing.name).toBe("Player");
+    expect(missing.name).not.toBe("Loading…");
   });
 });

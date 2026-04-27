@@ -7,7 +7,7 @@ export function fetchFriendRequests(userId){
 export function fetchBlocks(userId){
   return supabase.from('blocks').select('blocked_id').eq('blocker_id',userId);
 }
-export { fetchProfilesByIds } from "../../../lib/db.js";
+export { fetchProfilesByIds, fetchVisibleProfilesByIds } from "../../../lib/db.js";
 export function fetchSuggestedPlayers(userId, suburb, excludeIds){
   // Module 6: case-insensitive, trimmed suburb match. Old exact-string match
   // missed "Bondi" vs "bondi " variants. ilike with the suburb literal still
