@@ -738,7 +738,12 @@ export default function MapTab({
           bottom sheet (zone → court → player(s) → send invite).
           Hidden during play mode so it doesn't double-stack with
           the floating prompt + back button up top. */}
-      {playMode === "off" && (
+      {/* CTA hidden when:
+            • playMode is anything but "off" (we're in the flow)
+            • zone side panel is open (it'd sit underneath the panel
+              + double up the action). User feedback: 'when the
+              zone tab pops out, can we hide the play match button.' */}
+      {playMode === "off" && !sidePanelZone && (
       <button type="button"
         onClick={function(){
           track("play_match_cta_tapped", {
@@ -797,14 +802,36 @@ export default function MapTab({
           e.currentTarget.style.transform = "translateX(-50%)";
         }}>
         <span style={{
-          fontSize: 21, fontWeight: 900,
+          fontSize: 19, fontWeight: 900,
           letterSpacing: "0.10em", lineHeight: 1,
         }}>PLAY</span>
         <span style={{
-          fontSize: 11, fontWeight: 700,
+          fontSize: 10, fontWeight: 700,
           letterSpacing: "0.20em", lineHeight: 1,
           opacity: 0.72, marginTop: 3,
         }}>MATCH</span>
+        {/* Crossed-rackets glyph — both rackets pointing UP with
+            their handles crossing in an X shape at the bottom.
+            Two oval heads at the top corners, two handles arcing
+            down through the centre. currentColor + stroke so it
+            inverts cleanly on dark vs light basemap themes.
+            Per CLAUDE.md icon rule: SVG line-art only, stroke
+            currentColor, strokeWidth 1.5, no emoji. */}
+        <svg
+          width="24" height="24" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor"
+          strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ marginTop: 6, opacity: 0.92 }}>
+          {/* Racket A — head top-left, handle going down-right */}
+          <ellipse cx="6.5" cy="6.5" rx="3.2" ry="2.4"
+                   transform="rotate(-45 6.5 6.5)"/>
+          <line x1="9" y1="9" x2="20" y2="20"/>
+          {/* Racket B — head top-right, handle going down-left */}
+          <ellipse cx="17.5" cy="6.5" rx="3.2" ry="2.4"
+                   transform="rotate(45 17.5 6.5)"/>
+          <line x1="15" y1="9" x2="4" y2="20"/>
+        </svg>
       </button>
       )}
 
