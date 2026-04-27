@@ -358,7 +358,7 @@ export default function ZoneSidePanel({
                   flexShrink: 0, marginLeft: "auto",
                   display:"flex", alignItems:"center", justifyContent:"center",
                 }}>
-                  <ZoneShape zone={zone} size={32} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.4}/>
+                  <ZoneShape zone={zone} size={42} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
                 </div>
               </div>
             </div>
