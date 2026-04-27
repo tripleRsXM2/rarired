@@ -45,8 +45,9 @@ import SuggestedNextMovesSection from "../components/hub/SuggestedNextMovesSecti
 import PastCompetitionsSection   from "../components/hub/PastCompetitionsSection.jsx";
 import ExploreCardsSection       from "../components/hub/ExploreCardsSection.jsx";
 import { buildFeaturedSlides }   from "../utils/competeNormalize.js";
-import { pickRecentRematch,
-         pickContinueLeague }    from "../utils/competeSuggestions.js";
+import { buildSuggestions }      from "../utils/competeSuggestions.js";
+import { getDismissedSet,
+         dismissKey }            from "../utils/suggestionDismissals.js";
 
 // Reusable inner-rail wrapper. Keeps 720 max-width + horizontal
 // gutter so centered sections share the same vertical alignment as
@@ -183,16 +184,23 @@ export default function CompeteHub({
     tournaments && tournaments.isEntered, tournaments && tournaments.tournStatus,
   ]);
 
-  // ── Build suggestion cards (Slice 3) ───────────────────────────
-  // Both helpers fail closed — return null when data is missing or
-  // unreliable. The section component hides itself when both are
-  // null, so a user with no history + no leagues sees nothing.
-  var rematchSuggestion = useMemo(function () {
-    return pickRecentRematch(history || [], viewerId, mergedProfileMap);
-  }, [history, viewerId, mergedProfileMap]);
+  // ── Build suggestion cards (Slice 3 + dismissal layer) ─────────
+  // buildSuggestions returns the priority-sorted array of items;
+  // each helper inside fails closed (returns null when data is
+  // missing). dismissedKeys is per-user localStorage state — items
+  // whose key is in the set are filtered out so they never re-
+  // surface until the user clears dismissals (or the suggestion
+  // re-targets a different entity, e.g. a fresh rematch with a new
+  // matchId).
+  var [dismissedKeys, setDismissedKeys] = useState(function () { return getDismissedSet(viewerId); });
+  // Re-read on user switch — login flow could land us here with a
+  // different viewerId than we initialised with.
+  useEffect(function () {
+    setDismissedKeys(getDismissedSet(viewerId));
+  }, [viewerId]);
 
-  var continueLeagueSuggestion = useMemo(function () {
-    return pickContinueLeague({
+  var allSuggestions = useMemo(function () {
+    return buildSuggestions({
       leagues:     leagues.leagues || [],
       detailCache: leagues.detailCache || {},
       history:     history || [],
@@ -200,6 +208,14 @@ export default function CompeteHub({
       profileMap:  mergedProfileMap,
     });
   }, [leagues.leagues, leagues.detailCache, history, viewerId, mergedProfileMap]);
+
+  var visibleSuggestions = useMemo(function () {
+    return allSuggestions.filter(function (s) { return !dismissedKeys.has(s.key); });
+  }, [allSuggestions, dismissedKeys]);
+
+  function handleDismissSuggestion(key) {
+    setDismissedKeys(dismissKey(viewerId, key));
+  }
 
   // ── Render ─────────────────────────────────────────────────────
   return (
@@ -231,20 +247,21 @@ export default function CompeteHub({
           onCreateLeague={function () { setShowCreateLeague(true); }}
         />
 
-        {/* Slice 3: real-data suggestions only. The section hides
-            itself when both helpers return null (no history with a
-            linked opponent + no active leagues). Sits between the
-            Active surface and Explore so it reads as a calm "what
-            next" prompt rather than primary content. */}
+        {/* Real-data suggestions only. The section hides itself
+            when no items remain (after dismissals). Sits between
+            the Active surface and Explore so it reads as a calm
+            "what next" prompt rather than primary content. Internal
+            UX: collapsible Hide/Show, side-arrow carousel between
+            items, × dismiss per card (persisted to localStorage). */}
         <SuggestedNextMovesSection
           t={t}
-          rematch={rematchSuggestion}
-          continueLeague={continueLeagueSuggestion}
+          suggestions={visibleSuggestions}
           profileMap={mergedProfileMap}
           onRematch={function (targetUser, sourceMatch) {
             if (openChallenge) openChallenge(targetUser, "rematch", sourceMatch);
           }}
           onOpenLeague={goLeague}
+          onDismiss={handleDismissSuggestion}
         />
 
         <ExploreCardsSection

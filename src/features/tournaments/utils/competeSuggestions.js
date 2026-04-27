@@ -20,6 +20,46 @@
 // helpers return null.
 
 // ─────────────────────────────────────────────────────────────────────
+// 0. Composition — array shape consumed by SuggestedNextMovesSection
+// ─────────────────────────────────────────────────────────────────────
+//
+// Returns an array of suggestion items in display order. Each item
+// has a stable `key` so the section can:
+//   - filter against per-user dismissal state (suggestionDismissals)
+//   - use as a React key on the card
+//
+// Key shape is scoped to the underlying entity rather than just the
+// type, so a future rematch suggestion against a different match
+// re-surfaces after dismissing the current one.
+
+export function buildSuggestions(args) {
+  var out = [];
+  var rematch = pickRecentRematch(args.history || [], args.viewerId, args.profileMap || {});
+  if (rematch) {
+    out.push({
+      type:    "rematch",
+      key:     "rematch:" + (rematch.match && rematch.match.id ? rematch.match.id : rematch.opponentId),
+      rematch: rematch,
+    });
+  }
+  var continueLeague = pickContinueLeague({
+    leagues:     args.leagues     || [],
+    detailCache: args.detailCache || {},
+    history:     args.history     || [],
+    viewerId:    args.viewerId,
+    profileMap:  args.profileMap  || {},
+  });
+  if (continueLeague) {
+    out.push({
+      type:           "continue_league",
+      key:            "continue_league:" + continueLeague.league.id,
+      continueLeague: continueLeague,
+    });
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // 1. Rematch recent opponent
 // ─────────────────────────────────────────────────────────────────────
 //
