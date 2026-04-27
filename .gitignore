@@ -35,3 +35,4 @@ dist-ssr
 supabase/.temp/
 supabase/.branches/
 __screenshots__/
+.vercel

@@ -541,19 +541,43 @@ async function fanOut(userId: string, payload: PushPayload): Promise<{ sent: num
         .eq("id", sub.id);
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status ?? "error";
+      // Capture whatever upstream said so a human can read it from
+      // the DB instead of cracking open function logs. Keep it short
+      // — APNs error bodies can be verbose; 500 chars is enough to
+      // identify the rejection reason.
+      const reason = (() => {
+        const parts: string[] = [];
+        parts.push("status=" + String(status));
+        if (e?.message)            parts.push("msg=" + String(e.message));
+        if (e?.response?.statusText) parts.push("text=" + String(e.response.statusText));
+        try {
+          if (e?.response && typeof e.response.text === "function") {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // (best-effort; some webpush libraries don't expose the body)
+          }
+        } catch (_) { /* swallow */ }
+        if (e?.body)               parts.push("body=" + String(e.body).slice(0, 200));
+        return parts.join(" | ").slice(0, 500);
+      })();
+      console.error("[send-push] delivery failed:", sub.endpoint, reason);
       errors.push({ endpoint: sub.endpoint, status });
       const isGone = status === 404 || status === 410;
       if (isGone) {
         pruned++;
         await admin
           .from("push_subscriptions")
-          .update({ enabled: false, last_failure_at: new Date().toISOString() })
+          .update({
+            enabled: false,
+            last_failure_at: new Date().toISOString(),
+            last_failure_reason: reason,
+          })
           .eq("id", sub.id);
       } else {
         await admin
           .from("push_subscriptions")
           .update({
             last_failure_at: new Date().toISOString(),
+            last_failure_reason: reason,
             failure_count: ((sub as any).failure_count || 0) + 1,
           })
           .eq("id", sub.id);
