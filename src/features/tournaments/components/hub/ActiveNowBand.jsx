@@ -99,58 +99,47 @@ export default function ActiveNowBand({ slides }) {
     }}>
       {/* Inner content rail — same 720 max-width as the hub's
           centered sections, so titles/captions line up vertically
-          with everything else on the page. */}
+          with everything else on the page. position: relative so
+          the side arrows can absolute-position to the rail's
+          edges (and stay aligned with the slide content rather
+          than the dark band's outer edges). */}
       <div style={{
+        position: "relative",
         maxWidth: 720,
         margin:   "0 auto",
         padding:  "0 clamp(20px, 4vw, 32px)",
       }}>
-        {/* Eyebrow + indicator + arrows — single header row. */}
+        {/* Eyebrow + indicator. No arrows here — they sit on the
+            sides of the slide content via absolute positioning
+            below. Single line: "ACTIVE NOW · 1 of 2". */}
         <div style={{
-          display:      "flex",
-          alignItems:   "center",
-          justifyContent: "space-between",
-          gap:          12,
-          marginBottom: 18,
+          fontSize:       10,
+          fontWeight:     800,
+          color:          INK_TEXT_DIM,
+          letterSpacing:  "0.16em",
+          textTransform:  "uppercase",
+          marginBottom:   18,
         }}>
-          <div style={{
-            fontSize:       10,
-            fontWeight:     800,
-            color:          INK_TEXT_DIM,
-            letterSpacing:  "0.16em",
-            textTransform:  "uppercase",
-          }}>
-            Active now
-            {hasMany && (
-              <span style={{ marginLeft: 8, opacity: 0.85 }}>
-                · {(activeIdx + 1) + " of " + slides.length}
-              </span>
-            )}
-          </div>
+          Active now
           {hasMany && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <NavArrowBtn dir="left"  enabled={activeIdx > 0}                      onClick={function () { scrollTo(activeIdx - 1); }} />
-              <NavArrowBtn dir="right" enabled={activeIdx < slides.length - 1}      onClick={function () { scrollTo(activeIdx + 1); }} />
-            </div>
+            <span style={{ marginLeft: 8, opacity: 0.85 }}>
+              · {(activeIdx + 1) + " of " + slides.length}
+            </span>
           )}
         </div>
 
-        {/* Scroller. */}
+        {/* Scroller. Slides match the scroller width exactly so
+            adjacent slides don't peek through the right edge —
+            the previous flex:0 0 100% + scroller padding combo
+            left a 4-12px gap that leaked the next slide's content. */}
         <div
           ref={scrollerRef}
+          className="cs-active-band-scroller"
           style={{
             display:           "flex",
             overflowX:         "auto",
             scrollSnapType:    "x mandatory",
-            // Hide native scrollbar — modern browsers via the
-            // ::-webkit-scrollbar pseudo + scrollbarWidth.
             scrollbarWidth:    "none",
-            // Negative side-margins + matching padding so each slide
-            // can reach the band's inner edges without the scrollbar
-            // gutter eating into the visible area.
-            margin:            "0 -2px",
-            padding:           "0 2px",
-            // Native momentum scrolling on iOS.
             WebkitOverflowScrolling: "touch",
           }}>
           {slides.map(function (s, idx) {
@@ -159,19 +148,40 @@ export default function ActiveNowBand({ slides }) {
                 key={s.id}
                 data-slide-idx={idx}
                 style={{
-                  flex:             "0 0 100%",
-                  scrollSnapAlign:  "start",
-                  // Tiny horizontal pad so adjacent slides peek slightly
-                  // — telegraphs that the surface scrolls. Hidden when
-                  // there's only one slide.
-                  paddingRight:     hasMany ? 12 : 0,
-                  boxSizing:        "border-box",
+                  // width 100% (NOT flex 0 0 100%) — resolves
+                  // unambiguously against the scroller's content
+                  // box. flexShrink:0 keeps the slide at exactly
+                  // 100%; box-sizing makes the dimensions add up
+                  // without leaking.
+                  width:           "100%",
+                  flexShrink:      0,
+                  scrollSnapAlign: "start",
+                  boxSizing:       "border-box",
                 }}>
                 <Slide slide={s} />
               </div>
             );
           })}
         </div>
+
+        {/* Side arrows — only when there's more than one slide.
+            Sit absolutely against the inner rail's left/right
+            edges, vertically centered. Glyph-only (no circle
+            border). Hit area ≥44px via padding. */}
+        {hasMany && (
+          <SideArrow
+            dir="left"
+            enabled={activeIdx > 0}
+            onClick={function () { scrollTo(activeIdx - 1); }}
+          />
+        )}
+        {hasMany && (
+          <SideArrow
+            dir="right"
+            enabled={activeIdx < slides.length - 1}
+            onClick={function () { scrollTo(activeIdx + 1); }}
+          />
+        )}
       </div>
 
       {/* Hide WebKit scrollbar via inlined CSS — keeps the carousel
@@ -422,35 +432,57 @@ function ActionBtn({ action, variant }) {
   );
 }
 
-// ── NavArrowBtn ──────────────────────────────────────────────────
-// Small circular arrow button at the right of the header row.
-// Mirrors the line-art icon convention (currentColor stroke 1.5,
-// 18×18 viewBox).
-function NavArrowBtn({ dir, enabled, onClick }) {
+// ── SideArrow ───────────────────────────────────────────────────
+// Glyph-only nav arrow positioned absolutely against the inner
+// rail's left/right edge. No circle, no border — just the SVG
+// chevron over the dark band. Tap target is enlarged via padding
+// (44×44 hit area) without growing the visual.
+//
+// The arrow vertically centers on the slide content via top: 50%.
+// `top` is computed against the inner rail (which contains the
+// header row + the scroller), so the arrow lands roughly where the
+// big rank/headline sits — not at the eyebrow line. Slight
+// downward offset accounts for the eyebrow at the top of the rail.
+function SideArrow({ dir, enabled, onClick }) {
   return (
     <button
       onClick={enabled ? onClick : undefined}
       disabled={!enabled}
       aria-label={dir === "left" ? "Previous active item" : "Next active item"}
       style={{
-        width:         32, height: 32,
-        background:    "transparent",
-        border:        "1px solid " + (enabled ? INK_BORDER : "rgba(255,255,255,0.07)"),
-        borderRadius:  999,
-        color:         enabled ? INK_TEXT : "rgba(255,255,255,0.25)",
-        cursor:        enabled ? "pointer" : "default",
-        display:       "inline-flex",
-        alignItems:    "center",
+        position: "absolute",
+        // Sit ~58% down the inner rail so we line up with the big
+        // rank/headline area rather than the eyebrow at the top.
+        top:       "58%",
+        transform: "translateY(-50%)",
+        // Tucked just inside the inner rail's horizontal padding —
+        // 4px of breathing room so the arrow doesn't sit flush with
+        // the gutter on narrow viewports.
+        left:      dir === "left"  ? 4 : "auto",
+        right:     dir === "right" ? 4 : "auto",
+        // Hit area: 44×44 via padding.
+        padding:   "12px",
+        background: "transparent",
+        border:     "none",
+        color:      enabled ? INK_TEXT : "rgba(255,255,255,0.25)",
+        cursor:     enabled ? "pointer" : "default",
+        display:    "flex",
+        alignItems: "center",
         justifyContent: "center",
-        padding:       0,
-        transition:    "opacity 0.15s",
-      }}>
-      <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
+        // Z above scroller content so swipe still works on the
+        // slide body (the absolute arrow only intercepts events on
+        // its 44×44 hit area).
+        zIndex:     2,
+        transition: "opacity 0.15s",
+      }}
+      onMouseEnter={function (e) { if (enabled) e.currentTarget.style.opacity = "0.7"; }}
+      onMouseLeave={function (e) { if (enabled) e.currentTarget.style.opacity = "1"; }}>
+      <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
         {dir === "left" ? (
-          <path d="M11 4l-5 5 5 5" stroke="currentColor" strokeWidth="1.5"
+          <path d="M11 4l-5 5 5 5" stroke="currentColor" strokeWidth="2"
                 strokeLinecap="round" strokeLinejoin="round"/>
         ) : (
-          <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.5"
+          <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="2"
                 strokeLinecap="round" strokeLinejoin="round"/>
         )}
       </svg>

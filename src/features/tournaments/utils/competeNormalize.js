@@ -473,7 +473,10 @@ export function buildActiveLeagueSlide(lg, handlers, opts) {
     id:        "slide_league_active_" + lg.id,
     type:      CARD_TYPE.LEAGUE_ACTIVE,
     priority:  2,
-    eyebrow:   "Active league",
+    // Eyebrow drops the "Active" prefix because the band's own
+    // header already reads "ACTIVE NOW" — repeating it on every
+    // slide reads as redundant.
+    eyebrow:   "League",
     headline:  lg.name || "League",
     bigStat:   rank ? { value: "#" + rank, label: "Your rank" } : null,
     caption:   captionParts.join(" · ") || null,
@@ -513,6 +516,7 @@ export function buildActiveTournamentSlide(tn, handlers, opts) {
     id:        "slide_tournament_active_" + tn.id,
     type:      CARD_TYPE.TOURNAMENT_ACTIVE,
     priority:  2,
+    // Same reasoning as League — band header carries "ACTIVE NOW".
     eyebrow:   "Tournament",
     headline:  tn.name || "Tournament",
     bigStat:   bigVal ? { value: bigVal, label: "Entered" } : null,
