@@ -1178,12 +1178,25 @@ export default function PlayMatchWizard({
             <div>
               {!loading && players.length > 0 && (
                 <div>
+                  {/* Sub-step 1 — pick a time. The circled-number
+                      glyph visually maps to the user's mental
+                      'first this, then that' mental model on the
+                      final step (1. When → 2. Send invite). */}
                   <div style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                    textTransform: "uppercase", color: t.textTertiary,
-                    marginBottom: 8,
+                    display:"flex", alignItems:"center", gap: 10,
+                    marginBottom: 12,
                   }}>
-                    When?
+                    <span style={{
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: t.accent, color: t.accentText || "#fff",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize: 12, fontWeight: 900, lineHeight: 1,
+                      flexShrink: 0,
+                    }}>1</span>
+                    <span style={{
+                      fontSize: 13, fontWeight: 800, letterSpacing: "0.04em",
+                      textTransform: "uppercase", color: t.text,
+                    }}>When?</span>
                   </div>
                   <div style={{ display:"flex", gap: 6, flexWrap:"wrap" }}>
                     {[
@@ -1313,13 +1326,25 @@ export default function PlayMatchWizard({
                   )}
 
                   {selectedIds.length > 0 && (
-                    <div style={{ marginTop: 14 }}>
+                    <div style={{ marginTop: 22 }}>
+                      {/* Sub-step 2 — send the invite. Same circled-
+                          number pattern as 'When?' above so the two
+                          actions read as a clear ordered pair. */}
                       <div style={{
-                        fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
-                        textTransform: "uppercase", color: t.textTertiary,
-                        marginBottom: 6,
+                        display:"flex", alignItems:"center", gap: 10,
+                        marginBottom: 10,
                       }}>
-                        Message preview
+                        <span style={{
+                          width: 22, height: 22, borderRadius: "50%",
+                          background: t.accent, color: t.accentText || "#fff",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontSize: 12, fontWeight: 900, lineHeight: 1,
+                          flexShrink: 0,
+                        }}>2</span>
+                        <span style={{
+                          fontSize: 13, fontWeight: 800, letterSpacing: "0.04em",
+                          textTransform: "uppercase", color: t.text,
+                        }}>Send message invite</span>
                       </div>
                       <div style={{
                         padding: "12px 14px",
