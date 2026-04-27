@@ -9,15 +9,14 @@ import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { formatSetScore } from "../../scoring/utils/tennisScoreValidation.js";
 import {
-  getEffectiveType,
   getNotifLabel,
   getThreadContextLabel,
   groupNotifications,
-  getItemSection,
   getItemIds,
   canDismissItem,
   notifAccentColor,
   notifTimeLabel,
+  isActionable,
 } from "../utils/notifUtils.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,9 +262,11 @@ function NotifRow({
     }
   }
   var navigate     = useNavigate();
-  var effectiveType = getEffectiveType(n);
+  // Module 11 Slice 2: actionable replaces the action/important/activity
+  // bucket. read state is read_at-first, falls back to legacy `read`.
+  var isAction     = isActionable(n);
   var accent       = notifAccentColor(n, t);
-  var isUnread     = !n.read;
+  var isUnread     = !n.read_at && !n.read;
 
   // ── Swipe state ──────────────────────────────────────────────────────────
   var [swipeX, setSwipeX]       = useState(0);
@@ -394,7 +395,7 @@ function NotifRow({
           borderBottom: "1px solid " + t.border,
           borderLeft: "3px solid " + (isUnread ? accent : "transparent"),
           background: isUnread
-            ? (effectiveType === "action" ? accent + "0c" : t.accentSubtle)
+            ? (isAction ? accent + "0c" : t.accentSubtle)
             : "transparent",
           cursor: "default",
           transform: "translateX(" + swipeX + "px)",
@@ -407,7 +408,7 @@ function NotifRow({
           onClick={n.from_user_id && openProfile ? goProfile : undefined}
           style={{ position: "relative", flexShrink: 0, cursor: n.from_user_id && openProfile ? "pointer" : "default" }}>
           <Avatar name={n.fromName} size={34} avatarUrl={n.fromAvatarUrl}/>
-          {effectiveType === "action" && isUnread && (
+          {isAction && isUnread && (
             <div style={{
               position: "absolute", bottom: -2, right: -2,
               width: 13, height: 13, borderRadius: "50%",
@@ -616,8 +617,8 @@ function NotifRow({
 function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
   var { primary, context } = item;
   var accent      = notifAccentColor(primary, t);
-  var effectiveType = getEffectiveType(primary);
-  var isUnread    = !primary.read;
+  var isAction    = isActionable(primary);
+  var isUnread    = !primary.read_at && !primary.read;
   var dismissable = canDismissItem(item);
 
   // Swipe state (same logic as NotifRow)
@@ -673,7 +674,7 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
           borderBottom: context.length ? "none" : "1px solid " + t.border,
           borderLeft: "3px solid " + (isUnread ? accent : "transparent"),
           background: isUnread
-            ? (effectiveType === "action" ? accent + "0c" : t.accentSubtle)
+            ? (isAction ? accent + "0c" : t.accentSubtle)
             : "transparent",
           transform: "translateX(" + swipeX + "px)",
           transition: isSwiping ? "none" : "transform 0.25s cubic-bezier(0.32,0.72,0,1), background 0.15s",
@@ -684,7 +685,7 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
         <div style={{ display: "flex", alignItems: "flex-start", gap: 11 }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
             <Avatar name={primary.fromName} size={34} avatarUrl={primary.fromAvatarUrl}/>
-            {effectiveType === "action" && isUnread && (
+            {isAction && isUnread && (
               <div style={{
                 position: "absolute", bottom: -2, right: -2,
                 width: 13, height: 13, borderRadius: "50%",
@@ -867,21 +868,21 @@ export default function NotificationsPanel({
 
   // Group + sort once per render (cheap — O(n) passes). Regular DM
   // notifications (`message` type) aren't generated anymore — the
-  // People tab badge surfaces DM unread state directly. Legacy rows
-  // with that type are still filtered out below so old inboxes don't
-  // display them after the product rule change.
+  // Module 11 Slice 2: groupNotifications now applies the canonical
+  // isActiveForUser filter internally + sorts actionables-then-newest.
+  // Section split (action/important/activity) is gone — the panel
+  // renders one unified list. 'message' is filtered inside types.js
+  // (isVisibleInCentre) so we don't have to remember to drop it here.
   var displayItems = useMemo(function () {
-    var filtered = notifications.filter(function (n) { return n.type !== "message"; });
-    return groupNotifications(filtered);
+    return groupNotifications(notifications);
   }, [notifications]);
 
-  // Split into sections
-  var actionItems    = displayItems.filter(function (i) { return getItemSection(i) === "action"; });
-  var importantItems = displayItems.filter(function (i) { return getItemSection(i) === "important"; });
-  var activityItems  = displayItems.filter(function (i) { return getItemSection(i) === "activity"; });
-
+  // "Mark all read" is enabled whenever there's at least one unread
+  // INFORMATIONAL row to mark — actionable rows are deliberately
+  // skipped by markAllRead so an unresolved task can never be
+  // silently silenced.
   var hasMarkable = notifications.some(function (n) {
-    return !n.read && getEffectiveType(n) !== "action";
+    return !n.read_at && !n.read && !isActionable(n) && !n.dismissed_at && !n.resolved_at;
   });
 
   // ── Shared helpers passed into sub-rows ──────────────────────────────────
@@ -1000,7 +1001,13 @@ export default function NotificationsPanel({
           )}
         </div>
 
-        {/* ── Body ────────────────────────────────────────────────────────── */}
+        {/* ── Body ──────────────────────────────────────────────────────────
+            Module 11 Slice 2: ONE list, newest first. No section headers.
+            Visibility = isActiveForUser (centralised in notifUtils).
+            Unresolved actionables soft-pin to the top inside the
+            grouping helper, but the user reads it as one continuous
+            inbox, not a dashboard.
+        */}
         <div style={{ overflowY: "auto", flex: 1 }}>
           {displayItems.length === 0 ? (
             <div style={{
@@ -1010,15 +1017,11 @@ export default function NotificationsPanel({
             }}>
               <div style={{ fontSize: 32, lineHeight: 1 }}>🎾</div>
               <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                textTransform: "uppercase", color: t.textTertiary,
-                marginTop: 4,
-              }}>All caught up</div>
-              <div style={{
                 fontSize: 18, fontWeight: 800, color: t.text,
                 letterSpacing: "-0.4px", lineHeight: 1.1,
                 textAlign: "center",
-              }}>You're clear.</div>
+                marginTop: 4,
+              }}>You're all caught up.</div>
               <div style={{
                 fontSize: 12, color: t.textSecondary,
                 textAlign: "center", maxWidth: 220, lineHeight: 1.5,
@@ -1028,26 +1031,7 @@ export default function NotificationsPanel({
               </div>
             </div>
           ) : (
-            <>
-              {actionItems.length > 0 && (
-                <>
-                  <SectionLabel label="Needs your attention" t={t} />
-                  {actionItems.map(renderItem)}
-                </>
-              )}
-              {importantItems.length > 0 && (
-                <>
-                  <SectionLabel label="Updates" t={t} />
-                  {importantItems.map(renderItem)}
-                </>
-              )}
-              {activityItems.length > 0 && (
-                <>
-                  <SectionLabel label="Activity" t={t} />
-                  {activityItems.map(renderItem)}
-                </>
-              )}
-            </>
+            displayItems.map(renderItem)
           )}
         </div>
       </div>

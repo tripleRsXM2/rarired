@@ -105,15 +105,44 @@ export function insertNotification(payload){
     return r;
   });
 }
+// Module 11 Slice 2 — dismiss writes dismissed_at instead of deleting.
+// Keeps the row as history (never surfaced in V1 because the panel
+// filters on isActiveForUser; deferred "View history" surface can
+// read it later). The legacy export name stays so existing callers
+// don't break.
 export function deleteNotification(id){
-  return supabase.from('notifications').delete().eq('id',id);
+  return supabase.from('notifications')
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('dismissed_at', null);  // no-op if already dismissed
 }
+
+// Module 11 Slice 2 — mark a single notification read.
+// Writes BOTH read_at (canonical) and read=true (legacy mirror) so
+// any old code reading the boolean keeps working during transition.
+// dispatch is a single-row UPDATE; the notifications_update_guard_trg
+// allows authenticated clients to write read_at on their own rows.
 export function markNotificationRead(id){
-  return supabase.from('notifications').update({read:true}).eq('id',id);
+  return supabase.from('notifications')
+    .update({ read: true, read_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('read_at', null);  // idempotent — never re-stamp an already-read row
 }
 export function markNotificationsReadByIds(ids){
   if(!ids||!ids.length)return Promise.resolve({data:null,error:null});
-  return supabase.from('notifications').update({read:true}).in('id',ids);
+  return supabase.from('notifications')
+    .update({ read: true, read_at: new Date().toISOString() })
+    .in('id', ids)
+    .is('read_at', null);
+}
+
+// Module 11 Slice 2 — defensive client-side reconciliation hook.
+// Calls the SECURITY DEFINER reconcile_my_notifications RPC, which
+// uses auth.uid() internally so callers can ONLY reconcile their
+// own rows. Idempotent + cheap — safe to call on app boot to catch
+// any rows the cleanup triggers missed.
+export async function reconcileMyNotifications(){
+  return supabase.rpc('reconcile_my_notifications');
 }
 
 // Upsert-style message notification: one per conversation per recipient.
