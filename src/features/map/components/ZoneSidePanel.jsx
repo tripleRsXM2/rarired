@@ -367,12 +367,12 @@ export default function ZoneSidePanel({
           }}>
             {visibleCourts.map(function (c, idx) {
               var selected = selectedCourt === c.name;
-              // Two-digit row number — '01' / '02' / etc. Lets the
-              // user track which court they're looking at when the
-              // list scrolls on mobile, and gives the desktop list a
-              // consistent rhythm down the left edge. tabular-nums
-              // keeps the digits perfectly aligned.
-              var rowNum = String(idx + 1).padStart(2, "0");
+              // Plain row number — '1' / '2' / '10' etc. (no
+              // leading zero pad per user). Lets the user track
+              // position when the list scrolls on mobile.
+              // tabular-nums keeps single- and double-digit rows
+              // visually aligned along the left edge.
+              var rowNum = String(idx + 1);
               // Flat row — no border, no card chrome. Selection state
               // = soft accent-tinted bg filling the whole row + bolded
               // accent-coloured text. Booking icon ghost on the right
