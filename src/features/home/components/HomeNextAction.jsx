@@ -81,6 +81,12 @@ function scrollToFeedMatch(matchId) {
 // ── Inline urgency rows — bold text, no card ────────────────────────────────
 
 function UrgencyLine({ t, color, label, verb, onClick }) {
+  // Layout: [label pill] [verb (wraps) ......... arrow]
+  // Previously the verb had whiteSpace: nowrap + ellipsis, which
+  // truncated long names like "Mikey logged a match with you" on
+  // 375px viewports. Now the verb wraps to a second line and the
+  // arrow stays at the end (via flex-wrap on the row + the arrow
+  // having flex-shrink: 0).
   return (
     <button
       onClick={onClick}
@@ -91,15 +97,17 @@ function UrgencyLine({ t, color, label, verb, onClick }) {
         margin: 0,
         textAlign: "left",
         cursor: "pointer",
-        display: "inline-flex",
+        display: "flex",
+        flexWrap: "wrap",
         alignItems: "baseline",
-        gap: 8,
+        columnGap: 8,
+        rowGap: 4,
         fontSize: "clamp(15px, 2vw, 17px)",
         fontWeight: 600,
         color: t.text,
         letterSpacing: "-0.2px",
-        lineHeight: 1.4,
-        maxWidth: "100%",
+        lineHeight: 1.35,
+        width: "100%",
       }}>
       <span style={{
         fontSize: 10,
@@ -111,10 +119,16 @@ function UrgencyLine({ t, color, label, verb, onClick }) {
       }}>
         {label}
       </span>
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {verb}
+      <span style={{
+        flex: "1 1 auto",
+        minWidth: 0,
+        overflowWrap: "anywhere",
+        // Trailing arrow lives at the end of the verb so it always
+        // sits adjacent to the readable text, even after wrap.
+      }}>
+        {verb}{" "}
+        <span style={{ color: color, fontWeight: 800, whiteSpace: "nowrap" }}>→</span>
       </span>
-      <span style={{ color: color, flexShrink: 0, fontWeight: 800 }}>→</span>
     </button>
   );
 }
@@ -153,6 +167,11 @@ export default function HomeNextAction({
   challengesList, challengesProfileMap,
   onLogScores,
   openLogMatch,
+  // Optional. When wired (HomeTab passes it through from App.jsx),
+  // urgency clicks open the ActionReviewDrawer overlay instead of
+  // doing a scroll-to-feed-match (which fails when the feed isn't
+  // rendered or the active filter excludes the match).
+  onReviewMatch,
 }) {
   if (!authUser) return null;
 
@@ -163,22 +182,48 @@ export default function HomeNextAction({
   // Urgency line (if any) renders above the primary CTA. The CTA is
   // always present — the page's primary action is "Log a match",
   // contextual urgency just precedes it.
+  //
+  // Click handlers prefer onReviewMatch (opens the ActionReviewDrawer
+  // overlay — same path notifications use) when wired by App.jsx;
+  // fall back to scrollToFeedMatch otherwise. Scroll-to is fragile
+  // (only works if the feed has rendered the match card, which fails
+  // when the user landed here from a notification deep-link before
+  // the feed list mounted, or when the active feed filter doesn't
+  // include the match).
   var urgency = null;
+  function reviewOrScroll(match) {
+    return function () {
+      if (onReviewMatch) onReviewMatch(match);
+      else               scrollToFeedMatch(match.id);
+    };
+  }
+
+  // Resolve the most-likely display name for the OTHER party on a
+  // match row. useMatchHistory enriches tagged rows with `friendName`
+  // (the linked-friend match override) and casual rows with `oppName`
+  // (free-text). `playerName` is set inconsistently on the legacy
+  // path. Falls through to "Someone" rather than the harsher
+  // "Opponent" — reads as a placeholder, not a label.
+  function nameForMatch(m) {
+    if (!m) return "Someone";
+    return m.friendName || m.playerName || m.opponentName || m.oppName || "Someone";
+  }
+
   if (disputeMatch) {
-    var oppName = disputeMatch.opponentName || disputeMatch.playerName || "your opponent";
+    var oppName = nameForMatch(disputeMatch);
     urgency = {
       color: t.red,
       label: "Action needed",
       verb: "Match vs " + oppName + " needs your response",
-      onClick: function () { scrollToFeedMatch(disputeMatch.id); },
+      onClick: reviewOrScroll(disputeMatch),
     };
   } else if (pendingMatch) {
-    var poster = pendingMatch.playerName || "Opponent";
+    var poster = nameForMatch(pendingMatch);
     urgency = {
       color: t.orange,
       label: "Confirm match",
-      verb: poster + " logged a match against you",
-      onClick: function () { scrollToFeedMatch(pendingMatch.id); },
+      verb: poster + " logged a match with you",
+      onClick: reviewOrScroll(pendingMatch),
     };
   } else if (challenge) {
     var partnerId = challenge.challenger_id === authUser.id ? challenge.challenged_id : challenge.challenger_id;

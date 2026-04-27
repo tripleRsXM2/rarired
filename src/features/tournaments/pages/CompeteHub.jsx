@@ -40,6 +40,7 @@ import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
 import { isActive }    from "../../leagues/utils/leagueLifecycle.js";
 import CompeteHero               from "../components/hub/CompeteHero.jsx";
 import ActiveNowBand             from "../components/hub/ActiveNowBand.jsx";
+import CompeteStartActions       from "../components/hub/CompeteStartActions.jsx";
 import SuggestedNextMovesSection from "../components/hub/SuggestedNextMovesSection.jsx";
 import PastCompetitionsSection   from "../components/hub/PastCompetitionsSection.jsx";
 import ExploreCardsSection       from "../components/hub/ExploreCardsSection.jsx";
@@ -207,11 +208,7 @@ export default function CompeteHub({
       paddingBottom: 100,
     }}>
       <InnerRail style={{ marginBottom: "clamp(20px, 3vw, 32px)" }}>
-        <CompeteHero
-          t={t}
-          onChallenge={goChallenges}
-          onCreateLeague={function () { setShowCreateLeague(true); }}
-        />
+        <CompeteHero t={t} />
       </InnerRail>
 
       {/* Carousel band — full-bleed across the viewport on every
@@ -223,6 +220,16 @@ export default function CompeteHub({
         {slides.length === 0 && (
           <ActiveNowEmpty t={t} />
         )}
+
+        {/* "Start something new" CTAs sit under the band so the
+            editorial moment leads the page. When no active items
+            exist, the empty state above sits directly above these
+            buttons — they become the primary action path. */}
+        <CompeteStartActions
+          t={t}
+          onChallenge={goChallenges}
+          onCreateLeague={function () { setShowCreateLeague(true); }}
+        />
 
         {/* Slice 3: real-data suggestions only. The section hides
             itself when both helpers return null (no history with a

@@ -1091,6 +1091,10 @@ export default function HomeTab({
   leaguesIndex, onOpenLeague,
   // Slice 1 (design overhaul) — Home Leagues strip
   myLeagues, leagueDetailCache, loadLeagueDetail,
+  // Opens the ActionReviewDrawer for a given match — used by
+  // HomeNextAction's urgency CTA so "Confirm match" works
+  // independent of feed-card render state.
+  onReviewMatch,
 }) {
   // Deep-link: when we arrive from a notification that carries a
   // highlightMatchId in router state, scroll to that FeedCard and pulse it.
@@ -1277,6 +1281,12 @@ export default function HomeTab({
           challengesProfileMap={challengesProfileMap}
           onLogScores={onLogConvertedMatch}
           openLogMatch={openLogMatch}
+          /* Slice: urgency clicks open the ActionReviewDrawer overlay
+             rather than scrolling to the feed card (which fails when
+             the user lands here from a notification deep-link before
+             the feed list mounts, or when the feed filter excludes
+             the match). Passed down from App.jsx. */
+          onReviewMatch={onReviewMatch}
         />
       </section>
 

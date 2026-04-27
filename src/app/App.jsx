@@ -792,6 +792,10 @@ export default function App(){
               challengesProfileMap={challenges.profileMap}
               onLogConvertedMatch={openConvertToMatch}
               goToChallengesTab={function(){navigate("/tournaments/challenges");}}
+              /* HomeNextAction's urgency CTA: open ActionReviewDrawer
+                 instead of doing a fragile scroll-to-feed-card. Same
+                 handler FeedCard's "Review" button uses. */
+              onReviewMatch={openReviewForMatch}
               /* Module 7 — simple id→name index for league pills on feed cards */
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
               onOpenLeague={function(id){ navigate("/tournaments/leagues?id=" + id); }}
