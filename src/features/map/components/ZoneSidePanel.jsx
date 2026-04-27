@@ -312,7 +312,12 @@ export default function ZoneSidePanel({
           track("zone_swiped", { from: zone.id, to: zonesArr[next].id, direction: dx < 0 ? "left" : "right" });
         } : null}
         style={{
-          padding: isNarrow && onSelectZone ? "12px 20px 16px" : "20px 20px 16px",
+          // Mobile compacts the entire title block (incl. progression
+          // bar) so it doesn't crowd the courts list. User: 'top 2
+          // sections a tiny bit more compact'.
+          padding: isNarrow
+            ? (onSelectZone ? "8px 16px 10px" : "14px 16px 10px")
+            : "20px 20px 16px",
           borderBottom:"1px solid "+t.border,
           touchAction: isNarrow && onSelectZone ? "pan-y" : "auto",
         }}>
@@ -325,7 +330,7 @@ export default function ZoneSidePanel({
             different zones.' Hidden on desktop (no swipe gesture). */}
         {isNarrow && onSelectZone && (
           <div style={{
-            display:"flex", gap: 4, marginBottom: 12,
+            display:"flex", gap: 4, marginBottom: 8,
           }}>
             {ZONES.map(function(z){
               var on = z.id === zone.id;
@@ -350,18 +355,18 @@ export default function ZoneSidePanel({
             })}
           </div>
         )}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
-          <div style={{ display:"flex", gap:12, alignItems:"center", flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap: isNarrow ? 8 : 12 }}>
+          <div style={{ display:"flex", gap: isNarrow ? 10 : 12, alignItems:"center", flex:1, minWidth:0 }}>
             <div style={{
-              width:36, height:36, borderRadius:"50%", background: zone.color,
+              width: isNarrow ? 32 : 36, height: isNarrow ? 32 : 36, borderRadius:"50%", background: zone.color,
               display:"flex", alignItems:"center", justifyContent:"center",
-              color:"#fff", fontWeight:700, fontSize:16, flexShrink:0,
+              color:"#fff", fontWeight:700, fontSize: isNarrow ? 14 : 16, flexShrink:0,
               boxShadow:"0 0 0 3px "+t.bgCard,
             }}>{zone.num}</div>
             <div style={{ minWidth:0, flex:1 }}>
-              <div style={{ fontSize:10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom:2 }}>Zone {zone.num}</div>
+              <div style={{ fontSize: isNarrow ? 9 : 10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom: isNarrow ? 1 : 2 }}>Zone {zone.num}</div>
               <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
-                <div style={{ fontSize:18, fontWeight:700, color:t.text, letterSpacing:"-0.02em", lineHeight:1.15, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+                <div style={{ fontSize: isNarrow ? 16 : 18, fontWeight:700, color:t.text, letterSpacing:"-0.02em", lineHeight:1.15, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
                   {zone.name}
                 </div>
                 {canSetHome && (
@@ -392,7 +397,7 @@ export default function ZoneSidePanel({
                   flexShrink: 0, marginLeft: "auto",
                   display:"flex", alignItems:"center", justifyContent:"center",
                 }}>
-                  <ZoneShape zone={zone} size={42} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
+                  <ZoneShape zone={zone} size={isNarrow ? 34 : 42} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
                 </div>
               </div>
             </div>
@@ -413,27 +418,27 @@ export default function ZoneSidePanel({
             </svg>
           </button>
         </div>
-        <div style={{ fontSize:12, color:t.textSecondary, marginTop:12, lineHeight:1.45 }}>{zone.blurb}</div>
+        <div style={{ fontSize: isNarrow ? 11.5 : 12, color:t.textSecondary, marginTop: isNarrow ? 8 : 12, lineHeight:1.4 }}>{zone.blurb}</div>
       </div>
 
       {/* Stats row */}
       <div style={{
         display:"grid",
         gridTemplateColumns: activity && activity.matches_7d > 0 ? "1fr 1fr 1fr" : "1fr 1fr",
-        padding:"14px 20px", borderBottom:"1px solid "+t.border, gap:12,
+        padding: isNarrow ? "10px 16px" : "14px 20px", borderBottom:"1px solid "+t.border, gap: isNarrow ? 10 : 12,
       }}>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{courtsCellValue}</div>
-          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>{courtsCellLabel}</div>
+          <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{courtsCellValue}</div>
+          <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>{courtsCellLabel}</div>
         </div>
         <div>
-          <div style={{ fontSize:20, fontWeight:700, color:t.text }}>{loading ? "…" : displayPlayers.length}</div>
-          <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>Players here</div>
+          <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:t.text, lineHeight:1.1 }}>{loading ? "…" : displayPlayers.length}</div>
+          <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>Players here</div>
         </div>
         {activity && activity.matches_7d > 0 && (
           <div>
-            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>🔥 {activity.matches_7d}</div>
-            <div style={{ fontSize:10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:2 }}>
+            <div style={{ fontSize: isNarrow ? 17 : 20, fontWeight:700, color:"#ef4444", lineHeight:1.1 }}>🔥 {activity.matches_7d}</div>
+            <div style={{ fontSize: isNarrow ? 9.5 : 10, color:t.textTertiary, textTransform:"uppercase", letterSpacing:"0.08em", marginTop: isNarrow ? 1 : 2 }}>
               Matches · This week
             </div>
           </div>
