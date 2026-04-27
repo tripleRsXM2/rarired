@@ -350,18 +350,15 @@ export default function ZoneSidePanel({
                     {NAV_ICONS.homeCourt(14)}
                   </button>
                 )}
-                {/* Zone shape glyph — small SVG silhouette of the
-                    zone's actual polygon, on the RIGHT side of the
-                    zone name. User: 'make the icon in the zone tab
-                    be on the right side of the name.' Sits at the
-                    end of the name row so the eye reads NAME →
-                    SHAPE as a single identifier pair. */}
+                {/* Zone shape glyph — bare SVG, no chip background.
+                    User: 'remove the cube with bevelled edges' that
+                    was sitting behind the silhouette. Sits at the
+                    trailing edge of the name row via marginLeft:auto. */}
                 <div style={{
-                  width: 36, height: 36, flexShrink: 0, marginLeft: "auto",
+                  flexShrink: 0, marginLeft: "auto",
                   display:"flex", alignItems:"center", justifyContent:"center",
-                  borderRadius: 8, background: t.bgTertiary,
                 }}>
-                  <ZoneShape zone={zone} size={28} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.4}/>
+                  <ZoneShape zone={zone} size={32} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.4}/>
                 </div>
               </div>
             </div>
