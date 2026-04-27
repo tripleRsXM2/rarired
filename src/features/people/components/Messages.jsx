@@ -145,87 +145,6 @@ function AvatarStack(props) {
   );
 }
 
-// GroupDetailsDrawer — slide-up sheet (mobile) / right-anchored panel
-// (desktop). Lists each participant as a row with avatar + name, and a
-// chevron that opens their profile. Self has no chevron.
-function GroupDetailsDrawer(props) {
-  var t = props.t;
-  var conv = props.conv;
-  var me = props.me;
-  var openProfile = props.openProfile;
-  var onClose = props.onClose;
-  var participants = (conv && conv.participants) || [];
-  var isDesktop = typeof window !== "undefined" && window.innerWidth >= 700;
-  return createPortal((
-    <div
-      role="dialog" aria-modal="true" aria-label="Group details"
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 320,
-        background: "rgba(0,0,0,0.55)",
-        display: "flex",
-        alignItems: isDesktop ? "stretch" : "flex-end",
-        justifyContent: isDesktop ? "flex-end" : "center",
-      }}>
-      <div
-        onClick={function (e) { e.stopPropagation(); }}
-        style={isDesktop ? {
-          width: 360, maxWidth: "100%",
-          background: t.bgCard, borderLeft: "1px solid " + t.border,
-          padding: "20px",
-          height: "100%", overflowY: "auto",
-        } : {
-          width: "100%",
-          background: t.bgCard,
-          borderRadius: "20px 20px 0 0",
-          padding: "20px 20px calc(20px + env(safe-area-inset-bottom))",
-          maxHeight: "80vh", overflowY: "auto",
-        }}>
-        {!isDesktop && (
-          <div style={{ width: 32, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 16px" }} />
-        )}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: t.text }}>{convTitle(conv, me)}</div>
-          <button onClick={onClose} aria-label="Close"
-            style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 22, lineHeight: 1, cursor: "pointer", padding: "0 4px" }}>×</button>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-          Participants · {participants.length}
-        </div>
-        <div>
-          {participants.map(function (p) {
-            if (!p) return null;
-            var isSelf = p.id === me;
-            var canOpen = !isSelf && openProfile && p.id;
-            return (
-              <button key={p.id || p.name}
-                type="button"
-                onClick={canOpen ? function () { openProfile(p.id); } : undefined}
-                style={{
-                  display: "flex", alignItems: "center", gap: 12, width: "100%",
-                  padding: "10px 4px", border: "none", background: "transparent",
-                  textAlign: "left",
-                  cursor: canOpen ? "pointer" : "default",
-                  borderBottom: "1px solid " + t.border,
-                }}>
-                <PlayerAvatar name={p.name} avatar={p.avatar} avatarUrl={p.avatar_url} size={36} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.name}{isSelf ? " (you)" : ""}
-                  </div>
-                </div>
-                {canOpen && (
-                  <span aria-hidden="true" style={{ color: t.textTertiary, fontSize: 18, lineHeight: 1, flexShrink: 0 }}>›</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  ), document.body);
-}
-
 // ── Inline SVG icons for the action menu. Match the rest of the app's
 // nav-icon style (18px, 1.5 stroke, rounded caps). currentColor means the
 // menu-item's text color drives the glyph. ────────────────────────────────
@@ -269,12 +188,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var [convContextMenu, setConvContextMenu] = useState(null);
   var [showSettings, setShowSettings] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Single drawer for both 1:1 and group threads.
+  //   • 1:1 — opened via the desktop ⋯ toggle in the thread header.
+  //   • Group — opened via the same toggle, AND via tapping the group
+  //     thread header (since a group has multiple partners, we don't
+  //     have a single openProfile target on header tap).
   var [showDetails, setShowDetails] = useState(false);
-  // Group-thread participant drawer — opens when the user taps the
-  // header of a group conversation. 1:1 conversations open the partner
-  // profile via openProfile(); groups have multiple participants so a
-  // dedicated sheet replaces that single-tap target.
-  var [showGroupDetails, setShowGroupDetails] = useState(false);
   // Null when closed; a DOMRect when open. Capturing the rect at click
   // time (instead of reading through a ref at render time) avoids the
   // race where a just-mounted ref is still null, which made the picker
@@ -1063,7 +982,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         {conv.isGroup ? (
           <button
             type="button"
-            onClick={function () { setShowGroupDetails(true); }}
+            onClick={function () { setShowDetails(true); }}
             aria-label="Group details"
             style={{
               display: "flex", alignItems: "center", gap: 10,
@@ -1583,26 +1502,16 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       </div>{/* /sticky input region */}
       </div>{/* /thread column */}
 
-      {/* Details drawer (desktop only per .cs-dm-details-btn media query;
-          the toggle button is hidden on mobile so the drawer can't open). */}
+      {/* Details drawer — handles both 1:1 (rich identity card) and
+          group (stacked participant cards). Desktop renders it as a
+          right-anchored aside; mobile portals it as a bottom sheet
+          (used by the group thread-header tap, the only mobile entry
+          point — the ⋯ toggle is desktop-only via cs-dm-details-btn). */}
       {showDetails && (
         <DetailsDrawer
-          t={t} conv={conv}
+          t={t} conv={conv} me={myId}
           onOpenProfile={openProfile}
           onClose={function () { setShowDetails(false); }}
-        />
-      )}
-
-      {/* Group participant drawer — slide-up sheet (mobile) /
-          right-anchored panel (desktop). Triggered by tapping the
-          group-thread header. */}
-      {showGroupDetails && conv && conv.isGroup && (
-        <GroupDetailsDrawer
-          t={t}
-          conv={conv}
-          me={myId}
-          openProfile={openProfile}
-          onClose={function () { setShowGroupDetails(false); }}
         />
       )}
 
