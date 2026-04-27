@@ -18,6 +18,12 @@ import CreateLeagueModal from "./CreateLeagueModal.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 import LeagueNextOpponent from "./LeagueNextOpponent.jsx";
 import LeagueRivalryCallout from "./LeagueRivalryCallout.jsx";
+import LeagueLifecycleMenu  from "./LeagueLifecycleMenu.jsx";
+import LeagueLifecycleModal from "./LeagueLifecycleModal.jsx";
+import {
+  LIFECYCLE_LABELS, lifecyclePillTokens,
+  isActive, isPastLifecycle,
+} from "../utils/leagueLifecycle.js";
 
 export default function LeaguesPanel({
   t, authUser,
@@ -30,6 +36,13 @@ export default function LeaguesPanel({
   respondToInvite,
   removeMember,
   archiveLeague,
+  // Module 12 Slice 2 — three new lifecycle transitions. archiveLeague
+  // also gained an extended (reason, note) signature; old single-arg
+  // call sites still work because both args default to null on the
+  // service side.
+  completeLeague,
+  cancelLeague,
+  voidLeague,
   friends,
   openProfile,
   toast,
@@ -88,6 +101,9 @@ export default function LeaguesPanel({
         onInvite={inviteToLeague}
         onRemove={removeMember}
         onArchive={archiveLeague}
+        onComplete={completeLeague}
+        onCancel={cancelLeague}
+        onVoid={voidLeague}
         onRespond={respondToInvite}
         friends={friends}
         openProfile={openProfile}
@@ -129,23 +145,68 @@ export default function LeaguesPanel({
     );
   }
 
+  // Module 12 Slice 2 — split the list into Active vs Past so the
+  // panel surfaces what's currently playable up top and pushes
+  // historical seasons into a secondary section. Pending invites
+  // count as active for the purposes of this split (they're the
+  // most actionable thing in the list). Voided leagues are filtered
+  // upstream in useLeagues. Cancelled / archived / completed all
+  // fall under "Past".
+  var activeRows = leagues.filter(function (lg) {
+    return isActive(lg) || lg.my_status === "invited";
+  });
+  var pastRows   = leagues.filter(function (lg) {
+    return isPastLifecycle(lg) && lg.my_status !== "invited";
+  });
+
   return (
     <div>
       <ListHeader t={t} onNew={function () { setShowCreate(true); }} />
-      {leagues.map(function (lg) {
-        return (
-          <LeagueRow
-            key={lg.id}
-            t={t}
-            league={lg}
-            authUser={authUser}
-            onOpen={function () { setSelectedId(lg.id); }}
-            onRespond={respondToInvite}
-            toast={toast}
-            rowAnchor={leagueDeepLink.rowProps(lg.id)}
-          />
-        );
-      })}
+
+      {activeRows.length > 0 && (
+        <>
+          {/* Optional section divider — only render the label if both
+              sections will be shown, so a single-section list isn't
+              cluttered with chrome. */}
+          {pastRows.length > 0 && (
+            <SectionLabel t={t} label="Active" count={activeRows.length} />
+          )}
+          {activeRows.map(function (lg) {
+            return (
+              <LeagueRow
+                key={lg.id}
+                t={t}
+                league={lg}
+                authUser={authUser}
+                onOpen={function () { setSelectedId(lg.id); }}
+                onRespond={respondToInvite}
+                toast={toast}
+                rowAnchor={leagueDeepLink.rowProps(lg.id)}
+              />
+            );
+          })}
+        </>
+      )}
+
+      {pastRows.length > 0 && (
+        <>
+          <SectionLabel t={t} label="Past" count={pastRows.length} extraTopMargin={activeRows.length > 0}/>
+          {pastRows.map(function (lg) {
+            return (
+              <LeagueRow
+                key={lg.id}
+                t={t}
+                league={lg}
+                authUser={authUser}
+                onOpen={function () { setSelectedId(lg.id); }}
+                onRespond={respondToInvite}
+                toast={toast}
+                rowAnchor={leagueDeepLink.rowProps(lg.id)}
+              />
+            );
+          })}
+        </>
+      )}
 
       {showCreate && (
         <CreateLeagueModal
@@ -155,6 +216,27 @@ export default function LeaguesPanel({
           toast={toast}
         />
       )}
+    </div>
+  );
+}
+
+// ── SectionLabel ────────────────────────────────────────────────────
+// Small uppercase divider for the Active / Past split. Only rendered
+// when both sections have at least one row.
+function SectionLabel({ t, label, count, extraTopMargin }) {
+  return (
+    <div style={{
+      fontSize: 9, fontWeight: 700, color: t.textTertiary,
+      textTransform: "uppercase", letterSpacing: "0.14em",
+      marginTop: extraTopMargin ? 18 : 0,
+      marginBottom: 8,
+    }}>
+      {label}
+      {count != null ? (
+        <span style={{ marginLeft: 6, color: t.textTertiary, fontWeight: 600, opacity: 0.7 }}>
+          · {count}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -200,9 +282,11 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
     if (r && r.error) { (toast ? toast(r.error.message || "Could not decline.", "error") : window.alert("Could not decline.")); }
   }
 
-  var statusColor = league.status === "active"    ? t.green
-                   : league.status === "completed" ? t.orange
-                   : t.textTertiary;
+  // Status pill: pull both colour + label from the lifecycle helper so
+  // any future status addition (e.g. paused) lands in one place.
+  var pillTokens = lifecyclePillTokens(league.status);
+  var statusColor = t[pillTokens.fg] || t.textTertiary;
+  var statusLabel = LIFECYCLE_LABELS[league.status] || league.status;
 
   return (
     <div
@@ -214,6 +298,9 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
         borderRadius: 0, padding: "12px 14px", marginBottom: 8,
         cursor: pending ? "default" : "pointer",
         transition: "border-color 0.15s",
+        // Past leagues get a subtle visual de-emphasis so the active
+        // ones win the eye. Not so faded that they read as disabled.
+        opacity: !pending && isPastLifecycle(league) ? 0.78 : 1,
       }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -222,7 +309,7 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
               {league.name}
             </div>
             <span style={{ fontSize: 9, fontWeight: 700, color: statusColor, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-              {league.status}
+              {statusLabel}
             </span>
           </div>
           {league.description && (
@@ -276,23 +363,39 @@ function formatMatchFormat(mf) {
 // ── LeagueDetailView ──────────────────────────────────────────────────────────
 function LeagueDetailView({
   t, authUser, league, detail, profileMap,
-  onBack, onInvite, onRemove, onArchive, onRespond,
+  onBack, onInvite, onRemove, onArchive, onComplete, onCancel, onVoid, onRespond,
   friends, openProfile, toast,
   // Slice 4: viewer's match history + challenge composer for the
   // new retention surfaces (next opponent / rivalry callout).
   history, openChallenge,
 }) {
   var [inviteOpen, setInviteOpen] = useState(false);
+  // Module 12 Slice 2 — which lifecycle action the user has picked
+  // from the 3-dot menu. null when the modal is closed; otherwise one
+  // of 'complete' | 'archive' | 'cancel' | 'void'.
+  var [lifecycleAction, setLifecycleAction] = useState(null);
+
   var myMembership = (detail && detail.members || []).find(function (m) { return m.user_id === authUser.id; });
   var iAmOwner = !!myMembership && myMembership.role === "owner";
 
-  function report(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
-
-  async function handleArchive() {
-    if (!window.confirm("Archive this league? No new matches will be accepted.")) return;
-    var r = await onArchive(league.id);
-    if (r && r.error) report(r.error.message || "Could not archive.");
+  // Map action key → handler. Each handler accepts (reason, note) so
+  // the modal can pass them through. The hook refreshes the list +
+  // detail on success, which flips the status pill and re-evaluates
+  // the menu items automatically.
+  function handlerForAction(actionKey) {
+    if (actionKey === "complete") return function (r, n) { return onComplete(league.id, r, n); };
+    if (actionKey === "archive")  return function (r, n) { return onArchive(league.id, r, n); };
+    if (actionKey === "cancel")   return function (r, n) { return onCancel(league.id, r, n); };
+    if (actionKey === "void")     return function (r, n) { return onVoid(league.id, r, n); };
+    return function () { return Promise.resolve({ error: { message: "unknown lifecycle action" } }); };
   }
+
+  // Pill colour + label sourced from the lifecycle util so any new
+  // status value lands in one file.
+  var pillTokens = lifecyclePillTokens(league.status);
+  var pillFg     = t[pillTokens.fg] || t.textTertiary;
+  var pillBg     = t[pillTokens.bg] || t.bgTertiary;
+  var statusLabel = LIFECYCLE_LABELS[league.status] || league.status;
 
   return (
     <div>
@@ -311,11 +414,21 @@ function LeagueDetailView({
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-            <span style={{
-              fontSize: 9, fontWeight: 700, color: league.status === "active" ? t.green : t.textTertiary,
-              background: league.status === "active" ? t.greenSubtle : t.bgTertiary,
-              padding: "3px 8px", borderRadius: 20, letterSpacing: "0.12em", textTransform: "uppercase",
-            }}>{league.status}</span>
+            {/* Pill row: status pill + mode pill side-by-side; the
+                lifecycle 3-dot menu sits to the right when the viewer
+                is the owner and at least one transition is allowed. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{
+                fontSize: 9, fontWeight: 700, color: pillFg, background: pillBg,
+                padding: "3px 8px", borderRadius: 20, letterSpacing: "0.12em", textTransform: "uppercase",
+              }}>{statusLabel}</span>
+              <LeagueLifecycleMenu
+                t={t}
+                league={league}
+                iAmOwner={iAmOwner}
+                onPickAction={function (action) { setLifecycleAction(action); }}
+              />
+            </div>
             {/* Mode pill — Module 7.5. Locked at creation; affects which
                 match_type can be tagged into this league. */}
             <span style={{
@@ -338,16 +451,33 @@ function LeagueDetailView({
             : ""}
         </div>
 
-        {/* Owner actions */}
-        {iAmOwner && league.status === "active" && (
+        {/* Status note — only when populated. Slim banner so it
+            doesn't push other content. */}
+        {league.status_note && league.status !== "active" && (
+          <div style={{
+            marginTop: 10,
+            padding: "7px 9px",
+            background: t.bgTertiary,
+            border: "1px solid " + t.border,
+            borderRadius: 0,
+            fontSize: 11.5, color: t.textSecondary, lineHeight: 1.45,
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 2 }}>
+              Owner note
+            </div>
+            {league.status_note}
+          </div>
+        )}
+
+        {/* Owner action — Invite still lives inline since it's the
+            primary action when the league is running. Lifecycle
+            transitions are tucked into the kebab menu next to the
+            status pill above. */}
+        {iAmOwner && isActive(league) && (
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button onClick={function () { setInviteOpen(true); }}
               style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.accent, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
               + Invite member
-            </button>
-            <button onClick={handleArchive}
-              style={{ padding: "7px 12px", borderRadius: 0, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer" }}>
-              Archive season
             </button>
           </div>
         )}
@@ -399,6 +529,19 @@ function LeagueDetailView({
           friends={friends || []}
           onClose={function () { setInviteOpen(false); }}
           onInvite={onInvite}
+          toast={toast}
+        />
+      )}
+
+      {/* Lifecycle modal — shared shape across complete / archive /
+          cancel / void. Mounted only while an action is selected. */}
+      {lifecycleAction && (
+        <LeagueLifecycleModal
+          t={t}
+          league={league}
+          action={lifecycleAction}
+          onConfirm={handlerForAction(lifecycleAction)}
+          onClose={function () { setLifecycleAction(null); }}
           toast={toast}
         />
       )}

@@ -45,12 +45,57 @@ Inside ScoreModal:
 
 This is enforced server-side too: the `validate_match_league` trigger rejects any insert where `match_type !== league.mode`.
 
-### What a season is (V1)
-- The lifetime of a single league, from creation to archive
-- A league has three states:
-  - `active` — matches can be logged; standings update continuously
-  - `completed` — owner marks the season as concluded; no new matches accepted but standings remain visible
-  - `archived` — historical record; read-only
+### What a season is (V1, Module 12 lifecycle model)
+
+A league's lifetime moves through one of five statuses. The state machine
+is owned server-side by SECURITY DEFINER lifecycle RPCs in
+`supabase/migrations/20260427_league_lifecycle_v1.sql` and
+`20260427_league_lifecycle_v2_notifications.sql`. The owner is the only
+caller permitted to drive a transition.
+
+| Status | Meaning | Allowed source(s) | Standings | Final flag | Visible in normal lists |
+|---|---|---|---|---|---|
+| `active`    | Currently running — matches can be logged, standings recompute on every confirmed match. | (creation) | live | false | yes (Active section) |
+| `completed` | Owner marked the season finished. Standings frozen as the **FINAL** table. | active | locked | **true** | yes (Past section) |
+| `archived`  | Historical record — kept for browsing but the league has run its course. Standings frozen but **not** marked final. | active or completed | locked | false (or pre-existing) | yes (Past section) |
+| `cancelled` | Stopped before completion. Standings frozen but explicitly not final. | active | locked | false | yes (Past section) |
+| `voided`    | Wrong setup / test data / integrity issue. Hidden from normal surfaces; match history stays in personal feeds. | active (V1 owner rule) | locked | false | **no** (app-level filter; admin/audit only) |
+
+Lifecycle metadata on `leagues`:
+- `status` — current state (CHECK: one of the five values)
+- `status_reason` — short enum tag (CHECK-constrained: `season_finished`, `inactive`, `cancelled_by_creator`, `created_by_mistake`, `wrong_rules`, `wrong_players`, `integrity_issue`, `test_league`, `other`)
+- `status_note` — optional free-text the owner can leave for members
+- `status_changed_at` — timestamp of the most recent transition (NOT `completed_at`; see below)
+- `status_changed_by` — uuid of the actor (always the owner in V1)
+- `completed_at` — strictly the moment the league was marked **completed**. Archive / cancel / void do not touch this field. Legacy archived rows had their old `completed_at` migrated to `status_changed_at` and `completed_at` cleared.
+
+Standings freeze on `league_standings`:
+- `standings_locked_at` — set on every transition out of `active`. The `recalculate_league_standings_inner` function early-returns when this is set on any standings row in the league, so a late trigger fire after a transition can't repopulate frozen standings.
+- `is_final` + `finalized_at` — set **only** by `complete_league`. UI uses these to label "Final standings" vs "Frozen at archive".
+
+Audit trail:
+- `league_status_events` — one row per transition (`from_status`, `to_status`, `reason`, `note`, `changed_by`, `created_at`). RLS: members + creator can SELECT; INSERT/UPDATE/DELETE are blocked at the policy layer (SECURITY DEFINER RPCs are the only writers).
+
+### Lifecycle RPCs
+All four are `SECURITY DEFINER`, owner-only. Each accepts an optional `reason` (validated by the `leagues_status_reason_check` constraint) and an optional free-text `note`. Side effects:
+- locks standings (stamps `standings_locked_at`),
+- writes a `league_status_events` row,
+- emits to `audit_log` (best-effort),
+- fans an in-app notification (`league_completed` / `league_archived` / `league_cancelled` / `league_voided`) out to every active member except the actor (see `_emit_league_lifecycle_notifs`),
+- resolves any pending `league_invite` notifications for the league (the league is no longer joinable).
+
+| RPC | Allowed source | Sets `completed_at`? | Sets `is_final`? | Owner-V1 |
+|---|---|---|---|---|
+| `complete_league(uuid, reason, note)` | `active` | yes | yes | always |
+| `archive_league(uuid, reason, note)`  | `active` or `completed` | no (preserves existing) | no | always |
+| `cancel_league(uuid, reason, note)`   | `active` | no | no | always |
+| `void_league(uuid, reason, note)`     | `active` only (V1) | no | no | always — voiding non-active leagues is admin-only, deferred |
+
+### UI surfaces (Slice 2)
+- The leagues panel splits into **Active** (active + pending invites) and **Past** (completed / archived / cancelled). Voided leagues are filtered out at the `useLeagues` hook so every consumer sees the same view.
+- The detail view header shows a status pill with a per-state colour and label (`active`, `completed`, etc.). When `status_note` is set on a non-active league, a small "Owner note" panel surfaces it.
+- Owners get a 3-dot menu next to the status pill (`LeagueLifecycleMenu`). Each item opens a confirm modal (`LeagueLifecycleModal`) with a reason dropdown + optional note. The DB CHECK constraint enforces the reason enum; the UI mirrors it via `LIFECYCLE_REASONS` in `src/features/leagues/utils/leagueLifecycle.js`.
+- Voiding takes the league out of the recipient's normal list immediately (the hook filters it). The `league_voided` notification is the only signal members receive — without it the league would appear to silently vanish.
 
 ### What counts toward standings
 A match contributes to a league's standings **only if**:
@@ -137,7 +182,7 @@ None of these RPCs were modified. The league standings simply observe the outcom
 ## Open Questions
 
 1. **Head-to-head tiebreak** — planned for V1.1. Implementation options: (a) recursive SQL CTE; (b) compute in the `recalculate_league_standings` function using a post-pass over tied groups. (b) is simpler and correct. Will revisit when we have UI that exposes standings and players start asking why they're ranked below someone with the same record.
-2. **Season lifecycle automation** — should `status` auto-flip from `active` → `completed` when `end_date` passes? Currently manual via `archive_league` (which goes straight to `archived`). Consider a `complete_league` RPC + cron.
+2. **Season lifecycle automation** — manual transitions are now landed (Module 12: `complete_league` / `archive_league` / `cancel_league` / `void_league`). Auto-flip from `active` → `completed` when `end_date` passes is still deferred: would need a pg_cron job that calls `complete_league(league_id, 'season_finished')` on overdue rows. Worth wiring once we have data on whether owners actually mark seasons complete or just let them drift. Re-opening a non-active league (transition back to active, clear `standings_locked_at`) is also out of V1 — a one-way door for now; document this in copy.
 3. **"Season ending soon" notification** — not implemented in V1. Would require a cron job that scans leagues where `end_date` is within N days and fans out notifications. Defer until we have UI signal that users are engaging with standings.
 4. **Standings-changed notification** — if the user's rank dropped today, should we notify? Probably not as a push (risk of spam), but a passive badge on the People → Leagues tab would work. Defer to a retention-tuning pass.
 5. **Cross-league match** — should one match count for two leagues (e.g. both a "Friends" league and a "Work" league)? V1 says no (single `league_id`). If this becomes a user request, we'd need a `match_leagues` join table and would have to rethink the `max_matches_per_opponent` semantics.

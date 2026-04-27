@@ -20,6 +20,11 @@ var PUSH_WORTHY_TYPES = {
   challenge_declined:         1, challenge_expired:        1,
   friend_request:             1, request_accepted:         1,
   league_invite:              1, league_joined:            1,
+  // Module 12 Slice 2 — owner lifecycle transitions, fanned out to
+  // every active member by the SECURITY DEFINER lifecycle RPCs.
+  // Push-worthy so members don't only find out by opening the app.
+  league_completed:           1, league_archived:          1,
+  league_cancelled:           1, league_voided:            1,
   // pact_* notification types retired with the Tindis feature.
   message_request:            1, message_request_accepted: 1,
   // Module 9 — opponent-invite events that close the loop on the

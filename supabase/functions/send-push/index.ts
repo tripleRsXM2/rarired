@@ -133,6 +133,14 @@ const PUSH_TYPE_TO_CATEGORY: Record<string, string> = {
   request_accepted:             "system_updates",
   league_invite:                "league_updates",
   league_joined:                "league_updates",
+  // Module 12 Slice 2 — owner lifecycle transitions, fanned out to
+  // every active member by the SECURITY DEFINER lifecycle RPCs. Same
+  // category as league_invite / league_joined so existing per-user
+  // category mute settings cover them too.
+  league_completed:             "league_updates",
+  league_archived:              "league_updates",
+  league_cancelled:             "league_updates",
+  league_voided:                "league_updates",
   pact_proposed:                "match_invites",
   pact_claimed:                 "match_invites",
   pact_confirmed:               "match_invites",
@@ -261,6 +269,37 @@ function buildPayloadForType(type: string, fromName: string | null, entityId: st
         type, title: "Player joined league",
         body:  `${safeName} joined your league.`,
         url:   "/tournaments/leagues" + (entityId ? `?highlightLeagueId=${encodeURIComponent(entityId)}` : ""),
+        entityId,
+      };
+    // Module 12 Slice 2 — owner lifecycle transitions. Body deliberately
+    // omits the league name (kept private off the lock screen — same
+    // rule as match payloads).
+    case "league_completed":
+      return {
+        type, title: "League completed",
+        body:  `${safeName} marked a league season as complete. Final standings are locked.`,
+        url:   "/tournaments/leagues" + (entityId ? `?highlightLeagueId=${encodeURIComponent(entityId)}` : ""),
+        entityId,
+      };
+    case "league_archived":
+      return {
+        type, title: "League archived",
+        body:  `${safeName} archived a league. Standings are read-only.`,
+        url:   "/tournaments/leagues" + (entityId ? `?highlightLeagueId=${encodeURIComponent(entityId)}` : ""),
+        entityId,
+      };
+    case "league_cancelled":
+      return {
+        type, title: "League cancelled",
+        body:  `${safeName} cancelled a league before completion.`,
+        url:   "/tournaments/leagues" + (entityId ? `?highlightLeagueId=${encodeURIComponent(entityId)}` : ""),
+        entityId,
+      };
+    case "league_voided":
+      return {
+        type, title: "League voided",
+        body:  `${safeName} voided a league. It's been removed from your list.`,
+        url:   "/tournaments/leagues",
         entityId,
       };
     case "pact_proposed":

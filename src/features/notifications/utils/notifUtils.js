@@ -91,6 +91,17 @@ export function countsAsUnread(n) {
 
 // ─── Copy ────────────────────────────────────────────────────────────────────
 
+// Module 12 Slice 2 — pull the league name out of a notification's
+// metadata payload so lifecycle copy can name the league. Falls back
+// to "your" so the surrounding sentence still reads when metadata is
+// missing (e.g. legacy rows or a future emit path that forgets to
+// set it).
+function leagueLabelForNotif(n) {
+  var nm = n && n.metadata && n.metadata.league_name;
+  if (typeof nm === "string" && nm.trim().length > 0) return '"' + nm.trim() + '"';
+  return "your";
+}
+
 export function getNotifLabel(n) {
   var name = n.fromName || "Someone";
   switch (n.type) {
@@ -116,6 +127,15 @@ export function getNotifLabel(n) {
     case "challenge_expired":          return "Your challenge to " + name + " expired without a response.";
     case "league_invite":              return name + " invited you to a league.";
     case "league_joined":              return name + " joined your league.";
+    // Module 12 Slice 2 — owner-driven lifecycle transitions. Body
+    // tries to surface the league name from metadata (set server-side
+    // when the lifecycle RPC fans out the notif) so the recipient can
+    // act on it without opening detail. Falls back to a generic
+    // sentence if metadata is missing.
+    case "league_completed":           return name + " marked " + leagueLabelForNotif(n) + " season complete — final standings locked.";
+    case "league_archived":            return name + " archived " + leagueLabelForNotif(n) + " league.";
+    case "league_cancelled":           return name + " cancelled " + leagueLabelForNotif(n) + " league.";
+    case "league_voided":              return name + " voided " + leagueLabelForNotif(n) + " league — it's been removed from your list.";
     case "match_invite_claimed":       return name + " joined CourtSync and claimed the match — they'll confirm or dispute next.";
     case "match_invite_declined":      return name + " marked your invite as 'not me' — you can re-issue or void the match.";
     case "casual_match_logged":        return name + " logged a casual match with you.";

@@ -123,6 +123,49 @@ export function rpcRemoveLeagueMember(leagueId, userId) {
   });
 }
 
-export function rpcArchiveLeague(leagueId) {
-  return supabase.rpc("archive_league", { p_league_id: leagueId });
+// ── Lifecycle RPCs (Module 12 Slice 2) ───────────────────────────────────────
+//
+// All four are SECURITY DEFINER, owner-only. Each accepts an optional
+// `reason` (one of the values in LIFECYCLE_REASONS — DB CHECK enforces)
+// and an optional free-text `note`. Server-side they:
+//   • lock standings (standings_locked_at)
+//   • write a league_status_events audit row
+//   • emit an audit_log row (best-effort)
+//   • fan a notification out to every active member except the actor
+//   • resolve any pending league_invite notifs for the league
+//
+// The thin wrappers below intentionally don't validate reason — the DB's
+// leagues_status_reason_check constraint owns that surface, and we want
+// any future enum additions to require only a docs+constant change.
+
+export function rpcCompleteLeague(leagueId, reason, note) {
+  return supabase.rpc("complete_league", {
+    p_league_id: leagueId,
+    p_reason:    reason || "season_finished",
+    p_note:      note   || null,
+  });
+}
+
+export function rpcArchiveLeague(leagueId, reason, note) {
+  return supabase.rpc("archive_league", {
+    p_league_id: leagueId,
+    p_reason:    reason || "inactive",
+    p_note:      note   || null,
+  });
+}
+
+export function rpcCancelLeague(leagueId, reason, note) {
+  return supabase.rpc("cancel_league", {
+    p_league_id: leagueId,
+    p_reason:    reason || "cancelled_by_creator",
+    p_note:      note   || null,
+  });
+}
+
+export function rpcVoidLeague(leagueId, reason, note) {
+  return supabase.rpc("void_league", {
+    p_league_id: leagueId,
+    p_reason:    reason || "created_by_mistake",
+    p_note:      note   || null,
+  });
 }

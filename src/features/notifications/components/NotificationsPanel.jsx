@@ -595,6 +595,15 @@ function NotifRow({
             ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
           )}
 
+          {/* Module 12 Slice 2 — owner lifecycle transitions. league_voided
+              deliberately doesn't render a CTA: the league is gone from
+              the recipient's list, so a "View league" button would
+              dead-end. The other three deep-link to the (now Past)
+              league for closure / standings review. */}
+          {(n.type === "league_completed" || n.type === "league_archived" || n.type === "league_cancelled") && (
+            ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
+          )}
+
           {/* Tindis pact CTAs retired — feature removed pre-launch. */}
         </div>
 

@@ -136,10 +136,46 @@ export function useLeagues(opts) {
     return r;
   }
 
-  async function archiveLeague(leagueId) {
-    var r = await L.rpcArchiveLeague(leagueId);
+  async function archiveLeague(leagueId, reason, note) {
+    var r = await L.rpcArchiveLeague(leagueId, reason, note);
     if (!r.error && authUser) {
       await loadMyLeagues(authUser.id);
+      await loadLeagueDetail(leagueId);
+    }
+    return r;
+  }
+
+  // Module 12 Slice 2 — three new lifecycle transitions. Same shape as
+  // archiveLeague: RPC call, then refresh both the list and the detail
+  // cache so the new status flows into every consumer immediately.
+  // Server-side notification fan-out + pending-invite cleanup are
+  // handled inside the SECURITY DEFINER RPCs themselves.
+  async function completeLeague(leagueId, reason, note) {
+    var r = await L.rpcCompleteLeague(leagueId, reason, note);
+    if (!r.error && authUser) {
+      await loadMyLeagues(authUser.id);
+      await loadLeagueDetail(leagueId);
+    }
+    return r;
+  }
+
+  async function cancelLeague(leagueId, reason, note) {
+    var r = await L.rpcCancelLeague(leagueId, reason, note);
+    if (!r.error && authUser) {
+      await loadMyLeagues(authUser.id);
+      await loadLeagueDetail(leagueId);
+    }
+    return r;
+  }
+
+  async function voidLeague(leagueId, reason, note) {
+    var r = await L.rpcVoidLeague(leagueId, reason, note);
+    if (!r.error && authUser) {
+      await loadMyLeagues(authUser.id);
+      // After void the league is filtered out of the visible list, so
+      // the detail-cache refresh is a courtesy for any consumer still
+      // holding a stale ref. The component above us closes the detail
+      // view when status flips off active.
       await loadLeagueDetail(leagueId);
     }
     return r;
@@ -172,8 +208,21 @@ export function useLeagues(opts) {
     return { pendingInvites: pendingInvites };
   }
 
+  // Module 12 Slice 2 — voided leagues are hidden from normal surfaces.
+  // The DB still returns them via fetchMyLeagues (RLS doesn't change
+  // visibility for members), so we filter at the hook boundary so every
+  // consumer (LeaguesPanel, HomeLeaguesStrip, ScoreModal selector) sees
+  // the same view without re-implementing the rule. A direct deep-link
+  // to a voided league still loads via the detail cache — that's
+  // intentional for owner audit. Per spec there is no "show voided"
+  // toggle in V1.
+  var visibleLeagues = leagues.filter(function (lg) { return lg.status !== "voided"; });
+
   return {
-    leagues,
+    leagues: visibleLeagues,
+    // Raw list with voided still included — useful for owner audit
+    // surfaces if/when they get built. Nothing reads this in V1.
+    leaguesIncludingVoided: leagues,
     profileMap,
     detailCache,
     loading,
@@ -184,6 +233,9 @@ export function useLeagues(opts) {
     respondToInvite,
     removeMember,
     archiveLeague,
+    completeLeague,
+    cancelLeague,
+    voidLeague,
     resetLeagues,
     leaguesForMatchup,
     counts,

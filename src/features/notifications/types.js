@@ -231,6 +231,45 @@ export var NOTIF_TYPES = {
     push_category:      "league_updates",
     renotify_on_update: false,
   },
+  // Module 12 Slice 2 — owner lifecycle transitions, fanned out to
+  // every active member except the actor by the SECURITY DEFINER
+  // lifecycle RPCs (see supabase/migrations/20260427_league_lifecycle_v2_notifications.sql).
+  // All four are non-action: members can't undo a transition, they're
+  // just being told it happened. Push-worthy via 'league_updates'.
+  league_completed: {
+    action_required:    false,
+    entity_type:        "league",
+    click:              "leagues",
+    push_category:      "league_updates",
+    renotify_on_update: false,
+  },
+  league_archived: {
+    action_required:    false,
+    entity_type:        "league",
+    click:              "leagues",
+    push_category:      "league_updates",
+    renotify_on_update: false,
+  },
+  league_cancelled: {
+    action_required:    false,
+    entity_type:        "league",
+    click:              "leagues",
+    push_category:      "league_updates",
+    renotify_on_update: false,
+  },
+  // league_voided fires even though the league disappears from
+  // recipients' lists. The notif itself is the only signal — without
+  // it, members would just silently lose the league with no
+  // explanation. Click-target is 'leagues' but the deep-link will
+  // land on an empty list (the league no longer renders) — that's
+  // by design; the notif body carries the reason.
+  league_voided: {
+    action_required:    false,
+    entity_type:        "league",
+    click:              "leagues",
+    push_category:      "league_updates",
+    renotify_on_update: false,
+  },
 
   // ─── Activity (informational, in-app only) ──────────────────────
   like: {

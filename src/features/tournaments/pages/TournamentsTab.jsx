@@ -679,6 +679,13 @@ export default function TournamentsTab(props) {
             respondToInvite={leagues.respondToInvite}
             removeMember={leagues.removeMember}
             archiveLeague={leagues.archiveLeague}
+            /* Module 12 Slice 2 — three new owner lifecycle handlers
+               (complete / cancel / void). archiveLeague now also
+               accepts (reason, note) — same handler reference, the
+               extra args are propagated through the modal flow. */
+            completeLeague={leagues.completeLeague}
+            cancelLeague={leagues.cancelLeague}
+            voidLeague={leagues.voidLeague}
             friends={friends}
             openProfile={openProfilePreview}
             toast={props.toast}
