@@ -39,7 +39,10 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import * as webpush from "https://esm.sh/@negrel/webpush@0.3.0";
+// @negrel/webpush is published on JSR (jsr.io/@negrel/webpush). The
+// esm.sh JSR proxy resolves it for the Deno bundler. The bare
+// `https://esm.sh/@negrel/webpush@0.3.0` (npm namespace) returns 404.
+import * as webpush from "https://esm.sh/jsr/@negrel/webpush@0.3.0";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
