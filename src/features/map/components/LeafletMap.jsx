@@ -767,6 +767,35 @@ export default function LeafletMap({
     });
   },[hovered, selected, playMode, playZoneId]);
 
+  // Reframe the map to the selected zone whenever a zone is opened
+  // outside the Play Match flow. User feedback: 'when you select a
+  // zone, the tab comes up on the right, and on the left it should
+  // reframe the zone in the window.' Padding is asymmetric so the
+  // selected polygon ends up centered in the LEFT half of the map
+  // (the right ~360px is owned by ZoneSidePanel on desktop). On
+  // mobile the side panel covers the whole map, so we only refit
+  // for the desktop case to avoid wasted animation.
+  useEffect(function(){
+    var map = mapRef.current;
+    if(!map) return;
+    if(playMode !== "off") return;        // play-mode owns its own framing
+    if(!selected) return;                 // nothing selected → keep current view
+    if(isMobile) return;                  // panel covers the map; refit pointless
+    var layer = zoneLayersRef.current[selected];
+    if(!layer) return;
+    try {
+      map.fitBounds(layer.getBounds(), {
+        // Reserve the right column for the 360px side panel + 24px
+        // gutter; left/top/bottom get a normal 40px breathing margin.
+        paddingTopLeft:     [40, 40],
+        paddingBottomRight: [384, 40],
+        maxZoom: 14,
+        animate: true,
+        duration: 0.45,
+      });
+    } catch(_){}
+  },[selected, playMode, isMobile]);
+
   // Update zone label HTML when activity streams in — the flame badge is
   // attached to the zone number/name stack so it follows the polygon
   // centre automatically.
