@@ -88,16 +88,77 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+// ─── VAPID key handling ───────────────────────────────────────────
+//
+// Our env stores the VAPID keys as base64url-encoded raw bytes:
+//   VAPID_PUBLIC_KEY  — 65-byte uncompressed P-256 point (0x04 || X || Y)
+//                       → 87 base64url chars
+//   VAPID_PRIVATE_KEY — 32-byte private scalar `d`
+//                       → 43 base64url chars
+//
+// But @negrel/webpush's importVapidKeys expects JsonWebKey objects,
+// not strings. Calling it with strings fails with the cryptic
+// "Argument 2 can not be converted to a dictionary" because the
+// underlying SubtleCrypto.importKey("jwk", …) requires a JWK dict
+// as the second argument. We rebuild the JWKs from the raw bytes
+// before calling the library.
+
+function base64UrlToBytes(s: string): Uint8Array {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const b64 = (s + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function buildVapidJwks(publicB64: string, privateB64: string): {
+  publicKey: JsonWebKey; privateKey: JsonWebKey;
+} {
+  const pubBytes = base64UrlToBytes(publicB64);
+  // Expect 65-byte uncompressed: 0x04 || X(32) || Y(32). Anything
+  // else is a malformed key and will fail loud here, not 500 lines
+  // deep inside the library.
+  if (pubBytes.length !== 65 || pubBytes[0] !== 0x04) {
+    throw new Error(
+      "VAPID_PUBLIC_KEY: expected 65-byte uncompressed P-256 point starting with 0x04 (got " +
+      pubBytes.length + " bytes, leading byte 0x" + pubBytes[0].toString(16) + ")",
+    );
+  }
+  const x = bytesToBase64Url(pubBytes.slice(1, 33));
+  const y = bytesToBase64Url(pubBytes.slice(33, 65));
+
+  const publicKey: JsonWebKey = {
+    kty:     "EC",
+    crv:     "P-256",
+    x, y,
+    ext:     true,
+    key_ops: ["verify"],
+  };
+  const privateKey: JsonWebKey = {
+    kty:     "EC",
+    crv:     "P-256",
+    x, y,                  // public coords MUST be present on the private JWK
+    d:       privateB64,   // private scalar — already base64url-encoded
+    ext:     true,
+    key_ops: ["sign"],
+  };
+  return { publicKey, privateKey };
+}
+
 // VAPID details — built once on cold-start.
 let vapidPromise: Promise<webpush.ApplicationServer> | null = null;
 async function getVapid(): Promise<webpush.ApplicationServer> {
   if (vapidPromise) return vapidPromise;
   vapidPromise = (async () => {
     const importedKeys = await webpush.importVapidKeys(
-      {
-        publicKey:  VAPID_PUBLIC,
-        privateKey: VAPID_PRIVATE,
-      },
+      buildVapidJwks(VAPID_PUBLIC, VAPID_PRIVATE),
       { extractable: false },
     );
     return await webpush.ApplicationServer.new({
