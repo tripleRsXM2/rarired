@@ -635,8 +635,16 @@ export default function App(){
         {/* CENTER COLUMN */}
         <div className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}>
 
-          {/* MOBILE top nav — hidden on desktop via .cs-mob-nav CSS */}
-          <nav className="cs-mob-nav" style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border}}>
+          {/* MOBILE top nav — hidden on desktop via .cs-mob-nav CSS.
+              paddingTop:env(safe-area-inset-top) keeps content below
+              the iOS status bar / Dynamic Island when the PWA runs in
+              standalone mode (apple-mobile-web-app-status-bar-style is
+              "black-translucent", which paints page content behind the
+              system bar by design — without this padding the CS logo
+              and bell sit under the clock). The --cs-nav-h CSS variable
+              bakes the same inset, so .cs-map-frame + any other layout
+              math stays consistent on notched devices. */}
+          <nav className="cs-mob-nav" style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border,paddingTop:"env(safe-area-inset-top, 0px)"}}>
             {/* No maxWidth cap — content stretches edge-to-edge.
                 User feedback: 'when resizing the window, court sync
                 symbol at the top + profile picture/bell don't stick

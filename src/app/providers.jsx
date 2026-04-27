@@ -85,8 +85,15 @@ export default function Providers({ t, theme, children }){
 
       // ── Shell height tokens (for full-bleed pages like Map) ──────────────
       // --cs-nav-h = sticky mobile top nav height; --cs-tab-h = mobile bottom
-      // tab bar height including iOS safe area. Both collapse to 0 on desktop.
-      ":root{--cs-nav-h:52px;--cs-tab-h:calc(48px + env(safe-area-inset-bottom,0px))}",
+      // tab bar height including iOS safe area. Both bake the relevant
+      // env(safe-area-inset-*) into the variable so layout math
+      // (height:calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))) stays
+      // correct on devices with a notch / Dynamic Island. The nav itself
+      // also adds paddingTop:env(safe-area-inset-top) so its content
+      // (CS logo, bell, avatar) paints below the iOS status bar instead
+      // of underneath it. Both collapse to 0 on desktop.
+      ":root{--cs-nav-h:calc(52px + env(safe-area-inset-top,0px));" +
+        "--cs-tab-h:calc(48px + env(safe-area-inset-bottom,0px))}",
       "@media(min-width:1024px){:root{--cs-nav-h:0px;--cs-tab-h:0px}}",
       // A map-mode flag on the center col kills the outer-pad padding so the
       // map can reach the tab bar; the map itself owns its own sizing.
