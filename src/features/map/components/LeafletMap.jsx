@@ -767,33 +767,54 @@ export default function LeafletMap({
     });
   },[hovered, selected, playMode, playZoneId]);
 
-  // Reframe the map to the selected zone whenever a zone is opened
-  // outside the Play Match flow. User feedback: 'when you select a
-  // zone, the tab comes up on the right, and on the left it should
-  // reframe the zone in the window.' Padding is asymmetric so the
-  // selected polygon ends up centered in the LEFT half of the map
-  // (the right ~360px is owned by ZoneSidePanel on desktop). On
-  // mobile the side panel covers the whole map, so we only refit
-  // for the desktop case to avoid wasted animation.
+  // Reframe the map when the selected zone changes (default mode
+  // only — Play Match flow owns its own framing). Three cases:
+  //   • selected goes truthy → fit to that zone with right-side
+  //     padding so the picked polygon centres in the left half
+  //     of the map (the right ~384px is owned by the side panel).
+  //   • selected goes null AFTER having been set → refit to all
+  //     zones so the user sees the whole city again. User: 'when
+  //     you press the > to close the zone area, it should reframe
+  //     on the map again, right now it stays the same.'
+  //   • mobile: skip — the side panel covers the whole map so the
+  //     refit would be invisible work.
+  var prevSelectedRef = useRef(null);
   useEffect(function(){
     var map = mapRef.current;
     if(!map) return;
-    if(playMode !== "off") return;        // play-mode owns its own framing
-    if(!selected) return;                 // nothing selected → keep current view
-    if(isMobile) return;                  // panel covers the map; refit pointless
-    var layer = zoneLayersRef.current[selected];
-    if(!layer) return;
-    try {
-      map.fitBounds(layer.getBounds(), {
-        // Reserve the right column for the 360px side panel + 24px
-        // gutter; left/top/bottom get a normal 40px breathing margin.
-        paddingTopLeft:     [40, 40],
-        paddingBottomRight: [384, 40],
-        maxZoom: 14,
-        animate: true,
-        duration: 0.45,
-      });
-    } catch(_){}
+    if(playMode !== "off"){ prevSelectedRef.current = selected; return; }
+    if(isMobile){ prevSelectedRef.current = selected; return; }
+
+    if(selected){
+      var layer = zoneLayersRef.current[selected];
+      if(layer){
+        try {
+          map.fitBounds(layer.getBounds(), {
+            paddingTopLeft:     [40, 40],
+            paddingBottomRight: [384, 40],
+            maxZoom: 14,
+            animate: true,
+            duration: 0.45,
+          });
+        } catch(_){}
+      }
+    } else if(prevSelectedRef.current){
+      // selected → null transition: refit to all zones (city view).
+      var layers = Object.values(zoneLayersRef.current).filter(Boolean);
+      if(layers.length){
+        try {
+          var group = L.featureGroup(layers);
+          map.fitBounds(group.getBounds(), {
+            paddingTopLeft:     [24, 24],
+            paddingBottomRight: [24, 80],
+            maxZoom: 14,
+            animate: true,
+            duration: 0.45,
+          });
+        } catch(_){}
+      }
+    }
+    prevSelectedRef.current = selected;
   },[selected, playMode, isMobile]);
 
   // Update zone label HTML when activity streams in — the flame badge is

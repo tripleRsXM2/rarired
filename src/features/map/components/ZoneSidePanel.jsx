@@ -21,17 +21,19 @@
 //   • "click court → open CourtInfoCard modal" (that modal is still
 //     reachable from the map pin if users want the detailed view)
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
+import { ZONES } from "../data/zones.js";
 import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone } from "../services/mapService.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
+import ZoneShape from "./ZoneShape.jsx";
 
 var MAX_SELECT = 3; // 3 others + viewer = 4 for doubles
 
 export default function ZoneSidePanel({
-  t, zone, onClose,
+  t, zone, onClose, onSelectZone,
   authUser, profile, homeZone, onSetHome, onClearHome,
   onOpenProfile, activity,
   // onMessageSelected(partners[], slotHints) — array, supports doubles.
@@ -59,6 +61,10 @@ export default function ZoneSidePanel({
   }
 
   var [selectedIds, setSelectedIds]     = useState([]);
+  // Tracks where a touch swipe started so the gesture handler at
+  // the title card can decide on touchend whether the delta crossed
+  // the threshold to navigate to the next/previous zone.
+  var swipeStartRef = useRef(null);
   // Player list scope: "zone" (default, home_zone match in this zone)
   // or "everywhere" (whole user base, ranked the same way). Lets the
   // viewer pitch a match at a court to someone who isn't a local.
@@ -262,7 +268,12 @@ export default function ZoneSidePanel({
       width:"100%", maxWidth: isNarrow ? "none" : 360,
       background: t.bgCard,
       borderLeft: isNarrow ? "none" : ("1px solid " + t.border),
-      display:"flex", flexDirection:"column", zIndex:500,
+      display:"flex", flexDirection:"column",
+      // zIndex bumped from 500 → 1100 so the panel sits ABOVE
+      // Leaflet's attribution control (~z 800) on mobile. User
+      // feedback: 'OSM icon is still visible, can it hide when
+      // we are in that tab.'
+      zIndex: 1100,
       boxShadow: isNarrow ? "none" : "-8px 0 32px rgba(0,0,0,0.06)",
     }}>
 
@@ -271,15 +282,62 @@ export default function ZoneSidePanel({
           for what's a one-tap toggle). Same icon doubles as indicator
           and action: filled-accent when this zone is the viewer's home,
           outlined neutral otherwise. */}
-      <div style={{ padding:"20px 20px 16px", borderBottom:"1px solid "+t.border }}>
+      {(function(){
+        // Swipe gesture wiring — on mobile, dragging the title card
+        // left → next zone, right → previous zone. Threshold 48px so
+        // a small accidental drag doesn't navigate. Falls back to a
+        // no-op when isNarrow is false.
+        return null;
+      })()}
+      <div
+        onTouchStart={isNarrow && onSelectZone ? function(e){
+          var x = e.touches[0] ? e.touches[0].clientX : 0;
+          swipeStartRef.current = { x: x, t: Date.now() };
+        } : null}
+        onTouchEnd={isNarrow && onSelectZone ? function(e){
+          var s = swipeStartRef.current;
+          if(!s) return;
+          var endX = (e.changedTouches[0] || {}).clientX || 0;
+          var dx = endX - s.x;
+          var dt = Date.now() - s.t;
+          swipeStartRef.current = null;
+          if(Math.abs(dx) < 48) return;       // not a swipe
+          if(dt > 600) return;                 // too slow → probably a scroll
+          var zonesArr = ZONES;
+          var i = zonesArr.findIndex(function(z){ return z.id === zone.id; });
+          if(i < 0) return;
+          var next = dx < 0 ? (i + 1) % zonesArr.length
+                            : (i - 1 + zonesArr.length) % zonesArr.length;
+          onSelectZone(zonesArr[next].id);
+          track("zone_swiped", { from: zone.id, to: zonesArr[next].id, direction: dx < 0 ? "left" : "right" });
+        } : null}
+        style={{
+          padding:"20px 20px 16px",
+          borderBottom:"1px solid "+t.border,
+          touchAction: isNarrow && onSelectZone ? "pan-y" : "auto",
+        }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
           <div style={{ display:"flex", gap:12, alignItems:"center", flex:1, minWidth:0 }}>
+            {/* Zone shape glyph — small SVG silhouette of the zone's
+                actual polygon so the user gets a visual anchor that
+                matches what they see on the map. The numbered circle
+                stays as the colour anchor; the shape rides next to
+                the name. User: 'add in the shape of the zone
+                somewhere in the title card.' */}
             <div style={{
               width:36, height:36, borderRadius:"50%", background: zone.color,
               display:"flex", alignItems:"center", justifyContent:"center",
               color:"#fff", fontWeight:700, fontSize:16, flexShrink:0,
               boxShadow:"0 0 0 3px "+t.bgCard,
             }}>{zone.num}</div>
+            <div style={{
+              width: 36, height: 36, flexShrink: 0,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              borderRadius: 8,
+              background: t.bgTertiary,
+            }}>
+              <ZoneShape zone={zone} size={28} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.4}/>
+            </div>
             <div style={{ minWidth:0, flex:1 }}>
               <div style={{ fontSize:10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom:2 }}>Zone {zone.num}</div>
               <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>

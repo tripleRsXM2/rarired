@@ -580,6 +580,7 @@ export default function MapTab({
       {sidePanelZone && (
       <ZoneSidePanel
         t={t} zone={sidePanelZone} onClose={function(){ setSelected(null); }}
+        onSelectZone={function(nextId){ setSelected(nextId); setPanelCourtName(null); }}
         authUser={authUser} profile={profile}
         homeZone={homeZone}
         activity={selectedZone ? zoneActivity[selectedZone.id] : null}
