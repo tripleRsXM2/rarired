@@ -1,6 +1,7 @@
 // src/features/scoring/components/DisputeModal.jsx
 import { useState } from "react";
 import { inputStyle } from "../../../lib/theme.js";
+import { validateMatchScore } from "../utils/tennisScoreValidation.js";
 
 var REASONS=[
   {code:'wrong_score',  label:'Score is wrong'},
@@ -11,6 +12,26 @@ var REASONS=[
   {code:'other',        label:'Other'},
 ];
 
+// Compute who the sets say won. Skip blanks / NaN. Returns
+// "win" | "loss" | null. Mirrors ScoreModal.winnerBySets exactly so
+// the dispute path enforces the same "result vs sets" consistency
+// check users see when logging a fresh match.
+function winnerBySets(sets){
+  if (!sets || !sets.length) return null;
+  var ys = 0, ts = 0;
+  sets.forEach(function (s) {
+    var yStr = s.you  == null ? "" : String(s.you).trim();
+    var tStr = s.them == null ? "" : String(s.them).trim();
+    if (yStr === "" || tStr === "") return;
+    var y = Number(yStr), th = Number(tStr);
+    if (Number.isNaN(y) || Number.isNaN(th)) return;
+    if (y === th) return;
+    if (y > th) ys++; else ts++;
+  });
+  if (ys === ts) return null;
+  return ys > ts ? "win" : "loss";
+}
+
 export default function DisputeModal({
   t, disputeModal, setDisputeModal,
   disputeDraft, setDisputeDraft,
@@ -19,6 +40,11 @@ export default function DisputeModal({
   var iStyle=inputStyle(t);
   var [saving,setSaving]=useState(false);
   var [error,setError]=useState('');
+  // Mismatch-acknowledgement gate. Same pattern ScoreModal uses:
+  // when the picked result disagrees with what the sets say, show
+  // "Heads up — …" and require a second tap to override. Reset to
+  // false whenever scores OR the result picker change.
+  var [mismatchAck, setMismatchAck] = useState(false);
 
   if(!disputeModal) return null;
 
@@ -28,13 +54,41 @@ export default function DisputeModal({
   // At revision 3 (max), the person who is counter-proposing will push to round 4 — auto-void instead
   var wouldAutoVoid=isCounter&&(match.revisionCount||0)>=3;
 
-  function setDraft(key, val){ setDisputeDraft(function(d){return Object.assign({},d,{[key]:val});}); }
+  function setDraft(key, val){
+    // Any draft change resets the mismatch ack so a stale "tap again
+    // to keep" gate from a previous score combo can't slip through.
+    setMismatchAck(false);
+    setDisputeDraft(function(d){return Object.assign({},d,{[key]:val});});
+  }
+
+  // Build validator options that mirror the original match's mode +
+  // league context — disputes inherit the original match's
+  // match_type and league rules. Falls back to ranked+completed
+  // (the strictest) when those aren't known.
+  function buildDisputeValidatorOptions(){
+    var matchType = match && match.match_type ? match.match_type : 'ranked';
+    return {
+      matchType: matchType,
+      // Disputes always replace the match end-to-end with a corrected
+      // version. We require a valid completed match — no
+      // "time_limited / unfinished" partial proposals.
+      completionType: 'completed',
+      matchFormat: null,
+      finalSetFormat: 'normal_set',
+      allowPartialScores: false,
+      requireTiebreakDetails: matchType === 'ranked',
+      leagueMode: null,
+      leagueAllowPartial: false,
+    };
+  }
 
   async function handleSubmit(){
     setError('');
     if(!disputeDraft.reasonCode){setError('Please select a reason.');return;}
-    setSaving(true);
+
+    // Void shortcuts — no score validation needed.
     if(isNotMyMatch||wouldAutoVoid){
+      setSaving(true);
       var voidRes=await voidMatchAction(match, isNotMyMatch?'not_my_match':'max_revisions');
       setSaving(false);
       if(!voidRes||voidRes.error){
@@ -44,8 +98,40 @@ export default function DisputeModal({
       setDisputeModal(null);
       return;
     }
+
     var clean=disputeDraft.sets.filter(function(s){return s.you!==''||s.them!=='';});
-    if(!clean.length){setError('Add at least one set score.');setSaving(false);return;}
+    if(!clean.length){setError('Add at least one set score.');return;}
+
+    // Score-pattern validation. Catches set patterns that aren't
+    // valid completed sets (e.g. 5-4, 6-6) and matches that don't
+    // resolve to a winner under the format rules. The original
+    // submission path runs the same validator; the dispute path
+    // used to skip it entirely, which let users submit
+    // contradictory scores like "3-6, 4-6" + "I won".
+    var v = validateMatchScore(clean, buildDisputeValidatorOptions());
+    if (!v.ok) {
+      setError(v.message || 'Score is not valid. Check the set scores above.');
+      return;
+    }
+
+    // Result-vs-sets consistency. Same one-tap-override pattern
+    // ScoreModal uses: if the user's picked result doesn't match
+    // who actually won the sets, show a heads-up and require a
+    // second tap. Prevents the exact reported bug (winner has
+    // losing scores) without blocking edge cases the user might
+    // genuinely intend.
+    var whoWon = winnerBySets(clean);
+    if (whoWon && whoWon !== disputeDraft.result && !mismatchAck) {
+      setMismatchAck(true);
+      setError(
+        "Heads up — your set scores say you " + (whoWon === "win" ? "won" : "lost") +
+        " but you picked " + (disputeDraft.result === "win" ? "I won" : "I lost") +
+        ". Tap Submit again to keep it, or fix the scores above."
+      );
+      return;
+    }
+
+    setSaving(true);
     var proposal={sets:clean,result:disputeDraft.result,date:disputeDraft.date,venue:disputeDraft.venue,court:disputeDraft.court};
     var propRes=isCounter
       ?await counterPropose(match,disputeDraft.reasonCode,disputeDraft.reasonDetail,proposal)
@@ -131,11 +217,27 @@ export default function DisputeModal({
                 <label style={{fontSize:10,fontWeight:700,color:t.textSecondary,letterSpacing:'0.06em',textTransform:'uppercase'}}>Correct score</label>
                 {disputeDraft.sets.length<5&&(
                   <button
-                    onClick={function(){setDisputeDraft(function(d){return Object.assign({},d,{sets:d.sets.concat([{you:'',them:''}])});});}}
+                    onClick={function(){setMismatchAck(false);setDisputeDraft(function(d){return Object.assign({},d,{sets:d.sets.concat([{you:'',them:''}])});});}}
                     style={{background:'transparent',border:'1px solid '+t.border,borderRadius:6,padding:'3px 10px',fontSize:11,color:t.textSecondary,fontWeight:500}}>
                     + Set
                   </button>
                 )}
+              </div>
+              {/* Column headers — make it unambiguous which column
+                  is whose so users can't enter their score in the
+                  opponent's column by accident. Same YOU / THEM
+                  framing the Log Match flow uses. */}
+              <div style={{
+                display:'grid',gridTemplateColumns:'60px 1fr 1fr 24px',
+                gap:8,alignItems:'center',
+                fontSize:9,fontWeight:800,letterSpacing:'0.16em',
+                textTransform:'uppercase',color:t.textTertiary,
+                marginBottom:6,
+              }}>
+                <span/>
+                <span style={{textAlign:'center'}}>You</span>
+                <span style={{textAlign:'center'}}>Them</span>
+                <span/>
               </div>
               {disputeDraft.sets.map(function(set,si){
                 // Same tiebreak-reveal pattern as ScoreModal — show the
@@ -155,6 +257,11 @@ export default function DisputeModal({
                           <input key={who} type="number" inputMode="numeric" pattern="[0-9]*" min="0" value={set[who]} placeholder="0"
                             onChange={function(e){
                               var v=e.target.value;
+                              // Reset the mismatch ack so a stale
+                              // "tap again to keep" gate from a
+                              // previous score combo can't bypass
+                              // the consistency check.
+                              setMismatchAck(false);
                               setDisputeDraft(function(d){
                                 var ns=d.sets.map(function(ss,idx){
                                   if (idx!==si) return ss;
@@ -176,7 +283,7 @@ export default function DisputeModal({
                         );
                       })}
                       {disputeDraft.sets.length>1
-                        ?<button onClick={function(){setDisputeDraft(function(d){return Object.assign({},d,{sets:d.sets.filter(function(_,idx){return idx!==si;})});});}} style={{background:'none',border:'none',color:t.textTertiary,fontSize:16,padding:0}}>×</button>
+                        ?<button onClick={function(){setMismatchAck(false);setDisputeDraft(function(d){return Object.assign({},d,{sets:d.sets.filter(function(_,idx){return idx!==si;})});});}} style={{background:'none',border:'none',color:t.textTertiary,fontSize:16,padding:0}}>×</button>
                         :<div/>
                       }
                     </div>
@@ -192,6 +299,7 @@ export default function DisputeModal({
                               placeholder={who === (yNum === 7 ? 'you' : 'them') ? '7' : '0-5'}
                               onChange={function(e){
                                 var v = e.target.value;
+                                setMismatchAck(false);
                                 setDisputeDraft(function(d){
                                   var ns = d.sets.map(function(ss, idx){
                                     if (idx !== si) return ss;
