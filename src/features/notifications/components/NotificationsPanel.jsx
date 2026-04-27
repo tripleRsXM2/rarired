@@ -516,9 +516,12 @@ function NotifRow({
             </div>
           )}
 
-          {/* message / message_request */}
+          {/* message / message_request / group_added */}
           {(n.type === "message" || n.type === "message_request" || n.type === "message_request_accepted") && (
             ctaButton(t, t.accent, false, "View message →", goMessages)
+          )}
+          {n.type === "group_added" && (
+            ctaButton(t, t.accent, false, "Open group →", goMessages)
           )}
 
           {/* match reminder */}

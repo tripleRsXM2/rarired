@@ -96,6 +96,20 @@ export function countsAsUnread(n) {
 // to "your" so the surrounding sentence still reads when metadata is
 // missing (e.g. legacy rows or a future emit path that forgets to
 // set it).
+// group_added — append a tiny "with you and N others" tail when we know
+// the participant count from metadata. participant_count is the FULL set
+// (including creator + recipient), so "others" = count - 2 (recipient
+// + creator). Falls back to a bare "with you" if metadata is missing
+// (legacy / future emit path that forgets to set it).
+function groupAddedSuffix(n) {
+  var count = n && n.metadata && n.metadata.participant_count;
+  if (typeof count !== "number" || count < 3) return " with you";
+  var others = count - 2; // minus recipient, minus creator
+  if (others <= 0) return " with you";
+  if (others === 1) return " with you and 1 other";
+  return " with you and " + others + " others";
+}
+
 function leagueLabelForNotif(n) {
   var nm = n && n.metadata && n.metadata.league_name;
   if (typeof nm === "string" && nm.trim().length > 0) return '"' + nm.trim() + '"';
@@ -110,6 +124,7 @@ export function getNotifLabel(n) {
     case "message_request":            return name + " wants to message you.";
     case "message_request_accepted":   return name + " accepted your message request.";
     case "message":                    return name + " sent you a message.";
+    case "group_added":                return name + " started a group chat" + groupAddedSuffix(n) + ".";
     case "match_tag":                  return name + " logged a match with you — confirm or dispute.";
     case "match_confirmed":            return name + " confirmed your match result.";
     case "match_disputed":             return name + " disputed the match result — response needed.";

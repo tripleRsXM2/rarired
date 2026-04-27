@@ -185,6 +185,21 @@ export var NOTIF_TYPES = {
     push_category:      null,
     renotify_on_update: false,
   },
+  // group_added — fired by create_group_conversation to every
+  // non-creator participant the moment a group is materialised, so
+  // recipients see "Alex started a group with you" before the first
+  // message. Informational (the user can't action it from the tray —
+  // tapping it opens the conversation), but visible in the centre
+  // (unlike 'message') because it's a lifecycle event, not chat
+  // chatter. Push: in-app only in V1 — the first DM in the group
+  // already pushes via 'message_request' / message-family flows.
+  group_added: {
+    action_required:    false,
+    entity_type:        "conversation",
+    click:              "messages",
+    push_category:      null,
+    renotify_on_update: false,
+  },
 
   // ─── Challenges ─────────────────────────────────────────────────
   challenge_received: {
