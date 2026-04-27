@@ -340,6 +340,36 @@ describe("Messages — thread view", function () {
     expect(screen.getByLabelText(/conversation details/i)).toBeInTheDocument();
   });
 
+  it("Details drawer renders the partner's rich identity card (chips + View profile)", function () {
+    var richConv = Object.assign({}, baseConv, {
+      partner: {
+        id: "p1", name: "Alex", avatar: "AL",
+        skill: "Intermediate 2", style: "Baseliner",
+        suburb: "Bondi", ranking_points: 1234,
+        wins: 7, losses: 3, matches_played: 10,
+      },
+    });
+    var dms = makeDms({
+      activeConv: richConv,
+      threadMessages: [{ id: "m1", sender_id: "me-uid", content: "hi", created_at: new Date().toISOString() }],
+    });
+    var openProfile = vi.fn();
+    render(<Messages t={t} authUser={authUser} dms={dms} openProfile={openProfile} />);
+    fireEvent.click(screen.getByLabelText(/show details/i));
+    var aside = screen.getByLabelText(/conversation details/i);
+    // Skill + style chips
+    expect(within(aside).getByText("Intermediate 2")).toBeInTheDocument();
+    expect(within(aside).getByText("Baseliner")).toBeInTheDocument();
+    // Stats line — rating + record
+    expect(within(aside).getByText("1234")).toBeInTheDocument();
+    expect(within(aside).getByText("7-3")).toBeInTheDocument();
+    // Action button
+    var viewBtn = within(aside).getByRole("button", { name: /view profile/i });
+    expect(viewBtn).toBeInTheDocument();
+    fireEvent.click(viewBtn);
+    expect(openProfile).toHaveBeenCalledWith("p1");
+  });
+
   // Pin/Mute/Delete moved out of the drawer on 2026-04-24 — now a
   // right-click context menu on the conv-list row. See the separate
   // "conv list — right-click menu" suite below.

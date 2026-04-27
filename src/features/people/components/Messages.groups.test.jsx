@@ -120,4 +120,32 @@ describe("Messages — group conversations", function () {
     var textarea = screen.getByPlaceholderText(/message group…/i);
     expect(textarea).toBeInTheDocument();
   });
+
+  it("self participant card has no profile chevron / open handler", function () {
+    var openProfile = vi.fn();
+    var dms = makeDms({ activeConv: groupConv, threadMessages: [] });
+    render(<Messages t={t} authUser={authUser} dms={dms} openProfile={openProfile} />);
+    fireEvent.click(screen.getByLabelText(/group details/i));
+    var drawer = screen.getByRole("dialog", { name: /group details/i });
+    // The self row label includes "(you)". Click it; openProfile must NOT
+    // be called (self has no profile target).
+    var selfRow = within(drawer).getByText(/^Me \(you\)$/).closest("button");
+    fireEvent.click(selfRow);
+    expect(openProfile).not.toHaveBeenCalled();
+    // Tapping a non-self participant DOES open their profile.
+    var alexRow = within(drawer).getByText(/^Alex$/).closest("button");
+    fireEvent.click(alexRow);
+    expect(openProfile).toHaveBeenCalledWith("p-a");
+  });
+
+  it("the desktop ⋯ Show details toggle on a group thread also opens the unified drawer", function () {
+    var dms = makeDms({ activeConv: groupConv, threadMessages: [] });
+    render(<Messages t={t} authUser={authUser} dms={dms} />);
+    fireEvent.click(screen.getByLabelText(/show details/i));
+    var drawer = screen.getByRole("dialog", { name: /group details/i });
+    expect(drawer).toBeInTheDocument();
+    // Stacked participant cards include each member.
+    expect(within(drawer).getByText(/^Alex$/)).toBeInTheDocument();
+    expect(within(drawer).getByText(/^Brett$/)).toBeInTheDocument();
+  });
 });
