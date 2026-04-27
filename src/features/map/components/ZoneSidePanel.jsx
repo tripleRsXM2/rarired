@@ -318,26 +318,12 @@ export default function ZoneSidePanel({
         }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
           <div style={{ display:"flex", gap:12, alignItems:"center", flex:1, minWidth:0 }}>
-            {/* Zone shape glyph — small SVG silhouette of the zone's
-                actual polygon so the user gets a visual anchor that
-                matches what they see on the map. The numbered circle
-                stays as the colour anchor; the shape rides next to
-                the name. User: 'add in the shape of the zone
-                somewhere in the title card.' */}
             <div style={{
               width:36, height:36, borderRadius:"50%", background: zone.color,
               display:"flex", alignItems:"center", justifyContent:"center",
               color:"#fff", fontWeight:700, fontSize:16, flexShrink:0,
               boxShadow:"0 0 0 3px "+t.bgCard,
             }}>{zone.num}</div>
-            <div style={{
-              width: 36, height: 36, flexShrink: 0,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              borderRadius: 8,
-              background: t.bgTertiary,
-            }}>
-              <ZoneShape zone={zone} size={28} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.4}/>
-            </div>
             <div style={{ minWidth:0, flex:1 }}>
               <div style={{ fontSize:10, letterSpacing:"0.1em", color:t.textTertiary, textTransform:"uppercase", marginBottom:2 }}>Zone {zone.num}</div>
               <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
@@ -364,6 +350,19 @@ export default function ZoneSidePanel({
                     {NAV_ICONS.homeCourt(14)}
                   </button>
                 )}
+                {/* Zone shape glyph — small SVG silhouette of the
+                    zone's actual polygon, on the RIGHT side of the
+                    zone name. User: 'make the icon in the zone tab
+                    be on the right side of the name.' Sits at the
+                    end of the name row so the eye reads NAME →
+                    SHAPE as a single identifier pair. */}
+                <div style={{
+                  width: 36, height: 36, flexShrink: 0, marginLeft: "auto",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  borderRadius: 8, background: t.bgTertiary,
+                }}>
+                  <ZoneShape zone={zone} size={28} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.4}/>
+                </div>
               </div>
             </div>
           </div>
