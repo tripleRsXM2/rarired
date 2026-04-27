@@ -8,6 +8,7 @@ import { TABS } from "../lib/constants/ui.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
+import { createGroupConversation, sendMessage as dmSendMessage } from "../features/people/services/dmService.js";
 import { track } from "../lib/analytics.js";
 
 import Providers from "./providers.jsx";
@@ -482,11 +483,10 @@ export default function App(){
   var [composeTarget,setComposeTarget]=useState(null);
 
   // Play Match wizard direct-send (Option A — background send).
-  // The wizard already collected partners + venue + when + draft,
-  // so there's nothing for the user to add in a compose modal. Send
-  // each partner the draft as its own 1-on-1 DM, then toast success
-  // and let the user stay on the map. Mirrors ComposeMessageModal's
-  // serial-loop pattern so partial failures are visible.
+  // - 1 partner  → existing 1:1 flow via useDMs.
+  // - 2+ partners → single group conversation via create_group_conversation
+  //   RPC + one message insert. Avoids fanning N DMs and keeps the wizard's
+  //   "doubles invite" semantics in one thread everyone shares.
   async function onPlayMatchSend(partners, ctx){
     if(!Array.isArray(partners) || !partners.length || !dms) return;
     var draft = (ctx && ctx.draft) || "";
@@ -494,36 +494,49 @@ export default function App(){
     var slot = (ctx && (ctx.venue || ctx.date || ctx.time))
       ? { venue: ctx.venue, date: ctx.date || "", time: ctx.time || "" }
       : null;
-    var failed = 0;
-    for(var i = 0; i < partners.length; i++){
-      var p = partners[i];
-      if(!p || !p.id){ failed++; continue; }
-      try {
-        var opened = await dms.openConversationWith(p, { slot: slot, draft: draft });
-        if(opened && opened.error){ failed++; continue; }
-        var sent = await dms.sendMessage(draft);
-        if(sent && sent.error){ failed++; }
-      } catch(_){ failed++; }
-    }
-    var ok = partners.length - failed;
-    // Actionable toast: lets the user jump to the conversation if
-    // they want to review what was sent or follow up. Otherwise the
-    // toast self-dismisses and they stay on the map.
     var viewAction = {
       label: "View →",
       onClick: function(){ navigate("/people/messages"); },
     };
-    if(ok > 0 && failed === 0){
-      toast(
-        ok === 1 ? "Invite sent ✓" : ("Invite sent to " + ok + " players ✓"),
-        "success",
-        { action: viewAction }
-      );
-    } else if(ok > 0 && failed > 0){
-      toast("Sent to " + ok + " · " + failed + " failed", "info", { action: viewAction });
-    } else {
-      toast("Couldn't send invite — try again", "error");
+
+    if(partners.length === 1){
+      var p = partners[0];
+      if(!p || !p.id){ toast("Couldn't send invite — try again", "error"); return; }
+      try {
+        var opened = await dms.openConversationWith(p, { slot: slot, draft: draft });
+        if(opened && opened.error){ toast("Couldn't send invite — try again", "error"); return; }
+        var sent = await dms.sendMessage(draft);
+        if(sent && sent.error){ toast("Couldn't send invite — try again", "error"); return; }
+      } catch(_){ toast("Couldn't send invite — try again", "error"); return; }
+      toast("Invite sent ✓", "success", { action: viewAction });
+      return;
     }
+
+    // Group invite (partners.length >= 2).
+    var otherIds = partners.filter(function(p){ return p && p.id; }).map(function(p){ return p.id; });
+    if(!otherIds.length){ toast("Couldn't send invite — try again", "error"); return; }
+    try {
+      var g = await createGroupConversation(otherIds);
+      if(g.error){
+        if(g.error.code === 'block_conflict'){
+          toast("That group can't be created right now. Try messaging them individually instead.", "error");
+        } else {
+          toast("Couldn't send invite — try again", "error");
+        }
+        return;
+      }
+      var convId = g.data;
+      var meId = auth.authUser && auth.authUser.id;
+      if(!convId || !meId){ toast("Couldn't send invite — try again", "error"); return; }
+      var s = await dmSendMessage(convId, meId, draft, null);
+      if(s && s.error){ toast("Couldn't send invite — try again", "error"); return; }
+    } catch(_){ toast("Couldn't send invite — try again", "error"); return; }
+
+    track("group_conversation_created", {
+      source: "doubles_invite",
+      participant_count: partners.length + 1,
+    });
+    toast("Group invite sent ✓", "success", { action: viewAction });
   }
 
   // Notif types that always carry a proposal — stale local match needs a DB refresh.

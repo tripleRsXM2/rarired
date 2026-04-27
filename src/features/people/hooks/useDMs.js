@@ -163,7 +163,22 @@ export function useDMs(opts) {
     var pendingOut = all.filter(function (c) { return c.status === "pending" && c.requester_id === uid; });
     var pendingIn = all.filter(function (c) { return c.status === "pending" && c.requester_id !== uid; });
 
-    var partnerIds = [...new Set(all.map(function (c) { return c.user1_id === uid ? c.user2_id : c.user1_id; }))];
+    // Compute the union of every profile id we may need: legacy 1:1 partner
+    // (derived from user1/user2) PLUS every group participant. Always one
+    // bulk fetch — same query whether the user has 1 or 50 conversations.
+    var profileIdSet = {};
+    all.forEach(function (c) {
+      var ids = Array.isArray(c.participant_ids) ? c.participant_ids : null;
+      if (ids && ids.length) {
+        ids.forEach(function (id) { if (id && id !== uid) profileIdSet[id] = true; });
+      } else {
+        // Legacy / test fixtures without participant_ids — fall back to
+        // user1/user2 derivation.
+        var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
+        if (pid) profileIdSet[pid] = true;
+      }
+    });
+    var allProfileIds = Object.keys(profileIdSet);
     var convIds = accepted.map(function (c) { return c.id; });
 
     // ─── PHASE 1 — paint the list NOW with stub partners ──────────────
@@ -174,13 +189,30 @@ export function useDMs(opts) {
     // skeleton clears as soon as the bare list arrives, and per-row
     // names + unread badges patch in within a few hundred ms.
     function bareEnrich(c) {
-      var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
+      var ids = Array.isArray(c.participant_ids) ? c.participant_ids : null;
+      var isGroup = !!c.is_group;
       // Best-effort unread guess: if the most recent message wasn't
       // ours and we have no read receipt yet, treat it as unread. Once
       // the reads-fetch resolves the patcher below recomputes.
       var hasUnread = c.status === "accepted" && c.last_message_sender_id !== uid && !!c.last_message_at;
+      var stubParticipants;
+      if (ids && ids.length) {
+        stubParticipants = ids.map(function (id) {
+          return { id: id, name: id === uid ? "You" : "Loading…", avatar: "?" };
+        });
+      } else {
+        var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
+        stubParticipants = [
+          { id: uid, name: "You", avatar: "?" },
+          { id: pid, name: "Loading…", avatar: "?" },
+        ];
+      }
+      var partnerStub = isGroup ? null
+        : { id: (ids && ids.length ? ids.filter(function(i){return i!==uid;})[0] : (c.user1_id === uid ? c.user2_id : c.user1_id)), name: "Loading…", avatar: "?" };
       return Object.assign({}, c, {
-        partner: { id: pid, name: "Loading…", avatar: "?" },
+        isGroup: isGroup,
+        participants: stubParticipants,
+        partner: partnerStub,
         hasUnread: hasUnread,
         lastReadAt: null, partnerLastReadAt: null,
         lastMsgSeenByPartner: false,
@@ -195,20 +227,40 @@ export function useDMs(opts) {
     // mutes come along for the ride.
     var empty = { data: [] };
     Promise.all([
-      partnerIds.length ? fetchProfilesByIds(partnerIds, PARTNER_FIELDS) : Promise.resolve(empty),
-      convIds.length    ? D.fetchReads(uid, convIds)                    : Promise.resolve(empty),
-      convIds.length    ? D.fetchPartnerReadsForConvs(uid, convIds)      : Promise.resolve(empty),
+      allProfileIds.length ? fetchProfilesByIds(allProfileIds, PARTNER_FIELDS) : Promise.resolve(empty),
+      convIds.length       ? D.fetchReads(uid, convIds)                       : Promise.resolve(empty),
+      convIds.length       ? D.fetchPartnerReadsForConvs(uid, convIds)        : Promise.resolve(empty),
     ]).then(function (parallel) {
-      var partnerMap = {};
-      (parallel[0].data || []).forEach(function (p) { partnerMap[p.id] = p; });
+      var profileMap = {};
+      (parallel[0].data || []).forEach(function (p) { profileMap[p.id] = p; });
       var readMap = {};
       (parallel[1].data || []).forEach(function (row) { readMap[row.conversation_id] = row.last_read_at; });
       var partnerReadMap = {};
       (parallel[2].data || []).forEach(function (row) { partnerReadMap[row.conversation_id] = row.last_read_at; });
 
       function patch(c) {
-        var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
-        var partner = partnerMap[pid] || c.partner || { id: pid, name: "Player", avatar: "PL" };
+        var ids = Array.isArray(c.participant_ids) ? c.participant_ids : null;
+        var isGroup = !!c.is_group;
+        var participants;
+        if (ids && ids.length) {
+          participants = ids.map(function (id) {
+            return profileMap[id] || (c.participants || []).find(function(p){return p && p.id===id;}) ||
+              { id: id, name: id === uid ? "You" : "Player", avatar: "PL" };
+          });
+        } else {
+          var pid = c.user1_id === uid ? c.user2_id : c.user1_id;
+          participants = [
+            profileMap[uid] || { id: uid, name: "You", avatar: "PL" },
+            profileMap[pid] || { id: pid, name: "Player", avatar: "PL" },
+          ];
+        }
+        var partner = null;
+        if (!isGroup) {
+          var pid2 = ids && ids.length
+            ? (ids.filter(function (i) { return i !== uid; })[0] || null)
+            : (c.user1_id === uid ? c.user2_id : c.user1_id);
+          partner = (pid2 && profileMap[pid2]) || c.partner || { id: pid2, name: "Player", avatar: "PL" };
+        }
         var lastRead = readMap[c.id];
         var partnerRead = partnerReadMap[c.id];
         var hasUnread = c.status === "accepted" && c.last_message_sender_id !== uid &&
@@ -217,6 +269,8 @@ export function useDMs(opts) {
           partnerRead && c.last_message_at &&
           new Date(partnerRead) >= new Date(c.last_message_at);
         return Object.assign({}, c, {
+          isGroup: isGroup,
+          participants: participants,
           partner: partner,
           hasUnread: hasUnread,
           lastReadAt: lastRead,
@@ -423,15 +477,70 @@ export function useDMs(opts) {
   //   - Proposed slot + interpolated draft are written AFTER _scrubTransient
   //     (openOrStartConversation calls scrub internally) so they stick.
   //   - Async — returns { error: null | string } from openOrStartConversation.
-  async function openConversationWith(partner, opts) {
-    if (!partner || !partner.id) return { error: "no_partner" };
+  async function openConversationWith(partnerOrPartners, opts) {
     var o = opts || {};
-    var r = await openOrStartConversation(partner);
-    if (r && r.error) return r;
-    if (o.slot) setProposedSlot(o.slot);
-    if (o.draft != null) {
-      setMsgDraft(o.draft);
+
+    // Normalise: support both single-partner (legacy) and array (group) input.
+    var partners = Array.isArray(partnerOrPartners) ? partnerOrPartners : [partnerOrPartners];
+    partners = partners.filter(function (p) { return p && p.id; });
+    if (!partners.length) return { error: "no_partner" };
+
+    // 1:1 path — single partner falls through to the existing
+    // openOrStartConversation flow (draft + first-send materialisation).
+    if (partners.length === 1) {
+      var r = await openOrStartConversation(partners[0]);
+      if (r && r.error) return r;
+      if (o.slot) setProposedSlot(o.slot);
+      if (o.draft != null) setMsgDraft(o.draft);
+      return { error: null };
     }
+
+    // Group path — materialise immediately. Groups have no draft mode:
+    // the row + participant set are written before the user types
+    // anything else, because a group with N members can't sensibly be
+    // "invisible until first send" the way a 1:1 can.
+    if (!authUser) return { error: "Not signed in" };
+    var uid = authUser.id;
+    var otherIds = partners.map(function (p) { return p.id; });
+    var gc = await D.createGroupConversation(otherIds);
+    if (gc.error) {
+      // Surface block_conflict with a stable code so callers can show
+      // the right toast without string-matching. Do NOT mutate state.
+      if (gc.error.code === 'block_conflict') {
+        return { error: { code: 'block_conflict' } };
+      }
+      return { error: gc.error };
+    }
+    var convId = gc.data;
+    var meStub = { id: uid, name: "You", avatar: "PL" };
+    var participants = [meStub].concat(partners);
+    var groupConv = {
+      id: convId,
+      isGroup: true,
+      status: "accepted",
+      participants: participants,
+      partner: null,
+      requester_id: uid,
+      last_message_at: null,
+      last_message_preview: null,
+      last_message_sender_id: null,
+      hasUnread: false,
+      lastReadAt: null,
+    };
+    _scrubTransient();
+    setThreadMessages([]);
+    setReactions({});
+    setActiveConv(groupConv);
+    activeConvRef.current = groupConv;
+    // Add to conversations list (front) so it shows up immediately. The
+    // realtime participants channel will dedupe if the row arrives via
+    // postgres_changes too.
+    setConversations(function (cs) {
+      if (cs.some(function (c) { return c.id === convId; })) return cs;
+      return [groupConv].concat(cs);
+    });
+    if (o.slot) setProposedSlot(o.slot);
+    if (o.draft != null) setMsgDraft(o.draft);
     return { error: null };
   }
 
@@ -454,7 +563,9 @@ export function useDMs(opts) {
     // someone, the conversation hasn't been created yet (see
     // openOrStartConversation — draft mode avoids writing a DB row
     // until the user actually commits something). Create it now.
-    var isDraftFirstSend = conv && conv.isDraft;
+    // Groups never enter draft mode (openConversationWith materialises
+    // immediately) so this whole branch is 1:1-only.
+    var isDraftFirstSend = conv && conv.isDraft && !conv.isGroup;
     if (isDraftFirstSend) {
       var partnerProfile = conv.partner;
       var gc = await D.getOrCreateConversation(partnerProfile.id);
@@ -504,6 +615,22 @@ export function useDMs(opts) {
       // conversations.hasUnread. message_request (first DM from a
       // non-friend) still fires above because it requires an explicit
       // accept/decline decision in the notification tray.
+      //
+      // Groups: the upsert_message_notification RPC takes a single
+      // recipient, so fan out client-side — one call per non-self
+      // participant. Lets the existing per-conv notification row +
+      // unread badge model work unchanged for groups.
+      if (conv.isGroup && Array.isArray(conv.participants)) {
+        conv.participants.forEach(function (p) {
+          if (!p || !p.id || p.id === uid) return;
+          upsertMessageNotification({
+            user_id: p.id,
+            from_user_id: uid,
+            entity_id: conv.id,
+            metadata: null,
+          });
+        });
+      }
       setConversations(function (cs) {
         var updated = Object.assign({}, conv, {
           last_message_preview: preview,
@@ -654,6 +781,10 @@ export function useDMs(opts) {
       var conv = payload.new;
       if (conv.requester_id === uid) return;
       if (conv.user1_id !== uid && conv.user2_id !== uid) return;
+      // Group conversations come in via the participants channel below
+      // — skip them here so we don't double-add. The 1:1 path stays
+      // exactly as it was.
+      if (conv.is_group) return;
       var partnerId = conv.user1_id === uid ? conv.user2_id : conv.user1_id;
       var pr = await fetchProfilesByIds([partnerId], PARTNER_FIELDS);
       var partner = (pr.data && pr.data[0]) || { id: partnerId, name: "Player", avatar: "PL" };
@@ -773,6 +904,74 @@ export function useDMs(opts) {
     return function () { supabase.removeChannel(convChannel); };
   }, [authUser && authUser.id]);
 
+  // ── Realtime: conversation_participants (groups + late-join sync) ───────
+  // When someone adds the viewer to a group conversation, the conversations
+  // INSERT realtime above can't surface it (the row is owned by the creator
+  // and the user1/user2 columns may not contain the viewer). The
+  // conversation_participants insert filtered by the viewer's user_id is the
+  // canonical signal that "you've been added to this conv". We re-fetch the
+  // conversation row (via the same fetch_my_conversations RPC scope, by id)
+  // and prepend it to the list, deduping by id so the convs channel can't
+  // create a duplicate.
+  useEffect(function () {
+    if (!authUser) return;
+    var uid = authUser.id;
+    async function handleParticipantInsert(payload) {
+      var convId = payload.new && payload.new.conversation_id;
+      if (!convId) return;
+      // Dedupe — if we already have it (e.g. we materialised it locally
+      // via openConversationWith, or the convs channel beat us to it),
+      // skip.
+      var alreadyHave = false;
+      setConversations(function (cs) {
+        if (cs.some(function (c) { return c.id === convId; })) alreadyHave = true;
+        return cs;
+      });
+      if (alreadyHave) return;
+      var fresh = await supabase.from("conversations").select("*")
+        .eq("id", convId).maybeSingle();
+      if (!fresh || !fresh.data) return;
+      var row = fresh.data;
+      // Pull the full participant set so we can render names. One RPC
+      // is overkill here — a direct table read is fine, and the RLS on
+      // conversation_participants already restricts to convs the user is in.
+      var partsRes = await supabase.from("conversation_participants")
+        .select("user_id").eq("conversation_id", convId);
+      var ids = ((partsRes && partsRes.data) || []).map(function (r) { return r.user_id; });
+      var profilesRes = ids.length
+        ? await fetchProfilesByIds(ids, PARTNER_FIELDS)
+        : { data: [] };
+      var profileMap = {};
+      ((profilesRes && profilesRes.data) || []).forEach(function (p) { profileMap[p.id] = p; });
+      var participants = ids.map(function (id) {
+        return profileMap[id] || { id: id, name: id === uid ? "You" : "Player", avatar: "PL" };
+      });
+      var isGroup = !!row.is_group;
+      var partner = null;
+      if (!isGroup) {
+        var pid = ids.filter(function (i) { return i !== uid; })[0] || null;
+        partner = (pid && profileMap[pid]) || null;
+      }
+      var enriched = Object.assign({}, row, {
+        isGroup: isGroup,
+        participants: participants,
+        partner: partner,
+        hasUnread: row.status === "accepted" && row.last_message_sender_id !== uid && !!row.last_message_at,
+      });
+      setConversations(function (cs) {
+        if (cs.some(function (c) { return c.id === convId; })) return cs;
+        return [enriched].concat(cs);
+      });
+    }
+    var partsChannel = supabase.channel("participants:" + uid)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversation_participants", filter: "user_id=eq." + uid },
+        handleParticipantInsert
+      )
+      .subscribe();
+    return function () { supabase.removeChannel(partsChannel); };
+  }, [authUser && authUser.id]);
+
   // ── Realtime: typing inbox ─────────────────────────────────────────────
   // Each user subscribes to their own broadcast inbox. Senders open a
   // lightweight channel pointed at the recipient's inbox (cached in
@@ -870,6 +1069,9 @@ export function useDMs(opts) {
 
   useEffect(function () {
     if (!authUser || !activeConv || activeConv.status !== "accepted") return;
+    // Seen-receipts are a 1:1-only concept — there's no single "partner"
+    // in a group whose last_read_at can drive a "✓ Seen" indicator.
+    if (activeConv.isGroup) return;
     var uid = authUser.id;
     var convId = activeConv.id;
     var partnerId = (activeConv.partner && activeConv.partner.id) ||
@@ -1014,28 +1216,30 @@ export function useDMs(opts) {
             avatar_url:         p.avatar_url != null ? p.avatar_url : partner.avatar_url,
           });
         }
-        setConversations(function (cs) {
-          return cs.map(function (c) {
-            if (c && c.partner && c.partner.id === p.id) {
-              return Object.assign({}, c, { partner: patchOne(c.partner) });
-            }
-            return c;
-          });
-        });
-        setRequests(function (rs) {
-          return rs.map(function (r) {
-            if (r && r.partner && r.partner.id === p.id) {
-              return Object.assign({}, r, { partner: patchOne(r.partner) });
-            }
-            return r;
-          });
-        });
-        setActiveConv(function (ac) {
-          if (ac && ac.partner && ac.partner.id === p.id) {
-            return Object.assign({}, ac, { partner: patchOne(ac.partner) });
+        function patchConv(c) {
+          if (!c) return c;
+          var changed = false;
+          var nextPartner = c.partner;
+          if (c.partner && c.partner.id === p.id) {
+            nextPartner = patchOne(c.partner);
+            changed = true;
           }
-          return ac;
-        });
+          var nextParticipants = c.participants;
+          if (Array.isArray(c.participants)) {
+            var hit = false;
+            nextParticipants = c.participants.map(function (pp) {
+              if (pp && pp.id === p.id) { hit = true; return patchOne(pp); }
+              return pp;
+            });
+            if (hit) changed = true;
+            else nextParticipants = c.participants;
+          }
+          if (!changed) return c;
+          return Object.assign({}, c, { partner: nextPartner, participants: nextParticipants });
+        }
+        setConversations(function (cs) { return cs.map(patchConv); });
+        setRequests(function (rs) { return rs.map(patchConv); });
+        setActiveConv(function (ac) { return patchConv(ac); });
       })
       .subscribe();
     return function () { supabase.removeChannel(channel); };

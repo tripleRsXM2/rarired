@@ -210,6 +210,17 @@ After claim AND opponent confirmation:
 | 16 | Mobile share sheet | Web Share opens correct OS sheet on iOS PWA + Android Chrome |
 | 17 | Pending row in feed | Shows "AWAITING OPPONENT" pill; no rating impact |
 
+## Doubles invite — group thread (phase 4, April 2026)
+
+When a logger invites multiple opponents at once (doubles or 3+ partners), the
+"Message them about it" flow now produces **one shared group conversation**
+instead of N fan-out 1:1 DMs. Implementation lives in `useDMs` /
+`Messages.jsx` (see `docs/messaging.md` Groups section). Behavioural changes:
+
+- One thread, one notification fan-out — recipients see a single group conv in their inbox.
+- Singles flows are unchanged; the `play_match_invite_sent` event keeps `partner_count` so analytics can split singles vs group.
+- If any pair of intended participants has an active block, the RPC refuses; the UI surfaces the refusal copy from `notification-taxonomy.md` and falls back to messaging them individually.
+
 ## Out of scope (V1)
 
 - Rate limiting (per-user pending invites per day) — invite-spam abuse vector
