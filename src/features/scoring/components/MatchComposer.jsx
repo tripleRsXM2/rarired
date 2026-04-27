@@ -502,7 +502,17 @@ export default function MatchComposer({
                 setScoreDraft(function (d) { return Object.assign({}, d, { leagueId: v }); });
               }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0, appearance: "auto" })}>
-              <option value="">No — just a {effectiveMatchType} match</option>
+              {/* Default no-league option. Reads as a positive
+                  framing ("Regular Ranked / Casual") rather than the
+                  former "No — just a ranked match" which read like
+                  rejecting a question. The "— No Competition"
+                  qualifier makes it explicit that the match counts
+                  for global stats but not toward any league. */}
+              <option value="">
+                {effectiveMatchType === "ranked"
+                  ? "Regular Ranked — No Competition"
+                  : "Regular Casual — No Competition"}
+              </option>
               {eligible.map(function (lg) {
                 return <option key={lg.id} value={lg.id}>{lg.name}</option>;
               })}
