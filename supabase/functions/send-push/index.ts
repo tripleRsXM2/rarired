@@ -133,14 +133,14 @@ const PUSH_TYPE_TO_CATEGORY: Record<string, string> = {
   request_accepted:             "system_updates",
   league_invite:                "league_updates",
   league_joined:                "league_updates",
-  // Module 12 Slice 2 — owner lifecycle transitions, fanned out to
-  // every active member by the SECURITY DEFINER lifecycle RPCs. Same
-  // category as league_invite / league_joined so existing per-user
-  // category mute settings cover them too.
-  league_completed:             "league_updates",
-  league_archived:              "league_updates",
-  league_cancelled:             "league_updates",
-  league_voided:                "league_updates",
+  // Module 12 Slice 2 — owner lifecycle transitions are intentionally
+  // NOT mapped here in V1: lifecycle events are in-app only. A type
+  // missing from this map causes the dispatch path to skip the push
+  // (see the early-return on `!category` below). Mirrors
+  // PUSH_WORTHY_TYPES in notificationService.js + push_category=null
+  // in src/features/notifications/types.js. The payload template
+  // cases below are kept (cheap dead code) so re-enabling push later
+  // only requires re-adding the four lines above.
   pact_proposed:                "match_invites",
   pact_claimed:                 "match_invites",
   pact_confirmed:               "match_invites",

@@ -235,26 +235,34 @@ export var NOTIF_TYPES = {
   // every active member except the actor by the SECURITY DEFINER
   // lifecycle RPCs (see supabase/migrations/20260427_league_lifecycle_v2_notifications.sql).
   // All four are non-action: members can't undo a transition, they're
-  // just being told it happened. Push-worthy via 'league_updates'.
+  // just being told it happened.
+  //
+  // **In-app only in V1.** push_category=null on all four. Lifecycle
+  // events on a private league aren't lock-screen-grade urgent, and
+  // league_voided in particular shouldn't surface as a push (a voided
+  // league is often a mistake the owner is trying to make quietly go
+  // away — a system-wide "league voided" lock-screen would defeat
+  // that). Re-enable per-type when there's a clear retention reason
+  // to push.
   league_completed: {
     action_required:    false,
     entity_type:        "league",
     click:              "leagues",
-    push_category:      "league_updates",
+    push_category:      null,
     renotify_on_update: false,
   },
   league_archived: {
     action_required:    false,
     entity_type:        "league",
     click:              "leagues",
-    push_category:      "league_updates",
+    push_category:      null,
     renotify_on_update: false,
   },
   league_cancelled: {
     action_required:    false,
     entity_type:        "league",
     click:              "leagues",
-    push_category:      "league_updates",
+    push_category:      null,
     renotify_on_update: false,
   },
   // league_voided fires even though the league disappears from
@@ -267,7 +275,7 @@ export var NOTIF_TYPES = {
     action_required:    false,
     entity_type:        "league",
     click:              "leagues",
-    push_category:      "league_updates",
+    push_category:      null,
     renotify_on_update: false,
   },
 

@@ -91,11 +91,56 @@ All four are `SECURITY DEFINER`, owner-only. Each accepts an optional `reason` (
 | `cancel_league(uuid, reason, note)`   | `active` | no | no | always |
 | `void_league(uuid, reason, note)`     | `active` only (V1) | no | no | always — voiding non-active leagues is admin-only, deferred |
 
+### Lifecycle code contract — `status_changed_by`
+
+Every lifecycle RPC MUST stamp `status_changed_by = auth.uid()` on the
+`leagues` row, write a `league_status_events` audit row with the same
+`changed_by`, and (where applicable) include the actor in the
+notification fan-out's `from_user_id`. The four V1 RPCs already do
+this; future RPCs (e.g. a hypothetical `reopen_league`) inherit the
+same obligation. The defensive backfill in
+`20260427_league_lifecycle_v3_changed_by_backfill.sql` covers the only
+foreseeable drift case (`status_changed_by IS NULL` on a non-active
+row whose `created_by` is known) by attributing the action to the
+league owner. Rows where both `status_changed_by` and `created_by` are
+NULL are considered legacy/system and left as-is — practically
+impossible today (`created_by` is `NOT NULL`) but documented so the
+case is enumerated rather than implicit. A `CHECK (status = 'active'
+OR status_changed_by IS NOT NULL OR created_by IS NULL)` is reserved
+for a follow-up migration once the contract has had a few release
+cycles to settle.
+
+### Lifecycle notifications (in-app only in V1)
+
+The four lifecycle types (`league_completed`, `league_archived`,
+`league_cancelled`, `league_voided`) are routed in-app only — none
+fan out to Web Push in V1. `push_category = null` in
+`src/features/notifications/types.js`, the JS `PUSH_WORTHY_TYPES`
+allow-list omits them, and the Edge Function's
+`PUSH_TYPE_TO_CATEGORY` doesn't map them. Rationale: lifecycle events
+on a private league don't earn lock-screen real estate yet, and
+`league_voided` in particular shouldn't ping every member's home
+screen on what's typically an owner cleanup move. Re-enable per-type
+if a retention argument calls for it.
+
 ### UI surfaces (Slice 2)
 - The leagues panel splits into **Active** (active + pending invites) and **Past** (completed / archived / cancelled). Voided leagues are filtered out at the `useLeagues` hook so every consumer sees the same view.
 - The detail view header shows a status pill with a per-state colour and label (`active`, `completed`, etc.). When `status_note` is set on a non-active league, a small "Owner note" panel surfaces it.
 - Owners get a 3-dot menu next to the status pill (`LeagueLifecycleMenu`). Each item opens a confirm modal (`LeagueLifecycleModal`) with a reason dropdown + optional note. The DB CHECK constraint enforces the reason enum; the UI mirrors it via `LIFECYCLE_REASONS` in `src/features/leagues/utils/leagueLifecycle.js`.
+- Confirm copy is explicit about one-way doors — completing a season says "You can't add new matches after this", cancelling says "Use this if the league is being abandoned partway through", voiding says "Cannot be undone in V1 — contact support if you need to revert". No reopen path ships in V1.
 - Voiding takes the league out of the recipient's normal list immediately (the hook filters it). The `league_voided` notification is the only signal members receive — without it the league would appear to silently vanish.
+
+### Deferred follow-ups (V1)
+
+Tracked here so they don't drop off:
+
+1. **No reopen path.** A non-active league cannot be transitioned back to `active` from any client surface. `standings_locked_at` and `is_final` would both need to be cleared and recalc re-armed. Confirm-modal copy in Slice 2 calls out the one-way nature explicitly. Revisit when there's user demand or a season-restart flow.
+2. **Helper rename / generalisation.** `_resolve_pending_league_invites(league_id)` resolves only `league_invite` rows today. If we add more league-scoped pending notification types (e.g. `league_match_reminder` once league-scoped reminders ship), rename to `_resolve_pending_league_notifs(league_id, types[])` or take a type filter.
+3. **Notification registry tech debt.** Each new lifecycle (or any non-standard) type must touch four surfaces: `src/features/notifications/types.js`, `src/features/notifications/services/notificationService.js`, `supabase/functions/send-push/index.ts`, and `docs/notification-taxonomy.md`. Worth a generation step or a single-source-of-truth refactor in a future cleanup pass.
+4. **`status_changed_by` CHECK constraint.** Deferred — see the code contract section above.
+5. **`pg_cron` auto-complete.** Auto-flipping `active` → `completed` when `end_date` passes is still on the table — would call `complete_league(league_id, 'season_finished')` from a daily sweep. Wire once we have signal owners actually use the manual transition.
+6. **Voiding non-active leagues.** Restricted to admin/support in V1. If a completed league turns out to be wrong-data after the fact, recovery is manual.
+7. **Per-recipient lifecycle push toggle.** Tied to (1) — if push is re-enabled later, each lifecycle type should respect `notification_preferences.league_updates` (and possibly need its own sub-category for finer mute control).
 
 ### What counts toward standings
 A match contributes to a league's standings **only if**:
