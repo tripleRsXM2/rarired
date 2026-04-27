@@ -29,8 +29,29 @@ export function useCurrentUser(){
   async function loadProfile(user){
     var init=initials(user.user_metadata.name||user.email);
     var r=await fetchProfile(user.id);
-    var isNewUser=!r.data;
     var defaults=defaultProfile(user,init);
+
+    // Transient-error handling. If the request errored at all (503
+    // PostgREST outage, network blip, RLS denial, etc.) we MUST NOT
+    // treat the user as new — that fires the onboarding modal AND
+    // overwrites their profile with `defaults`, which is what
+    // triggered the 'Your game, your level' loop during the
+    // 2026-04-27 PostgREST outage.
+    //   • r.data + no error → load real profile
+    //   • r.data is null + error → service couldn't tell us; bail
+    //     gracefully, keep prior in-memory profile, do NOT upsert,
+    //     do NOT mark new. Caller's loadProfile flow can retry.
+    //   • r.data is null + no error → genuine new user; create
+    //     defaults + upsert + flag isNew=true so onboarding fires.
+    if(r.error){
+      console.warn("[useCurrentUser] loadProfile error — preserving prior state:", r.error.message || r.error);
+      // Don't clobber profile state when we can't read. Mark
+      // unloaded so the UI's profileLoaded gate stays closed and
+      // the user doesn't accidentally save a stale draft.
+      setProfileLoaded(false);
+      return { profile: null, isNew: false, error: r.error };
+    }
+    var isNewUser = !r.data;
     var loaded;
     if(r.data){
       loaded=r.data;

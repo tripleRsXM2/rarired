@@ -282,6 +282,10 @@ export default function SettingsScreen({
                         setProfile(function(p){return Object.assign({},p,{home_zone:prev});});
                         setProfileDraft(function(d){return Object.assign({},d,{home_zone:prev});});
                         console.error("Home zone save error:", r.error);
+                        // Used to fail silently — dropdown would revert
+                        // and the user had no clue why. Surface the
+                        // actual error so they (and we) can see it.
+                        if(toast) toast("Home zone save failed: " + (r.error.message || "unknown error"), "error");
                       } else {
                         if(nextVal) track("home_zone_set",     { zone_id: nextVal, from: "settings" });
                         else        track("home_zone_cleared", { zone_id: prev,    from: "settings" });
@@ -537,10 +541,25 @@ export default function SettingsScreen({
                   if (!profile.skill_level_locked) {
                     payload.skill = nd.skill || "Intermediate 1";
                   }
-                  var res=await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+                  var res;
+                  try {
+                    res = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+                  } catch (thrown) {
+                    // Network failure / fetch rejection — promise threw before
+                    // PostgREST could even respond. Surface the message so the
+                    // user can tell us what they saw.
+                    console.error("Profile save threw:", thrown);
+                    if(toast) toast("Save failed: " + (thrown && thrown.message ? thrown.message : "network error"), "error");
+                    return;
+                  }
                   if(res.error){
-                    console.error("Profile save error:",res.error);
-                    if(toast) toast("Couldn't save — try again.", "error");
+                    // Surface the actual Supabase / Postgres error in the
+                    // toast so we don't have to guess (was generic 'try
+                    // again' — useless for debugging). Keep the verbose
+                    // dump in console.error for full inspection.
+                    console.error("Profile save error:", res.error, "payload:", payload);
+                    var msg = (res.error && res.error.message) || "unknown error";
+                    if(toast) toast("Couldn't save: " + msg, "error");
                   } else {
                     setProfileDraft(nd); // keep the draft in sync with the saved row
                     if(toast) toast("Profile saved", "success");
