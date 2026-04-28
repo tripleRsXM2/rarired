@@ -121,12 +121,19 @@ export default function Providers({ t, theme, children }){
       // focal point. Replaces the previous behaviour of hiding the
       // others entirely. User feedback: 'instead of hiding the
       // others, can we grey and make them less noticeable'.
+      // !important is required: leaflet.markercluster calls
+      // marker.setOpacity(1) during clustering animations, which
+      // writes inline style.opacity='1' on the cluster bubble. Without
+      // !important the inline value beats this rule and nothing dims.
+      // Excludes .cs-zone-name (zone label markers) so the picked
+      // zone's caption stays at full strength while sibling court
+      // markers fade.
       ".leaflet-container[data-court-focus='true'] .cs-court-cluster," +
-        ".leaflet-container[data-court-focus='true'] .leaflet-marker-icon:not(.cs-court-solo):not(.cs-zone-centroid){" +
-        "opacity:0.35;" +
+        ".leaflet-container[data-court-focus='true'] .leaflet-marker-icon:not(.cs-court-solo):not(.cs-zone-centroid):not(.cs-zone-name){" +
+        "opacity:0.35!important;" +
         "transition:opacity 0.25s ease}",
       ".leaflet-container[data-court-focus='true'] .cs-court-solo{" +
-        "opacity:1}",
+        "opacity:1!important}",
 
       // Map-native Play Match — court markers in step 2 use a 4-way
       // diagonal-offset placement so labels don't stack on top of
