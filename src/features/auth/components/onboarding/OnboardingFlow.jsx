@@ -49,7 +49,12 @@ const T = {
   muted:    "#787569",
   line:     "rgba(10,10,10,0.07)",
   line2:    "rgba(10,10,10,0.16)",
-  accent:   "#DFFF3F",
+  // User feedback: 'the green colour is not working. make all the
+  // green orange.' Swapped from the design's lime #DFFF3F to the
+  // design's own swatch-palette orange #FF5A1F. One token drives
+  // every accent surface — buttons, glyphs, dots, gradient stops,
+  // pulses — across all 9 screens.
+  accent:   "#FF5A1F",
   font:        "'Inter Tight', ui-sans-serif, system-ui, -apple-system, sans-serif",
   fontDisplay: "'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, sans-serif",
 };
@@ -110,7 +115,7 @@ function ensureFonts() {
   }
 }
 
-export default function OnboardingFlow({ onComplete, auth, forceSignIn = false }) {
+export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, onOpenProfile }) {
   // The auth controller is owned by App.jsx; it's passed in here so we
   // share one Supabase subscription / one set of authStep state. The
   // shape we use:
@@ -237,7 +242,7 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false }
     if (stepName === "zone")    return <Zone    {...props} next={advanceFromZone} />;
     if (stepName === "courts")  return <Courts  {...props} next={advanceFromCourts} />;
     if (stepName === "avail")   return <Availability {...props} next={advanceFromAvail} />;
-    if (stepName === "aha")     return <Aha state={state} T={T} busy={busy} onFinish={finishOnboarding} onSkip={finishOnboarding} />;
+    if (stepName === "aha")     return <Aha state={state} T={T} busy={busy} onFinish={finishOnboarding} onSkip={finishOnboarding} onOpenProfile={onOpenProfile} />;
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx, state, busy]);

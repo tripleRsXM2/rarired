@@ -10,7 +10,7 @@ import { fetchPlayersInZone } from "../../../../map/services/mapService.js";
 import { ZONE_BY_ID } from "../../../../map/data/zones.js";
 import { avColor, initials as avInitials } from "../../../../../lib/utils/avatar.js";
 
-export default function Aha({ state, T, onFinish, onSkip, busy }) {
+export default function Aha({ state, T, onFinish, onSkip, onOpenProfile, busy }) {
   const [players, setPlayers] = useState(null);
   const [revealed, setRevealed] = useState(false);
 
@@ -65,7 +65,7 @@ export default function Aha({ state, T, onFinish, onSkip, busy }) {
           ) : count === 0 ? (
             <EmptyState T={T}/>
           ) : (
-            <StackedPlayers players={players} revealed={revealed} T={T}/>
+            <StackedPlayers players={players} revealed={revealed} T={T} onOpenProfile={onOpenProfile}/>
           )}
         </div>
 
@@ -80,7 +80,7 @@ export default function Aha({ state, T, onFinish, onSkip, busy }) {
   );
 }
 
-function StackedPlayers({ players, revealed, T }) {
+function StackedPlayers({ players, revealed, T, onOpenProfile }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {players.map((p, i) => (
@@ -89,21 +89,40 @@ function StackedPlayers({ players, revealed, T }) {
           transform: revealed ? "translateY(0) scale(1)" : "translateY(24px) scale(0.96)",
           transition: `opacity 540ms cubic-bezier(.2,.8,.2,1) ${i * 110}ms, transform 540ms cubic-bezier(.2,.8,.2,1) ${i * 110}ms`,
         }}>
-          <PlayerCard p={p} T={T}/>
+          <PlayerCard p={p} T={T} onOpenProfile={onOpenProfile}/>
         </div>
       ))}
     </div>
   );
 }
 
-function PlayerCard({ p, T }) {
+function PlayerCard({ p, T, onOpenProfile }) {
+  // Cards link to the real profile route. User feedback: 'you should
+  // link the existing profiles into find players.' p comes from
+  // fetchPlayersInZone — already a real profile row, so we can hand
+  // its id straight to the existing openProfile flow.
   const init = (p.avatar || avInitials(p.name || "")) || "?";
+  const clickable = !!(onOpenProfile && p.id);
+  const handleOpen = clickable ? function(){ onOpenProfile(p.id); } : null;
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 14,
-      padding: "14px 16px",
-      background: T.surface, border: `1px solid ${T.line}`, borderRadius: 16,
-    }}>
+    <button
+      type="button"
+      onClick={handleOpen}
+      disabled={!clickable}
+      aria-label={clickable ? ("Open " + (p.name || "player") + "'s profile") : undefined}
+      style={{
+        appearance: "none", textAlign: "left", width: "100%",
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "14px 16px",
+        background: T.surface, border: `1px solid ${T.line}`, borderRadius: 16,
+        cursor: clickable ? "pointer" : "default",
+        fontFamily: T.font, color: T.fg,
+        transition: "transform 160ms cubic-bezier(.2,.8,.2,1), box-shadow 160ms",
+      }}
+      onMouseDown={clickable ? function(e){ e.currentTarget.style.transform = "scale(0.98)"; } : undefined}
+      onMouseUp={clickable ? function(e){ e.currentTarget.style.transform = "scale(1)"; } : undefined}
+      onMouseLeave={clickable ? function(e){ e.currentTarget.style.transform = "scale(1)"; } : undefined}
+    >
       <div style={{
         width: 46, height: 46, borderRadius: 999,
         background: avColor(p.name),
@@ -126,7 +145,12 @@ function PlayerCard({ p, T }) {
           {p.suburb && <Tag T={T}>{p.suburb}</Tag>}
         </div>
       </div>
-    </div>
+      {clickable && (
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style={{ flexShrink: 0, opacity: 0.45 }}>
+          <path d="M5 3 L 9 7 L 5 11" stroke={T.fg} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )}
+    </button>
   );
 }
 

@@ -688,21 +688,43 @@ export default function App(){
   // invite-deep-link. Returning users (onbDone === true) get a
   // SignIn-only variant via forceSignIn — they shouldn't re-walk the
   // 9-screen questionnaire.
+  // Returning users (onbDone) who hit a signed-out state should still
+  // see the SignIn-only variant of the flow — that's what `forceSignIn`
+  // does inside OnboardingFlow. The gate's `!onbDone` clause means
+  // first-timers exit the launch experience the moment finishOnboarding
+  // sets the flag (otherwise an email-confirmation-required project
+  // would re-render the Aha screen on a loop because !auth.authUser
+  // stays true even after onComplete fires).
   var showOnboardingFlow = !auth.authUser
     && auth.authInitialized
     && !invitePath
-    && tab === "home";
-  if (showOnboardingFlow) {
+    && tab === "home"
+    && !onbDone;
+  // After a returning user signs out, onbDone is still set in localStorage
+  // but they're not authenticated — funnel them to the SignIn-only variant.
+  var showReturningSignIn = !auth.authUser
+    && auth.authInitialized
+    && !invitePath
+    && tab === "home"
+    && onbDone;
+  if (showOnboardingFlow || showReturningSignIn) {
     return (
       <Providers t={t} theme={theme}>
         <ServiceHealthBanner/>
         <OnboardingFlow
           auth={auth}
-          forceSignIn={onbDone}
+          forceSignIn={showReturningSignIn}
+          onOpenProfile={function(uid){
+            if(!uid) return;
+            // Profile route — same path the rest of the app uses. Keeps
+            // the Aha cards "live" (tap a player on the final screen,
+            // land in their actual profile).
+            navigate("/profile/" + uid);
+          }}
           onComplete={function(){
             setOnbDone(true);
-            // Guarantee they land on /home after the flow finishes (the
-            // default — but cheap to assert).
+            // Belt-and-braces: ensure the URL is /home so the next
+            // render of the main shell lands on the feed.
             navigate("/home", { replace: true });
           }}
         />
