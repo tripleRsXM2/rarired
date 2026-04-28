@@ -139,18 +139,23 @@ export default function MapTab({
   // you select a zone on the map... is it possible to press back on
   // the web browser and just go back to the map?'
   //
-  // Pattern: when the side panel opens, push a transient history
-  // state. A popstate (hardware back, browser back, swipe-back gesture)
-  // closes the panel. If the user closes via the X / outside-tap
-  // instead, we pop our pushed entry on cleanup so the history stack
-  // stays clean. closedByPopRef avoids a double-back loop when the
-  // popstate handler itself runs setSelected(null).
+  // The effect dep is the OPEN-ness of the panel as a boolean — NOT
+  // the zone id. Tapping a different zone while one is already open
+  // (zone A → zone B) keeps the panel open with zone B; we must NOT
+  // tear down + re-push history in that case (used to race with
+  // popstate and close the panel — bug 2 in user feedback 'tab
+  // disappears and it just stays zoomed in').
+  //
+  // closedByPopRef stops the cleanup from calling history.back() if
+  // the close was already triggered by popstate (otherwise we'd pop
+  // twice and accidentally leave the page).
+  var sidePanelOpen = !!sidePanelZone;
   var closedByPopRef = useRef(false);
   useEffect(function(){
-    if(!sidePanelZone) return;
+    if(!sidePanelOpen) return;
     closedByPopRef.current = false;
     try {
-      window.history.pushState({ csZone: sidePanelZone.id }, "");
+      window.history.pushState({ csZone: true }, "");
     } catch(_){}
     function onPop(){
       closedByPopRef.current = true;
@@ -163,7 +168,7 @@ export default function MapTab({
       if(!closedByPopRef.current){
         // Closed via UI (X / outside tap / route change) — pop our
         // history entry so a subsequent back press doesn't replay
-        // a stale "open this zone" state.
+        // a stale "open the panel" state.
         try {
           if(window.history.state && window.history.state.csZone){
             window.history.back();
@@ -171,7 +176,7 @@ export default function MapTab({
         } catch(_){}
       }
     };
-  }, [sidePanelZone && sidePanelZone.id]);
+  }, [sidePanelOpen]);
 
   // Persist + emit analytics whenever a layer flips. One handler covers
   // all toggles to keep the track payload uniform.
@@ -287,10 +292,15 @@ export default function MapTab({
     // venue highlighted), the player carousel filtered to that
     // venue's regulars, and a Message button into wizard step 4.
     if(court && court.zone){
-      // Suppress the panelCourtName-reset effect that fires on
-      // selected change — we want both to land together.
-      skipPanelCourtResetRef.current = true;
-      setSelected(court.zone);
+      // Set skipRef ONLY when we're actually switching zones — the
+      // effect only fires on `selected` change, so a same-zone court
+      // tap doesn't need (and shouldn't set) the skip. Otherwise
+      // skipRef leaks to the next legitimate zone-change and lets
+      // a stale court name persist into the wrong zone.
+      if(court.zone !== selected){
+        skipPanelCourtResetRef.current = true;
+        setSelected(court.zone);
+      }
       setPanelCourtName(court.name);
       track("court_tapped_opens_zone_panel", {
         court_name: court.name,
