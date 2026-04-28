@@ -799,9 +799,9 @@ export default function MapTab({
                 // circle is reused inside, just at a slightly tighter
                 // scale. Lighter footprint than the old 114px circle
                 // but more substance than the prior thin pill.
-                height: 64,
-                padding: "0 28px",
-                borderRadius: 16,
+                height: 58,
+                padding: "0 26px",
+                borderRadius: 14,
                 flexDirection: "column",
                 justifyContent: "center",
                 gap: 0,
