@@ -122,6 +122,45 @@ export default function MapTab({
   var playZone = playZoneId ? ZONE_BY_ID[playZoneId] : null;
   var homeZone = profile && profile.home_zone;
 
+  // Browser back / mobile gesture-back closes the zone side panel
+  // instead of leaving the page. User feedback (esp. mobile): 'when
+  // you select a zone on the map... is it possible to press back on
+  // the web browser and just go back to the map?'
+  //
+  // Pattern: when the side panel opens, push a transient history
+  // state. A popstate (hardware back, browser back, swipe-back gesture)
+  // closes the panel. If the user closes via the X / outside-tap
+  // instead, we pop our pushed entry on cleanup so the history stack
+  // stays clean. closedByPopRef avoids a double-back loop when the
+  // popstate handler itself runs setSelected(null).
+  var closedByPopRef = useRef(false);
+  useEffect(function(){
+    if(!sidePanelZone) return;
+    closedByPopRef.current = false;
+    try {
+      window.history.pushState({ csZone: sidePanelZone.id }, "");
+    } catch(_){}
+    function onPop(){
+      closedByPopRef.current = true;
+      setSelected(null);
+      setPanelCourtName(null);
+    }
+    window.addEventListener("popstate", onPop);
+    return function(){
+      window.removeEventListener("popstate", onPop);
+      if(!closedByPopRef.current){
+        // Closed via UI (X / outside tap / route change) — pop our
+        // history entry so a subsequent back press doesn't replay
+        // a stale "open this zone" state.
+        try {
+          if(window.history.state && window.history.state.csZone){
+            window.history.back();
+          }
+        } catch(_){}
+      }
+    };
+  }, [sidePanelZone && sidePanelZone.id]);
+
   // Persist + emit analytics whenever a layer flips. One handler covers
   // all toggles to keep the track payload uniform.
   function setLayer(key, value){
