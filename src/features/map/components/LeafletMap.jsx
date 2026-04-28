@@ -766,20 +766,21 @@ export default function LeafletMap({
         return;
       }
       // Default mode (no play flow active)
-      // Mobile-only: drop the hard coloured outline on un-selected
-      // zones. User feedback: 'i want to test the map without the
-      // hard coloured outlined lines surrounding the zones. Maybe
-      // just make them the transparent colour'. Selection still
-      // gets a stroke so the picked zone has visible commitment;
-      // hover doesn't apply on mobile so it's a no-op.
+      // Mobile keeps the outline but at 30% less weight (2 → 1.4) per
+      // user follow-up: 'bring back the outline of the zones, but
+      // make the lines 30% less thick on mobile'.
       if(isSel){
         layer.setStyle({ color: z.color, weight: 3, opacity: 1, fillColor: z.color, fillOpacity: 0.62 });
       } else if(isHover){
         layer.setStyle({ color: z.color, weight: 2.5, opacity: 1, fillColor: z.color, fillOpacity: 0.6 });
-      } else if(isMobile){
-        layer.setStyle({ color: z.color, weight: 0, opacity: 0, fillColor: z.color, fillOpacity: 0.42 });
       } else {
-        layer.setStyle({ color: z.color, weight: 2, opacity: 0.9, fillColor: z.color, fillOpacity: 0.42 });
+        layer.setStyle({
+          color: z.color,
+          weight: isMobile ? 1.4 : 2,
+          opacity: 0.9,
+          fillColor: z.color,
+          fillOpacity: 0.42,
+        });
       }
     });
   },[hovered, selected, playMode, playZoneId, isMobile]);

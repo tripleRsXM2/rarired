@@ -791,15 +791,19 @@ export default function MapTab({
           },
           isMobile
             ? {
-                // Mobile pill — Spotify/Strava/Notion primary-action
-                // pattern. Compact horizontal slug, single label, no
-                // glyph. Drops the 114px circle (~12% of a 360px-wide
-                // phone) for a much lighter footprint. User feedback:
-                // 'circle takes a lot of space on the mobile phone'.
-                height: 52,
+                // Mobile bevelled rectangle — user feedback: 'make a
+                // rectangle with bevelled edges. and bring back the
+                // play match with the old font style'. Soft rounded
+                // corners (16px) instead of a full pill (999); the
+                // PLAY/MATCH stacked typography from the desktop
+                // circle is reused inside, just at a slightly tighter
+                // scale. Lighter footprint than the old 114px circle
+                // but more substance than the prior thin pill.
+                height: 64,
                 padding: "0 28px",
-                borderRadius: 999,
-                flexDirection: "row",
+                borderRadius: 16,
+                flexDirection: "column",
+                justifyContent: "center",
                 gap: 0,
                 boxShadow:
                   "0 8px 22px rgba(20,18,17,0.32), " +
@@ -832,12 +836,21 @@ export default function MapTab({
           e.currentTarget.style.transform = "translateX(-50%)";
         }}>
         {isMobile ? (
-          // Mobile: single horizontal "Play Match" label. No glyph —
-          // the text alone is unambiguous at a primary-action site.
-          <span style={{
-            fontSize: 15, fontWeight: 800,
-            letterSpacing: "0.02em", lineHeight: 1,
-          }}>Play Match</span>
+          // Mobile: PLAY/MATCH stacked — same iconic typography as the
+          // desktop circle, just at a slightly tighter scale to fit
+          // the 64px-tall rectangle. User feedback: 'bring back the
+          // play match with the old font style'.
+          <>
+            <span style={{
+              fontSize: 17, fontWeight: 900,
+              letterSpacing: "0.10em", lineHeight: 1,
+            }}>PLAY</span>
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.20em", lineHeight: 1,
+              opacity: 0.72, marginTop: 3,
+            }}>MATCH</span>
+          </>
         ) : (
           <>
             <span style={{
