@@ -772,46 +772,56 @@ export default function MapTab({
           setPlayMode("zone");
         }}
         aria-label="Play Match"
-        style={{
-          position:"absolute",
-          left:"50%",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 32px)",
-          transform:"translateX(-50%)",
-          zIndex: 550,
-          // Iconic circle — Strava/Nike/Apple Voice Memos pattern.
-          // Flat solid fill, single soft drop shadow, no gradient,
-          // no inner highlights. Theme-adaptive: dark CTA on light
-          // basemap, light CTA on dark basemap — so contrast stays
-          // constant and the button never gets lost. Apple's primary-
-          // button pattern. Sized at 114px (was 104, +10% per user)
-          // so it reads even more confidently as the map's hero
-          // action without crowding the bottom prompt.
-          width: 114, height: 114,
-          borderRadius: "50%",
-          border: "none",
-          background: mapDark ? "#fff" : "#14110f",
-          color: mapDark ? "#14110f" : "#fff",
-          fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
-          cursor: "pointer",
-          // Layered shadow scaled up with the bigger button — deeper
-          // ambient shadow at the bottom for elevation, tighter
-          // contact shadow underneath.
-          boxShadow:
-            "0 14px 32px rgba(20,18,17,0.36), " +
-            "0 4px 8px rgba(20,18,17,0.22)",
-          display: "flex", flexDirection: "column",
-          alignItems: "center",
-          // User feedback: 'lower everything in the play match button.
-          // Seems like its a bit unbalanced... Its too central.'
-          // Anchor the stack to the bottom with a touch of padding so
-          // the words + glyph sit visually anchored to the lower half
-          // of the circle (more deliberate than dead-centre).
-          justifyContent: "flex-end",
-          paddingBottom: 22,
-          paddingTop: 18,
-          gap: 0,
-          transition: "transform 0.12s ease, box-shadow 0.18s ease",
-        }}
+        style={Object.assign(
+          {
+            position:"absolute",
+            left:"50%",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + " + (isMobile ? 24 : 32) + "px)",
+            transform:"translateX(-50%)",
+            zIndex: 550,
+            border: "none",
+            background: mapDark ? "#fff" : "#14110f",
+            color: mapDark ? "#14110f" : "#fff",
+            fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "transform 0.12s ease, box-shadow 0.18s ease",
+          },
+          isMobile
+            ? {
+                // Mobile pill — Spotify/Strava/Notion primary-action
+                // pattern. Compact horizontal slug, single label, no
+                // glyph. Drops the 114px circle (~12% of a 360px-wide
+                // phone) for a much lighter footprint. User feedback:
+                // 'circle takes a lot of space on the mobile phone'.
+                height: 52,
+                padding: "0 28px",
+                borderRadius: 999,
+                flexDirection: "row",
+                gap: 0,
+                boxShadow:
+                  "0 8px 22px rgba(20,18,17,0.32), " +
+                  "0 2px 4px rgba(20,18,17,0.18)",
+              }
+            : {
+                // Desktop iconic circle — keeps the brand-y hero
+                // treatment with PLAY / MATCH stacked + crossed
+                // rackets. There's plenty of canvas at desktop
+                // sizes for the bigger statement.
+                width: 114, height: 114,
+                borderRadius: "50%",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                paddingBottom: 22,
+                paddingTop: 18,
+                gap: 0,
+                boxShadow:
+                  "0 14px 32px rgba(20,18,17,0.36), " +
+                  "0 4px 8px rgba(20,18,17,0.22)",
+              }
+        )}
         onMouseDown={function(e){
           e.currentTarget.style.transform = "translateX(-50%) scale(0.95)";
         }}
@@ -821,49 +831,47 @@ export default function MapTab({
         onMouseLeave={function(e){
           e.currentTarget.style.transform = "translateX(-50%)";
         }}>
-        <span style={{
-          fontSize: 19, fontWeight: 900,
-          letterSpacing: "0.10em", lineHeight: 1,
-        }}>PLAY</span>
-        <span style={{
-          fontSize: 10, fontWeight: 700,
-          letterSpacing: "0.20em", lineHeight: 1,
-          opacity: 0.72, marginTop: 3,
-        }}>MATCH</span>
-        {/* Crossed-rackets glyph — two real rackets pointing UP
-            with handles crossing in an X at the bottom. Heads are
-            now substantial ovals (was anaemic — user feedback:
-            'circle part is really small') and the handles connect
-            to the head with a tiny throat segment so they read as
-            actual rackets, not stick figures. Per CLAUDE.md icon
-            rule: SVG line-art only, stroke currentColor,
-            strokeWidth 1.6, no fill, no emoji. */}
-        <svg
-          width="30" height="30" viewBox="0 0 30 30"
-          fill="none" stroke="currentColor"
-          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-          aria-hidden="true"
-          style={{ marginTop: 4, opacity: 0.92 }}>
-          {/* RACKET A — head top-left, throat + handle down-right.
-              Head is a wide oval rotated -45° so the major axis
-              points along the handle. Slight stringbed cross for
-              tennis-iconography clarity at this size. */}
-          <g transform="rotate(-45 8 8)">
-            <ellipse cx="8" cy="8" rx="5" ry="3.6"/>
-            <line x1="8" y1="3.6" x2="8" y2="12.4" opacity="0.55"/>
-            <line x1="3.4" y1="8" x2="12.6" y2="8" opacity="0.55"/>
-          </g>
-          {/* throat + handle from head A toward bottom-right corner */}
-          <line x1="11.3" y1="11.3" x2="25.5" y2="25.5"/>
-          {/* RACKET B — head top-right, mirror of A. */}
-          <g transform="rotate(45 22 8)">
-            <ellipse cx="22" cy="8" rx="5" ry="3.6"/>
-            <line x1="22" y1="3.6" x2="22" y2="12.4" opacity="0.55"/>
-            <line x1="17.4" y1="8" x2="26.6" y2="8" opacity="0.55"/>
-          </g>
-          {/* throat + handle from head B toward bottom-left corner */}
-          <line x1="18.7" y1="11.3" x2="4.5" y2="25.5"/>
-        </svg>
+        {isMobile ? (
+          // Mobile: single horizontal "Play Match" label. No glyph —
+          // the text alone is unambiguous at a primary-action site.
+          <span style={{
+            fontSize: 15, fontWeight: 800,
+            letterSpacing: "0.02em", lineHeight: 1,
+          }}>Play Match</span>
+        ) : (
+          <>
+            <span style={{
+              fontSize: 19, fontWeight: 900,
+              letterSpacing: "0.10em", lineHeight: 1,
+            }}>PLAY</span>
+            <span style={{
+              fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.20em", lineHeight: 1,
+              opacity: 0.72, marginTop: 3,
+            }}>MATCH</span>
+            {/* Crossed-rackets glyph — desktop only. Per CLAUDE.md
+                icon rule: SVG line-art, stroke currentColor. */}
+            <svg
+              width="30" height="30" viewBox="0 0 30 30"
+              fill="none" stroke="currentColor"
+              strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ marginTop: 4, opacity: 0.92 }}>
+              <g transform="rotate(-45 8 8)">
+                <ellipse cx="8" cy="8" rx="5" ry="3.6"/>
+                <line x1="8" y1="3.6" x2="8" y2="12.4" opacity="0.55"/>
+                <line x1="3.4" y1="8" x2="12.6" y2="8" opacity="0.55"/>
+              </g>
+              <line x1="11.3" y1="11.3" x2="25.5" y2="25.5"/>
+              <g transform="rotate(45 22 8)">
+                <ellipse cx="22" cy="8" rx="5" ry="3.6"/>
+                <line x1="22" y1="3.6" x2="22" y2="12.4" opacity="0.55"/>
+                <line x1="17.4" y1="8" x2="26.6" y2="8" opacity="0.55"/>
+              </g>
+              <line x1="18.7" y1="11.3" x2="4.5" y2="25.5"/>
+            </svg>
+          </>
+        )}
       </button>
       )}
 
