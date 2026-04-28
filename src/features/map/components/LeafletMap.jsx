@@ -913,6 +913,17 @@ export default function LeafletMap({
       var prev = zoneLabelsRef.current[id];
       if(prev){ map.removeLayer(prev); }
       if(inPlay){ zoneLabelsRef.current[id] = null; return; }
+      // When a zone is selected, hide centroid badges (home + flame)
+      // on every OTHER zone so the picked zone has the cleanest
+      // possible canvas. User feedback: 'if you select a zone outside
+      // your home zone, your home icon is still visible, can you dim
+      // it like the rest or just hide it?' We hide rather than dim
+      // — once the user has committed to a zone, the badges on
+      // other zones are pure noise.
+      if(selected && selected !== id){
+        zoneLabelsRef.current[id] = null;
+        return;
+      }
       var html = zoneCentroidBadgeHtml(z, zoneActivity && zoneActivity[id], homeZone === z.id, showHomes, showActivity);
       if(!html){
         zoneLabelsRef.current[id] = null;
@@ -943,7 +954,7 @@ export default function LeafletMap({
       }).addTo(map);
       zoneLabelsRef.current[id] = marker;
     });
-  },[zoneActivity, homeZone, showHomes, showActivity, playMode]);
+  },[zoneActivity, homeZone, showHomes, showActivity, playMode, selected]);
 
   // (Old standalone home-pin effect retired — the home indicator is
   // baked into the zone-number label's house-shaped badge above. One

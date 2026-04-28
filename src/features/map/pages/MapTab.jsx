@@ -104,7 +104,19 @@ export default function MapTab({
   var [playCourtName,setPlayCourtName]=useState(null);
   // When the zone changes, drop any panel-court selection so we don't
   // leak a stale venue name into a different zone's panel.
-  useEffect(function(){ setPanelCourtName(null); },[selected]);
+  // EXCEPT when a court click on the map drives the zone change —
+  // there we want both `selected` (zone) AND `panelCourtName` (the
+  // tapped court) to be set together. handleCourtSelect flips this
+  // ref before calling setSelected; the effect honours it once and
+  // resets.
+  var skipPanelCourtResetRef = useRef(false);
+  useEffect(function(){
+    if(skipPanelCourtResetRef.current){
+      skipPanelCourtResetRef.current = false;
+      return;
+    }
+    setPanelCourtName(null);
+  },[selected]);
   // Layer-panel state — independent toggles for the optional overlays
   // plus a basemap-theme override. Zone colors are NOT here; they're
   // permanent identifying chrome. Persisted to localStorage so a user's
@@ -263,6 +275,27 @@ export default function MapTab({
       setPlayMode("players");
       track("play_match_court_picked", { zone_id: playZoneId, court_name: court.name });
       track("play_match_step_entered", { step: 2 });
+      return;
+    }
+    // Default mode (no play flow): tapping a court on the map opens
+    // the zone side panel for that court's zone with the court
+    // pre-selected. User feedback: 'instead of the booking modal
+    // showing up, can it bring it right to the zone menu with the
+    // court selected? That way they just have to pick a player to
+    // play.' This routes both mobile + web straight into the play
+    // loop. The side panel already has the court list (with that
+    // venue highlighted), the player carousel filtered to that
+    // venue's regulars, and a Message button into wizard step 4.
+    if(court && court.zone){
+      // Suppress the panelCourtName-reset effect that fires on
+      // selected change — we want both to land together.
+      skipPanelCourtResetRef.current = true;
+      setSelected(court.zone);
+      setPanelCourtName(court.name);
+      track("court_tapped_opens_zone_panel", {
+        court_name: court.name,
+        zone_id: court.zone,
+      });
       return;
     }
     setSelectedCourt(court);
