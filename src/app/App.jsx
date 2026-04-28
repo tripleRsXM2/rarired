@@ -48,6 +48,7 @@ import InviteMatchPage from "../features/scoring/pages/InviteMatchPage.jsx";
 import { parseInvitePath } from "../features/scoring/utils/inviteUrl.js";
 import ComposeMessageModal from "../features/people/components/ComposeMessageModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
+import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -671,6 +672,44 @@ export default function App(){
     );
   }
 
+  // ── New 9-screen onboarding experience for logged-out users ───────────
+  // Renders in place of the regular logged-out shell. Mounts only when:
+  //   • Auth has initialized AND
+  //   • There is no signed-in user AND
+  //   • The user is on the root home tab (don't override deep-links to
+  //     specific tabs — those have their own auth-required behavior).
+  // Returning users (cs-onb-done flag set) skip straight to a SignIn-only
+  // path; OnboardingFlow handles that internally.
+  // The legacy AuthModal stays mounted in the main shell for in-session
+  // requireAuth() triggers, so this branch only owns the launch experience.
+  var [onbDone, setOnbDone] = useState(function(){ return didCompleteOnboarding(); });
+  // Show the new flow when: auth has initialized, no signed-in user,
+  // we're on the root home tab, and we're not in the middle of an
+  // invite-deep-link. Returning users (onbDone === true) get a
+  // SignIn-only variant via forceSignIn — they shouldn't re-walk the
+  // 9-screen questionnaire.
+  var showOnboardingFlow = !auth.authUser
+    && auth.authInitialized
+    && !invitePath
+    && tab === "home";
+  if (showOnboardingFlow) {
+    return (
+      <Providers t={t} theme={theme}>
+        <ServiceHealthBanner/>
+        <OnboardingFlow
+          auth={auth}
+          forceSignIn={onbDone}
+          onComplete={function(){
+            setOnbDone(true);
+            // Guarantee they land on /home after the flow finishes (the
+            // default — but cheap to assert).
+            navigate("/home", { replace: true });
+          }}
+        />
+      </Providers>
+    );
+  }
+
   return (
     <Providers t={t} theme={theme}>
       {/* Service-health banner — sits above the shell, only renders
@@ -1179,13 +1218,20 @@ export default function App(){
           authError={auth.authError} setAuthError={auth.setAuthError}
           authFieldErrors={auth.authFieldErrors} setAuthFieldErrors={auth.setAuthFieldErrors}
         />
-        <OnboardingModal
-          t={t} authUser={auth.authUser}
-          showOnboarding={currentUser.showOnboarding} setShowOnboarding={currentUser.setShowOnboarding}
-          profile={currentUser.profile} setProfile={currentUser.setProfile} setProfileDraft={currentUser.setProfileDraft}
-          onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
-          onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
-        />
+        {/* Legacy 4-step onboarding modal. Stays mounted for users who
+            never went through the new 9-screen OnboardingFlow (e.g.
+            existing users created before the launch). When the new flow
+            sets the cs-onb-done localStorage flag, we suppress this so
+            we don't double-onboard them. */}
+        {!onbDone && (
+          <OnboardingModal
+            t={t} authUser={auth.authUser}
+            showOnboarding={currentUser.showOnboarding} setShowOnboarding={currentUser.setShowOnboarding}
+            profile={currentUser.profile} setProfile={currentUser.setProfile} setProfileDraft={currentUser.setProfileDraft}
+            onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
+            onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
+          />
+        )}
         <ToastStack t={t} toasts={toastSystem.toasts} dismiss={toastSystem.dismiss} />
 
         {/* Module 10 Slice 2 — private post-match feedback prompt.
