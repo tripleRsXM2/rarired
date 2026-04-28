@@ -572,8 +572,34 @@ export default function LeafletMap({
     // marker on top, full opacity) reads as the focal point while
     // surrounding venues stay legible for spatial context.
     var container = map.getContainer();
-    if(inFocus) container.setAttribute("data-court-focus", "true");
-    else        container.removeAttribute("data-court-focus");
+    if(inFocus) {
+      container.setAttribute("data-court-focus", "true");
+    } else {
+      container.removeAttribute("data-court-focus");
+      // When focus exits, leaflet.markercluster may have set inline
+      // style.opacity on cluster bubbles during clustering animations
+      // mid-focus — those inline values would persist and beat the
+      // (now non-matching) CSS rule, leaving icons stuck at 0.35.
+      // User feedback bug 1: 'leaves the other icons with transparency'.
+      // Iterate the cluster's currently-displayed markers and clear
+      // the inline opacity so the default cascade takes over.
+      try {
+        cluster.eachLayer(function(mk){
+          if(mk && mk._icon && mk._icon.style){
+            mk._icon.style.opacity = "";
+          }
+          if(mk && mk._iconCluster && mk._iconCluster.style){
+            mk._iconCluster.style.opacity = "";
+          }
+        });
+        // The cluster itself manages bubble icons via internal nodes.
+        // Force a refresh so any stale opacities on cluster bubbles
+        // get rewritten by the plugin to its default (1).
+        if(typeof cluster.refreshClusters === "function"){
+          cluster.refreshClusters();
+        }
+      } catch(_){}
+    }
 
     // Solo highlight marker — full-opacity court icon with an accent
     // ring so it pops as "the pinned one". Reuses COURT_SVG to keep
