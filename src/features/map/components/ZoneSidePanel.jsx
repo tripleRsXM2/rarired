@@ -397,7 +397,22 @@ export default function ZoneSidePanel({
                   flexShrink: 0, marginLeft: "auto",
                   display:"flex", alignItems:"center", justifyContent:"center",
                 }}>
-                  <ZoneShape zone={zone} size={isNarrow ? 34 : 42} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
+                  {/* Mobile: glyph is wider-than-tall (50×32) so the
+                      polygon — which for most zones runs E-W wider
+                      than N-S — fills the slot horizontally without
+                      forcing the title row to grow. Height stays at
+                      32 (a hair under the previous 34) so the row
+                      doesn't grow vertically. ZoneShape's tighter
+                      internal pad (now sw/2) further reduces empty
+                      space inside the SVG. User: 'increase the zone
+                      icon bigger, removing the space above and
+                      below it. however, I dont want that section
+                      to increase in size'. */}
+                  {isNarrow ? (
+                    <ZoneShape zone={zone} width={50} height={32} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
+                  ) : (
+                    <ZoneShape zone={zone} size={42} stroke={zone.color} fill={zone.color + "26"} strokeWidth={1.5}/>
+                  )}
                 </div>
               </div>
             </div>
