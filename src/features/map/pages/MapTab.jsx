@@ -740,152 +740,55 @@ export default function MapTab({
         />
       )}
 
-      {/* Court info modal — opens on court marker tap */}
-      {/* Play Match CTA — primary action of the map. Bottom-centre,
-          thumb-zone optimal. Orange so it pops against the green
-          zone polygons + neutral chrome. Phase 1: visual only —
-          tap fires telemetry so we can see interest from day one
-          (Mom-test: instrument before shipping the flow). Phase 2
-          will swap the no-op for a guided 5-step wizard inside a
-          bottom sheet (zone → court → player(s) → send invite).
-          Hidden during play mode so it doesn't double-stack with
-          the floating prompt + back button up top. */}
-      {/* CTA hidden when:
-            • playMode is anything but "off" (we're in the flow)
-            • zone side panel is open (it'd sit underneath the panel
-              + double up the action). User feedback: 'when the
-              zone tab pops out, can we hide the play match button.' */}
+      {/* Cold-start prompt — replaces the Play Match FAB. User council
+          take: 'buttons feel old when the surface itself is the
+          action'. The map IS the affordance; tapping a zone already
+          opens the side panel which has courts/players/Message →
+          wizard step 4 (i.e. the play flow). The button was the
+          last vestige of an old two-flow split. Now: tap a zone,
+          you're in. Same iconic uppercase font as 'CHOOSE YOUR
+          ZONE' / 'CHOOSE COURT' so the language reads as a series.
+          Hidden when:
+            • a zone is selected (side panel is open — it has the
+              context now)
+            • playMode is engaged (legacy guard; playMode is unset
+              today but harmless to keep) */}
       {playMode === "off" && !sidePanelZone && (
-      <button type="button"
-        onClick={function(){
-          track("play_match_cta_tapped", {
-            has_zone: !!selected,
-            has_court: !!panelCourtName,
-          });
-          // Map-native flow: skip the wizard modal for steps 1+2,
-          // enter zone-pick mode on the map. Closes any existing
-          // side panel + clears prior court pin so the user gets a
-          // clean canvas.
-          setSelected(null);
-          setPanelCourtName(null);
-          setPlayZoneId(null);
-          setPlayMode("zone");
-        }}
-        aria-label="Play Match"
-        style={Object.assign(
-          {
+        <div
+          onClick={function(){
+            track("play_match_cta_tapped", {
+              has_zone: !!selected,
+              has_court: !!panelCourtName,
+            });
+          }}
+          style={{
             position:"absolute",
-            left:"50%",
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + " + (isMobile ? 24 : 32) + "px)",
-            transform:"translateX(-50%)",
-            zIndex: 550,
-            border: "none",
-            background: mapDark ? "#fff" : "#14110f",
-            color: mapDark ? "#14110f" : "#fff",
-            fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, sans-serif",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "transform 0.12s ease, box-shadow 0.18s ease",
-          },
-          isMobile
-            ? {
-                // Mobile bevelled rectangle — user feedback: 'make a
-                // rectangle with bevelled edges. and bring back the
-                // play match with the old font style'. Soft rounded
-                // corners (16px) instead of a full pill (999); the
-                // PLAY/MATCH stacked typography from the desktop
-                // circle is reused inside, just at a slightly tighter
-                // scale. Lighter footprint than the old 114px circle
-                // but more substance than the prior thin pill.
-                height: 58,
-                padding: "0 26px",
-                borderRadius: 14,
-                flexDirection: "column",
-                justifyContent: "center",
-                gap: 0,
-                boxShadow:
-                  "0 8px 22px rgba(20,18,17,0.32), " +
-                  "0 2px 4px rgba(20,18,17,0.18)",
-              }
-            : {
-                // Desktop iconic circle — keeps the brand-y hero
-                // treatment with PLAY / MATCH stacked + crossed
-                // rackets. There's plenty of canvas at desktop
-                // sizes for the bigger statement.
-                width: 114, height: 114,
-                borderRadius: "50%",
-                flexDirection: "column",
-                justifyContent: "flex-end",
-                paddingBottom: 22,
-                paddingTop: 18,
-                gap: 0,
-                boxShadow:
-                  "0 14px 32px rgba(20,18,17,0.36), " +
-                  "0 4px 8px rgba(20,18,17,0.22)",
-              }
-        )}
-        onMouseDown={function(e){
-          e.currentTarget.style.transform = "translateX(-50%) scale(0.95)";
-        }}
-        onMouseUp={function(e){
-          e.currentTarget.style.transform = "translateX(-50%)";
-        }}
-        onMouseLeave={function(e){
-          e.currentTarget.style.transform = "translateX(-50%)";
-        }}>
-        {isMobile ? (
-          // Mobile: PLAY/MATCH stacked — same iconic typography as the
-          // desktop circle, just at a slightly tighter scale to fit
-          // the 64px-tall rectangle. User feedback: 'bring back the
-          // play match with the old font style'.
-          <>
-            <span style={{
-              fontSize: 17, fontWeight: 900,
-              letterSpacing: "0.10em", lineHeight: 1,
-            }}>PLAY</span>
-            <span style={{
-              fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.20em", lineHeight: 1,
-              opacity: 0.72, marginTop: 3,
-            }}>MATCH</span>
-          </>
-        ) : (
-          <>
-            <span style={{
-              fontSize: 19, fontWeight: 900,
-              letterSpacing: "0.10em", lineHeight: 1,
-            }}>PLAY</span>
-            <span style={{
-              fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.20em", lineHeight: 1,
-              opacity: 0.72, marginTop: 3,
-            }}>MATCH</span>
-            {/* Crossed-rackets glyph — desktop only. Per CLAUDE.md
-                icon rule: SVG line-art, stroke currentColor. */}
-            <svg
-              width="30" height="30" viewBox="0 0 30 30"
-              fill="none" stroke="currentColor"
-              strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-              aria-hidden="true"
-              style={{ marginTop: 4, opacity: 0.92 }}>
-              <g transform="rotate(-45 8 8)">
-                <ellipse cx="8" cy="8" rx="5" ry="3.6"/>
-                <line x1="8" y1="3.6" x2="8" y2="12.4" opacity="0.55"/>
-                <line x1="3.4" y1="8" x2="12.6" y2="8" opacity="0.55"/>
-              </g>
-              <line x1="11.3" y1="11.3" x2="25.5" y2="25.5"/>
-              <g transform="rotate(45 22 8)">
-                <ellipse cx="22" cy="8" rx="5" ry="3.6"/>
-                <line x1="22" y1="3.6" x2="22" y2="12.4" opacity="0.55"/>
-                <line x1="17.4" y1="8" x2="26.6" y2="8" opacity="0.55"/>
-              </g>
-              <line x1="18.7" y1="11.3" x2="4.5" y2="25.5"/>
-            </svg>
-          </>
-        )}
-      </button>
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + " + (isMobile ? 24 : 40) + "px)",
+            left: 0, right: 0,
+            zIndex: 540,
+            pointerEvents: "none",
+          }}>
+          <div className="fade-up" style={{
+            maxWidth: 720,
+            margin:"0 auto",
+            padding: isMobile ? "0 14px" : "0 22px",
+            textAlign:"center",
+          }}>
+            <div style={{
+              fontSize: isMobile ? 30 : 40, fontWeight: 900,
+              letterSpacing: "0.02em",
+              lineHeight: 1.05,
+              textTransform: "uppercase",
+              color: mapDark ? "#ffffff" : "#14110f",
+              textShadow: mapDark
+                ? "0 2px 16px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)"
+                : "0 2px 16px rgba(255,255,255,0.55), 0 1px 2px rgba(255,255,255,0.45)",
+              fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+            }}>
+              Tap a zone to play
+            </div>
+          </div>
+        </div>
       )}
 
       <CourtInfoCard t={t} court={selectedCourt}
