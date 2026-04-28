@@ -176,6 +176,12 @@ export default function LeafletMap({
   // Court cluster group is held in a ref so the showCourts toggle can
   // add/remove the whole layer without rebuilding markers each flip.
   var courtClusterRef = useRef(null);
+  // Markers grouped by zone id so the "selected zone hides other-zone
+  // courts" effect can add/remove them from the cluster without
+  // rebuilding the whole layer. User feedback (web): 'when picking
+  // courts... the courts that fall in the other zones are still
+  // visible. can you hide those?'
+  var courtMarkersByZoneRef = useRef({});
   // Solo highlight marker shown when focusedCourtName is set —
   // cluster hides, this single marker takes over.
   var soloMarkerRef = useRef(null);
@@ -428,6 +434,12 @@ export default function LeafletMap({
         if(courtSelectRef.current) courtSelectRef.current(c);
       });
       clusterGroup.addLayer(m);
+      // Index by zone for the "selected zone hides other zones'
+      // courts" effect below.
+      if(c.zone){
+        if(!courtMarkersByZoneRef.current[c.zone]) courtMarkersByZoneRef.current[c.zone] = [];
+        courtMarkersByZoneRef.current[c.zone].push(m);
+      }
     });
     courtClusterRef.current = clusterGroup;
     if(showCourts) map.addLayer(clusterGroup);
@@ -535,6 +547,24 @@ export default function LeafletMap({
       if(!map.hasLayer(cluster)) map.addLayer(cluster);
     } else {
       if(map.hasLayer(cluster)) map.removeLayer(cluster);
+    }
+    // When a zone is selected (default mode), hide courts that
+    // belong to OTHER zones — only the picked zone's courts remain
+    // tappable. Restores all courts to the cluster when nothing is
+    // selected. User feedback: 'when picking courts... the courts
+    // that fall in the other zones are still visible. can you hide
+    // those?'
+    if(showCluster){
+      var byZone = courtMarkersByZoneRef.current || {};
+      Object.keys(byZone).forEach(function(zoneId){
+        var markers = byZone[zoneId] || [];
+        var shouldShow = !selected || zoneId === selected;
+        markers.forEach(function(mk){
+          var has = cluster.hasLayer(mk);
+          if(shouldShow && !has) cluster.addLayer(mk);
+          else if(!shouldShow && has) cluster.removeLayer(mk);
+        });
+      });
     }
     // data-court-focus drives the CSS dim rule in providers.jsx —
     // when a side-panel court is pinned, every cluster child marker
@@ -681,7 +711,7 @@ export default function LeafletMap({
         } catch(_){}
       }
     }
-  },[showCourts, focusedCourtName, playMode, playZoneId, playCourtName]);
+  },[showCourts, focusedCourtName, playMode, playZoneId, playCourtName, selected]);
 
   // Reflect play-mode on the leaflet-container so CSS in providers
   // can blur+dim the tile pane. Also auto-fit to all zones on
