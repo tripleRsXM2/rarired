@@ -114,6 +114,20 @@ export default function Providers({ t, theme, children }){
         "filter:blur(1.75px);" +
         "transition:filter 0.35s ease}",
 
+      // Court focus dim — when a court is pinned in the side panel
+      // (data-court-focus='true'), every cluster child + cluster
+      // bubble fades to ~35% opacity so the solo highlight marker
+      // (cs-court-solo, full opacity, sits on top) reads as the
+      // focal point. Replaces the previous behaviour of hiding the
+      // others entirely. User feedback: 'instead of hiding the
+      // others, can we grey and make them less noticeable'.
+      ".leaflet-container[data-court-focus='true'] .cs-court-cluster," +
+        ".leaflet-container[data-court-focus='true'] .leaflet-marker-icon:not(.cs-court-solo):not(.cs-zone-centroid){" +
+        "opacity:0.35;" +
+        "transition:opacity 0.25s ease}",
+      ".leaflet-container[data-court-focus='true'] .cs-court-solo{" +
+        "opacity:1}",
+
       // Map-native Play Match — court markers in step 2 use a 4-way
       // diagonal-offset placement so labels don't stack on top of
       // each other in dense clusters. Each marker is a 140×80 box

@@ -514,8 +514,13 @@ export default function LeafletMap({
     var inPlayCourt   = playMode === "court" && !!playZoneId;
     var inPlayZone    = playMode === "zone";
     var inPlayPlayers = playMode === "players" && !!playCourtName;
-    // Cluster only shows in default mode (no focus, not in play).
-    var showCluster = showCourts && !inFocus && !inPlayCourt && !inPlayZone && !inPlayPlayers;
+    // Cluster stays visible during side-panel court focus (user
+    // feedback: 'instead of hiding the others, can we grey and make
+    // them less noticeable'). Dimming is done via CSS — see the
+    // data-court-focus attribute set below + providers.jsx rule.
+    // Still hidden during play-mode flows since those have their own
+    // dedicated court rendering.
+    var showCluster = showCourts && !inPlayCourt && !inPlayZone && !inPlayPlayers;
     // Solo focus marker — visible when in side-panel focus mode OR
     // when in the map-native players step (where we want exactly
     // ONE marker on the picked court, anchoring the venue).
@@ -531,6 +536,14 @@ export default function LeafletMap({
     } else {
       if(map.hasLayer(cluster)) map.removeLayer(cluster);
     }
+    // data-court-focus drives the CSS dim rule in providers.jsx —
+    // when a side-panel court is pinned, every cluster child marker
+    // fades to ~35% opacity so the picked one (rendered as the solo
+    // marker on top, full opacity) reads as the focal point while
+    // surrounding venues stay legible for spatial context.
+    var container = map.getContainer();
+    if(inFocus) container.setAttribute("data-court-focus", "true");
+    else        container.removeAttribute("data-court-focus");
 
     // Solo highlight marker — full-opacity court icon with an accent
     // ring so it pops as "the pinned one". Reuses COURT_SVG to keep
