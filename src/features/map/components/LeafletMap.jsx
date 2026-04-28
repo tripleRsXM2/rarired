@@ -399,20 +399,25 @@ export default function LeafletMap({
         });
       },
     });
+    // Mobile bumps the visible white dot + the hit box ~+10% per user
+    // feedback: 'increase the white circles by 10%. sometimes when
+    // zooming in, its hard to press'. 14→16 visible, 26→29 hit box.
+    var courtDotPx = isMobile ? 16 : 14;
+    var courtHitPx = isMobile ? 29 : 26;
+    var courtHitAnchor = Math.round(courtHitPx / 2);
     COURTS.forEach(function(c){
-      // Default court marker — minimalist solid white dot. The
-      // visible dot is 14px but the icon (hit) box is 26px so the
-      // tap target is comfortable on mobile (small dots were hard
-      // to hit). Soft shadow + hairline ring keep it readable on
-      // both light + dark basemaps.
+      // Default court marker — minimalist solid white dot. The visible
+      // dot is sized just above the eye and the icon (hit) box is
+      // a comfortable tap target. Soft shadow + hairline ring keep
+      // it readable on both light + dark basemaps.
       var html =
-        '<div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center">' +
-          '<div style="box-sizing:border-box;width:14px;height:14px;border-radius:50%;background:#fff;' +
+        '<div style="width:' + courtHitPx + 'px;height:' + courtHitPx + 'px;display:flex;align-items:center;justify-content:center">' +
+          '<div style="box-sizing:border-box;width:' + courtDotPx + 'px;height:' + courtDotPx + 'px;border-radius:50%;background:#fff;' +
             'box-shadow:0 1px 3px rgba(0,0,0,0.28),0 0 0 1px rgba(20,18,17,0.18);' +
             'cursor:pointer"></div>' +
         '</div>';
       var m = L.marker([c.lat, c.lng], {
-        icon: L.divIcon({ className: "", html: html, iconSize: [26,26], iconAnchor: [13,13] }),
+        icon: L.divIcon({ className: "", html: html, iconSize: [courtHitPx, courtHitPx], iconAnchor: [courtHitAnchor, courtHitAnchor] }),
         zIndexOffset: 1000,
       });
       m.bindTooltip(
@@ -546,14 +551,18 @@ export default function LeafletMap({
         // colour swap isn't needed — the size + the fact that it
         // stands alone is enough signal. Keeps the visual system
         // cohesive (everything is a white dot).
+        // Mobile +10% bump matches the default-marker treatment.
+        var soloDotPx = isMobile ? 20 : 18;
+        var soloHitPx = isMobile ? 33 : 30;
+        var soloAnchor = Math.round(soloHitPx / 2);
         var html =
-          '<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center">' +
-            '<div style="box-sizing:border-box;width:18px;height:18px;border-radius:50%;background:#fff;' +
+          '<div style="width:' + soloHitPx + 'px;height:' + soloHitPx + 'px;display:flex;align-items:center;justify-content:center">' +
+            '<div style="box-sizing:border-box;width:' + soloDotPx + 'px;height:' + soloDotPx + 'px;border-radius:50%;background:#fff;' +
               'box-shadow:0 2px 6px rgba(0,0,0,0.32),0 0 0 1px rgba(20,18,17,0.22);' +
               'cursor:pointer"></div>' +
           '</div>';
         var m = L.marker([c.lat, c.lng], {
-          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[30,30], iconAnchor:[15,15] }),
+          icon: L.divIcon({ className:"cs-court-solo", html: html, iconSize:[soloHitPx, soloHitPx], iconAnchor:[soloAnchor, soloAnchor] }),
           zIndexOffset: 2000,
           interactive: true,
         });
@@ -757,15 +766,23 @@ export default function LeafletMap({
         return;
       }
       // Default mode (no play flow active)
+      // Mobile-only: drop the hard coloured outline on un-selected
+      // zones. User feedback: 'i want to test the map without the
+      // hard coloured outlined lines surrounding the zones. Maybe
+      // just make them the transparent colour'. Selection still
+      // gets a stroke so the picked zone has visible commitment;
+      // hover doesn't apply on mobile so it's a no-op.
       if(isSel){
         layer.setStyle({ color: z.color, weight: 3, opacity: 1, fillColor: z.color, fillOpacity: 0.62 });
       } else if(isHover){
         layer.setStyle({ color: z.color, weight: 2.5, opacity: 1, fillColor: z.color, fillOpacity: 0.6 });
+      } else if(isMobile){
+        layer.setStyle({ color: z.color, weight: 0, opacity: 0, fillColor: z.color, fillOpacity: 0.42 });
       } else {
         layer.setStyle({ color: z.color, weight: 2, opacity: 0.9, fillColor: z.color, fillOpacity: 0.42 });
       }
     });
-  },[hovered, selected, playMode, playZoneId]);
+  },[hovered, selected, playMode, playZoneId, isMobile]);
 
   // Reframe the map when the selected zone changes (default mode
   // only — Play Match flow owns its own framing). Three cases:
