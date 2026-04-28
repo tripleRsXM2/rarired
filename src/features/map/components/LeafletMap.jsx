@@ -763,6 +763,23 @@ export default function LeafletMap({
         });
         return;
       }
+      // Default mode WITH a pinned selection: lock focus on the picked
+      // zone so the others fade to a hairline. Same visual lock-in the
+      // old FAB-driven 'court' play mode produced — user feedback was
+      // that they liked the other zones disappearing when one was
+      // selected on web. Mobile is unaffected because the side panel
+      // covers the map entirely once selected is set.
+      if(playMode === "off" && selected){
+        var isSelHere = id === selected;
+        layer.setStyle({
+          color: z.color,
+          weight: isSelHere ? 3 : 1,
+          opacity: isSelHere ? 1 : 0.18,
+          fillColor: z.color,
+          fillOpacity: isSelHere ? 0.62 : 0.05,
+        });
+        return;
+      }
       // Play mode ZONE: every zone is interactive but slightly dimmed
       // (compared to default) so the user reads "pick one of these".
       // Hovered zone gets a subtle lift.
