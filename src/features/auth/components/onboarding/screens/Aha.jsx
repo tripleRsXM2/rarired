@@ -1,28 +1,39 @@
 // Aha — final screen showing real local players matched to the user's
-// zone + level. Uses fetchPlayersInZone (RLS-safe — drops to empty for
-// unauthenticated viewers and anyway the user is signed-in by this point).
+// zone. Uses fetchPlayersInZone — same RPC the Map tab's zone panel uses
+// (RLS lets logged-in users select profiles where home_zone matches).
+// We pass [auth.authUser.id] as excludeIds so the user's own profile
+// doesn't appear in their own "players near you" list — that was a
+// real bug in the previous build (count showed "1 player" with the
+// user's own card).
 //
-// On the final CTA we call onFinish() which writes the final profile patch
-// + sets the cs-onb-done flag + closes the flow.
+// On the final CTAs we call onFinish() / onSkip() which write the final
+// profile patch + set the cs-onb-done flag + close the flow. Both
+// CTAs now share the same handler so "I'll explore on my own" is
+// never a dead button.
 import { useEffect, useState } from "react";
 import { PrimaryButton, GhostButton, ScreenIn } from "../atoms.jsx";
 import { fetchPlayersInZone } from "../../../../map/services/mapService.js";
 import { ZONE_BY_ID } from "../../../../map/data/zones.js";
 import { avColor, initials as avInitials } from "../../../../../lib/utils/avatar.js";
 
-export default function Aha({ state, T, onFinish, onSkip, onOpenProfile, busy }) {
+export default function Aha({ state, T, onFinish, onSkip, onOpenProfile, busy, viewerId }) {
   const [players, setPlayers] = useState(null);
   const [revealed, setRevealed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!state.zone) { setPlayers([]); return; }
-    fetchPlayersInZone(state.zone, 6, []).then((r) => {
+    var exclude = viewerId ? [viewerId] : [];
+    fetchPlayersInZone(state.zone, 6, exclude).then((r) => {
       if (cancelled) return;
-      setPlayers((r && r.data) || []);
+      // Belt-and-braces: also filter client-side in case RLS lets the
+      // viewer's own row through (older sessions, race conditions).
+      var rows = (r && r.data) || [];
+      if (viewerId) rows = rows.filter(function(p){ return p && p.id !== viewerId; });
+      setPlayers(rows);
     }).catch(() => { if (!cancelled) setPlayers([]); });
     return () => { cancelled = true; };
-  }, [state.zone]);
+  }, [state.zone, viewerId]);
 
   useEffect(() => {
     const t = setTimeout(() => setRevealed(true), 250);

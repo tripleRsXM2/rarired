@@ -673,39 +673,44 @@ export default function App(){
   }
 
   // ── New 9-screen onboarding experience for logged-out users ───────────
-  // Renders in place of the regular logged-out shell. Mounts only when:
-  //   • Auth has initialized AND
-  //   • There is no signed-in user AND
-  //   • The user is on the root home tab (don't override deep-links to
-  //     specific tabs — those have their own auth-required behavior).
-  // Returning users (cs-onb-done flag set) skip straight to a SignIn-only
-  // path; OnboardingFlow handles that internally.
-  // The legacy AuthModal stays mounted in the main shell for in-session
-  // requireAuth() triggers, so this branch only owns the launch experience.
+  // Renders in place of the regular logged-out shell. Mounts when:
+  //   • Auth has initialized
+  //   • Not in an invite deep-link
+  //   • Not yet completed (cs-onb-done is unset)
+  //   • EITHER the user is logged out (first visit / returning sign-out)
+  //     OR they've already started the new flow this device (cs-onb-started)
+  //
+  // The "started" guard matters because Supabase's signUp call sets a
+  // session immediately (when email-confirmation is disabled at the
+  // project level). Without the guard, the SIGNED_IN event flips
+  // auth.authUser truthy mid-flow, the gate goes false, and
+  // OnboardingFlow unmounts before the user has answered Age / Level /
+  // Zone / Courts / Availability — leaving Settings empty. With the
+  // guard, the flow stays mounted across the auth flip and persists
+  // each subsequent screen incrementally to the real profile row.
+  //
+  // Existing logged-in users (no cs-onb-started flag) bypass this branch
+  // entirely — they shouldn't be force-walked through onboarding.
+  //
+  // Tab gate intentionally REMOVED — onboarding is the gate before any
+  // protected feature. Logged-out users landing on /map, /people, etc.,
+  // get the same experience as someone who landed on /home. After they
+  // finish, onComplete() navigates to /home so they land in the feed.
   var [onbDone, setOnbDone] = useState(function(){ return didCompleteOnboarding(); });
-  // Show the new flow when: auth has initialized, no signed-in user,
-  // we're on the root home tab, and we're not in the middle of an
-  // invite-deep-link. Returning users (onbDone === true) get a
-  // SignIn-only variant via forceSignIn — they shouldn't re-walk the
-  // 9-screen questionnaire.
-  // Returning users (onbDone) who hit a signed-out state should still
-  // see the SignIn-only variant of the flow — that's what `forceSignIn`
-  // does inside OnboardingFlow. The gate's `!onbDone` clause means
-  // first-timers exit the launch experience the moment finishOnboarding
-  // sets the flag (otherwise an email-confirmation-required project
-  // would re-render the Aha screen on a loop because !auth.authUser
-  // stays true even after onComplete fires).
-  var showOnboardingFlow = !auth.authUser
-    && auth.authInitialized
+  function hasOnboardingStarted(){
+    try { return localStorage.getItem("cs-onb-started") === "1"; }
+    catch (_) { return false; }
+  }
+  var showOnboardingFlow = auth.authInitialized
     && !invitePath
-    && tab === "home"
-    && !onbDone;
+    && !onbDone
+    && (!auth.authUser || hasOnboardingStarted());
   // After a returning user signs out, onbDone is still set in localStorage
-  // but they're not authenticated — funnel them to the SignIn-only variant.
+  // but they're not authenticated — funnel them to the SignIn-only variant
+  // (forceSignIn={true}) regardless of which tab they're on.
   var showReturningSignIn = !auth.authUser
     && auth.authInitialized
     && !invitePath
-    && tab === "home"
     && onbDone;
   if (showOnboardingFlow || showReturningSignIn) {
     return (
@@ -721,10 +726,12 @@ export default function App(){
             // land in their actual profile).
             navigate("/profile/" + uid);
           }}
+          refreshProfile={currentUser.refreshProfileUI}
           onComplete={function(){
             setOnbDone(true);
             // Belt-and-braces: ensure the URL is /home so the next
-            // render of the main shell lands on the feed.
+            // render of the main shell lands on the feed (the user
+            // may have entered the flow via /map, /people, etc.).
             navigate("/home", { replace: true });
           }}
         />

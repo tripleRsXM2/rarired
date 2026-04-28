@@ -63,6 +63,15 @@ const STEPS = ["welcome", "name", "email", "age", "level", "intent", "zone", "co
 const PROGRESS_STEPS = ["name", "email", "age", "level", "intent", "zone", "courts", "avail"];
 const STORAGE_KEY = "cs-onb";
 const DONE_KEY    = "cs-onb-done";
+// User-started flag — set the moment they tap "Get started" on Welcome.
+// App.jsx's gate uses this to keep the flow mounted across the
+// signUp → SIGNED_IN re-render (auth.authUser flips truthy mid-flow).
+// Without this guard, a Supabase project with email-confirmation
+// disabled would unmount the flow at EmailPassword's success and
+// leave the user in the half-onboarded main shell with default
+// profile values. Stays set until cs-onb-done is set OR the user
+// explicitly bails (we don't currently have a cancel path).
+const STARTED_KEY = "cs-onb-started";
 
 const INITIAL_STATE = {
   first: "", last: "",
@@ -115,7 +124,7 @@ function ensureFonts() {
   }
 }
 
-export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, onOpenProfile }) {
+export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, onOpenProfile, refreshProfile }) {
   // The auth controller is owned by App.jsx; it's passed in here so we
   // share one Supabase subscription / one set of authStep state. The
   // shape we use:
@@ -163,8 +172,33 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   // We rely on that — no need to re-load here. Each screen's persistPatch
   // call writes through to the same row regardless.
 
+  // The Name screen runs BEFORE EmailPassword (i.e. before the user is
+  // authed) so its persistPatch is a no-op. The moment SIGNED_IN flips
+  // auth.authUser truthy, flush the collected name to the profile row
+  // so the Settings screen reflects what the user typed. Best-effort —
+  // failures don't block the flow; finishOnboarding's final patch will
+  // re-attempt. Runs once per session because the dep array tracks
+  // auth.authUser.id, which only changes on sign-in / sign-out.
+  const flushedRef = useRef(false);
+  useEffect(() => {
+    if (!auth.authUser || !auth.authUser.id) { flushedRef.current = false; return; }
+    if (flushedRef.current) return;
+    flushedRef.current = true;
+    const fullName = `${(state.first || "").trim()} ${(state.last || "").trim()}`.trim();
+    if (!fullName) return;
+    const init = avInitials(fullName);
+    upsertProfile({ id: auth.authUser.id, name: fullName, avatar: init }).catch(() => {});
+  }, [auth.authUser && auth.authUser.id, state.first, state.last]);
+
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
-  const next = () => setStepIdx((i) => Math.min(STEPS.length - 1, i + 1));
+  const next = () => {
+    // First time we leave Welcome → mark the flow as in-progress so
+    // App.jsx's gate keeps us mounted across the SIGNED_IN flip after
+    // EmailPassword's signUp resolves. Idempotent — safe to call on
+    // every advance; we only need it set once.
+    try { localStorage.setItem(STARTED_KEY, "1"); } catch (_) {}
+    setStepIdx((i) => Math.min(STEPS.length - 1, i + 1));
+  };
   const back = () => setStepIdx((i) => Math.max(0, i - 1));
 
   // After certain screens, persist a tiny patch to profiles. Best-effort —
@@ -196,15 +230,29 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   async function advanceFromAvail() { await persistPatch({ availability: availChipsToProfileShape(state.avail) }); next(); }
 
   async function finishOnboarding() {
+    // Bail-safe path: if we somehow reached the finish CTA without a
+    // signed-in user (email-confirmation-required project, browser
+    // wiped session, etc.) we still flip the done flag + call onComplete
+    // so the CTA is never a dead button. Final profile write is skipped
+    // because there's no row to write to — the user can fill values via
+    // Settings later.
     if (!auth.authUser) {
-      // Shouldn't happen — EmailPassword step gated; bail safely.
-      try { localStorage.setItem(DONE_KEY, "1"); } catch (_) {}
+      try {
+        localStorage.setItem(DONE_KEY, "1");
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STARTED_KEY);
+      } catch (_) {}
       if (onComplete) onComplete();
       return;
     }
     setBusy(true);
     const fullName = `${(state.first || "").trim()} ${(state.last || "").trim()}`.trim();
     const init = avInitials(fullName || auth.authUser.email || "?");
+    // Comprehensive final patch — every onboarding field is included
+    // so a user who skipped any earlier persistPatch (e.g. because
+    // signup hadn't completed yet) still gets every field saved here.
+    // Empty fields are omitted so we don't blank out values that were
+    // populated by an earlier persistPatch call.
     const patch = {
       id: auth.authUser.id,
       ...(fullName ? { name: fullName } : {}),
@@ -216,14 +264,25 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
       ...(state.avail  && state.avail.length  ? { availability:  availChipsToProfileShape(state.avail) } : {}),
     };
     try {
-      await upsertProfile(patch);
+      const r = await upsertProfile(patch);
+      if (r && r.error) {
+        console.warn("[OnboardingFlow] final persist returned error:", r.error.message);
+      }
     } catch (e) {
-      console.warn("[OnboardingFlow] final persist failed:", e && e.message);
+      console.warn("[OnboardingFlow] final persist threw:", e && e.message);
+    }
+    // Refresh in-memory profile state so Settings reflects what the
+    // user just typed. Without this, useCurrentUser.profile still
+    // holds the bootstrap defaults written when SIGNED_IN fired
+    // (loadProfile created a defaults row because the user was new).
+    if (refreshProfile && auth.authUser && auth.authUser.id) {
+      try { await refreshProfile(auth.authUser.id); } catch (_) {}
     }
     setBusy(false);
     try {
       localStorage.setItem(DONE_KEY, "1");
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STARTED_KEY);
     } catch (_) {}
     if (onComplete) onComplete();
   }
@@ -242,10 +301,10 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
     if (stepName === "zone")    return <Zone    {...props} next={advanceFromZone} />;
     if (stepName === "courts")  return <Courts  {...props} next={advanceFromCourts} />;
     if (stepName === "avail")   return <Availability {...props} next={advanceFromAvail} />;
-    if (stepName === "aha")     return <Aha state={state} T={T} busy={busy} onFinish={finishOnboarding} onSkip={finishOnboarding} onOpenProfile={onOpenProfile} />;
+    if (stepName === "aha")     return <Aha state={state} T={T} busy={busy} onFinish={finishOnboarding} onSkip={finishOnboarding} onOpenProfile={onOpenProfile} viewerId={auth.authUser && auth.authUser.id} />;
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepIdx, state, busy]);
+  }, [stepIdx, state, busy, auth.authUser && auth.authUser.id]);
 
   // Sign-in path takes over the whole frame.
   if (showSignIn) {
