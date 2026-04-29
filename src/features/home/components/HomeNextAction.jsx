@@ -133,28 +133,38 @@ function UrgencyLine({ t, color, label, verb, onClick }) {
   );
 }
 
-// ── Primary CTA — pill, generous, single accent moment ──────────────────────
+// ── Primary CTA — text-link with arrow, no box ─────────────────────────────
+//
+// Design pass: dropped the filled pill in line with the Compete hub
+// no-boxes treatment. The CTA reads as a calm text-link with an
+// inline → suffix — emphasis comes from the arrow + uppercase weight,
+// not a filled background. 44px tap target preserved via padding.
 
 function PrimaryCTA({ t, label, onClick }) {
   return (
     <button
       onClick={onClick}
       style={{
-        background: t.text,
-        color: t.bg,
-        border: "none",
-        borderRadius: 10,
-        padding: "16px 28px",
-        fontSize: 14,
-        fontWeight: 700,
+        alignSelf:     "flex-start",
+        minHeight:     44,
+        padding:       "12px 4px",
+        background:    "transparent",
+        border:        "none",
+        color:         t.text,
+        fontSize:      14,
+        fontWeight:    700,
         letterSpacing: "0.04em",
         textTransform: "uppercase",
-        cursor: "pointer",
-        transition: "opacity 0.15s",
+        cursor:        "pointer",
+        display:       "inline-flex",
+        alignItems:    "center",
+        gap:           8,
+        transition:    "opacity 0.15s",
       }}
-      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
       onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
       {label}
+      <span style={{ fontSize: 16, lineHeight: 1, fontWeight: 800 }}>→</span>
     </button>
   );
 }

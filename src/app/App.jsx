@@ -792,7 +792,16 @@ export default function App(){
                 stretches edge-to-edge so the icons distribute
                 evenly across any mobile viewport. */}
             <div style={{width:"100%",display:"flex",padding:"6px 0 calc(6px + env(safe-area-inset-bottom))"}}>
-              {TABS.map(function(tb){
+              {TABS.filter(function(tb){
+                // Admin tab is gated to admin profiles only — non-admins
+                // would land on the "Not found" page anyway, so the icon
+                // shouldn't tease an inaccessible surface. Mirrors the
+                // is_admin check that gates the admin tab content below.
+                if (tb.id === "admin") {
+                  return !!(currentUser && currentUser.profile && currentUser.profile.is_admin);
+                }
+                return true;
+              }).map(function(tb){
                 var on=tab===tb.id;
                 var Icon=NAV_ICONS[tb.id];
                 // Instagram-style red badge on the People tab for unread
