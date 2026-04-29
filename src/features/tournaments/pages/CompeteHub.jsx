@@ -247,22 +247,23 @@ export default function CompeteHub({
           onCreateLeague={function () { setShowCreateLeague(true); }}
         />
 
-        {/* Real-data suggestions only. The section hides itself
-            when no items remain (after dismissals). Sits between
-            the Active surface and Explore so it reads as a calm
-            "what next" prompt rather than primary content. Internal
-            UX: collapsible Hide/Show, hairline-separated banner rows,
-            × dismiss per row (persisted to localStorage). */}
-        <SuggestedNextMovesSection
-          t={t}
-          suggestions={visibleSuggestions}
-          profileMap={mergedProfileMap}
-          onRematch={function (targetUser, sourceMatch) {
-            if (openChallenge) openChallenge(targetUser, "rematch", sourceMatch);
-          }}
-          onOpenLeague={goLeague}
-          onDismiss={handleDismissSuggestion}
-        />
+        {/* Suggested-for-you section hidden for now. The data
+            pipeline (buildSuggestions, dismissedKeys, handlers
+            below) is left wired up so re-enabling is a one-line
+            change — un-comment the JSX when we're ready to bring
+            it back. */}
+        {false && (
+          <SuggestedNextMovesSection
+            t={t}
+            suggestions={visibleSuggestions}
+            profileMap={mergedProfileMap}
+            onRematch={function (targetUser, sourceMatch) {
+              if (openChallenge) openChallenge(targetUser, "rematch", sourceMatch);
+            }}
+            onOpenLeague={goLeague}
+            onDismiss={handleDismissSuggestion}
+          />
+        )}
 
         <ExploreCardsSection
           t={t}
