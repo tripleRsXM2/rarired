@@ -95,12 +95,14 @@ export default function MatchupHeader({
           </div>
         </div>
 
-        {/* VS sigil */}
+        {/* VS sigil — minimal, lowercase, no padding so it sits as a
+            thin junction between the two columns rather than a
+            visible block between them. */}
         <div style={{
-          fontSize: 10, fontWeight: 800,
-          letterSpacing: "0.18em", textTransform: "uppercase",
+          fontSize: 11,
+          fontStyle: "italic",
           color: t.textTertiary,
-          padding: "0 4px",
+          letterSpacing: "-0.1px",
         }}>
           vs
         </div>
@@ -150,10 +152,9 @@ export default function MatchupHeader({
         </div>
       </div>
 
-      <div style={{
-        marginTop: 14,
-        borderTop: "1px solid " + t.border,
-      }}/>
+      {/* No divider — the matchup section flows into the scoreboard
+          via the SCOREBOARD eyebrow below. Removing the hairline
+          stops the section reading as a closed-off "box". */}
     </div>
   );
 }

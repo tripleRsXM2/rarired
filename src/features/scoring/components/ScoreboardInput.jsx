@@ -149,16 +149,21 @@ export default function ScoreboardInput({
               placeholder="–"
               onChange={function (e) { setAt(i, who, e.target.value); }}
               style={{
-                padding: "12px 0",
-                textAlign: "center",
-                borderRadius: 8,
-                border: "1px solid " + t.border,
-                background: t.inputBg,
-                color: t.text,
-                fontSize: 22, fontWeight: 700,
-                width: "100%",
+                padding:        "10px 0",
+                textAlign:      "center",
+                borderRadius:   0,
+                border:         "none",
+                borderBottom:   "1px solid " + t.border,
+                background:     "transparent",
+                color:          t.text,
+                fontSize:       22,
+                fontWeight:     700,
+                width:          "100%",
                 fontVariantNumeric: "tabular-nums",
-              }}/>
+                outline:        "none",
+              }}
+              onFocus={function (e) { e.target.style.borderBottomColor = t.text; }}
+              onBlur={function (e)  { e.target.style.borderBottomColor = t.border; }}/>
           );
         })}
         {/* Right rail: only renders on the YOU row (top) — we put the
@@ -171,15 +176,26 @@ export default function ScoreboardInput({
                 onClick={addSet}
                 aria-label="Add set"
                 style={{
-                  alignSelf: "stretch",
-                  background: "transparent",
-                  border: "1px dashed " + t.border,
-                  borderRadius: 8,
-                  color: t.textTertiary,
-                  fontSize: 18, fontWeight: 400,
-                  cursor: "pointer",
-                  padding: 0,
-                  lineHeight: 1,
+                  alignSelf:    "stretch",
+                  background:   "transparent",
+                  border:       "none",
+                  borderBottom: "1px solid " + t.border,
+                  borderRadius: 0,
+                  color:        t.textTertiary,
+                  fontSize:     18,
+                  fontWeight:   400,
+                  cursor:       "pointer",
+                  padding:      0,
+                  lineHeight:   1,
+                  transition:   "color 0.15s, border-bottom-color 0.15s",
+                }}
+                onMouseEnter={function (e) {
+                  e.currentTarget.style.color = t.text;
+                  e.currentTarget.style.borderBottomColor = t.text;
+                }}
+                onMouseLeave={function (e) {
+                  e.currentTarget.style.color = t.textTertiary;
+                  e.currentTarget.style.borderBottomColor = t.border;
                 }}>
                 +
               </button>
@@ -233,16 +249,21 @@ export default function ScoreboardInput({
               placeholder={y === 7 ? "7" : "0–5"}
               onChange={function (e) { setTbAt(i, "you", e.target.value); }}
               style={{
-                padding: "5px 0",
-                textAlign: "center",
-                borderRadius: 5,
-                border: "1px solid " + t.border,
-                background: t.inputBg,
-                color: t.text,
-                fontSize: 12, fontWeight: 600,
-                width: "100%",
+                padding:        "4px 0",
+                textAlign:      "center",
+                borderRadius:   0,
+                border:         "none",
+                borderBottom:   "1px solid " + t.border,
+                background:     "transparent",
+                color:          t.text,
+                fontSize:       12,
+                fontWeight:     600,
+                width:          "100%",
                 fontVariantNumeric: "tabular-nums",
-              }}/>
+                outline:        "none",
+              }}
+              onFocus={function (e) { e.target.style.borderBottomColor = t.text; }}
+              onBlur={function (e)  { e.target.style.borderBottomColor = t.border; }}/>
             <span style={{
               fontSize: 11, color: t.textTertiary,
               textAlign: "center",
@@ -253,16 +274,21 @@ export default function ScoreboardInput({
               placeholder={x === 7 ? "7" : "0–5"}
               onChange={function (e) { setTbAt(i, "them", e.target.value); }}
               style={{
-                padding: "5px 0",
-                textAlign: "center",
-                borderRadius: 5,
-                border: "1px solid " + t.border,
-                background: t.inputBg,
-                color: t.text,
-                fontSize: 12, fontWeight: 600,
-                width: "100%",
+                padding:        "4px 0",
+                textAlign:      "center",
+                borderRadius:   0,
+                border:         "none",
+                borderBottom:   "1px solid " + t.border,
+                background:     "transparent",
+                color:          t.text,
+                fontSize:       12,
+                fontWeight:     600,
+                width:          "100%",
                 fontVariantNumeric: "tabular-nums",
-              }}/>
+                outline:        "none",
+              }}
+              onFocus={function (e) { e.target.style.borderBottomColor = t.text; }}
+              onBlur={function (e)  { e.target.style.borderBottomColor = t.border; }}/>
           </div>
         );
       })}
