@@ -133,21 +133,22 @@ function UrgencyLine({ t, color, label, verb, onClick }) {
   );
 }
 
-// ── Primary CTA — text-link with arrow, no box ─────────────────────────────
+// ── Primary CTA — centered "+ label" text-link, no box ────────────────────
 //
 // Design pass: dropped the filled pill in line with the Compete hub
-// no-boxes treatment. The CTA reads as a calm text-link with an
-// inline → suffix — emphasis comes from the arrow + uppercase weight,
-// not a filled background. 44px tap target preserved via padding.
+// no-boxes treatment. The CTA reads as a calm centered text-link
+// with a "+" prefix — same vocabulary as "+ New challenge" /
+// "+ New league" on the Compete hub. 44px tap target preserved via
+// padding.
 
 function PrimaryCTA({ t, label, onClick }) {
   return (
     <button
       onClick={onClick}
       style={{
-        alignSelf:     "flex-start",
+        alignSelf:     "center",
         minHeight:     44,
-        padding:       "12px 4px",
+        padding:       "12px 6px",
         background:    "transparent",
         border:        "none",
         color:         t.text,
@@ -156,15 +157,11 @@ function PrimaryCTA({ t, label, onClick }) {
         letterSpacing: "0.04em",
         textTransform: "uppercase",
         cursor:        "pointer",
-        display:       "inline-flex",
-        alignItems:    "center",
-        gap:           8,
         transition:    "opacity 0.15s",
       }}
       onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
       onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
-      {label}
-      <span style={{ fontSize: 16, lineHeight: 1, fontWeight: 800 }}>→</span>
+      {"+ " + label}
     </button>
   );
 }
