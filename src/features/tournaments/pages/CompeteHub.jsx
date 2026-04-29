@@ -251,8 +251,8 @@ export default function CompeteHub({
             when no items remain (after dismissals). Sits between
             the Active surface and Explore so it reads as a calm
             "what next" prompt rather than primary content. Internal
-            UX: collapsible Hide/Show, side-arrow carousel between
-            items, × dismiss per card (persisted to localStorage). */}
+            UX: collapsible Hide/Show, hairline-separated banner rows,
+            × dismiss per row (persisted to localStorage). */}
         <SuggestedNextMovesSection
           t={t}
           suggestions={visibleSuggestions}
@@ -295,18 +295,15 @@ export default function CompeteHub({
 }
 
 // ── Empty state ────────────────────────────────────────────────
-// Renders only when the carousel has nothing to show. Same Home-
-// style chrome (radius 14, generous padding, 🎾 motif) the previous
-// ActiveNowSection used. Stays in the inner rail so it doesn't
-// imply the band is broken — the band simply doesn't render when
-// there's nothing active.
+// Renders only when the carousel has nothing to show. Box chrome
+// dropped — the rest of the hub is now box-free, so a card here
+// would shout "broken band" instead of "calm placeholder". The 🎾
+// hero illustration stays (per the design rule's exception for
+// large decorative empty-state motifs).
 function ActiveNowEmpty({ t }) {
   return (
     <div style={{
-      background:   t.bgCard,
-      border:       "1px solid " + t.border,
-      borderRadius: 14,
-      padding:      "40px 24px",
+      padding:      "32px 0 8px",
       textAlign:    "center",
       marginBottom: "clamp(20px, 3vw, 32px)",
     }}>
@@ -321,7 +318,7 @@ function ActiveNowEmpty({ t }) {
         fontSize: 13, color: t.textSecondary,
         lineHeight: 1.6, maxWidth: 280, margin: "0 auto",
       }}>
-        Use the buttons above to start a challenge or a league.
+        Use the buttons below to start a challenge or a league.
       </div>
     </div>
   );

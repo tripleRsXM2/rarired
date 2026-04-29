@@ -1,10 +1,18 @@
 // src/features/tournaments/components/hub/PastCompetitionsSection.jsx
 //
-// Module 13 (Compete hub Slice 1) — collapsible Past competitions
-// section. Lists completed / archived / cancelled leagues. Voided
-// leagues never appear here (filtered out at the useLeagues hook
-// boundary; the shared isPastLifecycle predicate from
-// leagueLifecycle.js does not include 'voided' either).
+// Module 13 (Compete hub) — collapsible Past competitions section.
+// Lists completed / archived / cancelled leagues. Voided leagues
+// never appear here (filtered out at the useLeagues hook boundary;
+// the shared isPastLifecycle predicate from leagueLifecycle.js does
+// not include 'voided' either).
+//
+// Design pass: dropped the outlined row chrome. Each league is now
+// a banner-style row separated by a hairline divider, consistent
+// with the Suggested-for-you and Explore sections. Lifecycle pill
+// stays — it's the one bit of status colour worth keeping because
+// finished / cancelled / archived genuinely differ.
+//
+// Toggle is a quiet text-link (Hide / Show), no outlined button.
 //
 // Responsive behaviour:
 //   - Mobile (<= 640px) starts COLLAPSED. Tapping the header
@@ -56,94 +64,125 @@ export default function PastCompetitionsSection({ t, leagues, onOpenLeague }) {
         label="Past competitions"
         count={rows.length}
         action={
-          <button
+          <ToggleLink
+            t={t}
+            expanded={expanded}
             onClick={function () { setExpanded(function (v) { return !v; }); }}
-            aria-expanded={expanded}
-            style={{
-              padding: "4px 10px",
-              minHeight: 28,
-              background: "transparent",
-              border: "1px solid " + t.border,
-              // Slice 2: gently rounded — keeps the toggle subtle but
-              // visually consistent with the rounded card chrome below.
-              borderRadius: 8,
-              color: t.textSecondary,
-              fontSize: 11, fontWeight: 700,
-              letterSpacing: "0.04em", textTransform: "uppercase",
-              cursor: "pointer",
-            }}>
-            {expanded ? "Hide" : "Show"}
-          </button>
+          />
         }
       />
-      {expanded && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rows.map(function (lg) {
-            return (
-              <PastRow
-                key={lg.id}
-                t={t}
-                league={lg}
-                onClick={function () { onOpenLeague(lg.id); }}
-              />
-            );
-          })}
-        </div>
-      )}
+      {expanded && rows.map(function (lg, idx) {
+        return (
+          <PastRow
+            key={lg.id}
+            t={t}
+            league={lg}
+            onClick={function () { onOpenLeague(lg.id); }}
+            isLast={idx === rows.length - 1}
+          />
+        );
+      })}
     </section>
   );
 }
 
+// ── ToggleLink ───────────────────────────────────────────────────
+// Quiet text-link toggle in the section header — same as the one in
+// SuggestedNextMovesSection. Section actions are calm typography,
+// not buttons.
+function ToggleLink({ t, expanded, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-expanded={expanded}
+      style={{
+        background:    "transparent",
+        border:        "none",
+        padding:       "4px 0 4px 12px",
+        color:         t.textSecondary,
+        fontSize:      10,
+        fontWeight:    800,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        cursor:        "pointer",
+        transition:    "color 0.15s",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
+      onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; }}>
+      {expanded ? "Hide" : "Show"}
+    </button>
+  );
+}
+
 // ── PastRow ────────────────────────────────────────────────────
-// Compact row — past items shouldn't compete visually with active
-// cards. Reuses the same pill chrome / status colours as the
-// LeaguesPanel "Past" rows so the two surfaces feel continuous.
-function PastRow({ t, league, onClick }) {
+// Hairline-separated row. No box, no border, no bgCard. The whole
+// row is the affordance — tap anywhere on it to open the league.
+// Lifecycle pill on the right keeps the one signal that matters:
+// completed vs cancelled vs archived.
+function PastRow({ t, league, onClick, isLast }) {
   var pillTokens = lifecyclePillTokens(league.status);
   var fg = t[pillTokens.fg] || t.textTertiary;
   var bg = t[pillTokens.bg] || t.bgTertiary;
   var label = LIFECYCLE_LABELS[league.status] || league.status;
+  var reason = league.status_reason ? humaniseReason(league.status_reason) : null;
 
   return (
     <button
       onClick={onClick}
+      onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.7"; }}
+      onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
       style={{
-        background: t.bgCard,
-        border: "1px solid " + t.border,
-        borderRadius: 8,
-        padding: "10px 12px",
-        textAlign: "left",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        minHeight: 44,
-        // Slight de-emphasis vs Active now cards. Same opacity as
-        // LeaguesPanel's existing past treatment.
-        opacity: 0.86,
+        width:        "100%",
+        textAlign:    "left",
+        background:   "transparent",
+        border:       "none",
+        borderBottom: isLast ? "none" : "1px solid " + t.border,
+        borderRadius: 0,
+        padding:      "12px 0",
+        cursor:       "pointer",
+        display:      "flex",
+        alignItems:   "center",
+        gap:          12,
+        minHeight:    44,
+        transition:   "opacity 0.15s",
+        font:         "inherit",
+        color:        "inherit",
       }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 13, fontWeight: 700, color: t.text,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          fontSize:      14,
+          fontWeight:    700,
+          color:         t.text,
+          letterSpacing: "-0.2px",
+          lineHeight:    1.25,
+          overflow:      "hidden",
+          textOverflow:  "ellipsis",
+          whiteSpace:    "nowrap",
         }}>
           {league.name}
         </div>
-        {league.status_reason && (
+        {reason && (
           <div style={{
-            fontSize: 10.5, color: t.textTertiary, marginTop: 1,
-            letterSpacing: "0.02em",
+            fontSize:   12,
+            color:      t.textSecondary,
+            marginTop:  2,
+            lineHeight: 1.4,
           }}>
-            {humaniseReason(league.status_reason)}
+            {reason}
           </div>
         )}
       </div>
       <span style={{
-        flexShrink: 0,
-        fontSize: 9, fontWeight: 700, color: fg, background: bg,
-        padding: "3px 8px", borderRadius: 20,
-        letterSpacing: "0.12em", textTransform: "uppercase",
-        whiteSpace: "nowrap",
+        flexShrink:    0,
+        fontSize:      9,
+        fontWeight:    700,
+        color:         fg,
+        background:    bg,
+        padding:       "3px 8px",
+        borderRadius:  20,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        whiteSpace:    "nowrap",
       }}>
         {label}
       </span>
@@ -170,17 +209,16 @@ function humaniseReason(reason) {
 
 // ── Empty state ─────────────────────────────────────────────────
 // Spec asks for a clean empty state per section. Past has its own —
-// kept very compact since it's a low-priority surface.
+// kept very quiet now that the rest of the hub is box-free.
 function PastEmpty({ t }) {
   return (
     <section style={{ marginBottom: HUB_SECTION_MB }}>
       <SectionHeader t={t} label="Past competitions" />
       <div style={{
-        background: t.bgCard,
-        border: "1px solid " + t.border,
-        borderRadius: 10,
-        padding: "14px 16px",
-        fontSize: 12, color: t.textTertiary, lineHeight: 1.5,
+        padding:    "12px 0",
+        fontSize:   12,
+        color:      t.textTertiary,
+        lineHeight: 1.5,
       }}>
         Finished competitions will live here.
       </div>

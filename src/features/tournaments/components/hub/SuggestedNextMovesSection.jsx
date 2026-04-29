@@ -2,82 +2,52 @@
 //
 // Module 13 (Compete hub) — "Suggested for you" section.
 //
-// Renders BELOW the Active now band and Start something CTAs, ABOVE
-// Explore competition types. Surfaces real-data prompts only —
-// rematch a recent opponent, continue an active league. Hidden
-// entirely when no suggestion items remain (after dismissals).
+// Design pass: dropped the outlined card chrome and the side-arrow
+// carousel. Each suggestion is now a banner-style row separated
+// from the next by a hairline divider — reads as integrated content
+// rather than three boxes stacked on top of each other.
 //
-// Three behaviours users can drive:
-//   1. Hide / show toggle in the section header (collapse to just
-//      the eyebrow row when they don't want suggestions in their
-//      face right now). Local component state — refresh resets.
-//   2. Side-arrow carousel between suggestions when there's more
-//      than one. State-swap (not scroll-snap) — the section
-//      shows ONE card at a time with full content; arrows advance.
-//   3. × dismiss per card. Permanently hides that specific
-//      suggestion via localStorage (handled by the parent's
-//      `onDismiss(key)`). The dismissal is keyed to the underlying
-//      entity (matchId / leagueId), so a future suggestion against
-//      a DIFFERENT entity re-surfaces.
+// Behaviours kept from the previous slice:
+//   - Hide / Show toggle in the section header (collapse).
+//   - × dismiss per row (persists to per-user localStorage via the
+//     parent's onDismiss handler — see suggestionDismissals.js).
+//   - Section returns null when no items remain after dismissals,
+//     so everything below reflows up automatically.
 //
-// Visual: subordinate to the dark Active now band — same hairline-
-// bordered light card chrome the rest of the hub uses, with
-// outlined CTAs (no accent fill on action buttons).
+// Behaviours removed:
+//   - The state-swap carousel + side arrows + N-of-M indicator.
+//     With ≤2 active suggestion types in V1 (rematch + continue
+//     league), a vertical stack reads cleaner and matches the
+//     "more like banners" brief.
 
 import { useState } from "react";
 import PlayerAvatar from "../../../../components/ui/PlayerAvatar.jsx";
-import SectionHeader, { HUB_SECTION_MB } from "./SectionHeader.jsx";
+import SectionHeader from "./SectionHeader.jsx";
 
 export default function SuggestedNextMovesSection({
   t,
-  // Array of suggestion items (already filtered against dismissals
-  // by the parent). Each item has { type, key, rematch?, continueLeague? }.
   suggestions,
   profileMap,
   onRematch,        // (opponentProfile, sourceMatch) => void
   onOpenLeague,     // (leagueId) => void
   onDismiss,        // (key) => void  — persists to localStorage in parent
 }) {
-  // Section visibility — when nothing remains after dismissals the
-  // whole block unmounts. No empty-state placeholder here; the
-  // section's whole point is real prompts, and "no prompts" reads
-  // as the user has actioned everything.
+  // Section unmounts entirely when nothing remains. The parent's
+  // section-margin then collapses (no orphan whitespace) and the
+  // rest of the page reflows up — exactly the "section is gone,
+  // everything below comes up" behaviour the brief asks for.
   if (!suggestions || suggestions.length === 0) return null;
 
-  // Expand/collapse — local state, defaults to expanded. Mirrors
-  // PastCompetitionsSection's Hide/Show pattern but inverted
-  // (active suggestions deserve to be visible by default; past is
-  // historical and hides itself).
+  // Local expand/collapse — defaults expanded.
   var [expanded, setExpanded] = useState(true);
 
-  // Carousel index — clamped against the current suggestion count
-  // so a dismissal that removes the active item doesn't strand us
-  // out of range.
-  var [activeIdx, setActiveIdx] = useState(0);
-  var safeIdx = Math.min(Math.max(0, activeIdx), suggestions.length - 1);
-  var hasMany = suggestions.length > 1;
-  var current = suggestions[safeIdx];
-
-  function goPrev() { setActiveIdx(function (i) { return Math.max(0, (i || 0) - 1); }); }
-  function goNext() { setActiveIdx(function (i) { return Math.min(suggestions.length - 1, (i || 0) + 1); }); }
-
-  function handleDismiss(key) {
-    // Adjust the index BEFORE the parent re-renders us with a
-    // shorter list. If we're on the last item, step back by one.
-    if (safeIdx >= suggestions.length - 1 && safeIdx > 0) {
-      setActiveIdx(safeIdx - 1);
-    }
-    if (onDismiss) onDismiss(key);
-  }
-
   return (
-    <section style={{ marginBottom: HUB_SECTION_MB }}>
+    <section style={{ marginBottom: "clamp(20px, 3vw, 32px)" }}>
       <SectionHeader
         t={t}
         label="Suggested for you"
-        count={hasMany ? null : null /* count carried by indicator below when expanded */}
         action={
-          <ToggleBtn
+          <ToggleLink
             t={t}
             expanded={expanded}
             onClick={function () { setExpanded(function (v) { return !v; }); }}
@@ -85,128 +55,104 @@ export default function SuggestedNextMovesSection({
         }
       />
 
-      {expanded && (
-        <div style={{ position: "relative" }}>
-          {/* Indicator + carousel chrome above the card. Only
-              renders when there's more than one suggestion — a
-              single card doesn't need controls. */}
-          {hasMany && (
-            <div style={{
-              display:        "flex",
-              alignItems:     "center",
-              justifyContent: "space-between",
-              marginBottom:   8,
-            }}>
-              <div style={{
-                fontSize:      10,
-                fontWeight:    700,
-                color:         t.textTertiary,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-              }}>
-                {(safeIdx + 1) + " of " + suggestions.length}
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <CarouselArrow t={t} dir="left"  enabled={safeIdx > 0}                       onClick={goPrev} />
-                <CarouselArrow t={t} dir="right" enabled={safeIdx < suggestions.length - 1}  onClick={goNext} />
-              </div>
-            </div>
-          )}
-
-          {/* Single card render — keyed by suggestion key so React
-              tears down + remounts on swap rather than re-using
-              state across different content (avatar busy state etc). */}
-          {current.type === "rematch" && (
-            <RematchCard
-              key={current.key}
+      {expanded && suggestions.map(function (s, idx) {
+        var isLast = idx === suggestions.length - 1;
+        if (s.type === "rematch") {
+          return (
+            <RematchRow
+              key={s.key}
               t={t}
-              rematch={current.rematch}
+              rematch={s.rematch}
               profileMap={profileMap}
               onRematch={onRematch}
-              onDismiss={function () { handleDismiss(current.key); }}
+              onDismiss={function () { onDismiss && onDismiss(s.key); }}
+              isLast={isLast}
             />
-          )}
-          {current.type === "continue_league" && (
-            <ContinueLeagueCard
-              key={current.key}
+          );
+        }
+        if (s.type === "continue_league") {
+          return (
+            <ContinueLeagueRow
+              key={s.key}
               t={t}
-              continueLeague={current.continueLeague}
+              continueLeague={s.continueLeague}
               onOpenLeague={onOpenLeague}
-              onDismiss={function () { handleDismiss(current.key); }}
+              onDismiss={function () { onDismiss && onDismiss(s.key); }}
+              isLast={isLast}
             />
-          )}
-        </div>
-      )}
+          );
+        }
+        return null;
+      })}
     </section>
   );
 }
 
-// ── ToggleBtn ────────────────────────────────────────────────────
-// Small Hide/Show button in the section header. Same chrome as the
-// PastCompetitions toggle for visual consistency.
-function ToggleBtn({ t, expanded, onClick }) {
+// ── ToggleLink ───────────────────────────────────────────────────
+// Quiet text-link toggle in the section header. Lost the outlined
+// button chrome — section actions are calm typography, not buttons.
+function ToggleLink({ t, expanded, onClick }) {
   return (
     <button
       onClick={onClick}
       aria-expanded={expanded}
       style={{
-        padding:        "4px 10px",
-        minHeight:      28,
-        background:     "transparent",
-        border:         "1px solid " + t.border,
-        borderRadius:   8,
-        color:          t.textSecondary,
-        fontSize:       11,
-        fontWeight:     700,
-        letterSpacing:  "0.04em",
-        textTransform:  "uppercase",
-        cursor:         "pointer",
-      }}>
+        background:    "transparent",
+        border:        "none",
+        padding:       "4px 0 4px 12px",
+        color:         t.textSecondary,
+        fontSize:      10,
+        fontWeight:    800,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        cursor:        "pointer",
+        transition:    "color 0.15s",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
+      onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; }}>
       {expanded ? "Hide" : "Show"}
     </button>
   );
 }
 
-// ── CarouselArrow ────────────────────────────────────────────────
-// Compact circular-ish arrow button for the light-chrome carousel.
-// Smaller than the dark band's side-arrows; sits in the section
-// header's indicator row rather than over content.
-function CarouselArrow({ t, dir, enabled, onClick }) {
+// ── ArrowAction ──────────────────────────────────────────────────
+// Inline arrow-action link used by every suggestion row. Reads as a
+// "→" link, not a filled / outlined button. Tap area is generous
+// via padding without growing the visual.
+function ArrowAction({ t, label, busy, onClick }) {
   return (
     <button
-      onClick={enabled ? onClick : undefined}
-      disabled={!enabled}
-      aria-label={dir === "left" ? "Previous suggestion" : "Next suggestion"}
+      onClick={onClick}
+      disabled={busy}
       style={{
-        width:           28, height: 28,
-        background:      "transparent",
-        border:          "1px solid " + t.border,
-        borderRadius:    999,
-        color:           enabled ? t.text : t.textTertiary,
-        cursor:          enabled ? "pointer" : "default",
-        opacity:         enabled ? 1 : 0.4,
-        display:         "inline-flex",
-        alignItems:      "center",
-        justifyContent:  "center",
-        padding:         0,
-      }}>
-      <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-        {dir === "left" ? (
-          <path d="M11 4l-5 5 5 5" stroke="currentColor" strokeWidth="1.6"
-                strokeLinecap="round" strokeLinejoin="round"/>
-        ) : (
-          <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.6"
-                strokeLinecap="round" strokeLinejoin="round"/>
-        )}
-      </svg>
+        flexShrink:    0,
+        background:    "transparent",
+        border:        "none",
+        padding:       "8px 4px",
+        color:         t.text,
+        fontSize:      11.5,
+        fontWeight:    700,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        cursor:        busy ? "default" : "pointer",
+        opacity:       busy ? 0.6 : 1,
+        display:       "inline-flex",
+        alignItems:    "center",
+        gap:           6,
+        transition:    "opacity 0.15s",
+      }}
+      onMouseEnter={function (e) { if (!busy) e.currentTarget.style.opacity = "0.6"; }}
+      onMouseLeave={function (e) { if (!busy) e.currentTarget.style.opacity = "1"; }}>
+      {busy ? "…" : label}
+      {!busy && <span style={{ fontSize: 13, lineHeight: 1 }}>→</span>}
     </button>
   );
 }
 
 // ── DismissBtn ───────────────────────────────────────────────────
-// Tiny × button in the top-right of each card. Clicking removes
-// the suggestion from view permanently (per device, per user).
-// Hit area enlarged via padding without growing the visual.
+// Tiny × at the right of each row. Subtle in default state; lifts
+// to text colour on hover so it's discoverable without competing
+// with the row's title.
 function DismissBtn({ t, onClick }) {
   return (
     <button
@@ -214,17 +160,10 @@ function DismissBtn({ t, onClick }) {
       aria-label="Dismiss suggestion"
       title="Don't show this suggestion again"
       style={{
-        // Absolute top-right corner so the dismiss × never eats
-        // horizontal space away from the title + CTA in the
-        // card's flex row. Hit area enlarged via padding without
-        // growing the visual.
-        position:        "absolute",
-        top:             4,
-        right:           4,
+        flexShrink:      0,
         width:           28, height: 28,
         background:      "transparent",
         border:          "none",
-        borderRadius:    999,
         color:           t.textTertiary,
         cursor:          "pointer",
         padding:         0,
@@ -232,7 +171,6 @@ function DismissBtn({ t, onClick }) {
         alignItems:      "center",
         justifyContent:  "center",
         transition:      "color 0.15s",
-        zIndex:          1,
       }}
       onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
       onMouseLeave={function (e) { e.currentTarget.style.color = t.textTertiary; }}>
@@ -243,8 +181,46 @@ function DismissBtn({ t, onClick }) {
   );
 }
 
-// ── RematchCard ─────────────────────────────────────────────────
-function RematchCard({ t, rematch, profileMap, onRematch, onDismiss }) {
+// ── Row chrome — shared between RematchRow + ContinueLeagueRow ──
+// No card box. Just a flex row with horizontal padding, vertical
+// padding, and a hairline border-bottom (dropped on the last row).
+function rowStyle(t, isLast) {
+  return {
+    display:      "flex",
+    alignItems:   "center",
+    gap:          12,
+    padding:      "12px 0",
+    borderBottom: isLast ? "none" : "1px solid " + t.border,
+  };
+}
+
+function rowTitleStyle(t) {
+  return {
+    fontSize:      14,
+    fontWeight:    700,
+    color:         t.text,
+    letterSpacing: "-0.2px",
+    lineHeight:    1.25,
+    overflow:      "hidden",
+    textOverflow:  "ellipsis",
+    whiteSpace:    "nowrap",
+  };
+}
+
+function rowBodyStyle(t) {
+  return {
+    fontSize:      12,
+    color:         t.textSecondary,
+    marginTop:     2,
+    lineHeight:    1.4,
+    overflow:      "hidden",
+    textOverflow:  "ellipsis",
+    whiteSpace:    "nowrap",
+  };
+}
+
+// ── RematchRow ──────────────────────────────────────────────────
+function RematchRow({ t, rematch, profileMap, onRematch, onDismiss, isLast }) {
   var [busy, setBusy] = useState(false);
 
   var profile = profileMap && profileMap[rematch.opponentId];
@@ -266,76 +242,29 @@ function RematchCard({ t, rematch, profileMap, onRematch, onDismiss }) {
   }
 
   return (
-    <div style={{
-      // position:relative so the dismiss × can absolute-position
-      // to the top-right corner without taking horizontal space
-      // away from the title + CTA. Right-side padding bumped a
-      // touch (32 instead of 14) so the title doesn't bump the ×.
-      position:     "relative",
-      background:   t.bgCard,
-      border:       "1px solid " + t.border,
-      borderRadius: 10,
-      padding:      "12px 32px 12px 14px",
-      display:      "flex",
-      alignItems:   "center",
-      gap:          12,
-    }}>
+    <div style={rowStyle(t, isLast)}>
       <div style={{ flexShrink: 0 }}>
         <PlayerAvatar
           name={targetUser.name}
           avatar={avatarProfile.avatar}
           profile={avatarProfile}
-          size={40}
+          size={32}
         />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 14, fontWeight: 700, color: t.text,
-          letterSpacing: "-0.2px", lineHeight: 1.2,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          Rematch {targetUser.name}
-        </div>
-        <div style={{
-          fontSize: 12, color: t.textSecondary,
-          marginTop: 3, lineHeight: 1.4,
-        }}>
-          You played recently
-        </div>
+        <div style={rowTitleStyle(t)}>Rematch {targetUser.name}</div>
+        <div style={rowBodyStyle(t)}>You played recently</div>
       </div>
 
-      <button
-        onClick={handleClick}
-        disabled={busy}
-        style={{
-          flexShrink:    0,
-          minHeight:     36,
-          padding:       "0 14px",
-          background:    "transparent",
-          color:         t.text,
-          border:        "1px solid " + t.border,
-          borderRadius:  10,
-          fontSize:      11.5,
-          fontWeight:    700,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          cursor:        busy ? "default" : "pointer",
-          opacity:       busy ? 0.6 : 1,
-          transition:    "opacity 0.15s",
-        }}
-        onMouseEnter={function (e) { if (!busy) e.currentTarget.style.opacity = "0.7"; }}
-        onMouseLeave={function (e) { if (!busy) e.currentTarget.style.opacity = "1"; }}>
-        {busy ? "…" : "Challenge"}
-      </button>
-
+      <ArrowAction t={t} label="Challenge" busy={busy} onClick={handleClick} />
       <DismissBtn t={t} onClick={onDismiss} />
     </div>
   );
 }
 
-// ── ContinueLeagueCard ─────────────────────────────────────────
-function ContinueLeagueCard({ t, continueLeague, onOpenLeague, onDismiss }) {
+// ── ContinueLeagueRow ───────────────────────────────────────────
+function ContinueLeagueRow({ t, continueLeague, onOpenLeague, onDismiss, isLast }) {
   var lg      = continueLeague.league;
   var opp     = continueLeague.opponent;
   var oppName = continueLeague.opponentName;
@@ -345,59 +274,17 @@ function ContinueLeagueCard({ t, continueLeague, onOpenLeague, onDismiss }) {
     : "Open your league and keep it moving";
 
   return (
-    <div style={{
-      // position:relative so the dismiss × can absolute-position
-      // to the top-right corner without taking horizontal space
-      // away from the title + CTA. Right-side padding bumped a
-      // touch (32 instead of 14) so the title doesn't bump the ×.
-      position:     "relative",
-      background:   t.bgCard,
-      border:       "1px solid " + t.border,
-      borderRadius: 10,
-      padding:      "12px 32px 12px 14px",
-      display:      "flex",
-      alignItems:   "center",
-      gap:          12,
-    }}>
+    <div style={rowStyle(t, isLast)}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 14, fontWeight: 700, color: t.text,
-          letterSpacing: "-0.2px", lineHeight: 1.2,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          Continue {lg.name || "your league"}
-        </div>
-        <div style={{
-          fontSize: 12, color: t.textSecondary,
-          marginTop: 3, lineHeight: 1.4,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {bodyLine}
-        </div>
+        <div style={rowTitleStyle(t)}>Continue {lg.name || "your league"}</div>
+        <div style={rowBodyStyle(t)}>{bodyLine}</div>
       </div>
 
-      <button
+      <ArrowAction
+        t={t}
+        label="Open league"
         onClick={function () { onOpenLeague(lg.id); }}
-        style={{
-          flexShrink:    0,
-          minHeight:     36,
-          padding:       "0 14px",
-          background:    "transparent",
-          color:         t.text,
-          border:        "1px solid " + t.border,
-          borderRadius:  10,
-          fontSize:      11.5,
-          fontWeight:    700,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          cursor:        "pointer",
-          transition:    "opacity 0.15s",
-        }}
-        onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.7"; }}
-        onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
-        Open league
-      </button>
-
+      />
       <DismissBtn t={t} onClick={onDismiss} />
     </div>
   );
