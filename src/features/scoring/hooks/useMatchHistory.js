@@ -342,10 +342,17 @@ export function useMatchHistory(opts){
         message: validation.message,
       };
     }
-    // Confirmation is only needed for ranked matches (something to verify
-    // / dispute). Casual matches go straight to confirmed regardless of
-    // opponent linkage — there's no Elo to argue about.
-    var needsConfirmation = isVerified && matchType === 'ranked';
+    // Confirmation is needed when:
+    //   • match_type = 'ranked' (Elo on the line)  OR
+    //   • match has a league_id (league standings on the line — even
+    //     casual leagues count toward per-league standings, so the
+    //     opponent must be able to confirm/dispute before it locks in)
+    // Casual matches WITHOUT a league still go straight to confirmed —
+    // there's no Elo and no standings to argue about. Pre-2026-04-29
+    // casual+league matches were silently auto-confirmed which (a)
+    // skipped the opponent notification and (b) gave one side
+    // unilateral standings control. Both are bugs.
+    var needsConfirmation = isVerified && (matchType === 'ranked' || !!scoreDraft.leagueId);
     // Module 9: invite-flow rows wait in pending_opponent_claim until
     // someone claims via claim_match_invite — that RPC promotes them
     // to pending_confirmation and patches opponent_id.
@@ -359,8 +366,12 @@ export function useMatchHistory(opts){
       : (scoreModal.tournName || 'Casual Match');
 
     var hash = null;
-    // Match-hash dedupe is a ranked-flow feature (prevents both sides
-    // logging the same match twice). Casual matches don't need it.
+    // Match-hash dedupe is a confirmation-flow feature (prevents both
+    // sides logging the same match twice while it's pending). Tied to
+    // needsConfirmation rather than match_type so casual+league
+    // matches — which now go through pending_confirmation — are
+    // covered. Free-floating casual matches (no league) auto-confirm
+    // and don't need it.
     if (needsConfirmation) hash = computeMatchHash(authUser.id, opponentId, matchDate, clean);
 
     // Strip any half-filled tiebreak halves before we persist or
@@ -405,9 +416,15 @@ export function useMatchHistory(opts){
     if(needsConfirmation) payload.expires_at=new Date(Date.now()+72*60*60*1000).toISOString();
     // Module 7 — optional league tag. Server trigger (validate_match_league)
     // enforces the hard rules (both players active members, league active,
-    // max_matches_per_opponent not exceeded, match_type='ranked' required).
-    // Client just forwards.
-    if(needsConfirmation && scoreDraft.leagueId) payload.league_id=scoreDraft.leagueId;
+    // max_matches_per_opponent not exceeded, match_type matches league.mode
+    // per the 20260425_league_mode.sql migration). Client just forwards.
+    //
+    // Decoupled from needsConfirmation as of 2026-04-29: a league_id is
+    // a property of the match regardless of which lifecycle the match
+    // takes. Previously this was gated on needsConfirmation, which
+    // silently dropped league_id for casual+league matches and broke
+    // both the opponent notification and the league matches list.
+    if(scoreDraft.leagueId) payload.league_id=scoreDraft.leagueId;
 
     var ins=await M.insertMatch(payload);
     if(ins.error){

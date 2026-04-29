@@ -282,8 +282,9 @@ export default function ScoreModal({
   }
 
   // Slice 4 — fully contextual CTA copy. Drives from the same signals
-  // the composer uses internally (matchType, invite-toggle, completion)
-  // so the button label always reflects what tapping it actually does.
+  // the composer uses internally (matchType, invite-toggle, completion,
+  // league) so the button label always reflects what tapping it
+  // actually does.
   var ctaLabel = computeCtaLabel({
     saving: saving,
     isResubmit: isResubmit,
@@ -294,6 +295,7 @@ export default function ScoreModal({
     completionType: scoreDraft.completionType,
     inviteOpponent: !!scoreDraft.inviteOpponent,
     hasOpponentName: !!(casualOppName && casualOppName.trim()),
+    hasLeague: !!scoreDraft.leagueId,
   });
 
   // When the modal opens locked to a specific league (per-league
@@ -488,6 +490,7 @@ function computeCtaLabel({
   completionType,           // eslint-disable-line no-unused-vars
   inviteOpponent,
   hasOpponentName,
+  hasLeague,
 }) {
   if (saving) return "Saving…";
   if (isResubmit) return "Resubmit for confirmation";
@@ -503,9 +506,11 @@ function computeCtaLabel({
   }
   if (isCasualModal && isVerified) {
     var effective = matchType || 'ranked';
-    return effective === 'ranked'
-      ? "Submit for confirmation"
-      : "Save match";
+    // Ranked → always confirm. Casual+league → also confirm (per-2026-
+    // 04-29 rule: league standings need opponent agreement, even in
+    // casual-mode leagues). Free-floating casual → save match.
+    if (effective === 'ranked' || hasLeague) return "Submit for confirmation";
+    return "Save match";
   }
   return "Save result";
 }

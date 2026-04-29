@@ -29,8 +29,10 @@ The client sets `match_type` explicitly on insert based on whether the opponent 
 
 Defaults are layered — DB column default = `'casual'` so a missing tag from any future client never accidentally affects Elo. Explicit > default > safe.
 
-### Leagues are ranked-only
-Any match tagged with a `league_id` must have `match_type = 'ranked'`. Enforced at the DB layer by the `validate_match_league` BEFORE-INSERT trigger. Casual league matches don't make sense — league standings derive from confirmed ranked matches; a casual one would silently fail to count, which is more confusing than rejecting it at insert time.
+### Leagues — ranked or casual, never cross-mode
+Each league has a `mode` (`'ranked'` | `'casual'`). The `validate_match_league` BEFORE-INSERT trigger enforces a per-league mode comparison: a `mode='ranked'` league accepts only `match_type='ranked'` rows, and a `mode='casual'` league accepts only `match_type='casual'` rows. Cross-mode submissions are rejected at the DB layer. (Pre-2026-04-25 the trigger was hard-coded to `match_type='ranked'`; the 2026-04-25 `league_mode` migration introduced `leagues.mode` and the per-league check.)
+
+**Casual league matches still need confirmation.** Even though no Elo is on the line, league standings are — and standings only make sense if the opponent has agreed the match happened. Per the 2026-04-29 fix in `submitMatch`, any match with a `league_id` enters `pending_confirmation` regardless of `match_type`, fires the `match_tag` notification, and respects the same 72h expiry window as ranked matches. Once the opponent confirms, the row flips to `confirmed` and `recalculate_league_standings` picks it up. Casual matches **without** a league still auto-confirm — there's nothing to argue about.
 
 ### Backwards compatibility
 The 2026-04-25 migration backfilled every legacy `match_history` row using the previous heuristic (linked-opponent OR a non-casual `tourn_name` → `ranked`). Existing player records (Elo, W/L, matches_played) are unaffected by the migration; we just made the column explicit. Going forward, `tourn_name` is for **display** ("Sunday Crew"), `match_type` is for **policy**.
@@ -50,11 +52,12 @@ Two flavours:
 | Flavour | Condition | Status on log | match_type | Affects stats? |
 |---|---|---|---|---|
 | **Ranked** | Opponent is a real linked user (`opponent_id` set) | `pending_confirmation` | `ranked` | Only after opponent **confirms** |
-| **Casual (linked)** | Linked CourtSync user opponent, opted into casual via the match-type toggle | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched. Linked opponent gets a heads-up via `casual_match_logged` notification (informational, no action required). |
+| **Casual (linked, in casual league)** | Linked opponent + `league_id` pointing at a `mode='casual'` league | `pending_confirmation` | `casual` | Global Elo / W-L: never. League standings: only after opponent **confirms**. Opponent gets the standard `match_tag` notification (Confirm/Dispute CTA). |
+| **Casual (linked, no league)** | Linked CourtSync user opponent, opted into casual via the match-type toggle, no `league_id` | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched. Linked opponent gets a heads-up via `casual_match_logged` notification (informational, no action required). |
 | **Casual (freetext)** | Freetext opponent name only (no `opponent_id`) | `confirmed` immediately | `casual` | **Never** — stat columns stay untouched. No notification (no recipient). |
 | **Tournament match** | `tournament_id` set | Follows the tournament's own flow | Via existing tournament code path, not the casual/ranked split |
 
-The word "Casual" in the UI means "no stat impact, no confirmation loop". "Ranked" means "linked opponent, confirmation required, stats update on accept."
+The word "Casual" in the UI means "no Elo / W-L impact". The confirmation loop kicks in whenever the match has stakes the opponent should agree on — that's Elo (ranked) or league standings (any casual+league). Free-floating casual matches skip the loop because there's nothing to argue about.
 
 **Casual heads-up** (Module 9.1.5): a linked-opponent casual match still notifies the opponent via the `casual_match_logged` notification — informational only, no Confirm/Dispute CTA. Closes the trust gap where a friend could log fake casual matches against you and you'd never know unless you scrolled the feed. Recipients can void the match through the existing FeedCard flow if it didn't actually happen. Full spec: `docs/notification-taxonomy.md` v7.
 
