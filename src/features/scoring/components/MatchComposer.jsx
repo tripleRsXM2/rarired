@@ -336,12 +336,16 @@ export default function MatchComposer({
         </div>
       ) : (
         <div style={{ marginTop: 14, marginBottom: 16 }}>
-          <label style={labelStyle(t)}>Result</label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <label style={Object.assign({}, labelStyle(t), { letterSpacing: "0.12em" })}>Result</label>
+          <div style={{
+            display: "flex",
+            borderTop: "1px solid " + t.border,
+            borderBottom: "1px solid " + t.border,
+          }}>
             {[
               { id: "win",  l: "Win",  c: t.green },
               { id: "loss", l: "Loss", c: t.red   },
-            ].map(function (r) {
+            ].map(function (r, i) {
               var on = scoreDraft.result === r.id;
               return (
                 <button key={r.id}
@@ -349,14 +353,25 @@ export default function MatchComposer({
                     setScoreDraft(function (d) { return Object.assign({}, d, { result: r.id }); });
                   }}
                   style={{
-                    flex: 1, padding: "12px", borderRadius: 9,
-                    border: "1px solid " + (on ? r.c : t.border),
-                    background: on ? r.c + "18" : "transparent",
-                    fontSize: 15, fontWeight: on ? 700 : 400,
-                    color: on ? r.c : t.textSecondary,
+                    flex: 1,
+                    padding: "10px 6px",
+                    background: "transparent",
+                    border: "none",
+                    borderLeft: i === 0 ? "none" : "1px solid " + t.border,
+                    color: on ? r.c : t.textTertiary,
+                    fontSize: 11, fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
                     cursor: "pointer",
+                    position: "relative",
                   }}>
                   {r.l}
+                  {on && (
+                    <span style={{
+                      position: "absolute", left: 0, right: 0, bottom: -1, height: 2,
+                      background: r.c,
+                    }}/>
+                  )}
                 </button>
               );
             })}
@@ -387,35 +402,40 @@ export default function MatchComposer({
         }
         return (
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle(t)}>Match type</label>
-            <div style={{ display: "flex", gap: 8 }}>
+            <label style={Object.assign({}, labelStyle(t), { letterSpacing: "0.12em" })}>Match type</label>
+            <div style={{
+              display: "flex",
+              borderTop: "1px solid " + t.border,
+              borderBottom: "1px solid " + t.border,
+            }}>
               {[
-                { id: 'ranked', label: 'Ranked' },
-                { id: 'casual', label: 'Casual' },
-              ].map(function (mt) {
+                { id: 'ranked', label: 'Ranked', accent: t.accent },
+                { id: 'casual', label: 'Casual', accent: t.text },
+              ].map(function (mt, i) {
                 var on = current === mt.id;
-                var color = on
-                  ? (mt.id === 'ranked' ? t.accent : t.textSecondary)
-                  : t.textSecondary;
-                var bg = on
-                  ? (mt.id === 'ranked' ? t.accentSubtle : t.bgTertiary)
-                  : 'transparent';
-                var borderC = on
-                  ? (mt.id === 'ranked' ? t.accent : t.border)
-                  : t.border;
                 return (
                   <button key={mt.id} type="button"
                     onClick={function () { pick(mt.id); }}
                     style={{
-                      flex: 1, padding: '8px 10px', borderRadius: 8,
-                      border: '1px solid ' + borderC,
-                      background: bg, color: color,
-                      fontSize: 12, fontWeight: on ? 700 : 500,
-                      cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center',
-                      justifyContent: 'center',
+                      flex: 1,
+                      padding: "10px 6px",
+                      background: "transparent",
+                      border: "none",
+                      borderLeft: i === 0 ? "none" : "1px solid " + t.border,
+                      color: on ? mt.accent : t.textTertiary,
+                      fontSize: 11, fontWeight: 800,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      position: "relative",
                     }}>
                     {mt.label}
+                    {on && (
+                      <span style={{
+                        position: "absolute", left: 0, right: 0, bottom: -1, height: 2,
+                        background: mt.accent,
+                      }}/>
+                    )}
                   </button>
                 );
               })}
@@ -479,37 +499,42 @@ export default function MatchComposer({
         </div>
       )}
 
-      {/* LEAGUE — locked chip when the modal opened from the
-          per-league "+ Log match" path. The user can't change which
+      {/* LEAGUE — locked row when the modal opened from the per-
+          league "+ Log match" path. The user can't change which
           league this match files into and can't drop it to "No
-          Competition". The chip mirrors the visual weight of an
-          input row so the form rhythm stays consistent. */}
+          Competition". Boxless: a hairline-bordered row with the
+          league name + a Locked tag, matching the form's no-box
+          rhythm. */}
       {!isResubmit && lockedLeague && (
         <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle(t)}>League</label>
+          <label style={Object.assign({}, labelStyle(t), { letterSpacing: "0.12em" })}>League</label>
           <div style={{
-            padding:        "10px 12px",
-            borderRadius:   8,
-            border:         "1px solid " + t.border,
-            background:     t.bgTertiary,
-            color:          t.text,
-            fontSize:       13,
-            fontWeight:     600,
             display:        "flex",
             alignItems:     "center",
             justifyContent: "space-between",
             gap:            10,
+            padding:        "10px 0",
+            borderTop:      "1px solid " + t.border,
+            borderBottom:   "1px solid " + t.border,
           }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{
+              overflow:     "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace:   "nowrap",
+              fontSize:     14,
+              fontWeight:   700,
+              color:        t.text,
+              letterSpacing: "-0.2px",
+            }}>
               {lockedLeague.name || "League"}
             </span>
             <span style={{
-              flexShrink:     0,
-              fontSize:       9,
-              fontWeight:     800,
-              color:          t.textTertiary,
-              letterSpacing:  "0.12em",
-              textTransform:  "uppercase",
+              flexShrink:    0,
+              fontSize:      9,
+              fontWeight:    800,
+              color:         t.textTertiary,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
             }}>
               Locked
             </span>

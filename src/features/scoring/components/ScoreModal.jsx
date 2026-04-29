@@ -392,34 +392,67 @@ export default function ScoreModal({
               }}
             />
 
-            {/* Footer — Cancel + contextual Save CTA. */}
-            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            {/* Footer — boxless: Cancel as a quiet text-link on the
+                left, Save as the accent text-link on the right with
+                a → suffix. Same calm-typography vocabulary as the
+                Compete hub CTAs. 44px tap targets via padding. */}
+            <div style={{
+              display:        "flex",
+              alignItems:     "center",
+              justifyContent: "space-between",
+              gap:            12,
+              marginTop:      8,
+              paddingTop:     12,
+              borderTop:      "1px solid " + t.border,
+            }}>
               <button
                 onClick={function () {
                   setScoreModal(null);
                   if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
                 }}
                 style={{
-                  flex: 1, padding: "12px", borderRadius: 8,
-                  border: "1px solid " + t.border,
-                  background: "transparent", color: t.text,
-                  fontSize: 13, fontWeight: 500,
-                  cursor: "pointer",
-                }}>
+                  minHeight:     44,
+                  padding:       "12px 4px",
+                  background:    "transparent",
+                  border:        "none",
+                  color:         t.textSecondary,
+                  fontSize:      11,
+                  fontWeight:    700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  cursor:        "pointer",
+                  transition:    "color 0.15s",
+                }}
+                onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
+                onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; }}>
                 Cancel
               </button>
               <button
                 onClick={function () { handleSave(); }}
                 disabled={saving}
                 style={{
-                  flex: 2, padding: "12px", borderRadius: 8,
-                  border: "none",
-                  background: saving ? t.border : t.accent,
-                  color: "#fff", fontSize: 13, fontWeight: 600,
-                  opacity: saving ? 0.7 : 1,
-                  cursor: saving ? "default" : "pointer",
-                }}>
+                  minHeight:     44,
+                  padding:       "12px 4px",
+                  background:    "transparent",
+                  border:        "none",
+                  color:         saving ? t.textTertiary : t.accent,
+                  fontSize:      12.5,
+                  fontWeight:    800,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  cursor:        saving ? "default" : "pointer",
+                  display:       "inline-flex",
+                  alignItems:    "center",
+                  gap:           8,
+                  opacity:       saving ? 0.7 : 1,
+                  transition:    "opacity 0.15s",
+                }}
+                onMouseEnter={function (e) { if (!saving) e.currentTarget.style.opacity = "0.6"; }}
+                onMouseLeave={function (e) { if (!saving) e.currentTarget.style.opacity = "1"; }}>
                 {ctaLabel}
+                {!saving && (
+                  <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 800 }}>→</span>
+                )}
               </button>
             </div>
           </>
