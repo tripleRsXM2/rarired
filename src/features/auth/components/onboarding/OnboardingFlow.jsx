@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { upsertProfile } from "../../../profile/services/profileService.js";
 import { initials as avInitials } from "../../../../lib/utils/avatar.js";
-import { TopChrome, ScreenIn } from "./atoms.jsx";
+import { TopChrome, ScreenIn, BrandMark } from "./atoms.jsx";
 
 import Welcome        from "./screens/Welcome.jsx";
 import Name           from "./screens/Name.jsx";
@@ -134,6 +134,10 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   //   auth.setAuthStep         — to clear set-password after we update pw
   // We never need showAuth here (the legacy AuthModal stays mounted but
   // hidden whenever OnboardingFlow is on screen).
+
+  // Viewport-width tracker for the desktop layout (sticky top nav vs
+  // mobile inline TopChrome).
+  const wide = useIsWide();
 
   const [stepIdx, setStepIdx] = useState(0);
   const [state, setState] = useState(INITIAL_STATE);
@@ -361,13 +365,29 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx, state, busy, signupError, auth.authUser && auth.authUser.id]);
 
+  // Helper: build the desktop top nav (or null on mobile / for views
+  // where the brand-only top isn't useful). Brand-only on welcome /
+  // signin / verify / set-password (no progress, no back); full nav
+  // on the main flow steps.
+  function deskNav(opts) {
+    if (!wide) return null;
+    return (
+      <TopNavDesktop
+        progressIdx={(opts && opts.progressIdx) != null ? opts.progressIdx : -1}
+        total={(opts && opts.total) != null ? opts.total : 0}
+        canBack={!!(opts && opts.canBack)}
+        onBack={opts && opts.onBack}
+      />
+    );
+  }
+
   // Verify-email terminal — takes over regardless of step. Reached
   // from finishOnboarding() after the final upsert succeeds. Two
   // outcomes: "Back to sign in" (signs out, shows SignIn screen),
   // "Resend email" (calls supabase.auth.resend).
   if (showVerifyEmail) {
     return (
-      <Frame>
+      <Frame topNav={deskNav()}>
         <VerifyEmail
           T={T}
           email={(auth.authUser && auth.authUser.email) || state.email || ""}
@@ -383,7 +403,7 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   // Sign-in path takes over the whole frame.
   if (showSignIn) {
     return (
-      <Frame>
+      <Frame topNav={deskNav()}>
         {auth.authStep === "set-password"
           ? <SetPassword T={T} onDone={() => { auth.setAuthStep("choose"); }} />
           : (
@@ -407,15 +427,18 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   // PASSWORD_RECOVERY: takes over regardless of where the user is.
   if (auth.authStep === "set-password") {
     return (
-      <Frame>
+      <Frame topNav={deskNav()}>
         <SetPassword T={T} onDone={() => { auth.setAuthStep("choose"); }} />
       </Frame>
     );
   }
 
   return (
-    <Frame>
-      {!isWelcome && (
+    <Frame topNav={deskNav({ progressIdx: progressIdx, total: PROGRESS_STEPS.length, canBack: !isWelcome && !isAha, onBack: back })}>
+      {/* Mobile-only: inline TopChrome. Desktop has its own sticky
+          top nav (TopNavDesktop) and renders the screen directly
+          without the inline back+progress strip. */}
+      {!wide && !isWelcome && (
         <TopChrome
           step={Math.max(0, progressIdx)}
           total={PROGRESS_STEPS.length}
@@ -434,15 +457,16 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   );
 }
 
-// Outer page frame — full viewport on mobile, centered card on desktop.
-// We do NOT use the design's iOS device frame (it was a tweaks-panel
-// preview affordance); the real product fills the screen on mobile and
-// nests in a max-width card on desktop with a soft backdrop so the
-// onboarding doesn't look unanchored on a wide screen.
-//
-// Tracks viewport width via matchMedia so resize works live (the prior
-// `window.innerWidth >= 600` was computed once at mount — boxShadow
-// got stuck on whichever it landed on first).
+// Outer page frame — two layouts via matchMedia (live, not mount-once):
+//   • Mobile (<600px): full-screen card, edge-to-edge. The TopChrome
+//     atom inside the screen handles back+progress.
+//   • Desktop (≥600px): full-viewport page with a sticky top nav
+//     (brand + segmented progress + step counter + back) and a
+//     centered single-column content area below. Matches the design
+//     handoff (CourtSync Onboarding Web.html) — left pane only; the
+//     design's right "art" pane is intentionally dropped per user
+//     ("just copy the screen left screen. The screen right screen
+//     is not needed").
 function useIsWide() {
   const [wide, setWide] = useState(function(){
     if (typeof window === "undefined") return false;
@@ -462,39 +486,106 @@ function useIsWide() {
   return wide;
 }
 
-function Frame({ children }) {
+// Desktop top nav — sticky, full viewport width. Brand on the left,
+// progress segmented bar + step counter in the centre, back button
+// on the right. Hidden when none of those slots have content.
+function TopNavDesktop({ progressIdx = -1, total = 0, canBack = false, onBack }) {
+  const showProgress = progressIdx >= 0 && total > 0;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 24,
+      padding: "20px 40px",
+      borderBottom: `1px solid ${T.line}`,
+      background: T.bg,
+      position: "sticky", top: 0, zIndex: 10,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <BrandMark T={T} size={26}/>
+        <span style={{
+          fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 700,
+          letterSpacing: "-0.015em", color: T.fg,
+        }}>CourtSync</span>
+      </div>
+      <div style={{ flex: 1 }}/>
+      {showProgress && (
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {Array.from({ length: total }).map(function(_, i){
+              const filled = i <= progressIdx;
+              return (
+                <div key={i} style={{
+                  width: filled ? 28 : 18, height: 4, borderRadius: 2,
+                  background: filled ? T.fg : T.line2,
+                  transition: "all 200ms cubic-bezier(.2,.8,.2,1)",
+                }}/>
+              );
+            })}
+          </div>
+          <div style={{
+            fontFamily: T.fontMono || "ui-monospace, monospace",
+            fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", color: T.muted,
+          }}>
+            {String(progressIdx + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
+          </div>
+        </div>
+      )}
+      {canBack && (
+        <button type="button" onClick={onBack} style={{
+          appearance: "none", cursor: "pointer",
+          padding: "8px 14px", borderRadius: 999,
+          background: "transparent", border: `1px solid ${T.line2}`, color: T.fg,
+          fontFamily: T.font, fontSize: 13, fontWeight: 500,
+          display: "inline-flex", alignItems: "center", gap: 6,
+        }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M8 2 L 4 6 L 8 10" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Back
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Frame({ children, topNav }) {
   const wide = useIsWide();
+  if (wide) {
+    return (
+      <div className="cs-onb-root" style={{
+        minHeight: "100vh", width: "100%",
+        background: T.bg, color: T.fg,
+        display: "flex", flexDirection: "column",
+      }}>
+        {topNav}
+        <div style={{
+          flex: 1,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "flex-start",
+          padding: "40px 56px",
+        }}>
+          <div style={{
+            width: "100%", maxWidth: 480,
+            display: "flex", flexDirection: "column",
+            minHeight: 540,
+          }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // Mobile: full-screen card.
   return (
     <div className="cs-onb-root" style={{
       minHeight: "100vh", width: "100%",
-      // Subtle backdrop on desktop so the card has something to sit
-      // against. Mobile keeps the bare bg since the card fills the
-      // screen edge-to-edge.
-      background: wide
-        ? "radial-gradient(ellipse at top, #F4F2EB 0%, #E5E2D8 60%)"
-        : T.bg,
-      color: T.fg,
-      display: "flex",
-      alignItems: wide ? "center" : "stretch",
-      justifyContent: "center",
-      padding: wide ? "32px 20px" : 0,
+      background: T.bg, color: T.fg,
+      display: "flex", flexDirection: "column",
     }}>
       <div className="cs-onb-card" style={{
-        width: "100%",
-        maxWidth: wide ? 480 : "none",
-        // Mobile: full-screen. Desktop: a centered card with a fixed
-        // ish height so the layout doesn't sprawl on tall monitors.
-        // 880px matches the design's iOS preview height — every screen
-        // is laid out for a phone canvas, so giving it more vertical
-        // room would just waste whitespace.
-        minHeight: wide ? 0 : "100vh",
-        height: wide ? "min(880px, calc(100vh - 64px))" : "auto",
+        width: "100%", maxWidth: "none",
+        minHeight: "100vh",
         display: "flex", flexDirection: "column",
         background: T.bg, color: T.fg,
-        borderRadius: wide ? 28 : 0,
-        overflow: "hidden",
-        border: wide ? `1px solid ${T.line2}` : "none",
-        boxShadow: wide ? "0 30px 80px rgba(10,10,10,0.12)" : "none",
         paddingTop:    "env(safe-area-inset-top, 0px)",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}>
