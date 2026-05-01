@@ -4,7 +4,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { makeTheme, normaliseThemeId, THEME_IDS } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
-import { TABS } from "../lib/constants/ui.js";
+// TABS constant retired alongside the legacy bottom nav — the new
+// EditorialTabBar owns its own 5-item layout. NAV_ICONS still used
+// in the desktop sidebar + top mobile-nav bell/notification icons.
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { insertNotification, deleteNotification } from "../features/notifications/services/notificationService.js";
 import { markMatchTagStatus } from "../features/scoring/services/matchService.js";
@@ -33,6 +35,7 @@ import HomeHub from "../features/home/pages/HomeHub.jsx";
 import MatchesScreen from "../features/home/pages/MatchesScreen.jsx";
 import ProfileScreen from "../features/home/pages/ProfileScreen.jsx";
 import EditorialScreen from "../features/home/components/EditorialScreen.jsx";
+import EditorialTabBar from "../features/home/components/EditorialTabBar.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import CompeteHub      from "../features/tournaments/pages/CompeteHub.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
@@ -881,90 +884,31 @@ export default function App(){
             />
           )}
 
-          {/* MOBILE — raised "+" log-match action (per Editorial
-              Tennis design-handoff). Positioned as a floating button
-              above the bottom tab bar so the existing 6 tabs stay
-              intact. Lifts 16px above the bar, accent fill, soft
-              shadow. Hidden on desktop along with the bottom tabs. */}
+          {/* MOBILE bottom tab bar — Editorial Tennis (Phase 3
+              follow-up). 5 items in a 5-column grid with a centered
+              raised "+" log-match button between Maps and Friends.
+              Replaces the previous themed 6-tab bar + floating FAB.
+              Hidden on desktop ≥1024px via the existing .cs-mob-tabs
+              media rule in providers.jsx.
+              Routing:
+                HOME    → /home (HomeHub)
+                MAPS    → /tournaments (CompeteHub)
+                +       → openLogMatch
+                FRIENDS → /people
+                ME      → /profile
+              The court-discovery /map tab and the editorial /matches
+              feed are still reachable via direct URL (and via the
+              home-hub Matches tile) — they're just not in the bar. */}
           {auth.authUser && (
-            <button
-              className="cs-mob-tabs-fab"
-              onClick={openLogMatch}
-              aria-label="Log a match"
-              style={{
-                position: "fixed",
-                left: "50%",
-                transform: "translateX(-50%)",
-                bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
-                width: 56,
-                height: 56,
-                borderRadius: "50%",
-                background: t.accent,
-                color: "#fff",
-                border: "none",
-                display: "grid",
-                placeItems: "center",
-                cursor: "pointer",
-                zIndex: 51,
-                boxShadow: "0 8px 22px rgba(255, 45, 85, 0.32), 0 2px 6px rgba(0,0,0,0.18)",
-                transition: "transform 160ms cubic-bezier(0.22, 1, 0.36, 1)",
-                fontFamily: "'Space Grotesk', -apple-system, sans-serif",
-                fontSize: 30,
-                fontWeight: 400,
-                lineHeight: 1,
-                paddingBottom: 4,
+            <EditorialTabBar
+              activeTab={tab}
+              onTab={function (id) {
+                setTab(id);
+                if (id !== "tournaments") tournaments.setSelectedTournId(null);
               }}
-              onMouseEnter={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(-2px)"; }}
-              onMouseLeave={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(0)"; }}>
-              +
-            </button>
+              onLogMatch={openLogMatch}
+            />
           )}
-
-          {/* MOBILE bottom tab bar — icons only (hidden on desktop via CSS). */}
-          <div className="cs-mob-tabs" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
-            {/* No maxWidth cap (same fix as the top nav) — bar
-                stretches edge-to-edge so the icons distribute
-                evenly across any mobile viewport. */}
-            <div style={{width:"100%",display:"flex",padding:"6px 0 calc(6px + env(safe-area-inset-bottom))"}}>
-              {TABS.filter(function(tb){
-                // Admin tab is gated to admin profiles only — non-admins
-                // would land on the "Not found" page anyway, so the icon
-                // shouldn't tease an inaccessible surface. Mirrors the
-                // is_admin check that gates the admin tab content below.
-                if (tb.id === "admin") {
-                  return !!(currentUser && currentUser.profile && currentUser.profile.is_admin);
-                }
-                return true;
-              }).map(function(tb){
-                var on=tab===tb.id;
-                var Icon=NAV_ICONS[tb.id];
-                // Instagram-style red badge on the People tab for unread
-                // DMs + pending message requests.
-                var showDmBadge = tb.id === "people" && dms && dms.totalUnread() > 0;
-                var dmCount = showDmBadge ? dms.totalUnread() : 0;
-                return (
-                  <button key={tb.id}
-                    onClick={function(){setTab(tb.id);if(tb.id!=="tournaments")tournaments.setSelectedTournId(null);}}
-                    aria-label={tb.label}
-                    style={{flex:1,background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 0",transition:"color 0.2s",color:on?t.accent:t.textSecondary,cursor:"pointer"}}>
-                    <div style={{width:18,height:2,borderRadius:1,background:on?t.accent:"transparent",transition:"background 0.2s"}}/>
-                    <span style={{ position:"relative", display:"flex" }}>
-                      {Icon ? Icon(22) : null}
-                      {showDmBadge && (
-                        <span style={{
-                          position:"absolute", top:-4, right:-8,
-                          minWidth:14, height:14, borderRadius:7,
-                          background: t.red || "#ef4444", color:"#fff",
-                          fontSize:9, fontWeight:800,
-                          padding:"0 4px", lineHeight:"14px", textAlign:"center",
-                        }}>{dmCount > 9 ? "9+" : dmCount}</span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Tab content. (Tindis retired; old deep-links bounce
               through validTabs above and land on home.) */}

@@ -131,13 +131,17 @@ export default function ScoreModal({
   var [open, setOpen] = useState(false);
   var [pendingClose, setPendingClose] = useState(null);
 
-  // Open animation — fire on the next frame after scoreModal
+  // Open animation — fire on the next tick after scoreModal
   // appears so the initial render lands at translateY(100%) and
-  // the next frame transitions to translateY(0).
+  // the next paint transitions to translateY(0). setTimeout(0) is
+  // more reliable than requestAnimationFrame here — the rAF can
+  // batch with the same paint that produced the closed state on
+  // some browsers (notably mobile Safari), making the slide-up
+  // skip and the panel pop in instantly.
   useEffect(function () {
     if (!scoreModal) { setOpen(false); return; }
-    var raf = requestAnimationFrame(function () { setOpen(true); });
-    return function () { cancelAnimationFrame(raf); };
+    var to = setTimeout(function () { setOpen(true); }, 0);
+    return function () { clearTimeout(to); };
   }, [!!scoreModal]);
 
   // Close animation runner. Strips the .is-open class then fires
