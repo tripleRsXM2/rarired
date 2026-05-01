@@ -40,6 +40,24 @@ export default function Providers({ t, theme, children }){
       ".slide-up{animation:slideUp .36s cubic-bezier(.32,.72,0,1) both}",
       ".reveal{animation:reveal .4s cubic-bezier(.32,.72,0,1) both}",
       ".cs-deeplink-pulse{animation:deeplinkPulse 1.8s cubic-bezier(.32,.72,0,1) both;border-radius:inherit}",
+      // Editorial Tennis push transitions (Phase 3) — 380ms with the
+      // design's signature ease so the home-hub destination screens
+      // feel like they push in from the right (per
+      // design-handoff/README "Tile tap"). Distinct from .slide-in-
+      // right above because that one ships at 280ms and a different
+      // curve; we keep both so existing call sites don't shift.
+      ".cs-ed-push{animation:slideInRight .38s cubic-bezier(0.22,1,0.36,1) both}",
+      // Bottom-sheet primitive — used by the redesigned Log Match
+      // modal. The wrapper is fixed full-screen with a fading scrim;
+      // the panel slides up from the bottom. Same easing + 320ms
+      // duration the handoff specifies. .is-open toggles open state.
+      ".cs-sheet-scrim{position:fixed;inset:0;background:rgba(20,17,14,0);transition:background 240ms ease;z-index:200;pointer-events:none}",
+      ".cs-sheet-scrim.is-open{background:rgba(20,17,14,0.55);pointer-events:auto}",
+      ".cs-sheet-panel{position:fixed;left:0;right:0;bottom:0;transform:translateY(100%);transition:transform 320ms cubic-bezier(0.22,1,0.36,1);z-index:201;max-height:88dvh;display:flex;flex-direction:column}",
+      ".cs-sheet-panel.is-open{transform:translateY(0)}",
+      // Desktop ≥720px — center the sheet with a max-width so it
+      // reads as a tall narrow card rather than a stretched bar.
+      "@media(min-width:720px){.cs-sheet-panel{left:50%;right:auto;transform:translate(-50%, 100%);max-width:540px;width:100%}.cs-sheet-panel.is-open{transform:translate(-50%, 0)}}",
 
       // ── Responsive layout shell ───────────────────────────────────────────
       // Mobile default: single column, block layout. Uses 100dvh so iOS

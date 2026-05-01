@@ -121,6 +121,40 @@ export default function ScoreModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [casualOppId, isVerifiedForEffect, !!scoreModal, (myLeagues || []).length]);
 
+  // Bottom-sheet open/close animation state (Phase 3 redesign).
+  // The component still mounts/unmounts off `scoreModal`, but we
+  // gate the .is-open class on a separate `open` flag so the panel
+  // gets a frame to render at translateY(100%) before the class
+  // flip animates it in. Close-out is handled by closeWithAnim()
+  // below — sets open=false, then calls the original close fn after
+  // the 320ms transition so the panel slides down before unmount.
+  var [open, setOpen] = useState(false);
+  var [pendingClose, setPendingClose] = useState(null);
+
+  // Open animation — fire on the next frame after scoreModal
+  // appears so the initial render lands at translateY(100%) and
+  // the next frame transitions to translateY(0).
+  useEffect(function () {
+    if (!scoreModal) { setOpen(false); return; }
+    var raf = requestAnimationFrame(function () { setOpen(true); });
+    return function () { cancelAnimationFrame(raf); };
+  }, [!!scoreModal]);
+
+  // Close animation runner. Strips the .is-open class then fires
+  // the user-supplied teardown after the slide-down completes.
+  function closeWithAnim(fn) {
+    setOpen(false);
+    setPendingClose(function () { return fn; });
+  }
+  useEffect(function () {
+    if (!pendingClose) return;
+    if (open) return; // wait for the panel to slide back down
+    var fn = pendingClose;
+    setPendingClose(null);
+    var to = setTimeout(function () { fn(); }, 320);
+    return function () { clearTimeout(to); };
+  }, [open, pendingClose]);
+
   if (!scoreModal) return null;
 
   var isResubmit = !!scoreModal.resubmit;
@@ -269,16 +303,27 @@ export default function ScoreModal({
   }
 
   function closeFromFinish() {
-    setFinish(null);
-    setScoreModal(null);
-    setCasualOppName("");
-    setCasualOppId(null);
+    closeWithAnim(function () {
+      setFinish(null);
+      setScoreModal(null);
+      setCasualOppName("");
+      setCasualOppId(null);
+    });
   }
 
   function backdropClick() {
     if (finish) return;
-    setScoreModal(null);
-    if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
+    closeWithAnim(function () {
+      setScoreModal(null);
+      if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
+    });
+  }
+
+  function cancelClick() {
+    closeWithAnim(function () {
+      setScoreModal(null);
+      if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
+    });
   }
 
   // Slice 4 — fully contextual CTA copy. Drives from the same signals
@@ -313,27 +358,47 @@ export default function ScoreModal({
     lockedSuggested = [];
   }
 
+  // Editorial bottom-sheet — Phase 3.
+  //
+  // Outer = full-screen scrim (.cs-sheet-scrim) that fades the page
+  // behind to 55% espresso. Tapping it closes the sheet (unless the
+  // finish moment is showing).
+  //
+  // Inner = a tall narrow panel pinned to the viewport bottom
+  // (.cs-sheet-panel) that slides up 320ms with the design's
+  // ease. 24px top-radius, drag-handle pip, cream background, no
+  // border. Form body inside is the same MatchComposer + finish
+  // states — only the chrome changed.
   return (
-    <div
-      onClick={backdropClick}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.35)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 200, padding: "0 16px",
-      }}>
+    <>
       <div
+        className={"cs-sheet-scrim" + (open ? " is-open" : "")}
+        onClick={backdropClick}
+      />
+      <div
+        className={"cs-sheet-panel" + (open ? " is-open" : "")}
         onClick={function (e) { e.stopPropagation(); }}
-        className="pop"
         style={{
-          background: t.modalBg, border: "1px solid " + t.border,
-          borderRadius: 16,
-          padding: "28px 24px",
-          width: "100%", maxWidth: 540,
-          maxHeight: "92vh", overflowY: "auto",
+          background:    "#F0E9DA", // ED_TOK.bg — cream paper.
+          color:         "#2A201A",
+          borderRadius:  "24px 24px 0 0",
+          borderTop:     "1px solid rgba(42, 32, 26, 0.12)",
+          padding:       "12px 22px calc(24px + env(safe-area-inset-bottom, 0px))",
+          fontFamily:    "'Sora', ui-sans-serif, -apple-system, sans-serif",
+          overflowY:     "auto",
+          // Subtle elevation underneath — sits above the scrim so the
+          // edge of the panel reads cleanly against the cream.
+          boxShadow:     "0 -8px 32px rgba(0,0,0,0.18)",
         }}>
+        {/* Drag handle pip — affordance the sheet can be dismissed. */}
+        <div style={{
+          width:        36,
+          height:       4,
+          background:   "rgba(42, 32, 26, 0.22)",
+          borderRadius: 999,
+          margin:       "0 auto 12px",
+        }}/>
+        <div style={{ display: "flex", flexDirection: "column" }}>
         {finish ? (
           finish.invite ? (
             <InviteShareCard
@@ -408,10 +473,7 @@ export default function ScoreModal({
               borderTop:      "1px solid " + t.border,
             }}>
               <button
-                onClick={function () {
-                  setScoreModal(null);
-                  if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
-                }}
+                onClick={cancelClick}
                 style={{
                   minHeight:     44,
                   padding:       "12px 4px",
@@ -459,8 +521,9 @@ export default function ScoreModal({
             </div>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

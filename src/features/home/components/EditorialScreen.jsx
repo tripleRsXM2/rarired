@@ -98,7 +98,7 @@ export default function EditorialScreen({
   }
 
   return (
-    <div style={{
+    <div className="cs-ed-push" style={{
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
