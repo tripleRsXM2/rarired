@@ -29,6 +29,7 @@ import { useLeagues } from "../features/leagues/hooks/useLeagues.js";
 // usePacts hook retired alongside the Tindis match-pact feature.
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
+import HomeHub from "../features/home/pages/HomeHub.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import CompeteHub      from "../features/tournaments/pages/CompeteHub.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
@@ -91,7 +92,10 @@ export default function App(){
   // 'tindis' removed from validTabs after the pact feature was
   // retired pre-launch. Old deep links land here, fail validation,
   // and default-redirect to the home tab below.
-  var validTabs=["home","map","tournaments","people","profile","admin"];
+  // 'matches' added 2026-05-01 — Editorial Tennis home redesign:
+  // /home renders the new 3-tile HomeHub, the legacy feed list lives
+  // at /matches (where the Matches tile from the hub deep-links).
+  var validTabs=["home","matches","map","tournaments","people","profile","admin"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -874,6 +878,45 @@ export default function App(){
             />
           )}
 
+          {/* MOBILE — raised "+" log-match action (per Editorial
+              Tennis design-handoff). Positioned as a floating button
+              above the bottom tab bar so the existing 6 tabs stay
+              intact. Lifts 16px above the bar, accent fill, soft
+              shadow. Hidden on desktop along with the bottom tabs. */}
+          {auth.authUser && (
+            <button
+              className="cs-mob-tabs-fab"
+              onClick={openLogMatch}
+              aria-label="Log a match"
+              style={{
+                position: "fixed",
+                left: "50%",
+                transform: "translateX(-50%)",
+                bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: t.accent,
+                color: "#fff",
+                border: "none",
+                display: "grid",
+                placeItems: "center",
+                cursor: "pointer",
+                zIndex: 51,
+                boxShadow: "0 8px 22px rgba(255, 45, 85, 0.32), 0 2px 6px rgba(0,0,0,0.18)",
+                transition: "transform 160ms cubic-bezier(0.22, 1, 0.36, 1)",
+                fontFamily: "'Space Grotesk', -apple-system, sans-serif",
+                fontSize: 30,
+                fontWeight: 400,
+                lineHeight: 1,
+                paddingBottom: 4,
+              }}
+              onMouseEnter={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(-2px)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.transform = "translateX(-50%) translateY(0)"; }}>
+              +
+            </button>
+          )}
+
           {/* MOBILE bottom tab bar — icons only (hidden on desktop via CSS). */}
           <div className="cs-mob-tabs" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.tabBar,borderTop:"1px solid "+t.border}}>
             {/* No maxWidth cap (same fix as the top nav) — bar
@@ -922,7 +965,24 @@ export default function App(){
 
           {/* Tab content. (Tindis retired; old deep-links bounce
               through validTabs above and land on home.) */}
+          {/* /home — Editorial Tennis 3-tile hub (2026-05-01 redesign).
+              Tiles deep-link into existing routes:
+                · Maps tile     → /tournaments (CompeteHub)
+                · Matches tile  → /matches    (the legacy feed list below)
+                · Profile tile  → /profile
+              The "+" log-match action lives in the bottom tab bar. */}
           {tab==="home"&&(
+            <HomeHub
+              authUser={auth.authUser}
+              profile={currentUser.profile}
+              history={matchHistory.history}
+              myLeagues={leagues.leagues}
+              tournaments={tournaments}
+            />
+          )}
+          {/* /matches — full feed list (the previous /home content).
+              Same prop surface as before; routing-only change. */}
+          {tab==="matches"&&(
             <HomeTab
               t={t} authUser={auth.authUser} profile={currentUser.profile} history={matchHistory.history}
               feedLikes={matchHistory.feedLikes} setFeedLikes={matchHistory.setFeedLikes}
@@ -1138,8 +1198,11 @@ export default function App(){
 
         </div>{/* end .cs-center-col */}
 
-        {/* RIGHT PANEL — large desktop only, home tab only, controlled by .cs-right-col CSS */}
-        {tab==="home"&&(
+        {/* RIGHT PANEL — large desktop only. Renders alongside the
+            feed list at /matches (where the dense match content lives
+            post-redesign). Hidden on /home so the 3-tile hub keeps
+            its editorial breathing room. */}
+        {tab==="matches"&&(
           <div className="cs-right-col">
             <RightPanel
               t={t} authUser={auth.authUser}
