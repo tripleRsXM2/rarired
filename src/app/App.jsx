@@ -884,32 +884,10 @@ export default function App(){
             />
           )}
 
-          {/* MOBILE bottom tab bar — Editorial Tennis (Phase 3
-              follow-up). 5 items in a 5-column grid with a centered
-              raised "+" log-match button between Maps and Friends.
-              Replaces the previous themed 6-tab bar + floating FAB.
-              Hidden on desktop ≥1024px via the existing .cs-mob-tabs
-              media rule in providers.jsx.
-              Routing:
-                HOME    → /home (HomeHub)
-                MAPS    → /map (court-discovery map — the actual
-                          maps feature; CompeteHub at /tournaments is
-                          reachable via the home-hub Compete tile)
-                +       → openLogMatch
-                FRIENDS → /people
-                ME      → /profile
-              The editorial /matches feed is still reachable via the
-              home-hub Matches tile. */}
-          {auth.authUser && (
-            <EditorialTabBar
-              activeTab={tab}
-              onTab={function (id) {
-                setTab(id);
-                if (id !== "tournaments") tournaments.setSelectedTournId(null);
-              }}
-              onLogMatch={openLogMatch}
-            />
-          )}
+          {/* (Tab content rendered below — bottom nav itself is
+              mounted at the App-level outside cs-shell so it can't
+              be affected by page-specific stacking contexts. See
+              EditorialTabBar mount near the modal stack.) */}
 
           {/* Tab content. (Tindis retired; old deep-links bounce
               through validTabs above and land on home.) */}
@@ -1210,6 +1188,24 @@ export default function App(){
         )}
 
       </div>{/* end .cs-shell */}
+
+      {/* Bottom nav — mounted at the App level (outside cs-shell)
+          so it isn't trapped inside any page's stacking context.
+          Some destination screens use animation-fill-mode: both
+          which leaves a persistent transform on the wrapper — that
+          creates a containing block for fixed descendants and was
+          breaking the bar's "+" button on every page except /home
+          (where the wrapper has no transform). */}
+      {auth.authUser && (
+        <EditorialTabBar
+          activeTab={tab}
+          onTab={function (id) {
+            setTab(id);
+            if (id !== "tournaments") tournaments.setSelectedTournId(null);
+          }}
+          onLogMatch={openLogMatch}
+        />
+      )}
 
       {/* Settings screen (IG-style slide-in from avatar) */}
       {showSettings&&auth.authUser&&(
