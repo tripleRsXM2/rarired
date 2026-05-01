@@ -30,6 +30,9 @@ import { useLeagues } from "../features/leagues/hooks/useLeagues.js";
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
 import HomeHub from "../features/home/pages/HomeHub.jsx";
+import MatchesScreen from "../features/home/pages/MatchesScreen.jsx";
+import ProfileScreen from "../features/home/pages/ProfileScreen.jsx";
+import EditorialScreen from "../features/home/components/EditorialScreen.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import CompeteHub      from "../features/tournaments/pages/CompeteHub.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
@@ -980,9 +983,25 @@ export default function App(){
               tournaments={tournaments}
             />
           )}
-          {/* /matches — full feed list (the previous /home content).
-              Same prop surface as before; routing-only change. */}
+          {/* /matches — Editorial Tennis match history (Phase 2).
+              Replaces the dense FeedCard list with a clean stream:
+              hero title + stats strip + filter chips + match rows.
+              The legacy HomeTab is no longer mounted at any route;
+              kept around as a reference for Phase 3 social-feed work
+              (kudos/comments live there). */}
           {tab==="matches"&&(
+            <MatchesScreen
+              authUser={auth.authUser}
+              history={matchHistory.history}
+              leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
+              openProfile={openProfile}
+            />
+          )}
+          {/* (Legacy HomeTab mount preserved below for reference but
+              gated behind a never-true guard so the build keeps the
+              import + props graph intact for the rare case we want
+              to flip back during Phase 3 work on social interactions.) */}
+          {false&&(
             <HomeTab
               t={t} authUser={auth.authUser} profile={currentUser.profile} history={matchHistory.history}
               feedLikes={matchHistory.feedLikes} setFeedLikes={matchHistory.setFeedLikes}
@@ -1073,24 +1092,34 @@ export default function App(){
             // notifications, feed cards, and profile callouts stay
             // unchanged.
             !pathParts[1] ? (
-              <CompeteHub
-                t={t} authUser={auth.authUser}
-                challenges={challenges}
-                leagues={leagues}
-                /* Slice 2: pass the full tournaments hook bundle so
-                   the hub can read isEntered / tournStatus for the
-                   Active now predicate, navigate to a tournament
-                   detail via setSelectedTournId, and surface entered
-                   tournaments in the active list. */
-                tournaments={tournaments}
-                /* Slice 3: viewer's match history powers the rematch
-                   suggestion + the league next-opponent picker.
-                   openChallenge is the App-level composer launcher
-                   the hub fires from the Rematch CTA. */
-                history={matchHistory.history}
-                openChallenge={openChallenge}
-                toast={toast}
-              />
+              // Phase 2 — wrap the hub in EditorialScreen so /tournaments
+              // gets the back chevron + "Tournaments & leagues" kicker
+              // + 56px "Compete" hero title from the home-hub design
+              // language. CompeteHub's own CompeteHero is suppressed
+              // (hideHero) so the title doesn't double up. The
+              // ActiveNowBand + sections render below the editorial
+              // header unchanged.
+              <EditorialScreen kicker="Tournaments & leagues" title="Compete">
+                <CompeteHub
+                  t={t} authUser={auth.authUser}
+                  hideHero
+                  challenges={challenges}
+                  leagues={leagues}
+                  /* Slice 2: pass the full tournaments hook bundle so
+                     the hub can read isEntered / tournStatus for the
+                     Active now predicate, navigate to a tournament
+                     detail via setSelectedTournId, and surface entered
+                     tournaments in the active list. */
+                  tournaments={tournaments}
+                  /* Slice 3: viewer's match history powers the rematch
+                     suggestion + the league next-opponent picker.
+                     openChallenge is the App-level composer launcher
+                     the hub fires from the Rematch CTA. */
+                  history={matchHistory.history}
+                  openChallenge={openChallenge}
+                  toast={toast}
+                />
+              </EditorialScreen>
             ) : (
               <TournamentsTab
                 t={t} myId={myId} authUser={auth.authUser}
@@ -1159,6 +1188,26 @@ export default function App(){
           />
         )}
         {tab==="profile"&&(!profilePathId||(auth.authUser&&profilePathId===auth.authUser.id))&&(
+          // Phase 2 — Editorial Tennis profile screen replaces the
+          // dense ProfileTab on own-profile. Avatar + region/level
+          // row, big rating numeral, 2x2 stat grid, best-win
+          // callout, achievements row. The "Edit" right-action of
+          // EditorialScreen opens the existing SettingsScreen modal
+          // so the profile editor (avatar / name / suburb / skill /
+          // privacy) keeps working without a rewrite. The legacy
+          // ProfileTab is no longer mounted at any route — kept
+          // around as reference until the trust badges + leagues
+          // panel pieces it surfaces are folded into ProfileScreen
+          // in a follow-up.
+          <ProfileScreen
+            authUser={auth.authUser}
+            profile={currentUser.profile}
+            history={matchHistory.history}
+            onEdit={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+          />
+        )}
+        {/* Legacy ProfileTab mount — gated false until Phase 3. */}
+        {false&&(
           <ProfileTab
             t={t} authUser={auth.authUser} profile={currentUser.profile}
             history={matchHistory.history}
