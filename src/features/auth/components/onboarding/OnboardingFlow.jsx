@@ -437,23 +437,64 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
 // Outer page frame — full viewport on mobile, centered card on desktop.
 // We do NOT use the design's iOS device frame (it was a tweaks-panel
 // preview affordance); the real product fills the screen on mobile and
-// nests in a max-width card on desktop.
+// nests in a max-width card on desktop with a soft backdrop so the
+// onboarding doesn't look unanchored on a wide screen.
+//
+// Tracks viewport width via matchMedia so resize works live (the prior
+// `window.innerWidth >= 600` was computed once at mount — boxShadow
+// got stuck on whichever it landed on first).
+function useIsWide() {
+  const [wide, setWide] = useState(function(){
+    if (typeof window === "undefined") return false;
+    return window.matchMedia && window.matchMedia("(min-width: 600px)").matches;
+  });
+  useEffect(function(){
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia("(min-width: 600px)");
+    const onChange = function(e){ setWide(e.matches); };
+    if (mql.addEventListener) mql.addEventListener("change", onChange);
+    else if (mql.addListener) mql.addListener(onChange);
+    return function(){
+      if (mql.removeEventListener) mql.removeEventListener("change", onChange);
+      else if (mql.removeListener) mql.removeListener(onChange);
+    };
+  }, []);
+  return wide;
+}
+
 function Frame({ children }) {
+  const wide = useIsWide();
   return (
     <div className="cs-onb-root" style={{
       minHeight: "100vh", width: "100%",
-      background: T.bg,
+      // Subtle backdrop on desktop so the card has something to sit
+      // against. Mobile keeps the bare bg since the card fills the
+      // screen edge-to-edge.
+      background: wide
+        ? "radial-gradient(ellipse at top, #F4F2EB 0%, #E5E2D8 60%)"
+        : T.bg,
       color: T.fg,
-      display: "flex", alignItems: "stretch", justifyContent: "center",
+      display: "flex",
+      alignItems: wide ? "center" : "stretch",
+      justifyContent: "center",
+      padding: wide ? "32px 20px" : 0,
     }}>
       <div className="cs-onb-card" style={{
-        width: "100%", maxWidth: 460,
-        minHeight: "100vh",
+        width: "100%",
+        maxWidth: wide ? 480 : "none",
+        // Mobile: full-screen. Desktop: a centered card with a fixed
+        // ish height so the layout doesn't sprawl on tall monitors.
+        // 880px matches the design's iOS preview height — every screen
+        // is laid out for a phone canvas, so giving it more vertical
+        // room would just waste whitespace.
+        minHeight: wide ? 0 : "100vh",
+        height: wide ? "min(880px, calc(100vh - 64px))" : "auto",
         display: "flex", flexDirection: "column",
         background: T.bg, color: T.fg,
-        // Soft shadow only when there's room to "lift" the card off the
-        // page background (desktop). On mobile the card fills the screen.
-        boxShadow: typeof window !== "undefined" && window.innerWidth >= 600 ? "0 30px 80px rgba(0,0,0,0.06)" : "none",
+        borderRadius: wide ? 28 : 0,
+        overflow: "hidden",
+        border: wide ? `1px solid ${T.line2}` : "none",
+        boxShadow: wide ? "0 30px 80px rgba(10,10,10,0.12)" : "none",
         paddingTop:    "env(safe-area-inset-top, 0px)",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}>
