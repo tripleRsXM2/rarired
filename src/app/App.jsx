@@ -48,6 +48,7 @@ import InviteMatchPage from "../features/scoring/pages/InviteMatchPage.jsx";
 import { parseInvitePath } from "../features/scoring/utils/inviteUrl.js";
 import ComposeMessageModal from "../features/people/components/ComposeMessageModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
+import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -671,6 +672,73 @@ export default function App(){
     );
   }
 
+  // ── New 9-screen onboarding experience for logged-out users ───────────
+  // Renders in place of the regular logged-out shell. Mounts when:
+  //   • Auth has initialized
+  //   • Not in an invite deep-link
+  //   • Not yet completed (cs-onb-done is unset)
+  //   • EITHER the user is logged out (first visit / returning sign-out)
+  //     OR they've already started the new flow this device (cs-onb-started)
+  //
+  // The "started" guard matters because Supabase's signUp call sets a
+  // session immediately (when email-confirmation is disabled at the
+  // project level). Without the guard, the SIGNED_IN event flips
+  // auth.authUser truthy mid-flow, the gate goes false, and
+  // OnboardingFlow unmounts before the user has answered Age / Level /
+  // Zone / Courts / Availability — leaving Settings empty. With the
+  // guard, the flow stays mounted across the auth flip and persists
+  // each subsequent screen incrementally to the real profile row.
+  //
+  // Existing logged-in users (no cs-onb-started flag) bypass this branch
+  // entirely — they shouldn't be force-walked through onboarding.
+  //
+  // Tab gate intentionally REMOVED — onboarding is the gate before any
+  // protected feature. Logged-out users landing on /map, /people, etc.,
+  // get the same experience as someone who landed on /home. After they
+  // finish, onComplete() navigates to /home so they land in the feed.
+  var [onbDone, setOnbDone] = useState(function(){ return didCompleteOnboarding(); });
+  function hasOnboardingStarted(){
+    try { return localStorage.getItem("cs-onb-started") === "1"; }
+    catch (_) { return false; }
+  }
+  var showOnboardingFlow = auth.authInitialized
+    && !invitePath
+    && !onbDone
+    && (!auth.authUser || hasOnboardingStarted());
+  // After a returning user signs out, onbDone is still set in localStorage
+  // but they're not authenticated — funnel them to the SignIn-only variant
+  // (forceSignIn={true}) regardless of which tab they're on.
+  var showReturningSignIn = !auth.authUser
+    && auth.authInitialized
+    && !invitePath
+    && onbDone;
+  if (showOnboardingFlow || showReturningSignIn) {
+    return (
+      <Providers t={t} theme={theme}>
+        <ServiceHealthBanner/>
+        <OnboardingFlow
+          auth={auth}
+          forceSignIn={showReturningSignIn}
+          onOpenProfile={function(uid){
+            if(!uid) return;
+            // Profile route — same path the rest of the app uses. Keeps
+            // the Aha cards "live" (tap a player on the final screen,
+            // land in their actual profile).
+            navigate("/profile/" + uid);
+          }}
+          refreshProfile={currentUser.refreshProfileUI}
+          onComplete={function(){
+            setOnbDone(true);
+            // Belt-and-braces: ensure the URL is /home so the next
+            // render of the main shell lands on the feed (the user
+            // may have entered the flow via /map, /people, etc.).
+            navigate("/home", { replace: true });
+          }}
+        />
+      </Providers>
+    );
+  }
+
   return (
     <Providers t={t} theme={theme}>
       {/* Service-health banner — sits above the shell, only renders
@@ -1188,13 +1256,20 @@ export default function App(){
           authError={auth.authError} setAuthError={auth.setAuthError}
           authFieldErrors={auth.authFieldErrors} setAuthFieldErrors={auth.setAuthFieldErrors}
         />
-        <OnboardingModal
-          t={t} authUser={auth.authUser}
-          showOnboarding={currentUser.showOnboarding} setShowOnboarding={currentUser.setShowOnboarding}
-          profile={currentUser.profile} setProfile={currentUser.setProfile} setProfileDraft={currentUser.setProfileDraft}
-          onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
-          onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
-        />
+        {/* Legacy 4-step onboarding modal. Stays mounted for users who
+            never went through the new 9-screen OnboardingFlow (e.g.
+            existing users created before the launch). When the new flow
+            sets the cs-onb-done localStorage flag, we suppress this so
+            we don't double-onboard them. */}
+        {!onbDone && (
+          <OnboardingModal
+            t={t} authUser={auth.authUser}
+            showOnboarding={currentUser.showOnboarding} setShowOnboarding={currentUser.setShowOnboarding}
+            profile={currentUser.profile} setProfile={currentUser.setProfile} setProfileDraft={currentUser.setProfileDraft}
+            onboardStep={currentUser.onboardStep} setOnboardStep={currentUser.setOnboardStep}
+            onboardDraft={currentUser.onboardDraft} setOnboardDraft={currentUser.setOnboardDraft}
+          />
+        )}
         <ToastStack t={t} toasts={toastSystem.toasts} dismiss={toastSystem.dismiss} />
 
         {/* Module 10 Slice 2 — private post-match feedback prompt.
