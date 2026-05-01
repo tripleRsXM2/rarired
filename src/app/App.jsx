@@ -892,13 +892,14 @@ export default function App(){
               media rule in providers.jsx.
               Routing:
                 HOME    → /home (HomeHub)
-                MAPS    → /tournaments (CompeteHub)
+                MAPS    → /map (court-discovery map — the actual
+                          maps feature; CompeteHub at /tournaments is
+                          reachable via the home-hub Compete tile)
                 +       → openLogMatch
                 FRIENDS → /people
                 ME      → /profile
-              The court-discovery /map tab and the editorial /matches
-              feed are still reachable via direct URL (and via the
-              home-hub Matches tile) — they're just not in the bar. */}
+              The editorial /matches feed is still reachable via the
+              home-hub Matches tile. */}
           {auth.authUser && (
             <EditorialTabBar
               activeTab={tab}

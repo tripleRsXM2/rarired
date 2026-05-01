@@ -17,15 +17,14 @@
 //
 // Routing (mapped to existing app):
 //   HOME    → /home (HomeHub)
-//   MAPS    → /tournaments (CompeteHub) — the design's "Maps" tab
-//             is the tournaments+leagues destination
+//   MAPS    → /map (court-discovery map — the actual "maps" feature)
 //   +       → openLogMatch (no route change)
 //   FRIENDS → /people
 //   ME      → /profile
 //
-// The court-discovery /map and editorial /matches list still exist
-// but aren't surfaced in this 5-item bar — they're reachable via
-// direct URL or via the home-hub Matches tile.
+// The Compete hub (/tournaments) is reachable via the home-hub
+// Compete tile + via direct URL. The editorial /matches list is
+// reachable via the home-hub Matches tile.
 //
 // Hidden on desktop ≥1024px via the existing .cs-mob-tabs media
 // rule in providers.jsx.
@@ -79,11 +78,11 @@ var ICONS = {
 // Tab definitions — id is the route's first path segment, used by
 // the parent's setTab(id) handler.
 var TABS = [
-  { id: "home",        label: "Home",    Icon: ICONS.home    },
-  { id: "tournaments", label: "Maps",    Icon: ICONS.maps    },
-  { id: "log",         label: "Log",     primary: true       },
-  { id: "people",      label: "Friends", Icon: ICONS.friends },
-  { id: "profile",     label: "Me",      Icon: ICONS.me      },
+  { id: "home",    label: "Home",    Icon: ICONS.home    },
+  { id: "map",     label: "Maps",    Icon: ICONS.maps    },
+  { id: "log",     label: "Log",     primary: true       },
+  { id: "people",  label: "Friends", Icon: ICONS.friends },
+  { id: "profile", label: "Me",      Icon: ICONS.me      },
 ];
 
 export default function EditorialTabBar({ activeTab, onTab, onLogMatch }) {
