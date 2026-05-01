@@ -285,18 +285,23 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
 
   async function finishOnboarding() {
     // Bail-safe path: if we somehow reached the finish CTA without a
-    // signed-in user (email-confirmation-required project, browser
-    // wiped session, etc.) we still flip the done flag + call onComplete
-    // so the CTA is never a dead button. Final profile write is skipped
-    // because there's no row to write to — the user can fill values via
-    // Settings later.
+    // signed-in user (email-confirmation-required project, signUp
+    // pending, browser wiped session, etc.) we ALWAYS produce a
+    // visible screen transition. Land on VerifyEmail directly — its
+    // 'Back to sign in' button signs out (no-op if already unauth)
+    // and shows the SignIn screen. User feedback: 'when I press get
+    // started or I'll explore on my own, nothing happens. I thought
+    // its supposed to take you to a different page'. The previous
+    // bail called onComplete which navigated to /home — if the user
+    // was already on /home (most common entry point) the URL didn't
+    // change and the gate-flip felt invisible.
     if (!auth.authUser) {
       try {
         localStorage.setItem(DONE_KEY, "1");
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(STARTED_KEY);
       } catch (_) {}
-      if (onComplete) onComplete();
+      setShowVerifyEmail(true);
       return;
     }
     setBusy(true);

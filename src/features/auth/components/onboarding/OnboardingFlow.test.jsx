@@ -143,6 +143,45 @@ describe("OnboardingFlow", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  it("Aha CTA on UNAUTH user still produces a visible state change (VerifyEmail)", async () => {
+    // Repro: localStorage has stepIdx=9 but auth.authUser is null
+    // (e.g. signUp pending email confirmation, browser refresh before
+    // session hydrated, etc.). Previous behaviour called onComplete +
+    // navigate("/home") — invisible state change if user was already
+    // on /home. Now we always land on VerifyEmail so the CTA is never
+    // a dead button.
+    localStorage.setItem("cs-onb", JSON.stringify({
+      stepIdx: 9,
+      state: {
+        first: "Ada", last: "Lovelace",
+        email: "ada@example.com", password: "",
+        age: "", level: "", utr: "", intent: [],
+        zone: "inner-east", courts: [], avail: [],
+      },
+    }));
+    const onComplete = vi.fn();
+    render(
+      <OnboardingFlow
+        auth={makeAuthStub({ authUser: null })} // ← unauth
+        onComplete={onComplete}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /get started/i })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/verify your email/i)).toBeTruthy();
+    });
+    // Done flag flipped, transient state cleared.
+    expect(localStorage.getItem("cs-onb-done")).toBe("1");
+    expect(localStorage.getItem("cs-onb")).toBeNull();
+    expect(localStorage.getItem("cs-onb-started")).toBeNull();
+    // onComplete is NOT called — user must explicitly click 'Back to
+    // sign in' from VerifyEmail to proceed.
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
   it("'I'll explore on my own' lands on VerifyEmail + flips the done flag", async () => {
     localStorage.setItem("cs-onb", JSON.stringify({
       stepIdx: 9,
