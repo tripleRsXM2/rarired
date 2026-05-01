@@ -77,7 +77,7 @@ export default function Providers({ t, theme, children }){
       "}",
 
       // Hide mobile chrome on desktop
-      "@media(min-width:1024px){.cs-mob-nav{display:none!important}.cs-mob-tabs{display:none!important}}",
+      "@media(min-width:1024px){.cs-mob-nav{display:none!important}.cs-mob-tabs{display:none!important}.cs-mob-tabs-fab{display:none!important}}",
 
       // Mobile bottom padding (tab bar clearance) — removed on desktop
       ".cs-outer-pad{padding-bottom:80px}",
