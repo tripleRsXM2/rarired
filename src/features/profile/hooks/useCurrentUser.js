@@ -57,9 +57,32 @@ export function useCurrentUser(){
       loaded=r.data;
       setProfile(r.data); setProfileDraft(r.data);
     } else {
-      loaded=defaults;
-      setProfile(defaults); setProfileDraft(defaults);
-      await upsertProfile(defaults);
+      // Race-fix: when the user is mid-onboarding (cs-onb-started=1 +
+      // cs-onb-done not set), skip the auto-defaults upsert. The
+      // OnboardingFlow's auth-flip effect writes a name-overlaid full
+      // default profile in one atomic shot — having loadProfile ALSO
+      // upsert defaults here was causing a race where 'Your Name' won
+      // and the user's actual name from Welcome→Name was lost, plus
+      // all the per-screen persistPatch writes ended up on whatever
+      // row landed first. User feedback: 'when they put in their
+      // name... it needs to be auto registered to their account...
+      // your profile is Default Your Name'.
+      var midOnboarding = false;
+      try {
+        midOnboarding =
+          typeof localStorage !== "undefined" &&
+          localStorage.getItem("cs-onb-started") === "1" &&
+          localStorage.getItem("cs-onb-done") !== "1";
+      } catch (_) {}
+      if (midOnboarding) {
+        // Hold defaults in memory only — OnboardingFlow owns the DB write.
+        loaded = defaults;
+        setProfile(defaults); setProfileDraft(defaults);
+      } else {
+        loaded = defaults;
+        setProfile(defaults); setProfileDraft(defaults);
+        await upsertProfile(defaults);
+      }
     }
     setProfileLoaded(true);
     return { profile:loaded, isNew:isNewUser };

@@ -182,20 +182,44 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
 
   // The Name screen runs BEFORE EmailPassword (i.e. before the user is
   // authed) so its persistPatch is a no-op. The moment SIGNED_IN flips
-  // auth.authUser truthy, flush the collected name to the profile row
-  // so the Settings screen reflects what the user typed. Best-effort —
-  // failures don't block the flow; finishOnboarding's final patch will
-  // re-attempt. Runs once per session because the dep array tracks
-  // auth.authUser.id, which only changes on sign-in / sign-out.
+  // auth.authUser truthy, write the FULL initial profile with the name
+  // overlaid — every NOT NULL column seeded so subsequent per-screen
+  // persistPatch calls update specific fields without races.
+  //
+  // This races against useCurrentUser.loadProfile which ALSO wants to
+  // create a default row on first SIGNED_IN. We win the race by being
+  // wired directly to the auth.authUser dep here (synchronous on
+  // re-render), and loadProfile's defaults-upsert is suppressed via
+  // the `cs-onb-started` localStorage flag (see useCurrentUser:46).
+  // Best-effort — failures don't block the flow; finishOnboarding's
+  // final patch will re-attempt the comprehensive write.
+  // Runs once per session because flushedRef tracks auth.authUser.id.
   const flushedRef = useRef(false);
   useEffect(() => {
     if (!auth.authUser || !auth.authUser.id) { flushedRef.current = false; return; }
     if (flushedRef.current) return;
     flushedRef.current = true;
     const fullName = `${(state.first || "").trim()} ${(state.last || "").trim()}`.trim();
-    if (!fullName) return;
-    const init = avInitials(fullName);
-    upsertProfile({ id: auth.authUser.id, name: fullName, avatar: init }).catch(() => {});
+    const fallback = (auth.authUser.email || "Player").split("@")[0];
+    const displayName = fullName || fallback;
+    const init = avInitials(displayName);
+    // Single atomic upsert with every required column. Mirrors
+    // defaultProfile() in profileService.js — keep these in sync.
+    upsertProfile({
+      id: auth.authUser.id,
+      name: displayName,
+      suburb: "",
+      skill: "Intermediate 1",
+      style: "All-Court",
+      bio: "",
+      avatar: init,
+      avatar_url: null,
+      availability: {},
+      ranking_points: 1000,
+      wins: 0, losses: 0, matches_played: 0,
+      streak_count: 0, streak_type: null,
+      home_zone: null,
+    }).catch(() => {});
   }, [auth.authUser && auth.authUser.id, state.first, state.last]);
 
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
