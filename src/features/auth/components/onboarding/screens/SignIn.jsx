@@ -38,8 +38,20 @@ export default function SignIn({ T, onBack, onCreateAccount }) {
     const r = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if(r.error){ setError(mapAuthError(r.error.message)); return; }
-    // On success the auth controller fires SIGNED_IN, App.jsx unmounts
-    // the OnboardingFlow and shows the main shell. No navigation needed.
+    // Returning user — by definition they've used CourtSync before, so
+    // mark onboarding as completed and clear any partial-walk flag.
+    // Without this, a user who previously tapped "Get started" but
+    // didn't finish leaves cs-onb-started=1 in their localStorage,
+    // and after sign-in the gate `(!authUser || started)` evaluates
+    // to true, keeping OnboardingFlow mounted instead of dropping
+    // them into the main shell. User: 'I am trying to sign in with
+    // my old creds. Test until you solve it.'
+    try {
+      localStorage.setItem("cs-onb-done", "1");
+      localStorage.removeItem("cs-onb-started");
+    } catch (_) {}
+    // SIGNED_IN fires from the auth controller → App.jsx unmounts the
+    // OnboardingFlow and shows the main shell. No navigation needed.
   }
 
   async function onForgot(){

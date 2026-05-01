@@ -701,6 +701,26 @@ export default function App(){
     try { return localStorage.getItem("cs-onb-started") === "1"; }
     catch (_) { return false; }
   }
+  // Belt-and-braces: an existing user with a real profile (from before
+  // the new flow shipped, or a session restored on reload) should be
+  // treated as "onboarded" even if their localStorage doesn't have the
+  // cs-onb-done flag yet. Signal: profile.age_bracket OR profile.skill
+  // present. Without this, returning users via session-restore would
+  // see Welcome on every reload until they did a manual sign-in.
+  useEffect(function(){
+    if (onbDone) return;
+    if (!auth.authUser) return;
+    var p = currentUser.profile;
+    if (!p) return;
+    if (hasOnboardingStarted()) return; // mid-flow, do not flag yet
+    if (p.age_bracket || p.skill) {
+      try {
+        localStorage.setItem("cs-onb-done", "1");
+        localStorage.removeItem("cs-onb-started");
+      } catch (_) {}
+      setOnbDone(true);
+    }
+  }, [auth.authUser && auth.authUser.id, currentUser.profile && currentUser.profile.id, onbDone]);
   var showOnboardingFlow = auth.authInitialized
     && !invitePath
     && !onbDone
