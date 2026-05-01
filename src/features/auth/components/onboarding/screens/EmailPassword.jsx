@@ -32,31 +32,44 @@ function mapAuthError(msg){
   return msg;
 }
 
-export default function EmailPassword({ state, set, next, T }) {
+export default function EmailPassword({ state, set, next, T, onSignupPending, signupError }) {
   const emailRef = useRef(null);
   useEffect(() => { if (emailRef.current) emailRef.current.focus(); }, []);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Show a parent-supplied signup error (set when an optimistic
+  // advance's signUp resolved with an error AFTER the user moved on).
+  // The OnboardingFlow rolls them back to this screen + populates this.
+  useEffect(() => { if (signupError) setError(signupError); }, [signupError]);
 
   const fullName = `${(state.first || "").trim()} ${(state.last || "").trim()}`.trim();
   const valid = state.email && state.password;
 
-  async function onSubmit(){
+  function onSubmit(){
     const fe = {};
     if(!state.email || !state.email.trim()) fe.email = "Email is required.";
     else if(!validateEmail(state.email)) fe.email = "Please enter a valid email address.";
     if(!state.password) fe.password = "Password is required.";
     else if(!validatePassword(state.password)) fe.password = PASSWORD_RULE_TEXT;
     if(Object.keys(fe).length){ setFieldErrors(fe); return; }
-    setLoading(true); setError(""); setFieldErrors({});
-    const r = await supabase.auth.signUp({
+    setError(""); setFieldErrors({});
+    // Optimistic advance — fire signUp non-awaited. User feedback:
+    // 'pretty big lag between create your account and putting in
+    // your age. why is that?' The lag was the 500ms-2s network
+    // round-trip we were awaiting before calling next(). Now we
+    // hand the in-flight promise to the parent to track + error-
+    // handle, and advance synchronously. By the time the user
+    // picks an age (~3-5s of human reaction), authUser is set and
+    // per-screen persistPatch calls land normally. If signup errors
+    // (email already exists, etc.), the parent rolls back to this
+    // screen and surfaces the message via the signupError prop.
+    const p = supabase.auth.signUp({
       email: state.email.trim(),
       password: state.password,
       options: { data: { name: fullName || undefined } },
     });
-    setLoading(false);
-    if(r.error){ setError(mapAuthError(r.error.message)); return; }
+    if (onSignupPending) onSignupPending(p, mapAuthError);
     next();
   }
 
@@ -94,8 +107,8 @@ export default function EmailPassword({ state, set, next, T }) {
         <ErrorStrip msg={error} T={T} />
 
         <div style={{ flex: 1, minHeight: 12 }}/>
-        <PrimaryButton T={T} disabled={!valid || loading} onClick={onSubmit}>
-          {loading ? "Creating account…" : "Continue"}
+        <PrimaryButton T={T} disabled={!valid} onClick={onSubmit}>
+          Continue
         </PrimaryButton>
         <p style={{ marginTop: 12, fontFamily: T.font, fontSize: 12, color: T.muted, textAlign: "center" }}>
           By continuing, you agree to be a good sport.

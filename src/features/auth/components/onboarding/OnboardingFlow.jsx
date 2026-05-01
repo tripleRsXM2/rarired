@@ -148,6 +148,24 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   // started or I'll explore on my own it gets stuck, it should go
   // back to a page: where it says verify your email + go back to login.'
   const [showVerifyEmail, setShowVerifyEmail] = useState(false);
+  // Optimistic-signup error rollback: if the user clicks Continue on
+  // EmailPassword and we advance immediately while signUp is still in
+  // flight, we need a path back to that screen if the signUp errors
+  // out (email already exists, weak password the client missed, etc.).
+  // The error message is surfaced as a prop to EmailPassword.
+  const [signupError, setSignupError] = useState("");
+  function onSignupPending(promise, mapErr) {
+    setSignupError("");
+    promise.then((r) => {
+      if (r && r.error) {
+        setSignupError((mapErr || ((m) => m))(r.error.message));
+        setStepIdx(STEPS.indexOf("email"));
+      }
+    }).catch((e) => {
+      setSignupError((mapErr || ((m) => m))(e && e.message));
+      setStepIdx(STEPS.indexOf("email"));
+    });
+  }
   const hydrated = useRef(false);
 
   useEffect(() => { ensureFonts(); }, []);
@@ -331,7 +349,7 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
     const props = { state, set, T };
     if (stepName === "welcome") return <Welcome T={T} next={() => next()} onSignIn={() => setShowSignIn(true)} />;
     if (stepName === "name")    return <Name    {...props} next={() => next()} />;
-    if (stepName === "email")   return <EmailPassword {...props} next={() => next()} />;
+    if (stepName === "email")   return <EmailPassword {...props} next={() => next()} onSignupPending={onSignupPending} signupError={signupError} />;
     if (stepName === "age")     return <Age     {...props} next={advanceFromAge} />;
     if (stepName === "level")   return <Level   {...props} next={advanceFromLevel} />;
     if (stepName === "intent")  return <Intent  {...props} next={advanceFromIntent} />;
@@ -341,7 +359,7 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
     if (stepName === "aha")     return <Aha state={state} T={T} busy={busy} onFinish={finishOnboarding} onSkip={finishOnboarding} onOpenProfile={onOpenProfile} viewerId={auth.authUser && auth.authUser.id} />;
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepIdx, state, busy, auth.authUser && auth.authUser.id]);
+  }, [stepIdx, state, busy, signupError, auth.authUser && auth.authUser.id]);
 
   // Verify-email terminal — takes over regardless of step. Reached
   // from finishOnboarding() after the final upsert succeeds. Two
