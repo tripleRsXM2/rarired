@@ -22,15 +22,34 @@ export default function Aha({ state, T, onFinish, onSkip, onOpenProfile, busy, v
 
   useEffect(() => {
     let cancelled = false;
-    if (!state.zone) { setPlayers([]); return; }
     var exclude = viewerId ? [viewerId] : [];
-    fetchPlayersInZone(state.zone, 6, exclude).then((r) => {
+
+    // Two-stage fetch:
+    //   1. Try the user's selected zone (most relevant).
+    //   2. If empty, fall back to ANY users on the platform (sorted by
+    //      last_active). User feedback: 'we should be able to see the
+    //      users already on here.' Empty Aha kills momentum for users
+    //      in zones with no other players yet.
+    var primary = state.zone
+      ? fetchPlayersInZone(state.zone, 6, exclude)
+      : Promise.resolve({ data: [] });
+
+    primary.then(function(r){
       if (cancelled) return;
-      // Belt-and-braces: also filter client-side in case RLS lets the
-      // viewer's own row through (older sessions, race conditions).
       var rows = (r && r.data) || [];
       if (viewerId) rows = rows.filter(function(p){ return p && p.id !== viewerId; });
-      setPlayers(rows);
+      if (rows.length > 0) {
+        setPlayers(rows);
+        return;
+      }
+      // Fallback: pull anyone with a home_zone set (skip ghosts), sorted
+      // by recency. Same RPC, just no zone filter.
+      return fetchPlayersInZone(null, 6, exclude).then(function(r2){
+        if (cancelled) return;
+        var fb = (r2 && r2.data) || [];
+        if (viewerId) fb = fb.filter(function(p){ return p && p.id !== viewerId; });
+        setPlayers(fb);
+      });
     }).catch(() => { if (!cancelled) setPlayers([]); });
     return () => { cancelled = true; };
   }, [state.zone, viewerId]);

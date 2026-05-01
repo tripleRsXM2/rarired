@@ -36,6 +36,7 @@ import Availability, { availChipsToProfileShape } from "./screens/Availability.j
 import Aha            from "./screens/Aha.jsx";
 import SignIn         from "./screens/SignIn.jsx";
 import SetPassword    from "./screens/SetPassword.jsx";
+import VerifyEmail    from "./screens/VerifyEmail.jsx";
 
 // ─────────────────────────────────────────────────────────────
 // Local theme tokens — design source of truth (light only).
@@ -140,6 +141,13 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   // default view — they shouldn't re-walk the questionnaire.
   const [showSignIn, setShowSignIn] = useState(forceSignIn);
   const [busy, setBusy] = useState(false);
+  // Verify-email terminal screen. After Aha's CTA the user lands here
+  // before being kicked to SignIn — gives them an explicit "check your
+  // inbox" beat instead of dumping them into the app with an
+  // unverified address. User feedback: 'when you get to the get
+  // started or I'll explore on my own it gets stuck, it should go
+  // back to a page: where it says verify your email + go back to login.'
+  const [showVerifyEmail, setShowVerifyEmail] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => { ensureFonts(); }, []);
@@ -284,7 +292,12 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(STARTED_KEY);
     } catch (_) {}
-    if (onComplete) onComplete();
+    // Land on the verify-email terminal screen instead of immediately
+    // closing the flow. Two CTAs there: 'Back to sign in' (signs out,
+    // shows SignIn) and 'Resend email'. When the user clicks back, we
+    // keep them inside the OnboardingFlow shell (showSignIn=true) so
+    // the existing render branch handles it cleanly.
+    setShowVerifyEmail(true);
   }
 
   // Render the right screen for the current step, with all wiring threaded
@@ -305,6 +318,25 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx, state, busy, auth.authUser && auth.authUser.id]);
+
+  // Verify-email terminal — takes over regardless of step. Reached
+  // from finishOnboarding() after the final upsert succeeds. Two
+  // outcomes: "Back to sign in" (signs out, shows SignIn screen),
+  // "Resend email" (calls supabase.auth.resend).
+  if (showVerifyEmail) {
+    return (
+      <Frame>
+        <VerifyEmail
+          T={T}
+          email={(auth.authUser && auth.authUser.email) || state.email || ""}
+          onBackToSignIn={() => {
+            setShowVerifyEmail(false);
+            setShowSignIn(true);
+          }}
+        />
+      </Frame>
+    );
+  }
 
   // Sign-in path takes over the whole frame.
   if (showSignIn) {

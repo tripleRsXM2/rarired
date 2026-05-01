@@ -83,7 +83,7 @@ describe("OnboardingFlow", () => {
     expect(screen.getByText(/sign in to courtsync/i)).toBeTruthy();
   });
 
-  it("finishOnboarding writes a comprehensive profile patch + flags + onComplete", async () => {
+  it("finishOnboarding writes a comprehensive profile patch + flags + lands on VerifyEmail", async () => {
     // Hydrate the flow at the Aha step with a fully-populated state so
     // we can verify finishOnboarding's final patch contains every field.
     localStorage.setItem("cs-onb", JSON.stringify({
@@ -112,10 +112,13 @@ describe("OnboardingFlow", () => {
       expect(screen.getByRole("button", { name: /get started/i })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+    // Final step: lands on VerifyEmail with the user's email visible.
+    // (onComplete fires later from the VerifyEmail "Back to sign in" path.)
     await waitFor(() => {
-      expect(onComplete).toHaveBeenCalled();
+      expect(screen.getByText(/verify your email/i)).toBeTruthy();
     });
-    // upsertProfile should have been called with all collected fields.
+    expect(screen.getByText(/ada@example\.com/)).toBeTruthy();
+    // upsertProfile was called with all collected fields.
     expect(upsertProfile).toHaveBeenCalled();
     const patch = upsertProfile.mock.calls[upsertProfile.mock.calls.length - 1][0];
     expect(patch.id).toBe("user-abc");
@@ -128,15 +131,19 @@ describe("OnboardingFlow", () => {
     expect(patch.availability).toBeTruthy();
     expect(patch.availability.Mon).toContain("Morning");
     expect(patch.availability.Sat).toContain("Morning");
-    // refreshProfile should fire so Settings reflects the new values.
+    // refreshProfile fires so Settings reflects the new values.
     expect(refreshProfile).toHaveBeenCalledWith("user-abc");
     // cs-onb-done flag set, transient keys cleared.
     expect(localStorage.getItem("cs-onb-done")).toBe("1");
     expect(localStorage.getItem("cs-onb")).toBeNull();
     expect(localStorage.getItem("cs-onb-started")).toBeNull();
+    // onComplete is NOT called yet — that fires later from the VerifyEmail
+    // "Back to sign in" CTA in App.jsx (it doesn't navigate the user
+    // straight to /home; they first need to confirm their email).
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("'I'll explore on my own' fires onComplete + flips the done flag", async () => {
+  it("'I'll explore on my own' lands on VerifyEmail + flips the done flag", async () => {
     localStorage.setItem("cs-onb", JSON.stringify({
       stepIdx: 9,
       state: {
@@ -157,7 +164,9 @@ describe("OnboardingFlow", () => {
       expect(screen.getByRole("button", { name: /explore on my own/i })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole("button", { name: /explore on my own/i }));
-    await waitFor(() => { expect(onComplete).toHaveBeenCalled(); });
+    await waitFor(() => {
+      expect(screen.getByText(/verify your email/i)).toBeTruthy();
+    });
     expect(localStorage.getItem("cs-onb-done")).toBe("1");
   });
 });
