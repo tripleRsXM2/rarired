@@ -3,11 +3,14 @@
 // Editorial Tennis home — 3-tile hub (per design-handoff/README).
 //
 // Replaces the dense feed-driven HomeTab on the /home route with three
-// large square tiles: Maps (tournaments + leagues), Matches (history),
-// Profile. Each tile pushes the user into an existing feature page via
-// the router — Maps → /tournaments, Matches → /matches (which mounts
-// the legacy feed list), Profile → /profile. The "+" log-match action
-// lives in the bottom tab bar (App.jsx), centered + raised.
+// large square tiles: Compete (tournaments + leagues), Matches
+// (history), Profile. Each tile pushes the user into an existing
+// feature page via the router — Compete → /tournaments, Matches →
+// /matches, Profile → /profile. The "+" log-match action lives in
+// the bottom tab bar (App.jsx), centered + raised.
+//
+// (The handoff README originally labeled the first tile "Maps". The
+// product term is "Compete" — same destination, more accurate name.)
 //
 // Design tokens are inlined here to keep the component self-contained
 // and avoid leaking the cream/terracotta palette into the rest of the
@@ -44,8 +47,11 @@ var TOK = {
   mono:      "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace",
 };
 
+// Tonal warm-earth palette per design-handoff. The "compete" tile is
+// the hero terracotta moment; matches sits in ochre clay; profile is
+// espresso for the deepest contrast.
 var TILE_PALETTE = {
-  maps:    { bg: "#B8593E", grad: "radial-gradient(120% 80% at 80% 20%, #D27052 0%, #B8593E 45%, #8C3F2A 100%)" },
+  compete: { bg: "#B8593E", grad: "radial-gradient(120% 80% at 80% 20%, #D27052 0%, #B8593E 45%, #8C3F2A 100%)" },
   matches: { bg: "#8E6C3F", grad: "radial-gradient(120% 80% at 20% 30%, #B58A56 0%, #8E6C3F 50%, #5E4528 100%)" },
   profile: { bg: "#2A201A", grad: "radial-gradient(120% 80% at 60% 40%, #4A3B30 0%, #2A201A 55%, #14100C 100%)" },
 };
@@ -83,23 +89,23 @@ export default function HomeHub({
   var fullName = (profile && profile.name) || (authUser && authUser.email && authUser.email.split("@")[0]) || "Player";
   var firstName = fullName.split(/\s+/)[0];
 
-  // Maps tile kicker — count active leagues + tournaments.
+  // Compete tile kicker — count active leagues + tournaments.
   var activeLeaguesCount = (myLeagues || []).filter(function (lg) {
     return lg.my_status === "active" && isActive(lg);
   }).length;
   var openTournCount = (tournaments && tournaments.tournaments)
     ? tournaments.tournaments.filter(function (tn) { return tn.status === "open" || tn.status === "active"; }).length
     : 0;
-  var mapsKickerParts = [];
-  if (activeLeaguesCount > 0) mapsKickerParts.push(activeLeaguesCount + " active");
-  if (openTournCount > 0) mapsKickerParts.push(openTournCount + " open");
-  var mapsKicker = mapsKickerParts.length ? mapsKickerParts.join(" · ") : "Browse competitions";
+  var competeKickerParts = [];
+  if (activeLeaguesCount > 0) competeKickerParts.push(activeLeaguesCount + " active");
+  if (openTournCount > 0) competeKickerParts.push(openTournCount + " open");
+  var competeKicker = competeKickerParts.length ? competeKickerParts.join(" · ") : "Browse competitions";
 
-  // Maps tile meta — soonest upcoming league/tournament.
+  // Compete tile meta — soonest upcoming league/tournament.
   var nextLeague = (myLeagues || []).find(function (lg) {
     return lg.my_status === "active" && isActive(lg);
   });
-  var mapsMeta = nextLeague
+  var competeMeta = nextLeague
     ? nextLeague.name
     : "Find a league or tournament";
 
@@ -155,12 +161,12 @@ export default function HomeHub({
       {/* 3-tile stack — full-bleed, 12px gap, square 1:1. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <Tile
-          kind="maps"
-          kicker={mapsKicker}
-          title="Maps"
-          meta={mapsMeta}
+          kind="compete"
+          kicker={competeKicker}
+          title="Compete"
+          meta={competeMeta}
           onClick={function () { navigate("/tournaments"); }}
-          art={<MapsArt />}
+          art={<CompeteArt />}
         />
         <Tile
           kind="matches"
@@ -306,7 +312,7 @@ function Tile({ kind, kicker, title, meta, onClick, art }) {
 
 // Tennis-court abstract — perspective court rectangle with white
 // service/baseline lines + a small bracket motif top-right.
-function MapsArt() {
+function CompeteArt() {
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
       <div style={{

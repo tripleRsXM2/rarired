@@ -67,6 +67,12 @@ function InnerRail({ children, style }) {
 
 export default function CompeteHub({
   t, authUser,
+  // When true, suppresses the in-page CompeteHero — used by the
+  // /tournaments mount in App.jsx where an EditorialScreen wrapper
+  // already provides the back chevron + 56px hero title. CompeteHub
+  // also drops its top padding in this mode so the hero strip
+  // flows directly into the carousel band beneath.
+  hideHero,
   // Hook bundles (passed from App.jsx — same shape as TournamentsTab).
   challenges,
   leagues,
@@ -220,12 +226,14 @@ export default function CompeteHub({
   // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="fade-up" style={{
-      paddingTop:    16,
+      paddingTop:    hideHero ? 0 : 16,
       paddingBottom: 100,
     }}>
-      <InnerRail style={{ marginBottom: "clamp(20px, 3vw, 32px)" }}>
-        <CompeteHero t={t} />
-      </InnerRail>
+      {!hideHero && (
+        <InnerRail style={{ marginBottom: "clamp(20px, 3vw, 32px)" }}>
+          <CompeteHero t={t} />
+        </InnerRail>
+      )}
 
       {/* Carousel band — full-bleed across the viewport on every
           screen size. When there are no active items, it returns
