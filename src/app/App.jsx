@@ -174,7 +174,7 @@ export default function App(){
     tab==="tournaments" ? "Compete" :
     tab==="people"      ? "Friends" :
     tab==="profile"     ? "Profile" :
-    tab==="match"       ? "" :
+    tab==="match"       ? "Log a match" :
     ""
   );
 

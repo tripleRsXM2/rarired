@@ -162,21 +162,15 @@ export default function LogMatchPage({
     && (type !== "league" || !!leagueId);
 
   // ── Handlers ──────────────────────────────────────────────────
-  function close() { navigate(-1); }
-
   function editSet(i, side) {
     setActiveSet(i);
     setActiveSide(side);
     setSheet("score");
   }
 
-  function addSet() {
-    if (sets.length >= 5) return;
-    setSets(sets.concat([{ a: "", b: "" }]));
-    setActiveSet(sets.length);
-    setActiveSide("a");
-    setSheet("score");
-  }
+  // (Page-level + Add set button is gone — adding sets now happens
+  // inside the score sheet's mini preview "+" button. ScoreSheet
+  // owns its own addSet helper.)
 
   function delSet(i) {
     if (sets.length <= 1) {
@@ -308,58 +302,18 @@ export default function LogMatchPage({
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
-      // Lock to viewport — the full flow (top bar + scoreboard +
-      // 4 detail rows + submit) is sized to fit a typical mobile
-      // viewport with 1 set so the user doesn't have to scroll.
-      // Content that DOES overflow (added sets, longer detail
-      // values) still scrolls within the inner body.
-      height:        "100dvh",
+      // Lock to the available viewport — page sits below the global
+      // top mob nav (--cs-nav-h, ~52px + safe-area-top) and above the
+      // fixed bottom tab bar (~80px + safe-area-bottom). Subtracting
+      // both keeps the scoreboard + 4 detail rows + submit visible
+      // without internal scroll on a typical 375x812 mobile.
+      height:        "calc(100dvh - var(--cs-nav-h, 52px) - 80px - env(safe-area-inset-bottom, 0px))",
       display:       "flex",
       flexDirection: "column",
     }}>
-      {/* Top bar — Back · "Log a match" · Close */}
-      <div style={{
-        display:             "grid",
-        gridTemplateColumns: "1fr auto 1fr",
-        alignItems:          "center",
-        padding:             "calc(16px + env(safe-area-inset-top, 0px)) 22px 14px",
-        background:          ED_TOK.bg,
-        position:            "sticky",
-        top:                 0,
-        zIndex:              5,
-      }}>
-        <button
-          onClick={close}
-          aria-label="Back"
-          style={topIconBtn(ED_TOK, "start")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.2"
-            strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6"/>
-          </svg>
-        </button>
-        <span style={{
-          fontFamily:    ED_TOK.mono,
-          fontSize:      11,
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          color:         ED_TOK.muted,
-          fontWeight:    600,
-        }}>
-          Log a match
-        </span>
-        <button
-          onClick={close}
-          aria-label="Close"
-          style={topIconBtn(ED_TOK, "end")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.2"
-            strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 6l12 12M18 6l-12 12"/>
-          </svg>
-        </button>
-      </div>
-
+      {/* No page-specific top bar — the global cs-mob-nav handles
+          the title ("Log a match") via App.jsx's topBarTitle wiring.
+          Users escape via the bottom tab bar. */}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8, minHeight: 0 }}>
         {/* HERO — verdict pill + scoreboard */}
         <div style={{ padding: "14px 22px 16px" }}>
@@ -369,7 +323,6 @@ export default function LogMatchPage({
             activeSet={activeSet}
             activeSide={activeSide}
             onEditCell={editSet}
-            onAddSet={addSet}
             onDelSet={delSet}
           />
         </div>
@@ -508,11 +461,13 @@ export default function LogMatchPage({
 // ── VerdictPill ──────────────────────────────────────────────────
 
 function VerdictPill({ won }) {
-  var bg, color, label;
-  if (won === true)       { bg = "#B8E6C2"; color = "#1A4527"; label = "● Win"; }
-  else if (won === false) { bg = "#F0B5A8"; color = "#5C2018"; label = "● Loss"; }
-  else                    { bg = ED_TOK.bg2; color = ED_TOK.muted; label = "○ Tap to score"; }
-
+  // No "Tap to score" empty state — the pill only shows once the
+  // match has a clear winner. Keeps the top of the page calm when
+  // the user first lands.
+  if (won == null) return null;
+  var bg    = won ? "#B8E6C2" : "#F0B5A8";
+  var color = won ? "#1A4527" : "#5C2018";
+  var label = won ? "● Win" : "● Loss";
   return (
     <div style={{
       fontFamily:    ED_TOK.mono,
@@ -539,7 +494,7 @@ function VerdictPill({ won }) {
 
 // ── Scoreboard (dark card) ──────────────────────────────────────
 
-function Scoreboard({ sets, activeSet, activeSide, onEditCell, onAddSet, onDelSet }) {
+function Scoreboard({ sets, activeSet, activeSide, onEditCell, onDelSet }) {
   return (
     <div style={{
       borderRadius: 22,
@@ -573,118 +528,130 @@ function Scoreboard({ sets, activeSet, activeSide, onEditCell, onAddSet, onDelSe
         <span style={{ textAlign: "right", color: "rgba(240, 233, 218, 0.55)" }}>Opponent</span>
       </div>
 
-      {/* Score rows */}
+      {/* Score rows — swipe left or right to delete (when there's
+          more than one set). The user no longer has a visible "×"
+          or "+ Add set" affordance; sets are added from inside the
+          score sheet's mini preview, and deleted via swipe gesture. */}
       {sets.map(function (s, i) {
         var aN = Number(s.a), bN = Number(s.b);
         var aWins = s.a !== "" && s.b !== "" && aN > bN;
         var bWins = s.a !== "" && s.b !== "" && bN > aN;
         var aActive = activeSet === i && activeSide === "a";
         var bActive = activeSet === i && activeSide === "b";
-
         return (
-          <div key={i} style={{
-            display:             "grid",
-            gridTemplateColumns: "1fr auto 1fr",
-            alignItems:          "center",
-            gap:                 14,
-            padding:             "6px 0",
-            position:            "relative",
-            borderTop:           i === 0 ? "none" : "1px solid rgba(240, 233, 218, 0.08)",
-            marginTop:           i === 0 ? 0 : 4,
-            paddingTop:          i === 0 ? 6 : 10,
-          }}>
-            <ScoreCell side="a" value={s.a} active={aActive} winner={aWins}
-              onClick={function () { onEditCell(i, "a"); }}/>
-            <span style={{
-              fontFamily:    ED_TOK.mono,
-              fontSize:      9.5,
-              fontWeight:    700,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color:         "rgba(240, 233, 218, 0.4)",
-              textAlign:     "center",
-              whiteSpace:    "nowrap",
+          <SwipeableScoreRow key={i}
+            index={i}
+            isFirst={i === 0}
+            canDelete={sets.length > 1}
+            onDelete={function () { onDelSet(i); }}>
+            <div style={{
+              display:             "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              alignItems:          "center",
+              gap:                 14,
+              padding:             "6px 0",
             }}>
-              Set {i + 1}
-            </span>
-            <ScoreCell side="b" value={s.b} active={bActive} winner={bWins}
-              onClick={function () { onEditCell(i, "b"); }}/>
-            {sets.length > 1 && (
-              <button
-                onClick={function (e) { e.stopPropagation(); onDelSet(i); }}
-                aria-label={"Remove set " + (i + 1)}
-                style={{
-                  position:   "absolute",
-                  top:        "50%",
-                  right:      -14,
-                  transform:  "translateY(-50%)",
-                  width:      20, height: 20,
-                  borderRadius: "50%",
-                  background: "rgba(240, 233, 218, 0.14)",
-                  color:      ED_TOK.bg,
-                  border:     "none",
-                  fontSize:   11,
-                  cursor:     "pointer",
-                  display:    "flex",
-                  alignItems: "center", justifyContent: "center",
-                  lineHeight: 1,
-                  opacity:    0,
-                  transition: "opacity 160ms",
-                }}
-                onMouseEnter={function (e) { e.currentTarget.style.opacity = 1; }}
-                onMouseLeave={function (e) { e.currentTarget.style.opacity = 0; }}>
-                ×
-              </button>
-            )}
-          </div>
+              <ScoreCell side="a" value={s.a} active={aActive} winner={aWins}
+                onClick={function () { onEditCell(i, "a"); }}/>
+              <span style={{
+                fontFamily:    ED_TOK.mono,
+                fontSize:      9.5,
+                fontWeight:    700,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color:         "rgba(240, 233, 218, 0.4)",
+                textAlign:     "center",
+                whiteSpace:    "nowrap",
+              }}>
+                Set {i + 1}
+              </span>
+              <ScoreCell side="b" value={s.b} active={bActive} winner={bWins}
+                onClick={function () { onEditCell(i, "b"); }}/>
+            </div>
+          </SwipeableScoreRow>
         );
       })}
+    </div>
+  );
+}
 
-      {/* + Add set */}
-      {sets.length < 5 && (
-        <button
-          onClick={onAddSet}
-          style={{
-            marginTop:    12,
-            width:        "100%",
-            background:   "transparent",
-            border:       "1px dashed rgba(240, 233, 218, 0.22)",
-            color:        "rgba(240, 233, 218, 0.6)",
-            borderRadius: 12,
-            padding:      10,
-            fontFamily:   ED_TOK.mono,
-            fontSize:     10.5,
-            fontWeight:   700,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            cursor:       "pointer",
-            transition:   "160ms",
-          }}
-          onMouseEnter={function (e) {
-            e.currentTarget.style.borderColor = ED_TOK.bg;
-            e.currentTarget.style.color = ED_TOK.bg;
-          }}
-          onMouseLeave={function (e) {
-            e.currentTarget.style.borderColor = "rgba(240, 233, 218, 0.22)";
-            e.currentTarget.style.color = "rgba(240, 233, 218, 0.6)";
-          }}>
-          + Add set
-        </button>
-      )}
+// ── SwipeableScoreRow ───────────────────────────────────────────
+// Touch / mouse drag handler that lets the user dismiss a set row
+// by swiping left or right. Threshold ≈ 40% of row width. Below the
+// threshold the row snaps back; above it the row animates off and
+// fires onDelete. Disabled when only one set remains (the canDelete
+// flag) — the row stays interactive for tapping cells in that case.
+function SwipeableScoreRow({ index, isFirst, canDelete, onDelete, children }) {
+  var [dx, setDx] = useState(0);
+  var [dragging, setDragging] = useState(false);
+  var startX = useRef(0);
+  var startY = useRef(0);
+  var locked = useRef(null); // null | "x" | "y" — once decided, sticks
+  var rowRef = useRef(null);
 
-      {/* Hint */}
-      <div style={{
-        marginTop:     12,
-        fontFamily:    ED_TOK.mono,
-        fontSize:      10.5,
-        fontWeight:    600,
-        letterSpacing: "0.14em",
-        textTransform: "uppercase",
-        color:         "rgba(240, 233, 218, 0.45)",
-        textAlign:     "center",
+  function pointerDown(e) {
+    if (!canDelete) return;
+    var pt = e.touches ? e.touches[0] : e;
+    startX.current = pt.clientX;
+    startY.current = pt.clientY;
+    locked.current = null;
+    setDragging(true);
+  }
+  function pointerMove(e) {
+    if (!dragging) return;
+    var pt = e.touches ? e.touches[0] : e;
+    var ddx = pt.clientX - startX.current;
+    var ddy = pt.clientY - startY.current;
+    if (locked.current == null) {
+      if (Math.abs(ddx) < 6 && Math.abs(ddy) < 6) return;
+      locked.current = Math.abs(ddx) > Math.abs(ddy) ? "x" : "y";
+    }
+    if (locked.current === "x") {
+      // Allow horizontal scroll-like behaviour; cap at row width.
+      var w = rowRef.current ? rowRef.current.clientWidth : 320;
+      var capped = Math.max(-w, Math.min(w, ddx));
+      setDx(capped);
+      // Prevent vertical scroll while horizontally swiping.
+      if (e.cancelable) e.preventDefault();
+    }
+  }
+  function pointerEnd() {
+    if (!dragging) return;
+    setDragging(false);
+    if (locked.current !== "x") { setDx(0); return; }
+    var w = rowRef.current ? rowRef.current.clientWidth : 320;
+    var threshold = w * 0.4;
+    if (Math.abs(dx) > threshold) {
+      // Animate off the screen, then delete.
+      setDx(dx > 0 ? w : -w);
+      setTimeout(function () { onDelete(); }, 180);
+    } else {
+      setDx(0);
+    }
+  }
+
+  return (
+    <div
+      ref={rowRef}
+      onTouchStart={pointerDown}
+      onTouchMove={pointerMove}
+      onTouchEnd={pointerEnd}
+      onMouseDown={pointerDown}
+      onMouseMove={dragging ? pointerMove : undefined}
+      onMouseUp={pointerEnd}
+      onMouseLeave={pointerEnd}
+      style={{
+        position:    "relative",
+        borderTop:   isFirst ? "none" : "1px solid rgba(240, 233, 218, 0.08)",
+        marginTop:   isFirst ? 0 : 4,
+        paddingTop:  isFirst ? 0 : 4,
+        transform:   "translateX(" + dx + "px)",
+        opacity:     1 - Math.min(1, Math.abs(dx) / (rowRef.current?.clientWidth || 320)),
+        transition:  dragging ? "none" : "transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms",
+        touchAction: canDelete ? "pan-y" : "auto",
+        userSelect:  "none",
       }}>
-        Tap any number to edit
-      </div>
+      {children}
     </div>
   );
 }
@@ -1847,21 +1814,6 @@ function MatchCelebration({ data, onDone }) {
 }
 
 // ── helpers ─────────────────────────────────────────────────────
-
-function topIconBtn(tok, justify) {
-  return {
-    width:        34, height: 34,
-    borderRadius: "50%",
-    background:   "transparent",
-    border:       "1px solid " + tok.line,
-    display:      "grid",
-    placeItems:   "center",
-    color:        tok.ink,
-    cursor:       "pointer",
-    justifySelf:  justify === "end" ? "end" : (justify === "start" ? "start" : "center"),
-    transition:   "background 160ms",
-  };
-}
 
 function primaryBtn(tok, disabled) {
   return {
