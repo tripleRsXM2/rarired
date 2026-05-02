@@ -75,5 +75,13 @@ export function normalizeMatch(m, isTagged, isThirdParty){
     // Confirmed-at timestamp — used by the friends-feed pagination cursor
     // and as a tiebreaker when sorting third-party rows alongside own/tagged.
     confirmedAt: m.confirmed_at || null,
+    // Submitted-at + created-at timestamps used as a fallback for the
+    // Activity "NEW" pill freshness check. Auto-confirmed casual
+    // standalone matches don't get confirmed_at populated server-side
+    // (it's only set on a pending → confirmed transition), so without
+    // these the pill check would have nothing to read on a freshly-
+    // logged casual after loadHistory replaces the optimistic row.
+    submittedAt: m.submitted_at || null,
+    createdAt:   m.created_at   || null,
   };
 }
