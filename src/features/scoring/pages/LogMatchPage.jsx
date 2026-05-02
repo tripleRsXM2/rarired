@@ -1016,7 +1016,7 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
                   <span
                     onClick={function () { setActiveSet(i); setActiveSide("a"); }}
                     style={miniNumStyle(ED_TOK, aOn)}>
-                    {s.a || "·"}
+                    {s.a || "0"}
                   </span>
                   <span style={{
                     fontFamily: ED_TOK.display,
@@ -1026,7 +1026,7 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
                   <span
                     onClick={function () { setActiveSet(i); setActiveSide("b"); }}
                     style={miniNumStyle(ED_TOK, bOn)}>
-                    {s.b || "·"}
+                    {s.b || "0"}
                   </span>
                 </span>
               );

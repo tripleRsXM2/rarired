@@ -144,9 +144,13 @@ export default function App(){
   }
   function clearHomeZone(){ applyHomeZone(null); }
 
-  // Redirect bare "/" to /home on first load.
+  // Redirect bare "/" to /match/log on first load — the
+  // editorial Log Match page is now the default landing surface
+  // (the user wants the app to open straight onto the score
+  // entry flow). Other routes (/home, /matches, etc.) are still
+  // reachable via the bottom nav and direct deep-links.
   useEffect(function(){
-    if(location.pathname==="/"||location.pathname==="")navigate("/home",{replace:true});
+    if(location.pathname==="/"||location.pathname==="")navigate("/match/log",{replace:true});
   },[]);
 
   var [profileTab,setProfileTab]=useState("overview");
@@ -864,7 +868,13 @@ export default function App(){
               {/* Left slot — empty per the editorial design. */}
               <div/>
 
-              {/* Center — scroll-reveal page title. */}
+              {/* Center — scroll-reveal page title. The wrapper
+                  takes the auto column; the inner span lays out
+                  on a single line, padded so the bell + avatar on
+                  the right can't overlap the descender on a
+                  trailing letter (the "g" in "Log a match" was
+                  getting clipped by the right column on narrow
+                  viewports). */}
               <span style={{
                 fontFamily:    "'Space Grotesk', -apple-system, sans-serif",
                 fontSize:      17,
@@ -876,6 +886,8 @@ export default function App(){
                 transition:    "opacity 220ms ease, transform 220ms ease",
                 pointerEvents: "none",
                 whiteSpace:    "nowrap",
+                padding:       "0 4px",
+                lineHeight:    1.3,
               }}>
                 {topBarTitle}
               </span>
