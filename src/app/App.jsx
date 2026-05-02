@@ -793,10 +793,12 @@ export default function App(){
           refreshProfile={currentUser.refreshProfileUI}
           onComplete={function(){
             setOnbDone(true);
-            // Belt-and-braces: ensure the URL is /home so the next
-            // render of the main shell lands on the feed (the user
-            // may have entered the flow via /map, /people, etc.).
-            navigate("/home", { replace: true });
+            // Land on /match/log post-onboarding — Log a match is
+            // the app's universal landing surface (also where the
+            // bare-"/" redirect sends users). Newly-onboarded
+            // users see the score-entry flow first instead of an
+            // empty home hub.
+            navigate("/match/log", { replace: true });
           }}
         />
       </Providers>
