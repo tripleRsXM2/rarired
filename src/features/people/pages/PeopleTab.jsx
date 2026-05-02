@@ -434,8 +434,14 @@ export default function PeopleTab({
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
-      minHeight:     "calc(100dvh - 64px)",
-      paddingBottom: 96,
+      // When the chat thread takes over, drop the legacy
+      // bottom-tab-bar reservations (minHeight subtraction +
+      // paddingBottom: 96). The thread owns the full viewport via
+      // cs-dm-root's own height calc and its input bar handles the
+      // safe-area-inset-bottom — anything else added at this layer
+      // produces a cream band below the input bar.
+      minHeight:     threadActive ? undefined : "calc(100dvh - 64px)",
+      paddingBottom: threadActive ? 0 : 96,
     }}>
       {/* Hero block removed — the global top mob nav already labels
           this surface ("Friends"), and the redundant count was
