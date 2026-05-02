@@ -173,7 +173,7 @@ export default function App(){
   // own top bar handles that).
   var topBarTitle = (
     tab==="home"        ? "Home" :
-    tab==="matches"     ? "Matches" :
+    tab==="matches"     ? "Activity" :
     tab==="map"         ? "Maps" :
     tab==="tournaments" ? "Compete" :
     tab==="people"      ? "Friends" :
@@ -1017,6 +1017,7 @@ export default function App(){
               history={matchHistory.history}
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
               openProfile={openProfile}
+              setScrolledPastHero={setScrolledPastHero}
             />
           )}
           {/* (Legacy HomeTab mount preserved below for reference but

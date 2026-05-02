@@ -1,35 +1,45 @@
 // src/features/home/pages/MatchesScreen.jsx
 //
-// Editorial Tennis matches screen (per design-handoff/README §3).
+// Editorial Tennis matches screen — surfaces as the "Activity"
+// bottom-tab destination.
 //
-// Replaces the dense FeedCard-based HomeTab on /matches with a clean
-// match history stream:
-//   1. Hero title "Matches" + kicker "<n> confirmed"
-//   2. 3-stat strip — Played / Wins / Rate
-//   3. Filter chips — All / League / Casual / Tournament
-//   4. Vertical match list — date column · W/L badge · opponent +
+// 2026-05-02: dropped the EditorialScreen wrapper + the redundant
+// "<n> confirmed" kicker + 56px "Matches" hero. The global top
+// mob-nav now handles the title ("Activity") via App.jsx's
+// topBarTitle wiring; the page body opens straight onto the
+// stat strip + filter chips + match list.
+//
+//   1. 3-stat strip — Played / Wins / Rate (now the page hero;
+//      scrolling past it fades "Activity" into the global top bar)
+//   2. Filter chips — All / League / Casual / Tournament
+//   3. Vertical match list — date column · W/L badge · opponent +
 //      score + type · rating delta
 //
 // Data comes from the same matchHistory.history prop the legacy
-// HomeTab used. We surface only confirmed matches here (the stats +
-// list both filter on status='confirmed') because that's what the
-// design's "stream" is — the player's locked-in history. Pending /
-// disputed / expired matches still surface on the home hub via the
-// "+" log-match flow and on the existing /tournaments urgency lines.
-//
-// Tap a row → opens the existing FeedInteractionsModal? No — for
-// Phase 2 we keep it scoped: tap deep-links to /matches/:id (a slot
-// already wired by deepLink utils, picked up downstream). For now,
-// the row click is a no-op stub the user can wire in Phase 3.
+// HomeTab used. We surface only confirmed matches here.
 
-import { useMemo, useState } from "react";
-import EditorialScreen, { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
 import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 
 var FILTERS = ["All", "League", "Casual", "Tournament"];
 
-export default function MatchesScreen({ authUser, history, leaguesIndex, openProfile }) {
+export default function MatchesScreen({ authUser, history, leaguesIndex, openProfile, setScrolledPastHero }) {
   var [filter, setFilter] = useState("All");
+  var heroRef = useRef(null);
+
+  // Scroll observer — fades "Activity" into the global top bar
+  // when the stat strip (the page hero) leaves the viewport.
+  useEffect(function () {
+    if (!heroRef.current) return;
+    if (!setScrolledPastHero) return;
+    setScrolledPastHero(false);
+    var io = new IntersectionObserver(function (entries) {
+      setScrolledPastHero(!entries[0].isIntersecting);
+    }, { threshold: 0.1 });
+    io.observe(heroRef.current);
+    return function () { io.disconnect(); };
+  }, [setScrolledPastHero]);
 
   // Confirmed-only stream + viewer-frame normalization.
   // useMatchHistory already attaches `result` in viewer frame for
@@ -63,14 +73,20 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
   }, [confirmed, filter]);
 
   return (
-    <EditorialScreen
-      kicker={played + " confirmed"}
-      title="Matches">
-      {/* Stat strip — 3 columns with hairline dividers. */}
-      <div style={{
+    <div className="cs-ed-push" style={{
+      background:    ED_TOK.bg,
+      color:         ED_TOK.ink,
+      fontFamily:    ED_TOK.sans,
+      minHeight:     "calc(100dvh - 64px)",
+      paddingBottom: 96,
+    }}>
+      {/* Stat strip — 3 columns with hairline dividers. This is
+          the page hero; scrolling past it fades "Activity" into
+          the global top bar. */}
+      <div ref={heroRef} style={{
         display:             "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
-        padding:             "8px 22px 18px",
+        padding:             "20px 22px 18px",
         borderBottom:        "1px solid " + ED_TOK.line,
         marginBottom:        6,
       }}>
@@ -135,7 +151,7 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
           })}
         </ul>
       )}
-    </EditorialScreen>
+    </div>
   );
 }
 

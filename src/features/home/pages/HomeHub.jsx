@@ -112,20 +112,9 @@ export default function HomeHub({
     ? nextLeague.name
     : "Find a league or tournament";
 
-  // Matches tile — confirmed count + last match.
-  var confirmedHistory = (history || []).filter(function (m) { return m.status === "confirmed"; });
-  var matchesKicker = confirmedHistory.length > 0
-    ? confirmedHistory.length + " confirmed"
-    : "No matches yet";
-  var lastMatch = confirmedHistory[0];
-  var matchesMeta;
-  if (lastMatch) {
-    var oppLabel = lastMatch.friendName || lastMatch.opponentName || lastMatch.oppName || lastMatch.playerName || "—";
-    var scoreLabel = formatMatchScore(lastMatch.sets) || "";
-    matchesMeta = "Last: " + (scoreLabel ? scoreLabel + " · " : "") + oppLabel;
-  } else {
-    matchesMeta = "Log your first match";
-  }
+  // (Matches tile retired — match history now lives behind the
+  // "Activity" bottom tab. The confirmedHistory derivation is no
+  // longer needed on the home hub.)
 
   // Profile tile — region + level kicker; rating + rank meta.
   var region = (profile && profile.suburb) || "Set a home court";
@@ -171,14 +160,9 @@ export default function HomeHub({
           onClick={function () { navigate("/tournaments"); }}
           art={<CompeteArt />}
         />
-        <Tile
-          kind="matches"
-          kicker={matchesKicker}
-          title="Matches"
-          meta={matchesMeta}
-          onClick={function () { navigate("/matches"); }}
-          art={<MatchesArt />}
-        />
+        {/* Matches tile retired 2026-05-02 — match history now
+            lives behind the "Activity" bottom tab, no longer
+            needs its own home-hub slot. */}
         <Tile
           kind="profile"
           kicker={profileKicker}
