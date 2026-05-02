@@ -50,6 +50,24 @@ export default function LogMatchPage({
 }) {
   var navigate = useNavigate();
 
+  // Lock the document body from scrolling/rubber-banding while
+  // this page is mounted. Even with the page wrapper sized to the
+  // viewport and overflow:hidden, iOS Safari can still elastically
+  // drag the document — pinning body overflow:hidden + overscroll-
+  // behavior:none kills that for as long as the user is here, then
+  // restores the prior values on unmount so other pages keep their
+  // native bounce.
+  useEffect(function () {
+    var prevOverflow = document.body.style.overflow;
+    var prevOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    return function () {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+    };
+  }, []);
+
   // ── Form state ────────────────────────────────────────────────
   // Default to ONE set so the page fits a typical mobile viewport
   // without needing to scroll. Users can + Add set up to 5.
@@ -310,6 +328,14 @@ export default function LogMatchPage({
       height:        "calc(100dvh - var(--cs-nav-h, 52px) - 80px - env(safe-area-inset-bottom, 0px))",
       display:       "flex",
       flexDirection: "column",
+      // Kill iOS rubber-band on the page wrapper — without this,
+      // Safari lets the user drag the whole page elastically even
+      // when it fits the viewport exactly (the user-reported "Log
+      // a match still scrolls on iOS"). overscroll-behavior:none
+      // also stops the rubber-band from leaking up to the ancestor
+      // when an inner section actually does need to scroll.
+      overflow:           "hidden",
+      overscrollBehavior: "none",
     }}>
       {/* No page-specific top bar — the global cs-mob-nav handles
           the title ("Log a match") via App.jsx's topBarTitle wiring.
@@ -318,14 +344,18 @@ export default function LogMatchPage({
           margin-top: auto and pin itself to the bottom of the
           available space, right above the global bottom tab bar.
           minHeight: 0 lets the inner overflow:auto behave when
-          content actually overflows (e.g. 5 sets added). */}
+          content actually overflows (e.g. 5 sets added).
+          overscroll-behavior: contain prevents an iOS rubber-band
+          drag from bleeding up to the page wrapper or the
+          document body. */}
       <div style={{
-        flex:           1,
-        overflowY:      "auto",
-        paddingBottom:  8,
-        minHeight:      0,
-        display:        "flex",
-        flexDirection:  "column",
+        flex:               1,
+        overflowY:          "auto",
+        paddingBottom:      8,
+        minHeight:          0,
+        display:            "flex",
+        flexDirection:      "column",
+        overscrollBehavior: "contain",
       }}>
         {/* HERO — verdict pill + scoreboard */}
         <div style={{ padding: "14px 22px 16px" }}>
