@@ -71,7 +71,17 @@ export default function Providers({ t, theme, children }){
       // Mobile default: single column, block layout. Uses 100dvh so iOS
       // Safari's url-bar collapse / Android keyboard open doesn't leave
       // a dead strip at the bottom or push content under the chrome.
-      "html,body{margin:0;padding:0;overflow-x:hidden}",
+      // overflow-x:clip prevents the page from scrolling sideways
+      // (same intent as overflow-x:hidden) WITHOUT breaking
+      // position:sticky on descendants. The hidden variant turns
+      // html/body into a scroll container in modern Chrome / Firefox,
+      // which detaches sticky elements (the global top mob nav)
+      // from the viewport — they scroll with the page instead of
+      // pinning. clip is the spec-blessed alternative for clamping
+      // a single axis without that side effect. Mobile Safari ≥16
+      // and Chrome ≥90 support clip; older fall back to hidden via
+      // the second declaration.
+      "html,body{margin:0;padding:0;overflow-x:hidden;overflow-x:clip}",
       "body{min-height:100dvh}",
       ".cs-shell{min-height:100dvh;display:block;background:"+t.bg+"}",
       ".cs-center-col{flex:1;min-width:0}",

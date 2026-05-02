@@ -64,25 +64,28 @@ export default function HomeHub({
   // Optional — App.jsx may pass it for the maps-tile kicker count.
   // Falls through gracefully when omitted.
   tournaments,
+  // Editorial top-bar scroll callback (App.jsx). Flips to true when
+  // the greeting block scrolls out of view so the global top nav
+  // can fade in "Home". Defaults to a no-op so the page still
+  // renders if mounted outside the App.jsx hierarchy (tests, etc.).
+  setScrolledPastHero,
 }) {
   var navigate = useNavigate();
   var greetRef = useRef(null);
 
-  // The README spec: top-bar title "Home" fades in only after the
-  // greeting scrolls out of view. We watch the greeting block.
-  // Currently we don't render our own top bar (App.jsx renders the
-  // global header), so this state is exposed for future top-bar
-  // integration. For now we still observe to keep the contract honest.
-  // eslint-disable-next-line no-unused-vars
-  var [_titleVisible, setTitleVisible] = useState(true);
+  // Watch the greeting block. While visible → top bar title hidden;
+  // while out of view → top bar title revealed. On unmount the App-
+  // level state resets to true via its tab-change effect.
   useEffect(function () {
     if (!greetRef.current) return;
+    if (!setScrolledPastHero) return;
+    setScrolledPastHero(false);
     var io = new IntersectionObserver(function (entries) {
-      setTitleVisible(entries[0].isIntersecting);
+      setScrolledPastHero(!entries[0].isIntersecting);
     }, { threshold: 0.1 });
     io.observe(greetRef.current);
     return function () { io.disconnect(); };
-  }, []);
+  }, [setScrolledPastHero]);
 
   // ── Derive tile content from real data ──────────────────────────
   // Greeting name — strip to first word for the bold portion.

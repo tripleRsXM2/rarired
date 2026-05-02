@@ -40,11 +40,20 @@ export default function LogMatchPage({
   myLeagues,
   submitMatch,
   toast,
+  // Triggers the post-match opponent feedback prompt (Module 10
+  // Slice 2 — PostMatchFeedbackCard) once a ranked match with a
+  // linked opponent is logged. Surfaces the "rate legitimacy /
+  // sportsmanship" chips so the truth loop closes from both sides
+  // — submitter rates the opponent now (right after logging), the
+  // opponent rates the submitter when they confirm.
+  setPendingFeedbackMatch,
 }) {
   var navigate = useNavigate();
 
   // ── Form state ────────────────────────────────────────────────
-  var [sets, setSets] = useState([{ a: "", b: "" }, { a: "", b: "" }]);
+  // Default to ONE set so the page fits a typical mobile viewport
+  // without needing to scroll. Users can + Add set up to 5.
+  var [sets, setSets] = useState([{ a: "", b: "" }]);
   var [opp, setOpp] = useState(null);            // { id, name, sub }
   var [type, setType] = useState(null);          // 'league' | 'casual' | 'tournament'
   var [leagueId, setLeagueId] = useState(null);  // when type === 'league'
@@ -257,12 +266,36 @@ export default function LogMatchPage({
       type:    type,
       delta:   estDelta,
       isRanked: draft.matchType === "ranked",
+      matchId: res && res.matchId ? String(res.matchId) : null,
     });
   }
 
   function celebrationDone() {
+    var matchId = celebration && celebration.matchId;
+    var oppForFeedback = celebration && celebration.opp;
     setCelebration(null);
     navigate("/home");
+    // Trust loop — once the user lands back home, surface the
+    // PostMatchFeedbackCard so they can rate the opponent's
+    // legitimacy / sportsmanship while the match is still fresh.
+    // Casual matches or freetext (no opp.id) skip — feedback rows
+    // need a reviewed_user_id and a real match_id.
+    if (
+      setPendingFeedbackMatch
+      && matchId
+      && oppForFeedback
+      && oppForFeedback.id
+    ) {
+      // Tiny delay so the celebration's slide-down animation isn't
+      // competing with the feedback card's slide-up.
+      setTimeout(function () {
+        setPendingFeedbackMatch({
+          matchId:        matchId,
+          reviewedUserId: oppForFeedback.id,
+          reviewedName:   oppForFeedback.name,
+        });
+      }, 320);
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────
@@ -275,7 +308,12 @@ export default function LogMatchPage({
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
-      minHeight:     "100dvh",
+      // Lock to viewport — the full flow (top bar + scoreboard +
+      // 4 detail rows + submit) is sized to fit a typical mobile
+      // viewport with 1 set so the user doesn't have to scroll.
+      // Content that DOES overflow (added sets, longer detail
+      // values) still scrolls within the inner body.
+      height:        "100dvh",
       display:       "flex",
       flexDirection: "column",
     }}>
@@ -322,9 +360,9 @@ export default function LogMatchPage({
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 16 }}>
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8, minHeight: 0 }}>
         {/* HERO — verdict pill + scoreboard */}
-        <div style={{ padding: "22px 22px 28px" }}>
+        <div style={{ padding: "14px 22px 16px" }}>
           <VerdictPill won={won} />
           <Scoreboard
             sets={sets}
@@ -368,7 +406,7 @@ export default function LogMatchPage({
         </div>
 
         {/* SUBMIT */}
-        <div style={{ padding: "22px 22px 26px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ padding: "14px 22px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
           <span style={{
             fontFamily:    ED_TOK.mono,
             fontSize:      10.5,
@@ -482,7 +520,7 @@ function VerdictPill({ won }) {
       letterSpacing: "0.18em",
       textTransform: "uppercase",
       fontWeight:    700,
-      marginBottom:  18,
+      marginBottom:  10,
     }}>
       <span style={{
         display:       "inline-flex",
@@ -699,7 +737,7 @@ function DetailRow({ label, value, sub, empty, onClick }) {
         display:        "flex",
         alignItems:     "center",
         gap:            14,
-        padding:        "18px 22px",
+        padding:        "12px 22px",
         borderBottom:   "1px solid " + ED_TOK.line,
         background:     hover ? ED_TOK.bg2 : "transparent",
         border:         "none",

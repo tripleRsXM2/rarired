@@ -4,7 +4,9 @@
 //
 // Replaces the dense ProfileTab on /profile (own-profile only) with a
 // minimal editorial view:
-//   1. Avatar XL + region/level + joined date row
+//   1. Avatar XL + region/level + joined date row (this is the hero
+//      block — when it scrolls out of view, the global top bar fades
+//      "Profile" in)
 //   2. Big rating numeral (clamp 78–104px) + ▲ delta + "CourtSync
 //      rating" microlabel
 //   3. 2x2 stat grid — Rank / Win rate / Time on court / Win streak
@@ -12,27 +14,43 @@
 //   5. Achievements chip row (placeholder until the trust badge
 //      system is wired in — Module 10 territory)
 //
-// Editing — the design has no inline editor here. The right-action
-// of the top bar opens the existing SettingsScreen modal via the
-// onEdit callback piped from App.jsx, so the existing edit flow
-// (avatar, name, suburb, skill, privacy) keeps working without a
-// rewrite. The public-profile route /profile/<id> is unchanged and
-// still renders PlayerProfileView.
+// 2026-05-02: dropped the EditorialScreen wrapper + the redundant
+// 56px "Profile" hero title — the global top mob-nav now handles
+// the title (fades in on scroll). Editing happens via the avatar
+// button in the top mob nav (opens SettingsScreen) — the same
+// path the rest of the app uses, so we don't surface a duplicate
+// "Edit" affordance here.
 //
 // Stats sourced from the same currentUser.profile + matchHistory
 // state ProfileTab uses today, so we don't introduce a new data
 // pipeline — only a new presentation.
 
-import { useMemo } from "react";
-import EditorialScreen, { ED_TOK, MicroLabel, EdDivider } from "../components/EditorialScreen.jsx";
+import { useEffect, useMemo, useRef } from "react";
+import { ED_TOK, MicroLabel, EdDivider } from "../components/EditorialScreen.jsx";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 export default function ProfileScreen({
   authUser,
   profile,
   history,
-  onEdit,
+  // Editorial top-bar scroll callback (App.jsx). Flips to true when
+  // the avatar/region hero block scrolls out of view so the global
+  // top nav can fade in "Profile". Defaults to a no-op so the page
+  // still renders if mounted outside the App.jsx hierarchy.
+  setScrolledPastHero,
 }) {
+  var heroRef = useRef(null);
+  useEffect(function () {
+    if (!heroRef.current) return;
+    if (!setScrolledPastHero) return;
+    setScrolledPastHero(false);
+    var io = new IntersectionObserver(function (entries) {
+      setScrolledPastHero(!entries[0].isIntersecting);
+    }, { threshold: 0.1 });
+    io.observe(heroRef.current);
+    return function () { io.disconnect(); };
+  }, [setScrolledPastHero]);
+
   // ── Derive the editorial fields from real data ────────────────
   var name = (profile && profile.name) || (authUser && authUser.email && authUser.email.split("@")[0]) || "Player";
   var handle = profile && profile.username ? "@" + profile.username : "";
@@ -82,37 +100,21 @@ export default function ProfileScreen({
   }, [history]);
 
   return (
-    <EditorialScreen
-      kicker={handle || "Profile"}
-      title="Profile"
-      rightAction={onEdit ? (
-        <button
-          onClick={onEdit}
-          aria-label="Edit profile"
-          style={{
-            background:    "transparent",
-            border:        "none",
-            color:         ED_TOK.ink,
-            fontFamily:    ED_TOK.mono,
-            fontSize:      11,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            fontWeight:    600,
-            cursor:        "pointer",
-            padding:       "4px 0",
-            transition:    "opacity 160ms",
-          }}
-          onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
-          onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
-          Edit
-        </button>
-      ) : null}>
-      {/* Avatar + region/level/joined block. */}
-      <div style={{
+    <div className="cs-ed-push" style={{
+      background:    ED_TOK.bg,
+      color:         ED_TOK.ink,
+      fontFamily:    ED_TOK.sans,
+      minHeight:     "calc(100dvh - 64px)",
+      paddingBottom: 96,
+    }}>
+      {/* Avatar + region/level/joined block — the hero. The global
+          top mob-nav fades "Profile" in once this block scrolls out
+          of view, per the editorial design. */}
+      <div ref={heroRef} style={{
         display:    "flex",
         alignItems: "center",
         gap:        14,
-        padding:    "12px 22px 16px",
+        padding:    "20px 22px 18px",
       }}>
         <PlayerAvatar
           name={name}
@@ -294,7 +296,7 @@ export default function ProfileScreen({
           })}
         </div>
       </div>
-    </EditorialScreen>
+    </div>
   );
 }
 

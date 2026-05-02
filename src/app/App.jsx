@@ -152,6 +152,32 @@ export default function App(){
   var [profileTab,setProfileTab]=useState("overview");
   var [showSettings,setShowSettings]=useState(false);
 
+  // Top-bar scroll-reveal state. Pages that opt into the editorial
+  // pattern (HomeHub, ProfileScreen) flip this to true via the
+  // setScrolledPastHero prop they receive when their hero element
+  // scrolls out of view. The mobile top nav reads it to fade the
+  // centered page title in. Defaults to true so pages that don't
+  // wire a scroll observer (Compete / Matches / Log Match) still
+  // show their title.
+  var [scrolledPastHero,setScrolledPastHero]=useState(true);
+  // Reset on route change — each page is responsible for setting
+  // it false on mount if it has a scroll observer.
+  useEffect(function(){ setScrolledPastHero(true); },[tab,profilePathId]);
+  // Title shown in the top nav center slot. Derived from the active
+  // tab; pages can override via the topBarTitle prop pattern later
+  // if needed (LogMatchPage stays a kicker-style microlabel — its
+  // own top bar handles that).
+  var topBarTitle = (
+    tab==="home"        ? "Home" :
+    tab==="matches"     ? "Matches" :
+    tab==="map"         ? "Maps" :
+    tab==="tournaments" ? "Compete" :
+    tab==="people"      ? "Friends" :
+    tab==="profile"     ? "Profile" :
+    tab==="match"       ? "" :
+    ""
+  );
+
   // Coordinator ref — lets useAuthController callbacks reach feature hooks
   // that are declared after it without stale closures.
   var coordRef=useRef({});
@@ -801,44 +827,78 @@ export default function App(){
         {/* CENTER COLUMN */}
         <div className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}>
 
-          {/* MOBILE top nav — hidden on desktop via .cs-mob-nav CSS.
-              paddingTop:env(safe-area-inset-top) keeps content below
-              the iOS status bar / Dynamic Island when the PWA runs in
-              standalone mode (apple-mobile-web-app-status-bar-style is
-              "black-translucent", which paints page content behind the
-              system bar by design — without this padding the CS logo
-              and bell sit under the clock). The --cs-nav-h CSS variable
-              bakes the same inset, so .cs-map-frame + any other layout
-              math stays consistent on notched devices. */}
-          <nav className="cs-mob-nav" style={{position:"sticky",top:0,zIndex:40,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",background:t.navBg,borderBottom:"1px solid "+t.border,paddingTop:"env(safe-area-inset-top, 0px)"}}>
-            {/* No maxWidth cap — content stretches edge-to-edge.
-                User feedback: 'when resizing the window, court sync
-                symbol at the top + profile picture/bell don't stick
-                to the side, there is a little gap sometimes.' Cap
-                used to be 680px which left a gutter on viewports
-                between 720px and 1023px (mobile-nav range). */}
-            <div style={{width:"100%",padding:"0 16px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:26,height:26,borderRadius:4,background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:t.accentText,letterSpacing:"-0.5px",flexShrink:0}}>CS</div>
-                <span style={{fontSize:15,fontWeight:700,letterSpacing:"-0.5px",color:t.text}}>CourtSync</span>
-              </div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          {/* MOBILE top nav — Editorial Tennis pass (2026-05-02).
+              Clean: empty left, centered scroll-reveal title, bell +
+              avatar right. The CS logo + wordmark are gone — the
+              left slot stays empty so the title can read centered.
+              Title fades in (220ms) once the active page's hero
+              scrolls out of view; pages signal via the
+              `setScrolledPastHero(true)` callback they receive in
+              props (HomeHub greeting, ProfileScreen avatar row).
+              On pages without a scroll observer the title shows
+              immediately (default visible=true; fade only kicks in
+              for pages that wire it). The --cs-nav-h CSS variable
+              still bakes env(safe-area-inset-top) so notched devices
+              paint correctly behind the iOS status bar. */}
+          {/* Editorial Tennis paper tokens hardcoded — the top bar
+              always reads cream regardless of the legacy theme the
+              user might be on, to match the editorial pages below. */}
+          <nav className="cs-mob-nav" style={{
+            position:       "sticky",
+            top:            0,
+            zIndex:         40,
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            background:     "#F0E9DA",
+            borderBottom:   "1px solid rgba(42, 32, 26, 0.12)",
+            paddingTop:     "env(safe-area-inset-top, 0px)",
+          }}>
+            <div style={{
+              width:               "100%",
+              padding:             "0 16px",
+              height:              52,
+              display:             "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              alignItems:          "center",
+            }}>
+              {/* Left slot — empty per the editorial design. */}
+              <div/>
+
+              {/* Center — scroll-reveal page title. */}
+              <span style={{
+                fontFamily:    "'Space Grotesk', -apple-system, sans-serif",
+                fontSize:      17,
+                fontWeight:    600,
+                letterSpacing: "-0.02em",
+                color:         "#2A201A",
+                opacity:       scrolledPastHero ? 1 : 0,
+                transform:     scrolledPastHero ? "translateY(0)" : "translateY(6px)",
+                transition:    "opacity 220ms ease, transform 220ms ease",
+                pointerEvents: "none",
+                whiteSpace:    "nowrap",
+              }}>
+                {topBarTitle}
+              </span>
+
+              {/* Right — bell + avatar (or Log in when signed out). */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
                 {auth.authUser&&(
                   <button
                     onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markSeen();}}
                     title="Notifications"
                     style={{
-                      position:"relative",width:32,height:32,
-                      background:"transparent",border:"none",padding:0,
+                      position:"relative",width:34,height:34,
+                      background:"transparent",
+                      border:"1px solid rgba(42, 32, 26, 0.12)",
+                      borderRadius:"50%",
+                      padding:0,
                       display:"flex",alignItems:"center",justifyContent:"center",
-                      color:notifications.unreadCount()>0?t.accent:t.textSecondary,
-                      transition:"color 0.15s",cursor:"pointer",
+                      color:"#2A201A",
+                      transition:"background 0.15s, color 0.15s",cursor:"pointer",
                     }}>
-                    {NAV_ICONS.notifications(18)}
+                    {NAV_ICONS.notifications(16)}
                     {notifications.unreadCount()>0&&(
-                      <div style={{position:"absolute",top:-2,right:-2,minWidth:14,height:14,padding:"0 3px",borderRadius:8,background:t.accent,border:"2px solid "+t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:t.accentText,letterSpacing:"-0.02em"}}>
-                        {notifications.unreadCount()>9?"9+":notifications.unreadCount()}
-                      </div>
+                      <div style={{position:"absolute",top:-1,right:-1,width:9,height:9,borderRadius:"50%",background:"#FF2D55",border:"2px solid #F0E9DA"}}/>
                     )}
                   </button>
                 )}
@@ -913,6 +973,7 @@ export default function App(){
               myLeagues={leagues.leagues}
               submitMatch={matchHistory.submitMatch}
               toast={toast}
+              setPendingFeedbackMatch={setPendingFeedbackMatch}
             />
           )}
 
@@ -929,6 +990,7 @@ export default function App(){
               history={matchHistory.history}
               myLeagues={leagues.leagues}
               tournaments={tournaments}
+              setScrolledPastHero={setScrolledPastHero}
             />
           )}
           {/* /matches — Editorial Tennis match history (Phase 2).
@@ -1151,7 +1213,7 @@ export default function App(){
             authUser={auth.authUser}
             profile={currentUser.profile}
             history={matchHistory.history}
-            onEdit={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+            setScrolledPastHero={setScrolledPastHero}
           />
         )}
         {/* Legacy ProfileTab mount — gated false until Phase 3. */}
