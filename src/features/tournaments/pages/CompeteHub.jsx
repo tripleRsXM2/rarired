@@ -34,7 +34,7 @@
 //       League     → opens the existing CreateLeagueModal
 //       Tournament → /tournaments/list (existing browse page)
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
 import { isActive, isPastLifecycle, LIFECYCLE_LABELS } from "../../leagues/utils/leagueLifecycle.js";
@@ -50,9 +50,28 @@ export default function CompeteHub({
   history,
   openChallenge,           // eslint-disable-line no-unused-vars — kept for future "rematch from card" wiring
   toast,                   // eslint-disable-line no-unused-vars
+  // Editorial top-bar scroll callback. Flips to true when the
+  // in-page 72px "Compete" hero scrolls out of view so the global
+  // top mob-nav can fade in "Compete". Same pattern as HomeHub +
+  // ProfileScreen.
+  setScrolledPastHero,
 }) {
   var navigate = useNavigate();
   var viewerId = authUser && authUser.id;
+  var heroRef = useRef(null);
+
+  // Scroll observer — gates the global top-bar title on the page
+  // hero leaving the viewport.
+  useEffect(function () {
+    if (!heroRef.current) return;
+    if (!setScrolledPastHero) return;
+    setScrolledPastHero(false);
+    var io = new IntersectionObserver(function (entries) {
+      setScrolledPastHero(!entries[0].isIntersecting);
+    }, { threshold: 0.1 });
+    io.observe(heroRef.current);
+    return function () { io.disconnect(); };
+  }, [setScrolledPastHero]);
 
   var [pastOpen, setPastOpen] = useState(false);
   var [plusOpen, setPlusOpen] = useState(false);
@@ -216,8 +235,10 @@ export default function CompeteHub({
       paddingBottom: 96,
       position:      "relative",
     }}>
-      {/* Hero header — kicker + 72px "Compete" title. */}
-      <div style={{ padding: "8px 22px 18px" }}>
+      {/* Hero header — kicker + 72px "Compete" title. The heroRef
+          on this block is observed so the global top mob-nav only
+          fades "Compete" in once the user has scrolled past it. */}
+      <div ref={heroRef} style={{ padding: "8px 22px 18px" }}>
         <div style={{
           fontFamily:    ED_TOK.mono,
           fontSize:      10.5,

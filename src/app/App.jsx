@@ -1024,6 +1024,7 @@ export default function App(){
               history={matchHistory.history}
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
               openProfile={openProfile}
+              onReviewMatch={openReviewForMatch}
               setScrolledPastHero={setScrolledPastHero}
             />
           )}
@@ -1135,6 +1136,7 @@ export default function App(){
                 history={matchHistory.history}
                 openChallenge={openChallenge}
                 toast={toast}
+                setScrolledPastHero={setScrolledPastHero}
               />
             ) : (
               <TournamentsTab

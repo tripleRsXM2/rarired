@@ -22,9 +22,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
 import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 
-var FILTERS = ["All", "League", "Casual", "Tournament"];
+var FILTERS = ["All", "Ranked", "League", "Casual", "Tournament"];
 
-export default function MatchesScreen({ authUser, history, leaguesIndex, openProfile, setScrolledPastHero }) {
+// Statuses that count as "needs the viewer's attention" — surfaced
+// inline in the list with a Pending pill + tap-to-review.
+var PENDING_STATUSES = ["pending_confirmation", "disputed", "pending_reconfirmation"];
+
+export default function MatchesScreen({ authUser, history, leaguesIndex, openProfile, onReviewMatch, setScrolledPastHero }) {
   var [filter, setFilter] = useState("All");
   var heroRef = useRef(null);
 
@@ -41,9 +45,8 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
     return function () { io.disconnect(); };
   }, [setScrolledPastHero]);
 
-  // Confirmed-only stream + viewer-frame normalization.
-  // useMatchHistory already attaches `result` in viewer frame for
-  // tagged rows (the user's POV) so we can read it directly.
+  // Confirmed stream — used for the stat strip (Played / Wins /
+  // Rate). Only confirmed rows count toward stats.
   var confirmed = useMemo(function () {
     return (history || []).filter(function (m) { return m.status === "confirmed"; });
   }, [history]);
@@ -53,24 +56,34 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
   var wins   = confirmed.filter(function (m) { return m.result === "win"; }).length;
   var rate   = played > 0 ? Math.round((wins / played) * 100) : 0;
 
-  // Filtered list per chip.
+  // List stream — confirmed + pending (so the user can review
+  // pending matches inline). Pending rows render with a Pending
+  // pill instead of a W/L badge and a tap opens the review drawer.
+  var listStream = useMemo(function () {
+    return (history || []).filter(function (m) {
+      return m.status === "confirmed" || PENDING_STATUSES.indexOf(m.status) !== -1;
+    });
+  }, [history]);
+
+  // Filtered list per chip. Filters apply across both confirmed
+  // and pending rows so a pending ranked match still shows under
+  // "Ranked" / "League" / etc. as expected.
   var filtered = useMemo(function () {
-    if (filter === "All") return confirmed;
-    if (filter === "Tournament") {
-      return confirmed.filter(function (m) {
+    function matches(m) {
+      if (filter === "All") return true;
+      if (filter === "Tournament") {
         return !!m.tournament_id || (m.tournName && m.tournName !== "Casual Match" && m.tournName !== "Ranked");
-      });
+      }
+      if (filter === "League")  return !!m.league_id;
+      if (filter === "Casual")  return m.match_type === "casual" && !m.league_id;
+      // Ranked = match_type ranked AND not in a league/tournament.
+      // Same shape rule we use for Casual (league rows live under
+      // the League chip, tournament rows under the Tournament chip).
+      if (filter === "Ranked")  return m.match_type === "ranked" && !m.league_id && !m.tournament_id;
+      return true;
     }
-    if (filter === "League") {
-      return confirmed.filter(function (m) { return !!m.league_id; });
-    }
-    if (filter === "Casual") {
-      return confirmed.filter(function (m) {
-        return m.match_type === "casual" && !m.league_id;
-      });
-    }
-    return confirmed;
-  }, [confirmed, filter]);
+    return listStream.filter(matches);
+  }, [listStream, filter]);
 
   return (
     <div className="cs-ed-push" style={{
@@ -104,11 +117,15 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
         </div>
       </div>
 
-      {/* Filter chips. */}
+      {/* Filter chips — single row, never wrap. With 5 chips
+          (All / Ranked / League / Casual / Tournament) they need
+          tighter padding + letter-spacing to fit a 375px viewport.
+          Equal flex:1 share so they auto-resize and centre their
+          text rather than ellipsizing. */}
       <div style={{
         display:     "flex",
         gap:         6,
-        flexWrap:    "wrap",
+        flexWrap:    "nowrap",
         padding:     "0 22px 14px",
       }}>
         {FILTERS.map(function (f) {
@@ -118,18 +135,22 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
               key={f}
               onClick={function () { setFilter(f); }}
               style={{
+                flex:          "1 1 0",
+                minWidth:      0,
                 background:    on ? ED_TOK.ink : "transparent",
                 border:        "1px solid " + (on ? ED_TOK.ink : ED_TOK.line),
                 color:         on ? ED_TOK.bg  : ED_TOK.ink2,
                 borderRadius:  999,
-                padding:       "6px 12px",
+                padding:       "6px 4px",
                 fontFamily:    ED_TOK.mono,
-                fontSize:      11,
-                letterSpacing: "0.08em",
+                fontSize:      10,
+                letterSpacing: "0.06em",
                 fontWeight:    500,
                 textTransform: "uppercase",
                 cursor:        "pointer",
                 transition:    "160ms",
+                whiteSpace:    "nowrap",
+                textAlign:     "center",
               }}>
               {f}
             </button>
@@ -145,7 +166,14 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
           {filtered.map(function (m, idx) {
             return (
               <li key={m.id || idx}>
-                <MatchRow match={m} authUser={authUser} leaguesIndex={leaguesIndex} openProfile={openProfile} isLast={idx === filtered.length - 1} />
+                <MatchRow
+                  match={m}
+                  authUser={authUser}
+                  leaguesIndex={leaguesIndex}
+                  openProfile={openProfile}
+                  onReviewMatch={onReviewMatch}
+                  isLast={idx === filtered.length - 1}
+                />
               </li>
             );
           })}
@@ -157,8 +185,15 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
 
 // ── MatchRow ────────────────────────────────────────────────────
 // Grid: [date][W/L badge][main stack: opp + score · type][delta]
-function MatchRow({ match, authUser, leaguesIndex, openProfile, isLast }) {
-  var won = match.result === "win";
+//
+// Pending rows (status !== 'confirmed') swap the W/L badge for a
+// muted "?" placeholder, render a Pending pill in the right slot
+// instead of the rating delta, and route the tap to onReviewMatch
+// (opens the existing ActionReviewDrawer) instead of the
+// opponent's profile.
+function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, isLast }) {
+  var isPending = match.status !== "confirmed";
+  var won  = !isPending && match.result === "win";
 
   // Opponent display name — useMatchHistory normalizes this onto
   // friendName/opponentName/oppName/playerName depending on the row
@@ -192,10 +227,15 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, isLast }) {
     ? match.rating_delta
     : null;
 
-  // Tap — opens opponent profile when we have an id; cheaper than
-  // wiring a new match-detail route in Phase 2. Falls back to no-op
-  // when the row is freetext/unlinked.
+  // Tap behaviour:
+  //   pending → open the review drawer so the user can confirm /
+  //             dispute / void without leaving Activity
+  //   confirmed → open the opponent's profile (cheap, no new route)
   function handleClick() {
+    if (isPending) {
+      if (onReviewMatch) onReviewMatch(match);
+      return;
+    }
     if (!openProfile) return;
     var oppId = match.opponent_id;
     if (match.isTagged) oppId = match.submitterId;
@@ -234,7 +274,8 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, isLast }) {
         {dateLabel.short}
       </div>
 
-      {/* W/L badge */}
+      {/* Result badge — W / L for confirmed, "?" for pending so
+          the row visually reads as "still in flight". */}
       <div style={{
         width:        28,
         height:       28,
@@ -244,11 +285,15 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, isLast }) {
         fontFamily:   ED_TOK.mono,
         fontWeight:   700,
         fontSize:     12,
-        border:       "1.5px solid " + (won ? "rgba(58,125,68,0.5)" : "rgba(195,57,43,0.5)"),
-        color:        won ? ED_TOK.win : ED_TOK.loss,
-        background:   won ? "rgba(58,125,68,0.06)" : "rgba(195,57,43,0.06)",
+        border:       "1.5px solid " + (
+          isPending ? ED_TOK.line :
+          won       ? "rgba(58,125,68,0.5)" :
+                      "rgba(195,57,43,0.5)"
+        ),
+        color:        isPending ? ED_TOK.muted : (won ? ED_TOK.win : ED_TOK.loss),
+        background:   isPending ? "transparent" : (won ? "rgba(58,125,68,0.06)" : "rgba(195,57,43,0.06)"),
       }}>
-        {won ? "W" : "L"}
+        {isPending ? "?" : (won ? "W" : "L")}
       </div>
 
       {/* Main stack */}
@@ -282,8 +327,26 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, isLast }) {
         </div>
       </div>
 
-      {/* Delta */}
-      {delta != null ? (
+      {/* Right slot — Pending pill for pending rows (tap-to-review),
+          rating delta for confirmed ranked rows, blank otherwise. */}
+      {isPending ? (
+        <span style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      9.5,
+          fontWeight:    700,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color:         "#7A4118",
+          background:    "#F0C8B8",
+          padding:       "4px 10px",
+          borderRadius:  999,
+          whiteSpace:    "nowrap",
+        }}>
+          {match.status === "disputed" || match.status === "pending_reconfirmation"
+            ? "Disputed"
+            : "Pending"}
+        </span>
+      ) : delta != null ? (
         <div style={{
           fontFamily:    ED_TOK.mono,
           fontWeight:    700,
