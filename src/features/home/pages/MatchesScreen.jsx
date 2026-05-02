@@ -262,15 +262,33 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
   // Tap behaviour:
   //   pending → open the review drawer so the user can confirm /
   //             dispute / void without leaving Activity
-  //   confirmed → open the opponent's profile (cheap, no new route)
+  //   confirmed → open the profile of whoever is DISPLAYED on the row
+  //
+  // Identity rule must mirror the display chain at the top of this
+  // component (`match.friendName || match.opponentName || ...`) so a
+  // tap on the visible name lands on the matching profile. The chain
+  // splits by row flavour:
+  //   own         (!isTagged, !isThirdParty) → display = oppName
+  //                                            opp     = opponent_id
+  //   tagged      (isTagged)  → display = friendName (submitter's
+  //                             real name, patched in useMatchHistory)
+  //                             opp     = submitterId
+  //   third-party (isThirdParty) → display = friendName (the SUBMITTER
+  //                             of the friends-feed row, NOT the
+  //                             non-viewer "opponent_id"). Click was
+  //                             previously opening opponent_id, which
+  //                             produced a Mdawg-row → Mikey-profile
+  //                             jump on rows where Mdawg submitted vs
+  //                             Mikey.
   function handleClick() {
     if (isPending) {
       if (onReviewMatch) onReviewMatch(match);
       return;
     }
     if (!openProfile) return;
-    var oppId = match.opponent_id;
-    if (match.isTagged) oppId = match.submitterId;
+    var oppId = (match.isTagged || match.isThirdParty)
+      ? match.submitterId
+      : match.opponent_id;
     if (oppId && (!authUser || oppId !== authUser.id)) openProfile(oppId);
   }
 

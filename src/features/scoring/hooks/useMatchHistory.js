@@ -499,7 +499,10 @@ export function useMatchHistory(opts){
     // Invite-flow rows skip match_tag — there's no opponent_id yet; the
     // notification path fires when the recipient claims via claim_match_invite.
     if(needsConfirmation&&sendNotification){
-      await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
+      var tagRes = await sendNotification({user_id:opponentId,type:'match_tag',from_user_id:authUser.id,match_id:matchId});
+      if (tagRes && tagRes.error) {
+        console.warn('[match_tag notification failed]', tagRes.error.message || tagRes.error);
+      }
     }
     // Module 9.1.5 — closes the trust gap on casual matches with a
     // linked opponent. The match auto-confirms (no Elo to argue
@@ -512,8 +515,24 @@ export function useMatchHistory(opts){
     //   - not invite-flow              (invite path has its own loop)
     // Activity-bucket informational notification — see
     // notifUtils.js for copy + sort weight.
+    //
+    // Failure is non-fatal (the match insert already succeeded) but
+    // logged with full RPC context so a 'unknown notification type'
+    // (migration not applied) or 'not a casual match between caller
+    // and recipient' (standing check) error is debuggable instead of
+    // disappearing into await-discarded silence.
     if(!needsConfirmation && matchType === 'casual' && opponentId && !inviteFlow && sendNotification){
-      await sendNotification({user_id:opponentId,type:'casual_match_logged',from_user_id:authUser.id,match_id:matchId});
+      var casualRes = await sendNotification({user_id:opponentId,type:'casual_match_logged',from_user_id:authUser.id,match_id:matchId});
+      if (casualRes && casualRes.error) {
+        console.warn('[casual_match_logged notification failed]', {
+          message: casualRes.error.message || casualRes.error,
+          code:    casualRes.error.code,
+          details: casualRes.error.details,
+          hint:    casualRes.error.hint,
+          recipient: opponentId,
+          matchId:   matchId,
+        });
+      }
     }
     track("match_logged",{match_id:matchId,is_ranked:matchType==='ranked',match_type:matchType,has_opponent_linked:!!opponentId,is_invite_flow:!!inviteFlow,sets:clean.length,result:scoreDraft.result});
     // Module 4: convert accepted challenge → completed when this match was

@@ -62,6 +62,7 @@ import { inputStyle } from "../../../lib/theme.js";
 import { PresenceDot } from "./PresenceIndicator.jsx";
 import { getPresence } from "../services/presenceService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
+import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 import EmojiPicker from "./EmojiPicker.jsx";
 import DetailsDrawer from "./DetailsDrawer.jsx";
 import { uploadDMAttachment, IMG_PREFIX, isImageMessageContent, extractImageUrl, MAX_ATTACHMENT_BYTES, createSignedDMUrl } from "../services/dmAttachmentUpload.js";
@@ -176,6 +177,22 @@ function IconPaperclip(p) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}>
       <path d="M13.5 8.5L8 14a3 3 0 1 1-4.2-4.3l6.5-6.5a2 2 0 1 1 2.8 2.9L6.8 12.4a1 1 0 1 1-1.4-1.4l5.8-5.8"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+// Editorial smiley — line-art SVG (per the no-emoji-as-icons rule
+// in CLAUDE.md). Used as the affordance for the emoji picker on
+// the message input bar; the picker still inserts real emoji into
+// message bodies, which is content not chrome.
+function IconSmiley(p) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" {...p}>
+      <circle cx="9" cy="9" r="7"
+        stroke="currentColor" strokeWidth="1.5"/>
+      <circle cx="6.5" cy="7.5" r="0.8" fill="currentColor"/>
+      <circle cx="11.5" cy="7.5" r="0.8" fill="currentColor"/>
+      <path d="M6 11c.6.9 1.7 1.5 3 1.5s2.4-.6 3-1.5"
         stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -741,7 +758,14 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   return (
     <div className="cs-dm-root" style={{
       display: "flex",
-      height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h) - 140px)",
+      // Fill the viewport minus the global top mob nav and bottom
+      // tab bar. The legacy "- 140px" reserved an oversized gap for
+      // the old input bar; the new editorial bar is ~42px and sits
+      // INSIDE this root, so the extra subtraction left a visible
+      // dead band below the bar. Letting the root span the full
+      // remaining viewport pins the input bar to the actual bottom
+      // edge above the tab nav.
+      height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
       minHeight: 420,
     }}>
       {/* ── List pane ─────────────────────────────────────────────────── */}
@@ -974,13 +998,46 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       ), document.body)}
 
-      {/* Header — paddingTop gives the 36px avatar breathing room from
-          the tabs row above; without it the top of the circle clips
-          (user feedback: 'players are cut off at the top'). */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 10, paddingBottom: 12, marginBottom: 4 }}>
-        <button onClick={function () { dms.closeConversation(); setMenuState(null); setShowSettings(false); setShowInputEmoji(null); }}
-          style={{ background: "transparent", border: "none", color: t.accent, fontSize: 22, lineHeight: 1, padding: "0 6px 0 0", flexShrink: 0, cursor: "pointer" }}
-          aria-label="Back">←</button>
+      {/* Header — owns the full top of the screen on mobile when the
+          thread is open (PeopleTab hides its own search + sub-tabs
+          and signals App.jsx to hide the global top mob nav). On
+          desktop it sits inline above the message list as before.
+          paddingTop bakes in env(safe-area-inset-top) so the chrome
+          paints up through the iOS notch region — same pattern the
+          League detail view uses. */}
+      <div style={{
+        display:      "flex",
+        alignItems:   "center",
+        gap:          10,
+        padding:      "calc(env(safe-area-inset-top, 0px) + 14px) 4px 14px",
+        marginBottom: 4,
+        background:   ED_TOK.bg,
+        borderBottom: "1px solid " + ED_TOK.line,
+        position:     "sticky",
+        top:          "var(--cs-nav-h, 0px)",
+        zIndex:       3,
+      }}>
+        <button
+          onClick={function () { dms.closeConversation(); setMenuState(null); setShowSettings(false); setShowInputEmoji(null); }}
+          aria-label="Back"
+          style={{
+            width:        32,
+            height:       32,
+            borderRadius: "50%",
+            background:   "transparent",
+            border:       "1px solid " + ED_TOK.line,
+            color:        ED_TOK.ink,
+            display:      "grid",
+            placeItems:   "center",
+            cursor:       "pointer",
+            flexShrink:   0,
+          }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
         {conv.isGroup ? (
           <button
             type="button"
@@ -1414,37 +1471,57 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
       {/* Input */}
       {(!isPending || iAmSender) && (
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: dms.replyTo ? 0 : 0, paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div style={{
+          display:       "flex",
+          gap:            8,
+          alignItems:     "flex-end",
+          paddingBottom:  "env(safe-area-inset-bottom)",
+          fontFamily:     ED_TOK.sans,
+        }}>
+          {/* Emoji button — SVG smiley (per the no-emoji-as-icons
+              rule in CLAUDE.md). Round outlined chip in editorial
+              palette. */}
           <button
             ref={emojiBtnRef}
             type="button"
             onClick={function (e) {
-              // Capture the rect synchronously — React's pooled event can
-              // null currentTarget by the time the setState callback runs.
               var rect = e.currentTarget.getBoundingClientRect();
               setShowInputEmoji(function (prev) { return prev ? null : rect; });
             }}
             aria-label="Insert emoji"
             style={{
-              width: 38, height: 42, flexShrink: 0,
-              background: "transparent", border: "1px solid " + t.border,
-              borderRadius: 12, color: t.text, fontSize: 18, cursor: "pointer",
-              padding: 0,
-            }}>😊</button>
+              width:        42, height: 42, flexShrink: 0,
+              background:   "transparent",
+              border:       "1px solid " + ED_TOK.line,
+              borderRadius: "50%",
+              color:        ED_TOK.ink,
+              cursor:       "pointer",
+              padding:      0,
+              display:      "grid",
+              placeItems:   "center",
+            }}>
+            <IconSmiley/>
+          </button>
+          {/* Attach image — round outlined chip, paperclip SVG. */}
           <button
             type="button"
             disabled={uploading}
             onClick={pickImageFile}
             aria-label="Attach image"
             style={{
-              width: 38, height: 42, flexShrink: 0,
-              background: "transparent", border: "1px solid " + t.border,
-              borderRadius: 12, color: uploading ? t.textTertiary : t.text,
-              cursor: uploading ? "wait" : "pointer",
-              padding: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              width:        42, height: 42, flexShrink: 0,
+              background:   "transparent",
+              border:       "1px solid " + ED_TOK.line,
+              borderRadius: "50%",
+              color:        uploading ? ED_TOK.muted : ED_TOK.ink,
+              cursor:       uploading ? "wait" : "pointer",
+              padding:      0,
+              display:      "grid",
+              placeItems:   "center",
             }}>
-            {uploading ? <span style={{ fontSize: 11 }}>…</span> : <IconPaperclip/>}
+            {uploading ? <span style={{ fontFamily: ED_TOK.mono, fontSize: 11 }}>…</span> : <IconPaperclip/>}
           </button>
+          {/* Textarea — editorial pill input, cream bg2 + hairline. */}
           <textarea
             ref={inputRef}
             rows={1}
@@ -1453,9 +1530,6 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             onChange={function (e) {
               dms.setMsgDraft(e.target.value);
               autoGrow(e.target);
-              // Broadcast a typing event to the partner — throttled to
-              // one every 2s so fast typists don't flood realtime.
-              // v1: typing indicator is 1:1 only — no fan-out for groups.
               if (dms.activeConv && dms.activeConv.isGroup) return;
               var now = Date.now();
               if (!typingSentRef.current || now - typingSentRef.current > 2000) {
@@ -1466,26 +1540,48 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               }
             }}
             onKeyDown={function (e) {
-              // Desktop: Enter sends, Shift+Enter newlines. Mobile enters a newline
-              // (the Send button is the action).
               var isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
               if (e.key === "Enter" && !e.shiftKey && !isMobile) { e.preventDefault(); trySend(); }
             }}
-            style={Object.assign({}, inputStyle(t), {
-              flex: 1, resize: "none", fontSize: 16, // 16 prevents iOS auto-zoom
-              padding: "10px 14px", borderRadius: 12,
-              minHeight: 42, maxHeight: 140, lineHeight: 1.4,
-              overflow: "auto",
-            })} />
+            style={{
+              flex:          1,
+              resize:        "none",
+              fontFamily:    ED_TOK.sans,
+              fontSize:      16, // 16 prevents iOS auto-zoom
+              padding:       "10px 16px",
+              borderRadius:  999,
+              minHeight:     42,
+              maxHeight:     140,
+              lineHeight:    1.4,
+              overflow:      "auto",
+              background:    ED_TOK.bg2,
+              border:        "1px solid " + ED_TOK.line,
+              color:         ED_TOK.ink,
+              outline:       "none",
+            }}/>
+          {/* Send — ink-on-cream pill, mono uppercase. Disabled state
+              holds the same shape so the bar geometry stays stable
+              while the user is mid-compose. */}
           <button
             disabled={!dms.msgDraft.trim() || dms.sending}
             onClick={trySend}
             aria-label="Send message"
             style={{
-              padding: "10px 16px", borderRadius: 12, border: "none",
-              background: t.accent, color: t.accentText, fontSize: 13, fontWeight: 700,
-              opacity: (!dms.msgDraft.trim() || dms.sending) ? 0.45 : 1,
-              flexShrink: 0, height: 42, cursor: (!dms.msgDraft.trim() || dms.sending) ? "not-allowed" : "pointer",
+              padding:       "0 18px",
+              height:        42,
+              borderRadius:  999,
+              border:        "1px solid " + ED_TOK.ink,
+              background:    ED_TOK.ink,
+              color:         ED_TOK.bg,
+              fontFamily:    ED_TOK.mono,
+              fontSize:      11,
+              fontWeight:    700,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              opacity:       (!dms.msgDraft.trim() || dms.sending) ? 0.4 : 1,
+              flexShrink:    0,
+              cursor:        (!dms.msgDraft.trim() || dms.sending) ? "not-allowed" : "pointer",
+              transition:    "opacity 140ms ease",
             }}>
             {dms.sending ? "…" : "Send"}
           </button>

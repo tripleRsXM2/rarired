@@ -1,43 +1,41 @@
 // src/features/profile/pages/PlayerProfileView.jsx
 //
-// Read-only public profile for any user that isn't the viewer. Shows identity
-// (name, location, skill), verification-oriented stats (confirmed count,
-// ranking, record, streak), and head-to-head against the viewer computed
-// locally from the viewer's own match history.
+// Editorial Tennis read-only profile for any user that isn't the
+// viewer. Mirrors the language of ProfileScreen (own-profile) so a
+// tap on a friend's avatar lands in the same visual realm — cream
+// paper, mono kickers, big rating numeral, hairline dividers — with
+// the friend-specific affordances (Challenge CTA + Block menu +
+// Head-to-head block) layered in.
 //
-// Kept intentionally lean for Module 1: no achievements, no availability,
-// no match history for the subject (RLS-restricted). Those surfaces are for
-// later modules when we have an RPC for public match data.
+// 2026-05-03 rewrite: drops the legacy `t`-token ProfileHero shared
+// component in favour of inline ED_TOK styling so the typography +
+// palette stay identical to the own-profile screen.
 
 import { useEffect, useState } from "react";
+import { ED_TOK, MicroLabel, EdDivider } from "../../home/components/EditorialScreen.jsx";
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { usePlayerProfile } from "../hooks/usePlayerProfile.js";
-import {
-  computeHeadToHead,
-} from "../utils/profileStats.js";
-import { track } from "../../../lib/analytics.js";
-import ProfileHero from "../components/ProfileHero.jsx";
+import { computeHeadToHead } from "../utils/profileStats.js";
 import { fetchTrustBadge } from "../../trust/services/trustService.js";
+import { track } from "../../../lib/analytics.js";
 
 export default function PlayerProfileView({
-  t, authUser, userId, viewerHistory, onBack, openChallenge, blockUser,
+  // t kept on the prop list for back-compat (Block menu still pulls
+  // a couple of legacy colour tokens for the destructive button copy).
+  t,
+  authUser, userId, viewerHistory, onBack, openChallenge, blockUser,
 }) {
   var state = usePlayerProfile(userId);
   var profile = state.profile;
 
-  // Module 3.5: fire once per public-profile view, once the real profile has
-  // loaded. Skeleton / error / not-found states don't count.
+  // Module 3.5: fire once per public-profile view, after the real
+  // profile has loaded.
   useEffect(function () {
     if (!profile || !profile.id) return;
-    track("profile_viewed", {
-      target_user_id: profile.id,
-      is_self: false,
-    });
+    track("profile_viewed", { target_user_id: profile.id, is_self: false });
   }, [profile && profile.id]);
 
-  // Module 10 Slice 2 — fetch the public reliability badge (responsive /
-  // reliable / confirmed) for this profile. Surfaces under the rating
-  // line in ProfileHero. Best-effort: if the fetch fails we silently
-  // render nothing (badges are an enhancement, not a critical path).
+  // Module 10 Slice 2 — public reliability badge.
   var [trustBadge, setTrustBadge] = useState(null);
   useEffect(function () {
     if (!profile || !profile.id) return;
@@ -48,246 +46,370 @@ export default function PlayerProfileView({
     return function () { alive = false; };
   }, [profile && profile.id]);
 
-  // Loading / error / not-found shells — all styled the same as the real
-  // profile hero so the layout doesn't jump when the fetch resolves.
-  if (state.loading) {
-    return <Shell t={t} onBack={onBack}><Skeleton t={t} /></Shell>;
-  }
+  if (state.loading) return <Shell onBack={onBack}><Skeleton/></Shell>;
   if (state.error) {
-    return <Shell t={t} onBack={onBack}>
-      <Empty t={t} title="Couldn't load profile" body={state.error} />
+    return <Shell onBack={onBack}>
+      <Empty title="Couldn't load profile" body={state.error}/>
     </Shell>;
   }
   if (!profile) {
-    return <Shell t={t} onBack={onBack}>
-      <Empty t={t} title="Profile not found" body="This player may have deleted their account." />
+    return <Shell onBack={onBack}>
+      <Empty title="Profile not found" body="This player may have deleted their account."/>
     </Shell>;
   }
 
-  var wins    = profile.wins || 0;
-  var losses  = profile.losses || 0;
-  var played  = profile.matches_played || 0;
-  var winRate = played ? Math.round(wins / played * 100) : 0;
-  var streakCount = profile.streak_count || 0;
-  var streakType  = profile.streak_type;
-  var streakLabel = streakCount === 0 ? "—" : streakCount + (streakType === "win" ? " W" : " L");
+  var firstName = profile.name ? profile.name.split(/\s+/)[0] : "player";
+  var region = profile.suburb || "—";
+  var level  = profile.skill  || "—";
+
+  var rating = (profile.ranking_points != null) ? Math.round(profile.ranking_points) : null;
+  var played = profile.matches_played || 0;
+  var wins   = profile.wins   || 0;
+  var losses = profile.losses || 0;
+  var winRate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : null;
 
   // H2H computed from the viewer's own history (RLS-safe).
   var h2h = computeHeadToHead(viewerHistory || [], authUser && authUser.id, profile.id);
 
-  // v2: the public-profile Challenge CTA renders below the Hero identity row
-  // as a full-width primary block (mirrors Home's LOG A MATCH).
-  var challengeBlock = (openChallenge && authUser && profile.id !== authUser.id) ? (
-    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-      <button
-        onClick={function () { openChallenge(profile, "profile"); }}
-        style={{
-          flex: 1, padding: "16px", border: "none",
-          background: t.text, color: t.bg,
-          fontSize: 14, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
-          cursor: "pointer", transition: "opacity 0.15s",
-        }}
-        onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-        onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-      >
-        Challenge {profile.name ? profile.name.split(" ")[0] : "player"}
-      </button>
-      {blockUser && (
-        <ProfileOverflowMenu t={t} profile={profile} blockUser={blockUser} />
-      )}
-    </div>
-  ) : null;
+  var canChallenge = openChallenge && authUser && profile.id !== authUser.id;
 
   return (
-    <Shell t={t} onBack={onBack}>
-      {/* HERO — borderless editorial composition, mirrors own-profile. */}
-      <section style={{
-        maxWidth: 720, margin: "0 auto",
-        padding: "clamp(16px, 3vw, 32px) clamp(20px, 4vw, 32px) 0",
-      }}>
-        <ProfileHero
-          t={t}
-          profile={profile}
-          viewerIsSelf={false}
-          recentFormHistory={null}
-          belowIdentitySlot={challengeBlock}
-          trustBadge={trustBadge}
-        />
-      </section>
-
-      {/* HAIRLINE */}
+    <Shell onBack={onBack}>
       <div style={{
-        maxWidth: 720, margin: "clamp(40px, 6vw, 64px) auto 0",
-        padding: "0 clamp(20px, 4vw, 32px)",
+        background:    ED_TOK.bg,
+        color:         ED_TOK.ink,
+        fontFamily:    ED_TOK.sans,
+        minHeight:     "calc(100dvh - 64px)",
+        paddingBottom: 96,
       }}>
-        <div style={{ borderTop: "1px solid " + t.border }} />
-      </div>
-
-      {/* PUBLIC STATS — borderless 4-stat row with hairlines (mirrors HomeWeekStrip). */}
-      <section style={{
-        maxWidth: 720, margin: "0 auto",
-        padding: "clamp(28px, 4vw, 40px) clamp(20px, 4vw, 32px) 0",
-      }}>
-        <div style={{ display: "flex", alignItems: "stretch" }}>
-          {[
-            { l: "Played", v: played, c: t.text },
-            { l: "Wins",   v: wins,   c: t.text },
-            { l: "Losses", v: losses, c: t.text },
-            { l: "Win %",  v: played ? winRate + "%" : "—", c: t.text },
-          ].map(function (s, i, arr) {
-            return (
-              <div key={s.l} style={{
-                flex: 1,
-                padding: "0 4px",
-                borderRight: i === arr.length - 1 ? "none" : "1px solid " + t.border,
-                textAlign: "center",
+        {/* Hero — avatar + region/level kicker. Same composition as
+            ProfileScreen's hero so identity reads identical. */}
+        <div style={{
+          display:    "flex",
+          alignItems: "center",
+          gap:        14,
+          padding:    "20px 22px 14px",
+        }}>
+          <PlayerAvatar
+            name={profile.name}
+            avatar={profile.avatar}
+            avatarUrl={profile.avatar_url}
+            profile={profile}
+            size={64}
+          />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{
+              fontFamily:    ED_TOK.display,
+              fontSize:      "clamp(28px, 7vw, 36px)",
+              fontWeight:    600,
+              letterSpacing: "-0.025em",
+              lineHeight:    1.0,
+              color:         ED_TOK.ink,
+              overflow:      "hidden",
+              textOverflow:  "ellipsis",
+              whiteSpace:    "nowrap",
+            }}>
+              {profile.name || "Player"}
+            </div>
+            <div style={{
+              fontFamily:    ED_TOK.mono,
+              fontSize:      11.5,
+              color:         ED_TOK.ink2,
+              letterSpacing: "0.04em",
+              marginTop:     6,
+              lineHeight:    1.35,
+            }}>
+              {region} · {level}
+            </div>
+            {trustBadge && (
+              <div style={{
+                marginTop:     6,
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10,
+                fontWeight:    700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color:         ED_TOK.accent,
               }}>
-                <div style={{
-                  fontSize: "clamp(28px, 4.5vw, 40px)",
-                  fontWeight: 800, color: s.c,
-                  letterSpacing: "-0.025em", lineHeight: 1,
-                  fontVariantNumeric: "tabular-nums",
-                }}>
-                  {s.v}
-                </div>
-                <div style={{
-                  marginTop: 8,
-                  fontSize: 10, fontWeight: 700, color: t.textTertiary,
-                  letterSpacing: "0.12em", textTransform: "uppercase",
-                }}>
-                  {s.l}
-                </div>
+                {trustBadge}
               </div>
-            );
-          })}
+            )}
+          </div>
         </div>
 
-        {/* Streak — single line of meta beneath the stats, only when applicable */}
-        {streakCount > 0 && (
-          <div style={{
-            marginTop: 18,
-            fontSize: 11, fontWeight: 700,
-            color: streakType === "win" ? t.green : t.red,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            textAlign: "center",
-          }}>
-            Current streak · {streakLabel}
+        {/* Big rating numeral — same scale as ProfileScreen so the
+            friend's identity reads at the same visual weight. */}
+        {rating != null && (
+          <>
+            <div style={{
+              padding: "0 22px 4px",
+              display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap",
+            }}>
+              <h2 style={{
+                margin:        0,
+                fontFamily:    ED_TOK.display,
+                fontSize:      "clamp(78px, 22vw, 104px)",
+                fontWeight:    800,
+                letterSpacing: "-0.05em",
+                lineHeight:    0.9,
+                color:         ED_TOK.ink,
+              }}>
+                {rating.toLocaleString()}
+              </h2>
+            </div>
+            <div style={{
+              padding:    "0 22px 18px",
+              display:    "flex",
+              alignItems: "center",
+              gap:        10,
+              flexWrap:   "wrap",
+            }}>
+              <MicroLabel>CourtSync rating</MicroLabel>
+              <span style={{
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10.5,
+                fontWeight:    600,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color:         ED_TOK.muted,
+              }}>
+                {played} confirmed match{played === 1 ? "" : "es"}
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* Challenge CTA — full-width primary block, mirrors ProfileScreen's
+            visual weight for primary actions (HOME's LOG A MATCH). The
+            overflow menu houses Block. */}
+        {canChallenge && (
+          <div style={{ padding: "0 22px 18px" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+              <button
+                onClick={function () { openChallenge(profile, "profile"); }}
+                style={{
+                  flex:          1,
+                  padding:       "16px 18px",
+                  background:    ED_TOK.ink,
+                  color:         ED_TOK.bg,
+                  border:        "none",
+                  borderRadius:  999,
+                  fontFamily:    ED_TOK.mono,
+                  fontSize:      12,
+                  fontWeight:    700,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  cursor:        "pointer",
+                  transition:    "opacity 140ms ease",
+                }}
+                onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.92"; }}
+                onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
+                Challenge {firstName}
+              </button>
+              {blockUser && (
+                <ProfileOverflowMenu profile={profile} blockUser={blockUser}/>
+              )}
+            </div>
           </div>
         )}
-      </section>
 
-      {/* HEAD-TO-HEAD — borderless display block, only when there's a real H2H */}
-      {authUser && h2h.totalMatches > 0 && (
-        <section style={{
-          maxWidth: 720, margin: "0 auto",
-          padding: "clamp(40px, 6vw, 64px) clamp(20px, 4vw, 32px) 0",
-        }}>
-          <div style={{
-            fontSize: "clamp(20px, 3vw, 24px)",
-            fontWeight: 700, color: t.text,
-            letterSpacing: "-0.02em",
-            marginBottom: 18,
-          }}>
-            Head to head
-          </div>
+        <EdDivider style={{ margin: "8px 22px 18px" }}/>
+
+        {/* Stat row — 4 cells, hairline-separated. Lifted from
+            ProfileScreen's 2x2 stat grid but flattened to a single
+            row because the friend view doesn't need a "your area"
+            cell, and the 4-stat row reads cleaner under the rating. */}
+        <div style={{ padding: "4px 22px 8px" }}>
           <div style={{ display: "flex", alignItems: "stretch" }}>
-            <div style={{ flex: 1, textAlign: "center", borderRight: "1px solid " + t.border, padding: "0 8px" }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: t.textTertiary,
-                textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8,
-              }}>
-                You
+            <PStatCell value={played}                          label="Played"  isLast={false}/>
+            <PStatCell value={wins}                            label="Wins"    isLast={false}/>
+            <PStatCell value={losses}                          label="Losses"  isLast={false}/>
+            <PStatCell value={winRate != null ? winRate + "%" : "—"} label="Win %" isLast/>
+          </div>
+        </div>
+
+        {/* Head-to-head — only when the viewer has actually played
+            this person. Same editorial type stack: mono microlabel,
+            big numeral. */}
+        {authUser && h2h.totalMatches > 0 && (
+          <>
+            <EdDivider style={{ margin: "26px 22px 18px" }}/>
+            <div style={{ padding: "0 22px 4px" }}>
+              <MicroLabel>Head to head</MicroLabel>
+            </div>
+            <div style={{ padding: "12px 22px 0" }}>
+              <div style={{ display: "flex", alignItems: "stretch" }}>
+                <H2HCell
+                  label="You"
+                  value={h2h.viewerWins}
+                  highlighted={h2h.viewerWins > h2h.subjectWins}
+                  isLast={false}
+                />
+                <H2HCell
+                  label={profile.name || "Them"}
+                  value={h2h.subjectWins}
+                  highlighted={h2h.subjectWins > h2h.viewerWins}
+                  isLast
+                />
               </div>
               <div style={{
-                fontSize: "clamp(36px, 5vw, 56px)",
-                fontWeight: 800,
-                color: h2h.viewerWins > h2h.subjectWins ? t.green : t.text,
-                fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1,
+                marginTop:     14,
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10.5,
+                color:         ED_TOK.muted,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                textAlign:     "center",
               }}>
-                {h2h.viewerWins}
+                {h2h.totalMatches} match{h2h.totalMatches !== 1 ? "es" : ""} played
+                {h2h.lastDate ? " · last " + h2h.lastDate : ""}
               </div>
             </div>
-            <div style={{ flex: 1, textAlign: "center", padding: "0 8px", minWidth: 0 }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: t.textTertiary,
-                textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {profile.name || "Them"}
-              </div>
-              <div style={{
-                fontSize: "clamp(36px, 5vw, 56px)",
-                fontWeight: 800,
-                color: h2h.subjectWins > h2h.viewerWins ? t.green : t.text,
-                fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1,
-              }}>
-                {h2h.subjectWins}
-              </div>
+          </>
+        )}
+
+        {/* "Not yet played" microcopy — only when the viewer HAS
+            played some ranked tennis but never against this person.
+            Skipped on a brand-new viewer to avoid scolding. */}
+        {authUser && h2h.totalMatches === 0 && played > 0 && (
+          <>
+            <EdDivider style={{ margin: "26px 22px 18px" }}/>
+            <div style={{
+              padding:       "8px 22px 0",
+              fontFamily:    ED_TOK.sans,
+              fontSize:      13,
+              color:         ED_TOK.ink2,
+              textAlign:     "center",
+              lineHeight:    1.5,
+            }}>
+              You haven't played {firstName} yet.
             </div>
-          </div>
-          <div style={{
-            marginTop: 14,
-            textAlign: "center",
-            fontSize: 11, color: t.textTertiary, letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}>
-            {h2h.totalMatches} match{h2h.totalMatches !== 1 ? "es" : ""} played
-            {h2h.lastDate ? " · last " + h2h.lastDate : ""}
-          </div>
-        </section>
-      )}
-
-      {authUser && h2h.totalMatches === 0 && played > 0 && (
-        <section style={{
-          maxWidth: 720, margin: "0 auto",
-          padding: "clamp(40px, 5vw, 56px) clamp(20px, 4vw, 32px) 0",
-        }}>
-          <div style={{
-            padding: "16px 0",
-            textAlign: "center",
-            fontSize: 12, color: t.textSecondary, letterSpacing: "0.04em",
-          }}>
-            You haven't played {profile.name || "this player"} yet.
-          </div>
-        </section>
-      )}
-
-      <div style={{ height: "clamp(56px, 8vw, 80px)" }} />
+          </>
+        )}
+      </div>
     </Shell>
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Shell / loading / empty helpers — kept in-file because they're specific
-// to this view's layout; promoting them would be premature generalisation.
+// ── Editorial helpers (local) ─────────────────────────────────────
 
-// Overflow menu next to the Challenge CTA on a public profile. Houses
-// the destructive actions (Block, future Report) so they're always one
-// click away but never primary chrome. Asymmetric block (council
-// decision): blocked users go invisible to the viewer; viewer remains
-// neutrally visible to them — no notification fires.
-function ProfileOverflowMenu({ t, profile, blockUser }) {
+function PStatCell({ value, label, isLast }) {
+  return (
+    <div style={{
+      flex:        1,
+      padding:     "0 6px",
+      borderRight: isLast ? "none" : "1px solid " + ED_TOK.line,
+      textAlign:   "center",
+    }}>
+      <div style={{
+        fontFamily:        ED_TOK.display,
+        fontSize:          "clamp(28px, 5vw, 36px)",
+        fontWeight:        700,
+        letterSpacing:     "-0.025em",
+        lineHeight:        1,
+        color:             ED_TOK.ink,
+        fontVariantNumeric:"tabular-nums",
+      }}>
+        {value}
+      </div>
+      <div style={{
+        marginTop:     8,
+        fontFamily:    ED_TOK.mono,
+        fontSize:      10,
+        fontWeight:    700,
+        color:         ED_TOK.muted,
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+      }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function H2HCell({ label, value, highlighted, isLast }) {
+  return (
+    <div style={{
+      flex:        1,
+      padding:     "0 8px",
+      borderRight: isLast ? "none" : "1px solid " + ED_TOK.line,
+      textAlign:   "center",
+      minWidth:    0,
+    }}>
+      <div style={{
+        fontFamily:    ED_TOK.mono,
+        fontSize:      10,
+        fontWeight:    700,
+        color:         ED_TOK.muted,
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        marginBottom:  10,
+        overflow:      "hidden",
+        textOverflow:  "ellipsis",
+        whiteSpace:    "nowrap",
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontFamily:        ED_TOK.display,
+        fontSize:          "clamp(40px, 7vw, 56px)",
+        fontWeight:        800,
+        letterSpacing:     "-0.03em",
+        lineHeight:        1,
+        color:             highlighted ? ED_TOK.win : ED_TOK.ink,
+        fontVariantNumeric:"tabular-nums",
+      }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// Overflow menu next to the Challenge CTA — Block lives here.
+// Restyled to the editorial palette (round outlined chip, ink-on-cream
+// dropdown). Asymmetric block (council decision): blocked users go
+// invisible to the viewer; viewer remains neutrally visible to them —
+// no notification fires.
+function ProfileOverflowMenu({ profile, blockUser }) {
   var [open, setOpen] = useState(false);
   return (
     <div style={{ position: "relative", flexShrink: 0 }}>
-      <button onClick={function () { setOpen(!open); }}
+      <button
+        onClick={function () { setOpen(!open); }}
         aria-label="More actions"
         title="More actions"
         style={{
-          width: 44, height: "100%", padding: 0,
-          borderRadius: 0, border: "none",
-          background: t.bgTertiary, color: t.textSecondary,
-          fontSize: 18, fontWeight: 700, lineHeight: 1, cursor: "pointer",
-        }}>⋯</button>
+          width:        50,
+          height:       "100%",
+          padding:      0,
+          borderRadius: 999,
+          border:       "1px solid " + ED_TOK.lineStrong,
+          background:   "transparent",
+          color:        ED_TOK.ink,
+          fontSize:     18,
+          fontWeight:   700,
+          lineHeight:   1,
+          cursor:       "pointer",
+        }}>
+        ⋯
+      </button>
       {open && (
         <>
-          <div onClick={function () { setOpen(false); }}
-            style={{ position: "fixed", inset: 0, zIndex: 50 }}/>
+          <div
+            onClick={function () { setOpen(false); }}
+            style={{ position: "fixed", inset: 0, zIndex: 50 }}
+          />
           <div style={{
-            position: "absolute", right: 0, top: "calc(100% + 4px)",
-            minWidth: 160, background: t.bgCard, border: "1px solid " + t.border,
-            borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-            overflow: "hidden", zIndex: 60,
+            position:     "absolute",
+            right:        0,
+            top:          "calc(100% + 6px)",
+            minWidth:     180,
+            background:   ED_TOK.bg,
+            border:       "1px solid " + ED_TOK.line,
+            borderRadius: 12,
+            boxShadow:    "0 12px 28px rgba(42, 32, 26, 0.18)",
+            overflow:     "hidden",
+            zIndex:       60,
           }}>
             <button
               onClick={function () {
@@ -297,10 +419,17 @@ function ProfileOverflowMenu({ t, profile, blockUser }) {
                 }
               }}
               style={{
-                display: "block", width: "100%", padding: "12px 16px",
-                border: "none", background: "transparent",
-                color: t.red, fontSize: 13, fontWeight: 600,
-                textAlign: "left", cursor: "pointer",
+                display:    "block",
+                width:      "100%",
+                padding:    "12px 16px",
+                border:     "none",
+                background: "transparent",
+                color:      ED_TOK.loss,
+                fontFamily: ED_TOK.sans,
+                fontSize:   13.5,
+                fontWeight: 600,
+                textAlign:  "left",
+                cursor:     "pointer",
               }}>
               Block
             </button>
@@ -311,26 +440,44 @@ function ProfileOverflowMenu({ t, profile, blockUser }) {
   );
 }
 
-function Shell({ t, onBack, children }) {
+// ── Shell / loading / empty (editorial palette) ───────────────────
+
+function Shell({ onBack, children }) {
   return (
-    <div style={{ width: "100%" }}>
+    <div style={{
+      width:      "100%",
+      background: ED_TOK.bg,
+      color:      ED_TOK.ink,
+      fontFamily: ED_TOK.sans,
+    }}>
       {onBack && (
         <div style={{
-          maxWidth: 720, margin: "0 auto",
-          padding: "20px clamp(20px, 4vw, 32px) 0",
+          padding: "20px 22px 0",
         }}>
           <button
             onClick={onBack}
             style={{
-              padding: "8px 14px",
-              background: "transparent",
-              border: "1px solid " + t.border,
-              color: t.textSecondary,
-              fontSize: 11, fontWeight: 700,
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              cursor: "pointer",
+              display:       "inline-flex",
+              alignItems:    "center",
+              gap:           8,
+              padding:       "8px 14px",
+              background:    "transparent",
+              border:        "1px solid " + ED_TOK.line,
+              borderRadius:  999,
+              color:         ED_TOK.ink,
+              fontFamily:    ED_TOK.mono,
+              fontSize:      11,
+              fontWeight:    700,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              cursor:        "pointer",
             }}>
-            ← Back
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+            Back
           </button>
         </div>
       )}
@@ -339,32 +486,46 @@ function Shell({ t, onBack, children }) {
   );
 }
 
-function Skeleton({ t }) {
+function Skeleton() {
   return (
-    <div style={{ padding: "28px 20px", opacity: 0.5 }}>
-      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-        <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.bgTertiary }} />
+    <div style={{ padding: "28px 22px", opacity: 0.5 }}>
+      <div style={{ display: "flex", gap: 14, marginBottom: 22 }}>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: ED_TOK.bg2 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ width: 160, height: 20, background: t.bgTertiary, borderRadius: 4, marginBottom: 8 }} />
-          <div style={{ width: 100, height: 12, background: t.bgTertiary, borderRadius: 4 }} />
+          <div style={{ width: 200, height: 28, background: ED_TOK.bg2, borderRadius: 4, marginBottom: 10 }} />
+          <div style={{ width: 140, height: 12, background: ED_TOK.bg2, borderRadius: 4 }} />
         </div>
       </div>
-      <div style={{ height: 60, background: t.bgTertiary, borderRadius: 0, marginBottom: 10 }} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0 }}>
+      <div style={{ width: 220, height: 80, background: ED_TOK.bg2, borderRadius: 8, marginBottom: 20 }} />
+      <div style={{ display: "flex", gap: 0 }}>
         {[0, 1, 2, 3].map(function (i) {
-          return <div key={i} style={{ height: 52, background: t.bgTertiary, borderLeft: i === 0 ? "none" : "1px solid " + t.bg }} />;
+          return <div key={i} style={{
+            flex: 1, height: 56, background: ED_TOK.bg2,
+            borderRight: i === 3 ? "none" : "1px solid " + ED_TOK.bg,
+          }}/>;
         })}
       </div>
     </div>
   );
 }
 
-function Empty({ t, title, body }) {
+function Empty({ title, body }) {
   return (
     <div style={{ padding: "60px 24px", textAlign: "center" }}>
-      <div style={{ fontSize: 32, marginBottom: 10 }}>🎾</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.5 }}>{body}</div>
+      <div style={{
+        fontFamily:    ED_TOK.display,
+        fontSize:      28,
+        fontWeight:    600,
+        letterSpacing: "-0.025em",
+        color:         ED_TOK.ink,
+        marginBottom:  10,
+      }}>{title}</div>
+      <div style={{
+        fontFamily: ED_TOK.sans,
+        fontSize:   13.5,
+        color:      ED_TOK.ink2,
+        lineHeight: 1.5,
+      }}>{body}</div>
     </div>
   );
 }

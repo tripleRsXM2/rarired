@@ -1241,6 +1241,12 @@ export default function App(){
             openConvertToMatch={openConvertToMatch}
             leagues={leagues}
             toast={toast}
+            /* When a Messages thread is open on mobile, the thread
+               owns the full screen — hide the global "Friends" top
+               mob nav so the conversation header sits at the very
+               top. Same setter we use from LeaguesPanel for the
+               league detail takeover. */
+            setHideTopMobNav={setHideTopMobNav}
           />
         )}
         {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
