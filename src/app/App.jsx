@@ -429,31 +429,21 @@ export default function App(){
   function openLogMatchInLeague(league, memberIds){
     if(!league||!league.id) { openLogMatch(); return; }
     var mode = league.mode === "casual" ? "casual" : "ranked";
-    matchHistory.setCasualOppName("");
-    matchHistory.setScoreModal({
-      casual:    true,
-      oppName:   "",
-      tournName: mode === "casual" ? "Casual Match" : "",
-      // Lock context — read by ScoreModal + MatchComposer to
-      // restrict opponent picker, lock the league selector, and
-      // hide the match-type picker.
-      lockedLeague: {
-        id:        league.id,
-        name:      league.name,
-        mode:      mode,
-        memberIds: Array.isArray(memberIds) ? memberIds.slice() : [],
+    // 2026-05-02: navigate to the editorial /match/log page
+    // (LogMatchPage), passing the league lock as router state.
+    // The new page reads state.lockedLeague on mount, pre-selects
+    // type=league + leagueId, locks the Type row from re-opening
+    // the sheet, and filters the opponent list to active league
+    // members only.
+    navigate("/match/log", {
+      state: {
+        lockedLeague: {
+          id:        league.id,
+          name:      league.name,
+          mode:      mode,
+          memberIds: Array.isArray(memberIds) ? memberIds.slice() : [],
+        },
       },
-    });
-    matchHistory.setScoreDraft({
-      sets:           [{you:"",them:""}],
-      result:         "win",
-      notes:          "",
-      date:           new Date().toISOString().slice(0,10),
-      venue:          "",
-      court:          "",
-      matchType:      mode,
-      completionType: "completed",
-      leagueId:       league.id,
     });
   }
 

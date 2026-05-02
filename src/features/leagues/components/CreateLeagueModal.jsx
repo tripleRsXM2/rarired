@@ -148,8 +148,12 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
           </div>
         </div>
 
-        {/* Dates + Max members */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+        {/* Dates + Max members — Start + End side-by-side on row 1,
+            Max members on its own row below. The previous 1fr/1fr/1fr
+            layout squeezed each native date input to ~110px on a
+            375px viewport, which forced the "Max members" label to
+            wrap to two lines and clipped its input. */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div>
             <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Start</label>
             <input type="date" value={startDate}
@@ -162,12 +166,12 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
               onChange={function (e) { setEndDate(e.target.value); }}
               style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
           </div>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Max members</label>
-            <input type="number" min="2" value={maxMembers} placeholder="—"
-              onChange={function (e) { setMaxMembers(e.target.value); }}
-              style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
-          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Max members</label>
+          <input type="number" min="2" value={maxMembers} placeholder="—"
+            onChange={function (e) { setMaxMembers(e.target.value); }}
+            style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
         </div>
 
         {/* Match format */}

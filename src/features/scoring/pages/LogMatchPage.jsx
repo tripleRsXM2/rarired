@@ -22,7 +22,7 @@
 // grows beyond ~80 lines it can be split out.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 import {
   calculateRatingChange,
@@ -50,6 +50,16 @@ export default function LogMatchPage({
   setPendingFeedbackMatch,
 }) {
   var navigate = useNavigate();
+  var location = useLocation();
+
+  // ── lockedLeague ───────────────────────────────────────────────
+  // When the page is opened from inside a league (e.g. the league
+  // detail page's "+ Log match" button), App.jsx passes a
+  // lockedLeague payload via router state. The page locks type to
+  // 'league' + the league's id, hides the Type sheet, and filters
+  // the opponent list to active league members. Cleared on unmount
+  // so a subsequent free-form open doesn't carry the lock.
+  var lockedLeague = (location && location.state && location.state.lockedLeague) || null;
 
   // Lock the document body from scrolling/rubber-banding while
   // this page is mounted. Even with the page wrapper sized to the
@@ -74,8 +84,11 @@ export default function LogMatchPage({
   // without needing to scroll. Users can + Add set up to 5.
   var [sets, setSets] = useState([{ a: "", b: "" }]);
   var [opp, setOpp] = useState(null);            // { id, name, sub }
-  var [type, setType] = useState(null);          // 'league' | 'casual' | 'tournament'
-  var [leagueId, setLeagueId] = useState(null);  // when type === 'league'
+  // When opened from a league, type + leagueId are pre-set from
+  // the router state and the Type row is rendered in a locked,
+  // non-tappable form.
+  var [type, setType] = useState(lockedLeague ? "league" : null);
+  var [leagueId, setLeagueId] = useState(lockedLeague ? lockedLeague.id : null);
   var [completion, setCompletion] = useState("completed"); // 'completed' | 'time_limited' | 'retired'
   var [details, setDetails] = useState({
     court: "",
@@ -175,6 +188,19 @@ export default function LogMatchPage({
     });
     return Object.values(byId);
   }, [recentOpponents, friends]);
+
+  // When opened from a league, filter the opponent lists to active
+  // league members only. Otherwise the user could pick a non-member
+  // opponent and the validate_match_league trigger would reject the
+  // insert at submit time.
+  var memberSet = useMemo(function () {
+    if (!lockedLeague || !Array.isArray(lockedLeague.memberIds)) return null;
+    var s = {};
+    lockedLeague.memberIds.forEach(function (id) { s[id] = true; });
+    return s;
+  }, [lockedLeague]);
+  var oppRecents  = memberSet ? recentOpponents.filter(function (p) { return memberSet[p.id]; }) : recentOpponents;
+  var oppAllPlayers = memberSet ? allPlayers.filter(function (p) { return memberSet[p.id]; }) : allPlayers;
 
   // Submit gating — score + opponent + type all set.
   var ready = completedSets.length > 0 && !!opp && !!type && !saving
@@ -410,7 +436,12 @@ export default function LogMatchPage({
               value={ctxLabel || "League, casual, or tournament"}
               empty={!type}
               sub={subForType(type, leagueId, activeLeagues)}
-              onClick={function () { setSheet("type"); }}
+              // When opened from a league, the Type row is locked —
+              // tapping does nothing. Visually it still reads with
+              // a chevron to keep the row rhythm consistent, but
+              // it just shows the locked league name.
+              onClick={lockedLeague ? function () {} : function () { setSheet("type"); }}
+              locked={!!lockedLeague}
             />
             <DetailRow
               label="Details"
@@ -497,8 +528,8 @@ export default function LogMatchPage({
 
       <BottomSheet open={sheet === "opp"} title="Opponent" onClose={function () { setSheet(null); }}>
         <OpponentSheet
-          recents={recentOpponents}
-          allPlayers={allPlayers}
+          recents={oppRecents}
+          allPlayers={oppAllPlayers}
           onPick={function (p) { setOpp(p); setSheet(null); }}
         />
       </BottomSheet>
@@ -787,12 +818,13 @@ function ScoreCell({ side, value, active, winner, onClick }) {
 
 // ── DetailRow ────────────────────────────────────────────────────
 
-function DetailRow({ label, value, sub, empty, onClick }) {
+function DetailRow({ label, value, sub, empty, onClick, locked }) {
   var [hover, setHover] = useState(false);
   return (
     <button
       onClick={onClick}
-      onMouseEnter={function () { setHover(true); }}
+      disabled={locked}
+      onMouseEnter={function () { if (!locked) setHover(true); }}
       onMouseLeave={function () { setHover(false); }}
       style={{
         display:        "flex",
@@ -800,14 +832,14 @@ function DetailRow({ label, value, sub, empty, onClick }) {
         gap:            12,
         padding:        "12px 20px",
         borderBottom:   "1px solid " + ED_TOK.line,
-        background:     hover ? ED_TOK.bg2 : "transparent",
+        background:     hover && !locked ? ED_TOK.bg2 : "transparent",
         border:         "none",
         borderLeft:     "none",
         borderRight:    "none",
         borderTop:      "none",
         width:          "100%",
         textAlign:      "left",
-        cursor:         "pointer",
+        cursor:         locked ? "default" : "pointer",
         color:          "inherit",
         transition:     "background 140ms",
         fontFamily:     "inherit",
@@ -861,11 +893,25 @@ function DetailRow({ label, value, sub, empty, onClick }) {
           </small>
         )}
       </span>
-      <span style={{
-        color:    ED_TOK.muted,
-        fontSize: 18,
-        flex:     "0 0 auto",
-      }}>›</span>
+      {/* Chevron hidden when row is locked — visually signals
+          the row is read-only and not tappable. */}
+      {locked ? (
+        <span style={{
+          color:         ED_TOK.muted,
+          fontFamily:    ED_TOK.mono,
+          fontSize:      9,
+          fontWeight:    700,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          flex:          "0 0 auto",
+        }}>Locked</span>
+      ) : (
+        <span style={{
+          color:    ED_TOK.muted,
+          fontSize: 18,
+          flex:     "0 0 auto",
+        }}>›</span>
+      )}
     </button>
   );
 }
