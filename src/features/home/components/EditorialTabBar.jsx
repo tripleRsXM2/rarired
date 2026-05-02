@@ -134,7 +134,10 @@ export default function EditorialTabBar({ activeTab, onTab, onLogMatch }) {
                 borderRadius:  "50%",
                 width:         52,
                 height:        52,
-                margin:        "-16px auto 0",
+                // Centered in the row instead of poking 16px above
+                // the bar — the negative margin made the button
+                // sit visually higher than the rest of the tabs.
+                margin:        "0 auto",
                 alignSelf:     "center",
                 justifySelf:   "center",
                 display:       "grid",
