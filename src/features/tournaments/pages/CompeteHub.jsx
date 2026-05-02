@@ -34,7 +34,7 @@
 //       League     → opens the existing CreateLeagueModal
 //       Tournament → /tournaments/list (existing browse page)
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
 import { isActive, isPastLifecycle, LIFECYCLE_LABELS } from "../../leagues/utils/leagueLifecycle.js";
@@ -165,42 +165,8 @@ export default function CompeteHub({
     return out;
   }, [leagues]);
 
-  // ── ATTENTION ───────────────────────────────────────────────
-  var attention = useMemo(function () {
-    var alerts = [];
-    // Matches the viewer owes a response on (confirm / accept dispute).
-    (history || []).forEach(function (m) {
-      var needs = (m.status === "pending_confirmation" && m.isTagged)
-               || ((m.status === "disputed" || m.status === "pending_reconfirmation") && m.pendingActionBy === viewerId);
-      if (!needs) return;
-      var oppName = m.friendName || m.opponentName || m.oppName || m.playerName || "Someone";
-      var primary;
-      if (m.status === "pending_confirmation") {
-        var sc = formatLastScore(m.sets);
-        primary = oppName + " is waiting on you to confirm" + (sc ? (" " + sc) : "");
-      } else {
-        primary = oppName + " disputed a match — your response needed";
-      }
-      alerts.push({ primary: primary, navTo: "/matches" });
-    });
-    // Incoming pending challenges
-    (challenges && challenges.challenges || []).forEach(function (ch) {
-      if (ch.status !== "pending") return;
-      if (ch.challenged_id !== viewerId) return;
-      var by = profileMap[ch.challenger_id];
-      var name = (by && by.name) || "Someone";
-      alerts.push({ primary: name + " challenged you to a match", navTo: "/tournaments/challenges" });
-    });
-    if (!alerts.length) return null;
-    return {
-      count:     alerts.length,
-      primary:   alerts[0].primary,
-      navTo:     alerts[0].navTo,
-      secondary: alerts.length === 1
-        ? "1 item needs your attention"
-        : alerts.length + " items need your attention",
-    };
-  }, [history, challenges, profileMap, viewerId]);
+  // (AttentionBanner removed — match-confirm / dispute alerts
+  // surface inside the Activity tab's pending pills now.)
 
   // ── Handlers ─────────────────────────────────────────────────
   function pickFromSheet(kind) {
@@ -269,10 +235,8 @@ export default function CompeteHub({
         </div>
       </div>
 
-      {/* AttentionBanner */}
-      {attention && (
-        <AttentionBanner attention={attention} onClick={function () { navigate(attention.navTo); }}/>
-      )}
+      {/* AttentionBanner removed — match-confirm / dispute alerts
+          surface inside the Activity tab now, not here. */}
 
       {/* Active section */}
       <SectionHead label={"Active · " + active.length} />
@@ -322,72 +286,6 @@ export default function CompeteHub({
           toast={toast}
         />
       )}
-    </div>
-  );
-}
-
-// ── AttentionBanner ─────────────────────────────────────────────
-
-function AttentionBanner({ attention, onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        margin:        "0 22px 20px",
-        background:    ED_TOK.bg2,
-        border:        "1px solid " + ED_TOK.line,
-        borderLeft:    "3px solid " + ED_TOK.accent,
-        borderRadius:  12,
-        padding:       "14px 16px",
-        display:       "flex",
-        alignItems:    "center",
-        gap:           12,
-        cursor:        "pointer",
-        transition:    "background 140ms",
-      }}
-      onMouseEnter={function (e) { e.currentTarget.style.background = "#DDD3BD"; }}
-      onMouseLeave={function (e) { e.currentTarget.style.background = ED_TOK.bg2; }}>
-      <span style={{
-        position:     "relative",
-        width:        8,
-        height:       8,
-        borderRadius: "50%",
-        background:   ED_TOK.accent,
-        flex:         "0 0 auto",
-      }}>
-        <span style={{
-          content:      '""',
-          position:     "absolute",
-          inset:        -6,
-          borderRadius: "50%",
-          border:       "2px solid " + ED_TOK.accent,
-          opacity:      0.4,
-          animation:    "csCompetePulse 1.6s ease-out infinite",
-          pointerEvents: "none",
-        }}/>
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontFamily:    ED_TOK.display,
-          fontSize:      15,
-          fontWeight:    600,
-          letterSpacing: "-0.01em",
-          lineHeight:    1.2,
-        }}>
-          {attention.primary}
-        </div>
-        <div style={{
-          fontFamily:    ED_TOK.mono,
-          fontSize:      11,
-          letterSpacing: "0.06em",
-          color:         ED_TOK.muted,
-          fontWeight:    500,
-          marginTop:     3,
-        }}>
-          {attention.secondary}
-        </div>
-      </div>
-      <span style={{ color: ED_TOK.muted, fontSize: 18, flex: "0 0 auto" }}>›</span>
     </div>
   );
 }
