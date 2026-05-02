@@ -16,15 +16,16 @@
 //     "log a match" entry point.
 //
 // Routing (mapped to existing app):
-//   HOME    → /home (HomeHub)
-//   MAPS    → /map (court-discovery map — the actual "maps" feature)
-//   +       → openLogMatch (no route change)
-//   FRIENDS → /people
-//   ME      → /profile
+//   HOME     → /home (HomeHub)
+//   MAPS     → /map (court-discovery map — the actual "maps" feature)
+//   +        → openLogMatch (no route change)
+//   FRIENDS  → /people
+//   ACTIVITY → /matches (editorial match history list)
 //
-// The Compete hub (/tournaments) is reachable via the home-hub
-// Compete tile + via direct URL. The editorial /matches list is
-// reachable via the home-hub Matches tile.
+// Profile (/profile) is reachable via the avatar in the global
+// top mob nav — no longer needs its own bottom-tab slot. The
+// Compete hub (/tournaments) is reachable via the home-hub
+// Compete tile + via direct URL.
 //
 // Hidden on desktop ≥1024px via the existing .cs-mob-tabs media
 // rule in providers.jsx.
@@ -73,16 +74,27 @@ var ICONS = {
       </svg>
     );
   },
+  // Activity — bar-chart trend, mirrors the Matches home-hub tile
+  // motif so the destination feels consistent.
+  activity: function () {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.6"
+        strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 21V11M11 21V5M17 21v-7M3 21h18"/>
+      </svg>
+    );
+  },
 };
 
 // Tab definitions — id is the route's first path segment, used by
 // the parent's setTab(id) handler.
 var TABS = [
-  { id: "home",    label: "Home",    Icon: ICONS.home    },
-  { id: "map",     label: "Maps",    Icon: ICONS.maps    },
-  { id: "log",     label: "Log",     primary: true       },
-  { id: "people",  label: "Friends", Icon: ICONS.friends },
-  { id: "profile", label: "Me",      Icon: ICONS.me      },
+  { id: "home",    label: "Home",     Icon: ICONS.home     },
+  { id: "map",     label: "Maps",     Icon: ICONS.maps     },
+  { id: "log",     label: "Log",      primary: true        },
+  { id: "people",  label: "Friends",  Icon: ICONS.friends  },
+  { id: "matches", label: "Activity", Icon: ICONS.activity },
 ];
 
 export default function EditorialTabBar({ activeTab, onTab, onLogMatch }) {

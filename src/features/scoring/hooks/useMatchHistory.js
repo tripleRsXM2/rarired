@@ -89,7 +89,28 @@ export function useMatchHistory(opts){
     var ownNorm=(hr.data||[]).map(function(m){return normalizeMatch(m,false,false);});
     var oppNorm=(or.data||[]).map(function(m){return normalizeMatch(m,true,false);});
     var thirdNorm=((fr && fr.data)||[]).map(function(m){return normalizeMatch(m,false,true);});
-    var normalized=ownNorm.concat(oppNorm).concat(thirdNorm).sort(function(a,b){return b.date<a.date?-1:1;});
+    // Sort by the ISO rawDate (YYYY-MM-DD) descending — the legacy
+    // sort used the localized display string `m.date` ("29 Apr 2026"
+    // vs "2 May 2026"), which collates lexically: "29 Apr" comes
+    // BEFORE "2 May" because " " (space, ASCII 32) < "9". Result:
+    // a single-digit-day match in May lands AFTER a two-digit-day
+    // April match in the list, so recent matches appeared at the
+    // bottom whenever the day rolled into a new month with fewer
+    // digits. ISO strings sort lexically AND chronologically the
+    // same way (YYYY-MM-DD), so this fix is stable across years
+    // and locales.
+    //
+    // Tiebreaker for two matches on the same day: id descending —
+    // UUID v4 has no time component, but at least gives a stable
+    // per-row order so React keys don't oscillate across reloads.
+    var normalized=ownNorm.concat(oppNorm).concat(thirdNorm).sort(function(a,b){
+      var ad=a.rawDate||"";
+      var bd=b.rawDate||"";
+      if(bd!==ad) return bd<ad?-1:1;
+      var ai=String(a.id||"");
+      var bi=String(b.id||"");
+      return bi<ai?-1:(bi>ai?1:0);
+    });
 
     // ── Enrich matches with participant profile data (name + avatar) ───────
     // For isTagged=true rows, m.opp_name is the current user's own name
