@@ -43,35 +43,23 @@ import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 // ── Page ─────────────────────────────────────────────────────────
 
 export default function CompeteHub({
+  t,
   authUser,
   challenges,
   leagues,
   tournaments,
   history,
   openChallenge,           // eslint-disable-line no-unused-vars — kept for future "rematch from card" wiring
-  toast,                   // eslint-disable-line no-unused-vars
-  // Editorial top-bar scroll callback. Flips to true when the
-  // in-page 72px "Compete" hero scrolls out of view so the global
-  // top mob-nav can fade in "Compete". Same pattern as HomeHub +
-  // ProfileScreen.
-  setScrolledPastHero,
+  toast,
 }) {
   var navigate = useNavigate();
   var viewerId = authUser && authUser.id;
-  var heroRef = useRef(null);
 
-  // Scroll observer — gates the global top-bar title on the page
-  // hero leaving the viewport.
-  useEffect(function () {
-    if (!heroRef.current) return;
-    if (!setScrolledPastHero) return;
-    setScrolledPastHero(false);
-    var io = new IntersectionObserver(function (entries) {
-      setScrolledPastHero(!entries[0].isIntersecting);
-    }, { threshold: 0.1 });
-    io.observe(heroRef.current);
-    return function () { io.disconnect(); };
-  }, [setScrolledPastHero]);
+  // No in-page hero to observe — the page now opens straight
+  // onto the Start-a-league CTA, so the global top mob-nav title
+  // ("Compete") shows immediately by default. (App.jsx resets
+  // scrolledPastHero to true on tab change, which is what we
+  // want here.)
 
   var [pastOpen, setPastOpen] = useState(false);
   var [plusOpen, setPlusOpen] = useState(false);
@@ -235,10 +223,10 @@ export default function CompeteHub({
       paddingBottom: 96,
       position:      "relative",
     }}>
-      {/* Hero header — kicker + 72px "Compete" title. The heroRef
-          on this block is observed so the global top mob-nav only
-          fades "Compete" in once the user has scrolled past it. */}
-      <div ref={heroRef} style={{ padding: "8px 22px 18px" }}>
+      {/* Top kicker + Primary CTA section. The previous 72px
+          "Compete" hero is gone — global top mob-nav handles the
+          title. Page opens straight onto the Start-a-league CTA. */}
+      <div style={{ padding: "16px 22px 24px" }}>
         <div style={{
           fontFamily:    ED_TOK.mono,
           fontSize:      10.5,
@@ -247,21 +235,38 @@ export default function CompeteHub({
           color:         ED_TOK.muted,
           fontWeight:    700,
           textAlign:     "center",
-          paddingBottom: 16,
+          paddingBottom: 18,
+          marginBottom:  18,
           borderBottom:  "1px solid " + ED_TOK.line,
         }}>
           Tournaments &nbsp;·&nbsp; Leagues &nbsp;·&nbsp; Challenges
         </div>
-        <h1 style={{
-          fontFamily:    ED_TOK.display,
-          fontSize:      "clamp(56px, 18vw, 72px)",
-          fontWeight:    500,
-          letterSpacing: "-0.04em",
-          lineHeight:    0.9,
-          margin:        "20px 0 0",
+        <button
+          onClick={function () { setShowCreateLeague(true); }}
+          style={primaryCTAStyle()}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.4"
+            strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          Start a league
+        </button>
+        <div style={{
+          display:        "flex",
+          justifyContent: "center",
+          gap:            6,
+          marginTop:      12,
+          fontFamily:     ED_TOK.mono,
+          fontSize:       11,
+          fontWeight:     600,
+          color:          ED_TOK.muted,
+          letterSpacing:  "0.04em",
         }}>
-          Compete
-        </h1>
+          <span>or</span>
+          <SecondaryLink onClick={function () { navigate("/tournaments/challenges"); }}>challenge someone</SecondaryLink>
+          <span>·</span>
+          <SecondaryLink onClick={function () { navigate("/tournaments/list"); }}>browse tournaments</SecondaryLink>
+        </div>
       </div>
 
       {/* AttentionBanner */}
@@ -287,36 +292,6 @@ export default function CompeteHub({
         </>
       )}
 
-      {/* Primary CTA */}
-      <div style={{ padding: "8px 22px 28px" }}>
-        <button
-          onClick={function () { setPlusOpen(true); }}
-          style={primaryCTAStyle()}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.4"
-            strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-          Challenge someone
-        </button>
-        <div style={{
-          display:        "flex",
-          justifyContent: "center",
-          gap:            6,
-          marginTop:      12,
-          fontFamily:     ED_TOK.mono,
-          fontSize:       11,
-          fontWeight:     600,
-          color:          ED_TOK.muted,
-          letterSpacing:  "0.04em",
-        }}>
-          <span>or</span>
-          <SecondaryLink onClick={function () { setPlusOpen(true); }}>start a league</SecondaryLink>
-          <span>·</span>
-          <SecondaryLink onClick={function () { setPlusOpen(true); }}>browse tournaments</SecondaryLink>
-        </div>
-      </div>
-
       {/* Past section */}
       <SectionHead
         label={"Past · " + past.length}
@@ -333,10 +308,11 @@ export default function CompeteHub({
       {/* Plus bottom-sheet */}
       <PlusSheet open={plusOpen} onClose={function () { setPlusOpen(false); }} onPick={pickFromSheet} />
 
-      {/* Create-league modal */}
+      {/* Create-league modal — opens from the Start-a-league CTA
+          and from the PlusSheet's "Start a league" option. */}
       {showCreateLeague && (
         <CreateLeagueModal
-          t={null}
+          t={t}
           onClose={function () { setShowCreateLeague(false); }}
           createLeague={leagues && leagues.createLeague}
           onCreated={function (newId) {

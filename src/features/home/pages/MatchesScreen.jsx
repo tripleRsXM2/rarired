@@ -143,14 +143,19 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
                 borderRadius:  999,
                 padding:       "6px 4px",
                 fontFamily:    ED_TOK.mono,
-                fontSize:      10,
-                letterSpacing: "0.06em",
+                fontSize:      9.5,
+                letterSpacing: "0.04em",
                 fontWeight:    500,
                 textTransform: "uppercase",
                 cursor:        "pointer",
                 transition:    "160ms",
                 whiteSpace:    "nowrap",
                 textAlign:     "center",
+                // "Tournament" is longest — keep it inside its
+                // pill on narrow viewports rather than letting it
+                // bleed out of the rounded border.
+                overflow:      "hidden",
+                textOverflow:  "ellipsis",
               }}>
               {f}
             </button>

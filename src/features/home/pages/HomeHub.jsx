@@ -228,10 +228,12 @@ function Tile({ kind, kicker, title, meta, onClick, art }) {
         pointerEvents: "none",
       }}/>
 
-      {/* Glass arrow, top-right. */}
+      {/* Glass arrow, bottom-right — sits in the corner alongside
+          the title/meta stack so the eye lands on the destination
+          cue right where the action is. */}
       <span aria-hidden="true" style={{
         position:       "absolute",
-        top:            22,
+        bottom:         22,
         right:          22,
         width:          38,
         height:         38,

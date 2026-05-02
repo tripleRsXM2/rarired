@@ -1129,6 +1129,7 @@ export default function App(){
               // "Compete" title) plus the AttentionBanner + Active
               // hero card / mini list + PlusSheet + Past list.
               <CompeteHub
+                t={t}
                 authUser={auth.authUser}
                 challenges={challenges}
                 leagues={leagues}
@@ -1136,7 +1137,6 @@ export default function App(){
                 history={matchHistory.history}
                 openChallenge={openChallenge}
                 toast={toast}
-                setScrolledPastHero={setScrolledPastHero}
               />
             ) : (
               <TournamentsTab
