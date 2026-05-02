@@ -296,7 +296,15 @@ export default function LogMatchPage({
       date:           details.date,
       venue:          details.court || "",
       court:          "",
-      matchType:      type === "casual" ? "casual" : "ranked",
+      // matchType MUST agree with the league's mode when filing into
+      // a league — the server trigger validate_match_league rejects
+      // (league.mode='casual' + match_type='ranked') and vice versa.
+      // Resolution order: lockedLeague payload (router state from
+      // "+ Log match" inside the league detail) → user-picked league
+      // from activeLeagues. Fall back to "ranked" only when neither
+      // resolution finds the league row, which shouldn't happen for
+      // an actively selected league.
+      matchType:      resolveMatchType(type, leagueId, lockedLeague, activeLeagues),
       completionType: completion,
       leagueId:       (type === "league" && leagueId) ? leagueId : null,
       inviteOpponent: false,
@@ -2306,6 +2314,27 @@ function subForType(type, leagueId, activeLeagues) {
   if (type === "casual") return "Stats only";
   if (type === "tournament") return "Tournament round";
   return null;
+}
+
+// Resolve the match_type to send to the server based on the picked
+// type / league. The server-side validate_match_league trigger
+// rejects (league.mode='casual' + match_type='ranked') and the
+// reverse, so the client MUST send the league's actual mode when
+// filing into one. lockedLeague (router state from a "Log match"
+// click inside the league detail view) is authoritative when
+// present; otherwise we look the league up in the user's active
+// leagues. As a last resort fall back to "ranked" for type==='league'
+// — but if we hit that path the picker is in an inconsistent state.
+function resolveMatchType(type, leagueId, lockedLeague, activeLeagues) {
+  if (type === "casual") return "casual";
+  if (type === "league" && leagueId) {
+    if (lockedLeague && lockedLeague.id === leagueId && lockedLeague.mode) {
+      return lockedLeague.mode === "casual" ? "casual" : "ranked";
+    }
+    var lg = (activeLeagues || []).find(function (l) { return l.id === leagueId; });
+    if (lg && lg.mode) return lg.mode === "casual" ? "casual" : "ranked";
+  }
+  return "ranked";
 }
 
 function labelForCompletion(c) {

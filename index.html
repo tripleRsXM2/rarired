@@ -53,7 +53,7 @@
          CSS only — no external dependencies. The actual app fades it
          out by setting body[data-cs-ready="true"] once auth has
          resolved (App.jsx → window.__csReady).
-         Failsafe in <body> below auto-hides after 1s if React never
+         Failsafe in <body> below auto-hides after 2s if React never
          marks ready, so a hung network request can't lock the user
          out.
          Editorial Tennis tokens: cream paper / espresso ink / clay
@@ -152,11 +152,11 @@
     <div id="root"></div>
 
     <script>
-      // Failsafe: hide splash after 1s even if React never marks
+      // Failsafe: hide splash after 2s even if React never marks
       // ready. Stops a stuck network request from locking the screen.
       window.__CS_SPLASH_FALLBACK = setTimeout(function () {
         if (document.body) document.body.dataset.csReady = "true";
-      }, 1000);
+      }, 2000);
 
       // Public hook React calls when boot is complete (auth has
       // resolved one way or the other). Triggers the CSS fade-out,

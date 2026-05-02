@@ -232,6 +232,21 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
     ? match.rating_delta
     : null;
 
+  // "NEW" pill — shows on confirmed rows for the first 24h since the
+  // match was confirmed. Pending rows keep the Pending pill (the
+  // freshness signal there isn't useful — the user already knows it's
+  // recent and unresolved); the moment a pending match flips to
+  // confirmed, the NEW pill takes over the right slot for the next
+  // 24h, then the regular delta returns. Falls back to `confirmed_at`
+  // (snake-case from older feed shapes) if the normalized field is
+  // missing.
+  var confirmedAt = match.confirmedAt || match.confirmed_at || null;
+  var isNew = false;
+  if (!isPending && confirmedAt) {
+    var ageMs = Date.now() - new Date(confirmedAt).getTime();
+    isNew = ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000;
+  }
+
   // Tap behaviour:
   //   pending → open the review drawer so the user can confirm /
   //             dispute / void without leaving Activity
@@ -333,7 +348,11 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
       </div>
 
       {/* Right slot — Pending pill for pending rows (tap-to-review),
-          rating delta for confirmed ranked rows, blank otherwise. */}
+          NEW pill for confirmed rows logged in the last 24h, rating
+          delta for confirmed ranked rows, blank otherwise. The NEW
+          pill takes priority over the delta so a freshly-confirmed
+          match reads as fresh first; the delta returns once the
+          24h window closes. */}
       {isPending ? (
         <span style={{
           fontFamily:    ED_TOK.mono,
@@ -350,6 +369,21 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
           {match.status === "disputed" || match.status === "pending_reconfirmation"
             ? "Disputed"
             : "Pending"}
+        </span>
+      ) : isNew ? (
+        <span style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      9.5,
+          fontWeight:    700,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color:         ED_TOK.accent,
+          background:    "rgba(255, 45, 85, 0.10)",
+          padding:       "4px 10px",
+          borderRadius:  999,
+          whiteSpace:    "nowrap",
+        }}>
+          New
         </span>
       ) : delta != null ? (
         <div style={{

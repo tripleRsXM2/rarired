@@ -229,7 +229,7 @@ export default function App(){
   // already-interactive UI; gating on them would force several
   // seconds of unnecessary splash time.
   //
-  // The splash has its own 1s failsafe inside index.html, so a
+  // The splash has its own 2s failsafe inside index.html, so a
   // stuck network call can't lock the screen even if this effect
   // never fires. Placed AFTER useAuthController() so the deps array
   // can read auth.authUser / auth.authInitialized — `var` hoists
