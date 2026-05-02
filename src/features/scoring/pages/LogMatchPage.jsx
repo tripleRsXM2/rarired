@@ -339,48 +339,55 @@ export default function LogMatchPage({
           />
         </div>
 
-        {/* DETAIL ROWS */}
-        <div style={{ borderTop: "1px solid " + ED_TOK.line }}>
-          <DetailRow
-            label="How it ended"
-            value={completionLabel}
-            empty={false}
-            onClick={function () { setSheet("completion"); }}
-          />
-          <DetailRow
-            label="Opponent"
-            value={opp ? opp.name : "Choose opponent"}
-            empty={!opp}
-            sub={opp ? opp.sub : null}
-            onClick={function () { setSheet("opp"); }}
-          />
-          <DetailRow
-            label="Type"
-            value={ctxLabel || "League, casual, or tournament"}
-            empty={!type}
-            sub={subForType(type, leagueId, activeLeagues)}
-            onClick={function () { setSheet("type"); }}
-          />
-          <DetailRow
-            label="Details"
-            value={detailsSummary || "Court, date, notes (optional)"}
-            empty={!detailsSummary}
-            sub={details.notes ? quote(details.notes, 48) : null}
-            onClick={function () { setSheet("details"); }}
-          />
-        </div>
-
-        {/* SUBMIT — pinned to the bottom of the body via
-            margin-top: auto so the button sits flush above the
-            bottom tab bar regardless of how compact the rest of
-            the form is. */}
+        {/* "How it ended" through "Log match" is one group — the
+            detail rows AND the submit zone share a wrapper with
+            margin-top: auto so the whole bottom-of-page concern
+            (configure + submit) reads as a single block pinned to
+            the bottom of the body, with the scoreboard hero
+            floating above with the leftover empty space between
+            them. */}
         <div style={{
-          padding:        "14px 22px 18px",
-          display:        "flex",
-          flexDirection:  "column",
-          gap:            8,
-          marginTop:      "auto",
+          marginTop:     "auto",
+          display:       "flex",
+          flexDirection: "column",
         }}>
+          <div style={{ borderTop: "1px solid " + ED_TOK.line }}>
+            <DetailRow
+              label="How it ended"
+              value={completionLabel}
+              empty={false}
+              onClick={function () { setSheet("completion"); }}
+            />
+            <DetailRow
+              label="Opponent"
+              value={opp ? opp.name : "Choose opponent"}
+              empty={!opp}
+              sub={opp ? opp.sub : null}
+              onClick={function () { setSheet("opp"); }}
+            />
+            <DetailRow
+              label="Type"
+              value={ctxLabel || "League, casual, or tournament"}
+              empty={!type}
+              sub={subForType(type, leagueId, activeLeagues)}
+              onClick={function () { setSheet("type"); }}
+            />
+            <DetailRow
+              label="Details"
+              value={detailsSummary || "Court, date, notes (optional)"}
+              empty={!detailsSummary}
+              sub={details.notes ? quote(details.notes, 48) : null}
+              onClick={function () { setSheet("details"); }}
+            />
+          </div>
+
+          {/* SUBMIT — sits at the very bottom of the bottom group. */}
+          <div style={{
+            padding:        "14px 22px 18px",
+            display:        "flex",
+            flexDirection:  "column",
+            gap:            8,
+          }}>
           <span style={{
             fontFamily:    ED_TOK.mono,
             fontSize:      10.5,
@@ -416,8 +423,9 @@ export default function LogMatchPage({
               </svg>
             )}
           </button>
-        </div>
-      </div>
+          </div>{/* end submit zone */}
+        </div>{/* end "How it ended → Log match" bottom group */}
+      </div>{/* end body */}
 
       {/* SHEETS */}
       <BottomSheet open={sheet === "score"} title="Score" onClose={function () { setSheet(null); }}>
