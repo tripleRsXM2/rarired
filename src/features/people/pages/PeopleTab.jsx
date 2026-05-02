@@ -434,13 +434,20 @@ export default function PeopleTab({
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
-      // When the chat thread takes over, drop the legacy
-      // bottom-tab-bar reservations (minHeight subtraction +
-      // paddingBottom: 96). The thread owns the full viewport via
-      // cs-dm-root's own height calc and its input bar handles the
-      // safe-area-inset-bottom — anything else added at this layer
-      // produces a cream band below the input bar.
-      minHeight:     threadActive ? undefined : "calc(100dvh - 64px)",
+      // minHeight = available viewport minus the global top mob nav
+      // AND the bottom tab bar. Hardcoded "100dvh - 64px" was wrong:
+      // on a notched iPhone the actual top nav is ~99px (52 + safe-
+      // area-inset-top) and the tab bar is ~78px, so the wrapper was
+      // sized 113px taller than the available space. Combined with
+      // the cs-mob-nav above it, total page height exceeded 100dvh
+      // by ~35px, forcing the page to scroll even when content fit.
+      // Using --cs-nav-h + --cs-tab-h keeps the wrapper exactly the
+      // size of the available viewport — no scroll on short lists.
+      //
+      // When the chat thread takes over (threadActive), drop the
+      // minHeight + paddingBottom entirely — cs-dm-root sizes itself
+      // and the input bar handles env(safe-area-inset-bottom).
+      minHeight:     threadActive ? undefined : "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
       paddingBottom: threadActive ? 0 : 96,
     }}>
       {/* Hero block removed — the global top mob nav already labels
