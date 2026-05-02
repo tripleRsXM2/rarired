@@ -59,6 +59,10 @@ export default function Providers({ t, theme, children }){
       // first effect run cancelled the timeout before it set
       // open=true, leaving the panel pinned at translateY(100%).
       "@keyframes csSheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}",
+      // Pulse ring — used by the Compete v2 attention banner. A
+      // small dot emits an expanding ring that fades, drawing the
+      // eye to the alert without being obnoxious.
+      "@keyframes csCompetePulse{0%{transform:scale(0.6);opacity:0.5}100%{transform:scale(1.6);opacity:0}}",
       "@keyframes csScrimIn{from{background:rgba(20,17,14,0)}to{background:rgba(20,17,14,0.55)}}",
       ".cs-sheet-scrim{position:fixed;inset:0;background:rgba(20,17,14,0.55);z-index:200;animation:csScrimIn 240ms ease backwards;pointer-events:auto}",
       ".cs-sheet-panel{position:fixed;left:0;right:0;bottom:0;transform:translateY(0);z-index:201;max-height:88dvh;display:flex;flex-direction:column;animation:csSheetIn 320ms cubic-bezier(0.22,1,0.36,1) backwards}",

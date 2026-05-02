@@ -1,300 +1,326 @@
 // src/features/tournaments/pages/CompeteHub.jsx
 //
-// Module 13 — hub-first landing for /tournaments.
+// Editorial Tennis "Compete v2" hub — supersedes the v1 carousel
+// + explore-types layout. v2 design intent (see
+// design_handoff_courtsync_compete_v2/README.md):
 //
-// Hierarchy (top → bottom, same on mobile + desktop):
+//   v1 carousel of active comps         → hero card + stacked minis
+//   v1 three explore-types rows         → single "+" bottom sheet
+//   v1 rank #2 was the visual hero      → competition NAME is hero
+//   v1 last match as a small line       → colored score chip on hero
+//   v1 two equal-weight CTAs            → one big challenge CTA
+//   v1 no alerts surface                → "Needs your attention" banner
 //
-//   1. CompeteHero            — title + 2 primary CTAs
-//   2. ActiveNowBand          — full-bleed dark carousel of every
-//                               active item (priority sorted).
-//                               Empty state when nothing active.
-//   3. ExploreCardsSection    — secondary navigation into legacy
-//                               category pages
-//   4. PastCompetitionsSection — historical leagues
+// Page hierarchy (top → bottom):
+//   1. Hero header (kicker + 72px "Compete")
+//   2. AttentionBanner — only when alerts.length > 0
+//   3. SectionHead "Active · {n}"
+//   4. HeroActiveCard (active[0]) + MiniActiveCard list (active[1..])
+//      OR empty-state dashed card when active.length === 0
+//   5. PrimaryCTA — "+ Challenge someone" + secondary text links
+//   6. SectionHead "Past · {n}" with Show/Hide toggle
+//   7. PastList (collapsed by default)
+//   8. PlusSheet — bottom sheet, opens from any CTA
 //
-// Routing: this page renders only when the URL is exactly
-// `/tournaments` (no trailing segment). Deeper routes
-// (`/tournaments/list|challenges|leagues`) keep rendering the
-// existing TournamentsTab — see App.jsx for the gate.
-//
-// Layout structure (important):
-//   <div .fade-up>           ← outer wrapper, NO max-width
-//     <div max-720>          ← centered inner block (hero only)
-//       CompeteHero
-//     </div>
-//     ActiveNowBand          ← full-bleed via width:100% on outer
-//     <div max-720>          ← centered inner block (rest)
-//       ExploreCardsSection
-//       PastCompetitionsSection
-//     </div>
-//   </div>
-//
-// This mirrors HomeTab's pattern: HomeLeagueBand uses width:100% to
-// stretch to the viewport; the centered sections sit in their own
-// max-width inner divs. Keeping the band outside the centered rail
-// is the cleanest way to break out without 100vw / scrollbar math.
+// Wiring:
+//   - ACTIVE = active leagues (my_status=active, lifecycle isActive)
+//     + entered tournaments (status not completed/cancelled)
+//     + accepted challenges where viewer is challenger or challenged
+//   - PAST  = leagues passing isPastLifecycle (completed/cancelled/archived)
+//   - ATTENTION = matches where pendingActionBy === viewerId (need
+//     viewer's response) + incoming pending challenges
+//   - PlusSheet routes:
+//       Challenge  → /tournaments/challenges (existing creation flow)
+//       League     → opens the existing CreateLeagueModal
+//       Tournament → /tournaments/list (existing browse page)
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateLeagueModal from "../../leagues/components/CreateLeagueModal.jsx";
-import { isActive }    from "../../leagues/utils/leagueLifecycle.js";
-import CompeteHero               from "../components/hub/CompeteHero.jsx";
-import ActiveNowBand             from "../components/hub/ActiveNowBand.jsx";
-import CompeteStartActions       from "../components/hub/CompeteStartActions.jsx";
-import SuggestedNextMovesSection from "../components/hub/SuggestedNextMovesSection.jsx";
-import PastCompetitionsSection   from "../components/hub/PastCompetitionsSection.jsx";
-import ExploreCardsSection       from "../components/hub/ExploreCardsSection.jsx";
-import { buildFeaturedSlides }   from "../utils/competeNormalize.js";
-import { buildSuggestions }      from "../utils/competeSuggestions.js";
-import { getDismissedSet,
-         dismissKey }            from "../utils/suggestionDismissals.js";
+import { isActive, isPastLifecycle, LIFECYCLE_LABELS } from "../../leagues/utils/leagueLifecycle.js";
+import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 
-// Reusable inner-rail wrapper. Keeps 720 max-width + horizontal
-// gutter so centered sections share the same vertical alignment as
-// HomeTab. The outer .fade-up wrapper stays unconstrained so the
-// dark band can stretch full-width.
-function InnerRail({ children, style }) {
-  return (
-    <div style={Object.assign({
-      maxWidth: 720,
-      margin:   "0 auto",
-      padding:  "0 clamp(20px, 4vw, 32px)",
-    }, style || {})}>
-      {children}
-    </div>
-  );
-}
+// ── Page ─────────────────────────────────────────────────────────
 
 export default function CompeteHub({
-  t, authUser,
-  // When true, suppresses the in-page CompeteHero — used by the
-  // /tournaments mount in App.jsx where an EditorialScreen wrapper
-  // already provides the back chevron + 56px hero title. CompeteHub
-  // also drops its top padding in this mode so the hero strip
-  // flows directly into the carousel band beneath.
-  hideHero,
-  // Hook bundles (passed from App.jsx — same shape as TournamentsTab).
+  authUser,
   challenges,
   leagues,
   tournaments,
-  // Slice 3: viewer's match history (rematch suggestion source) +
-  // the App-level openChallenge handler (composes a challenge with
-  // a target user + optional source match for venue/court prefill).
   history,
-  openChallenge,
-  toast,
+  openChallenge,           // eslint-disable-line no-unused-vars — kept for future "rematch from card" wiring
+  toast,                   // eslint-disable-line no-unused-vars
 }) {
   var navigate = useNavigate();
-  var [showCreateLeague, setShowCreateLeague] = useState(false);
-
   var viewerId = authUser && authUser.id;
 
-  // ── Navigation helpers (deep-links into existing pages) ────────
-  function goLeagues()     { navigate("/tournaments/leagues"); }
-  function goChallenges()  { navigate("/tournaments/challenges"); }
-  function goTournaments() { navigate("/tournaments/list"); }
-  function goLeague(id)    { navigate("/tournaments/leagues?id=" + id); }
-  function goTournament(id) {
-    if (tournaments && tournaments.setSelectedTournId) {
-      tournaments.setSelectedTournId(id);
-    }
-    navigate("/tournaments/list");
-  }
-  function goLogChallenge(challenge) {
-    // Reproduces ChallengesPanel's deep-link contract: route state
-    // carries `logChallengeId` which the panel's effect picks up
-    // and auto-opens the score modal.
-    navigate("/tournaments/challenges", { state: { logChallengeId: challenge.id } });
-  }
+  var [pastOpen, setPastOpen] = useState(false);
+  var [plusOpen, setPlusOpen] = useState(false);
+  var [showCreateLeague, setShowCreateLeague] = useState(false);
 
-  // ── Handlers passed into the slide builders ────────────────────
-  var handlers = useMemo(function () {
-    return {
-      acceptInvite: function (leagueId) {
-        return leagues.respondToInvite(leagueId, true).then(function (r) {
-          if (r && r.error) reportError(r.error.message || "Could not accept.");
-          return r;
-        });
-      },
-      declineInvite: function (leagueId, leagueName) {
-        if (!window.confirm("Decline invitation to " + (leagueName || "this league") + "?")) {
-          return Promise.resolve({ error: null });
-        }
-        return leagues.respondToInvite(leagueId, false).then(function (r) {
-          if (r && r.error) reportError(r.error.message || "Could not decline.");
-          return r;
-        });
-      },
-      acceptChallenge: function (challenge) {
-        return challenges.acceptChallenge(challenge).then(function (r) {
-          if (r && r.error) reportError(r.error.message || "Could not accept.");
-          return r;
-        });
-      },
-      declineChallenge: function (challenge) {
-        if (!window.confirm("Decline this challenge?")) return Promise.resolve({ error: null });
-        return challenges.declineChallenge(challenge).then(function (r) {
-          if (r && r.error) reportError(r.error.message || "Could not decline.");
-          return r;
-        });
-      },
-      openLeague:     function (id)        { goLeague(id); },
-      openTournament: function (id)        { goTournament(id); },
-      logChallenge:   function (challenge) { goLogChallenge(challenge); },
-      openChallenges: function ()          { goChallenges(); },
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leagues, challenges, tournaments]);
-
-  function reportError(msg) { if (toast) toast(msg, "error"); else window.alert(msg); }
-
-  // ── Lazy-load detail for active leagues so slides can render
-  // rank + record. Cache hits prevent re-fetch on subsequent visits.
+  // Lazy-load detail for active leagues so the hero card has rank
+  // + record. Same effect the v1 hub used.
   useEffect(function () {
     if (!leagues || !leagues.loadLeagueDetail) return;
-    var visibleActive = (leagues.leagues || []).filter(function (lg) {
+    var visible = (leagues.leagues || []).filter(function (lg) {
       return lg.my_status === "active" && isActive(lg);
     });
-    visibleActive.forEach(function (lg) {
+    visible.forEach(function (lg) {
       if (!leagues.detailCache || !leagues.detailCache[lg.id]) {
         leagues.loadLeagueDetail(lg.id);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leagues.leagues]);
+  }, [leagues && leagues.leagues]);
 
-  // Merged profile map: leagues + challenges + the small subset
-  // useMatchHistory keeps internally on each row's avatar field.
-  // Keeping the merge in one place means the slides + suggestions
-  // share the same name/avatar resolution.
-  var mergedProfileMap = useMemo(function () {
-    return Object.assign({}, leagues.profileMap || {}, challenges.profileMap || {});
-  }, [leagues.profileMap, challenges.profileMap]);
+  // Merged profile map for opponent name resolution on the hero
+  // card's last-match chip + accepted-challenge name.
+  var profileMap = useMemo(function () {
+    return Object.assign({},
+      (leagues && leagues.profileMap) || {},
+      (challenges && challenges.profileMap) || {}
+    );
+  }, [leagues && leagues.profileMap, challenges && challenges.profileMap]);
 
-  // ── Build slides for the carousel ──────────────────────────────
-  var slides = useMemo(function () {
-    return buildFeaturedSlides({
-      leagues:      leagues.leagues,
-      challenges:   challenges.challenges,
-      tournaments:  (tournaments && tournaments.tournaments) || [],
-      profileMap:   mergedProfileMap,
-      detailCache:  leagues.detailCache,
-      viewerId:     viewerId,
-      handlers:     handlers,
-      isEntered:    tournaments && tournaments.isEntered,
-      tournStatus:  tournaments && tournaments.tournStatus,
+  // ── ACTIVE list ─────────────────────────────────────────────
+  var active = useMemo(function () {
+    var out = [];
+    // Active leagues
+    (leagues && leagues.leagues || []).forEach(function (lg) {
+      if (lg.my_status !== "active" || !isActive(lg)) return;
+      var detail = leagues.detailCache && leagues.detailCache[lg.id];
+      var standing = detail && (detail.standings || []).find(function (s) { return s.user_id === viewerId; });
+      var memberCount = detail && (detail.members || []).filter(function (m) { return m.status === "active"; }).length;
+      var lastMeta = detail ? lastLeagueResult(detail, lg.id, viewerId, profileMap) : null;
+      out.push({
+        id:      "league:" + lg.id,
+        navTo:   "/tournaments/leagues?id=" + lg.id,
+        type:    "League",
+        name:    lg.name || "League",
+        rank:    standing ? standing.rank : null,
+        record:  standing ? (standing.wins + "–" + standing.losses) : "0–0",
+        players: memberCount || 0,
+        last:    lastMeta || { result: null, opp: null, score: null },
+      });
     });
-  }, [
-    leagues.leagues, challenges.challenges, mergedProfileMap, leagues.detailCache,
-    tournaments && tournaments.tournaments, viewerId, handlers,
-    tournaments && tournaments.isEntered, tournaments && tournaments.tournStatus,
-  ]);
-
-  // ── Build suggestion cards (Slice 3 + dismissal layer) ─────────
-  // buildSuggestions returns the priority-sorted array of items;
-  // each helper inside fails closed (returns null when data is
-  // missing). dismissedKeys is per-user localStorage state — items
-  // whose key is in the set are filtered out so they never re-
-  // surface until the user clears dismissals (or the suggestion
-  // re-targets a different entity, e.g. a fresh rematch with a new
-  // matchId).
-  var [dismissedKeys, setDismissedKeys] = useState(function () { return getDismissedSet(viewerId); });
-  // Re-read on user switch — login flow could land us here with a
-  // different viewerId than we initialised with.
-  useEffect(function () {
-    setDismissedKeys(getDismissedSet(viewerId));
-  }, [viewerId]);
-
-  var allSuggestions = useMemo(function () {
-    return buildSuggestions({
-      leagues:     leagues.leagues || [],
-      detailCache: leagues.detailCache || {},
-      history:     history || [],
-      viewerId:    viewerId,
-      profileMap:  mergedProfileMap,
+    // Accepted challenges (viewer is participant)
+    (challenges && challenges.challenges || []).forEach(function (ch) {
+      if (ch.status !== "accepted") return;
+      if (ch.challenger_id !== viewerId && ch.challenged_id !== viewerId) return;
+      var oppId = ch.challenger_id === viewerId ? ch.challenged_id : ch.challenger_id;
+      var opp = profileMap[oppId];
+      out.push({
+        id:      "challenge:" + ch.id,
+        navTo:   "/tournaments/challenges",
+        type:    "Challenge",
+        name:    "vs. " + ((opp && opp.name) || "Player"),
+        rank:    null,
+        record:  "0–0",
+        players: 2,
+        last:    { result: null, opp: null, score: null },
+      });
     });
-  }, [leagues.leagues, leagues.detailCache, history, viewerId, mergedProfileMap]);
+    // Active tournaments where the viewer is entered
+    (tournaments && tournaments.tournaments || []).forEach(function (tn) {
+      var entered = tournaments.isEntered ? tournaments.isEntered(tn.id) : false;
+      if (!entered) return;
+      if (tn.status === "completed" || tn.status === "cancelled") return;
+      out.push({
+        id:      "tourn:" + tn.id,
+        navTo:   "/tournaments/list",
+        type:    "Tournament",
+        name:    tn.name || "Tournament",
+        rank:    null,
+        record:  "—",
+        players: tn.player_count || 0,
+        last:    { result: null, opp: null, score: null },
+      });
+    });
+    return out;
+  }, [leagues, challenges, tournaments, profileMap, viewerId]);
 
-  var visibleSuggestions = useMemo(function () {
-    return allSuggestions.filter(function (s) { return !dismissedKeys.has(s.key); });
-  }, [allSuggestions, dismissedKeys]);
+  // ── PAST list ───────────────────────────────────────────────
+  var past = useMemo(function () {
+    var out = [];
+    (leagues && leagues.leagues || []).forEach(function (lg) {
+      if (!isPastLifecycle(lg)) return;
+      var tag = lg.status === "completed" ? "completed"
+              : lg.status === "cancelled" ? "cancelled"
+              : "archived";
+      out.push({
+        id:     "league:" + lg.id,
+        navTo:  "/tournaments/leagues?id=" + lg.id,
+        name:   lg.name || "League",
+        reason: humaniseReason(lg),
+        tag:    tag,
+      });
+    });
+    return out;
+  }, [leagues]);
 
-  function handleDismissSuggestion(key) {
-    setDismissedKeys(dismissKey(viewerId, key));
+  // ── ATTENTION ───────────────────────────────────────────────
+  var attention = useMemo(function () {
+    var alerts = [];
+    // Matches the viewer owes a response on (confirm / accept dispute).
+    (history || []).forEach(function (m) {
+      var needs = (m.status === "pending_confirmation" && m.isTagged)
+               || ((m.status === "disputed" || m.status === "pending_reconfirmation") && m.pendingActionBy === viewerId);
+      if (!needs) return;
+      var oppName = m.friendName || m.opponentName || m.oppName || m.playerName || "Someone";
+      var primary;
+      if (m.status === "pending_confirmation") {
+        var sc = formatLastScore(m.sets);
+        primary = oppName + " is waiting on you to confirm" + (sc ? (" " + sc) : "");
+      } else {
+        primary = oppName + " disputed a match — your response needed";
+      }
+      alerts.push({ primary: primary, navTo: "/matches" });
+    });
+    // Incoming pending challenges
+    (challenges && challenges.challenges || []).forEach(function (ch) {
+      if (ch.status !== "pending") return;
+      if (ch.challenged_id !== viewerId) return;
+      var by = profileMap[ch.challenger_id];
+      var name = (by && by.name) || "Someone";
+      alerts.push({ primary: name + " challenged you to a match", navTo: "/tournaments/challenges" });
+    });
+    if (!alerts.length) return null;
+    return {
+      count:     alerts.length,
+      primary:   alerts[0].primary,
+      navTo:     alerts[0].navTo,
+      secondary: alerts.length === 1
+        ? "1 item needs your attention"
+        : alerts.length + " items need your attention",
+    };
+  }, [history, challenges, profileMap, viewerId]);
+
+  // ── Handlers ─────────────────────────────────────────────────
+  function pickFromSheet(kind) {
+    setPlusOpen(false);
+    if (kind === "challenge")  navigate("/tournaments/challenges");
+    if (kind === "league")     setShowCreateLeague(true);
+    if (kind === "tournament") navigate("/tournaments/list");
   }
 
-  // ── Render ─────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────
+  var hero = active[0] || null;
+  var rest = active.slice(1);
+
   return (
-    <div className="fade-up" style={{
-      paddingTop:    hideHero ? 0 : 16,
-      paddingBottom: 100,
+    <div style={{
+      background:    ED_TOK.bg,
+      color:         ED_TOK.ink,
+      fontFamily:    ED_TOK.sans,
+      minHeight:     "calc(100dvh - 64px)",
+      paddingBottom: 96,
+      position:      "relative",
     }}>
-      {!hideHero && (
-        <InnerRail style={{ marginBottom: "clamp(20px, 3vw, 32px)" }}>
-          <CompeteHero t={t} />
-        </InnerRail>
+      {/* Hero header — kicker + 72px "Compete" title. */}
+      <div style={{ padding: "8px 22px 18px" }}>
+        <div style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      10.5,
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color:         ED_TOK.muted,
+          fontWeight:    700,
+          textAlign:     "center",
+          paddingBottom: 16,
+          borderBottom:  "1px solid " + ED_TOK.line,
+        }}>
+          Tournaments &nbsp;·&nbsp; Leagues &nbsp;·&nbsp; Challenges
+        </div>
+        <h1 style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      "clamp(56px, 18vw, 72px)",
+          fontWeight:    500,
+          letterSpacing: "-0.04em",
+          lineHeight:    0.9,
+          margin:        "20px 0 0",
+        }}>
+          Compete
+        </h1>
+      </div>
+
+      {/* AttentionBanner */}
+      {attention && (
+        <AttentionBanner attention={attention} onClick={function () { navigate(attention.navTo); }}/>
       )}
 
-      {/* Carousel band — full-bleed across the viewport on every
-          screen size. When there are no active items, it returns
-          null and the empty state below renders inside the rail. */}
-      <ActiveNowBand slides={slides} />
+      {/* Active section */}
+      <SectionHead label={"Active · " + active.length} />
 
-      <InnerRail>
-        {slides.length === 0 && (
-          <ActiveNowEmpty t={t} />
-        )}
+      {active.length === 0 ? (
+        <EmptyState onPlus={function () { setPlusOpen(true); }} />
+      ) : (
+        <>
+          <HeroActiveCard item={hero} onOpen={function () { navigate(hero.navTo); }} />
+          {rest.length > 0 && (
+            <div style={{ padding: "0 22px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {rest.map(function (it) {
+                return <MiniActiveCard key={it.id} item={it} onOpen={function () { navigate(it.navTo); }} />;
+              })}
+            </div>
+          )}
+        </>
+      )}
 
-        {/* "Start something new" CTAs sit under the band so the
-            editorial moment leads the page. When no active items
-            exist, the empty state above sits directly above these
-            buttons — they become the primary action path. */}
-        <CompeteStartActions
-          t={t}
-          onChallenge={goChallenges}
-          onCreateLeague={function () { setShowCreateLeague(true); }}
-        />
+      {/* Primary CTA */}
+      <div style={{ padding: "8px 22px 28px" }}>
+        <button
+          onClick={function () { setPlusOpen(true); }}
+          style={primaryCTAStyle()}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.4"
+            strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          Challenge someone
+        </button>
+        <div style={{
+          display:        "flex",
+          justifyContent: "center",
+          gap:            6,
+          marginTop:      12,
+          fontFamily:     ED_TOK.mono,
+          fontSize:       11,
+          fontWeight:     600,
+          color:          ED_TOK.muted,
+          letterSpacing:  "0.04em",
+        }}>
+          <span>or</span>
+          <SecondaryLink onClick={function () { setPlusOpen(true); }}>start a league</SecondaryLink>
+          <span>·</span>
+          <SecondaryLink onClick={function () { setPlusOpen(true); }}>browse tournaments</SecondaryLink>
+        </div>
+      </div>
 
-        {/* Suggested-for-you section hidden for now. The data
-            pipeline (buildSuggestions, dismissedKeys, handlers
-            below) is left wired up so re-enabling is a one-line
-            change — un-comment the JSX when we're ready to bring
-            it back. */}
-        {false && (
-          <SuggestedNextMovesSection
-            t={t}
-            suggestions={visibleSuggestions}
-            profileMap={mergedProfileMap}
-            onRematch={function (targetUser, sourceMatch) {
-              if (openChallenge) openChallenge(targetUser, "rematch", sourceMatch);
-            }}
-            onOpenLeague={goLeague}
-            onDismiss={handleDismissSuggestion}
-          />
-        )}
+      {/* Past section */}
+      <SectionHead
+        label={"Past · " + past.length}
+        action={past.length > 0 ? (pastOpen ? "Hide" : "Show") : null}
+        onAction={function () { setPastOpen(function (v) { return !v; }); }}/>
+      {pastOpen && past.length > 0 && (
+        <div style={{ borderTop: "1px solid " + ED_TOK.line }}>
+          {past.map(function (p) {
+            return <PastRow key={p.id} item={p} onOpen={function () { navigate(p.navTo); }} />;
+          })}
+        </div>
+      )}
 
-        <ExploreCardsSection
-          t={t}
-          onLeagues={goLeagues}
-          onChallenges={goChallenges}
-          onTournaments={goTournaments}
-        />
+      {/* Plus bottom-sheet */}
+      <PlusSheet open={plusOpen} onClose={function () { setPlusOpen(false); }} onPick={pickFromSheet} />
 
-        <PastCompetitionsSection
-          t={t}
-          leagues={leagues.leagues}
-          onOpenLeague={goLeague}
-        />
-      </InnerRail>
-
+      {/* Create-league modal */}
       {showCreateLeague && (
         <CreateLeagueModal
-          t={t}
+          t={null}
           onClose={function () { setShowCreateLeague(false); }}
-          createLeague={leagues.createLeague}
+          createLeague={leagues && leagues.createLeague}
           onCreated={function (newId) {
             setShowCreateLeague(false);
-            goLeague(newId);
+            navigate("/tournaments/leagues?id=" + newId);
           }}
           toast={toast}
         />
@@ -303,32 +329,683 @@ export default function CompeteHub({
   );
 }
 
-// ── Empty state ────────────────────────────────────────────────
-// Renders only when the carousel has nothing to show. Box chrome
-// dropped — the rest of the hub is now box-free, so a card here
-// would shout "broken band" instead of "calm placeholder". The 🎾
-// hero illustration stays (per the design rule's exception for
-// large decorative empty-state motifs).
-function ActiveNowEmpty({ t }) {
+// ── AttentionBanner ─────────────────────────────────────────────
+
+function AttentionBanner({ attention, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        margin:        "0 22px 20px",
+        background:    ED_TOK.bg2,
+        border:        "1px solid " + ED_TOK.line,
+        borderLeft:    "3px solid " + ED_TOK.accent,
+        borderRadius:  12,
+        padding:       "14px 16px",
+        display:       "flex",
+        alignItems:    "center",
+        gap:           12,
+        cursor:        "pointer",
+        transition:    "background 140ms",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.background = "#DDD3BD"; }}
+      onMouseLeave={function (e) { e.currentTarget.style.background = ED_TOK.bg2; }}>
+      <span style={{
+        position:     "relative",
+        width:        8,
+        height:       8,
+        borderRadius: "50%",
+        background:   ED_TOK.accent,
+        flex:         "0 0 auto",
+      }}>
+        <span style={{
+          content:      '""',
+          position:     "absolute",
+          inset:        -6,
+          borderRadius: "50%",
+          border:       "2px solid " + ED_TOK.accent,
+          opacity:      0.4,
+          animation:    "csCompetePulse 1.6s ease-out infinite",
+          pointerEvents: "none",
+        }}/>
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      15,
+          fontWeight:    600,
+          letterSpacing: "-0.01em",
+          lineHeight:    1.2,
+        }}>
+          {attention.primary}
+        </div>
+        <div style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      11,
+          letterSpacing: "0.06em",
+          color:         ED_TOK.muted,
+          fontWeight:    500,
+          marginTop:     3,
+        }}>
+          {attention.secondary}
+        </div>
+      </div>
+      <span style={{ color: ED_TOK.muted, fontSize: 18, flex: "0 0 auto" }}>›</span>
+    </div>
+  );
+}
+
+// ── SectionHead ─────────────────────────────────────────────────
+
+function SectionHead({ label, action, onAction }) {
   return (
     <div style={{
-      padding:      "32px 0 8px",
-      textAlign:    "center",
-      marginBottom: "clamp(20px, 3vw, 32px)",
+      display:        "flex",
+      justifyContent: "space-between",
+      alignItems:     "baseline",
+      padding:        "4px 22px 12px",
     }}>
-      <div style={{ fontSize: 36, marginBottom: 12 }}>🎾</div>
-      <div style={{
-        fontSize:      17, fontWeight: 700, color: t.text,
-        letterSpacing: "-0.3px", marginBottom: 6,
+      <span style={{
+        fontFamily:    ED_TOK.mono,
+        fontSize:      10.5,
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
+        color:         ED_TOK.muted,
+        fontWeight:    700,
       }}>
-        Nothing active right now
-      </div>
-      <div style={{
-        fontSize: 13, color: t.textSecondary,
-        lineHeight: 1.6, maxWidth: 280, margin: "0 auto",
-      }}>
-        Use the buttons below to start a challenge or a league.
+        {label}
+      </span>
+      {action && (
+        <button
+          onClick={onAction}
+          style={{
+            background:    "transparent",
+            border:        "none",
+            fontFamily:    ED_TOK.mono,
+            fontSize:      10.5,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color:         ED_TOK.ink,
+            fontWeight:    700,
+            cursor:        "pointer",
+            padding:       0,
+          }}>
+          {action}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── HeroActiveCard ──────────────────────────────────────────────
+
+function HeroActiveCard({ item, onOpen }) {
+  var won  = item.last.result === "Won";
+  var lost = item.last.result === "Lost";
+  return (
+    <div style={{ padding: "0 22px 12px" }}>
+      <div
+        onClick={onOpen}
+        style={{
+          background:   ED_TOK.ink,
+          color:        ED_TOK.bg,
+          borderRadius: 24,
+          padding:      "22px 22px 18px",
+          cursor:       "pointer",
+          transition:   "transform 160ms",
+        }}
+        onMouseEnter={function (e) { e.currentTarget.style.transform = "translateY(-1px)"; }}
+        onMouseLeave={function (e) { e.currentTarget.style.transform = "translateY(0)"; }}>
+        <div style={{
+          display:        "flex",
+          justifyContent: "space-between",
+          alignItems:     "center",
+        }}>
+          <span style={{
+            fontFamily:    ED_TOK.mono,
+            fontSize:      10.5,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            fontWeight:    700,
+            color:         "rgba(240, 233, 218, 0.55)",
+          }}>
+            {item.type}
+          </span>
+          {item.rank != null && (
+            <span style={{
+              fontFamily:    ED_TOK.mono,
+              fontSize:      10.5,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontWeight:    700,
+              color:         "rgba(240, 233, 218, 0.55)",
+            }}>
+              Your rank{" "}
+              <b style={{
+                color:         ED_TOK.bg,
+                fontFamily:    ED_TOK.display,
+                fontSize:      16,
+                fontWeight:    600,
+                marginLeft:    4,
+                letterSpacing: "-0.02em",
+              }}>#{item.rank}</b>
+            </span>
+          )}
+        </div>
+
+        <h2 style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      38,
+          fontWeight:    500,
+          letterSpacing: "-0.035em",
+          lineHeight:    0.95,
+          margin:        "18px 0 14px",
+        }}>
+          {item.name}
+        </h2>
+
+        <div style={{
+          display:       "flex",
+          gap:           18,
+          marginTop:     4,
+          fontFamily:    ED_TOK.mono,
+          fontSize:      11,
+          fontWeight:    600,
+          color:         "rgba(240, 233, 218, 0.55)",
+          letterSpacing: "0.04em",
+        }}>
+          <span>
+            <b style={statBoldStyle()}>{item.record}</b>
+            record
+          </span>
+          <span>
+            <b style={statBoldStyle()}>{item.players}</b>
+            {item.players === 1 ? "player" : "players"}
+          </span>
+        </div>
+
+        <div style={{
+          display:        "flex",
+          justifyContent: "space-between",
+          alignItems:     "center",
+          paddingTop:     14,
+          marginTop:      14,
+          borderTop:      "1px solid rgba(240, 233, 218, 0.12)",
+        }}>
+          <div>
+            <div style={{
+              fontFamily:    ED_TOK.mono,
+              fontSize:      9.5,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              fontWeight:    700,
+              color:         "rgba(240, 233, 218, 0.45)",
+              marginBottom:  4,
+            }}>
+              Last match
+            </div>
+            <div style={{
+              fontFamily:    ED_TOK.display,
+              fontSize:      17,
+              fontWeight:    500,
+              letterSpacing: "-0.015em",
+            }}>
+              {item.last.opp ? ("vs. " + item.last.opp) : "—"}
+            </div>
+          </div>
+          {item.last.result ? (
+            <div style={{
+              display:       "inline-flex",
+              alignItems:    "center",
+              gap:           8,
+              fontFamily:    ED_TOK.display,
+              fontSize:      18,
+              fontWeight:    600,
+              letterSpacing: "-0.015em",
+              padding:       "6px 12px",
+              borderRadius:  999,
+              background:    won ? "rgba(184, 230, 194, 0.15)" : "rgba(240, 181, 168, 0.15)",
+              color:         won ? "#B8E6C2" : "#F0B5A8",
+            }}>
+              <span style={{
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                fontWeight:    700,
+              }}>
+                {item.last.result}
+              </span>
+              <span>{item.last.score}</span>
+            </div>
+          ) : (
+            <span style={{
+              fontFamily: ED_TOK.sans,
+              fontSize:   13,
+              color:      "rgba(240, 233, 218, 0.55)",
+              fontStyle:  "italic",
+            }}>
+              No matches yet
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+// ── MiniActiveCard ──────────────────────────────────────────────
+
+function MiniActiveCard({ item, onOpen }) {
+  var won  = item.last.result === "Won";
+  var lost = item.last.result === "Lost";
+  var dotColor = won ? "#3A7D44" : (lost ? "#C3392B" : ED_TOK.muted);
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        background:          ED_TOK.bg2,
+        border:              "1px solid " + ED_TOK.line,
+        borderRadius:        14,
+        padding:             "14px 16px",
+        display:             "grid",
+        gridTemplateColumns: "36px 1fr auto",
+        alignItems:          "center",
+        gap:                 14,
+        cursor:              "pointer",
+        textAlign:           "left",
+        width:               "100%",
+        fontFamily:          "inherit",
+        color:               "inherit",
+        transition:          "140ms",
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.background = "#DDD3BD"; }}
+      onMouseLeave={function (e) { e.currentTarget.style.background = ED_TOK.bg2; }}>
+      <span style={{
+        fontFamily:    ED_TOK.display,
+        fontSize:      28,
+        fontWeight:    600,
+        letterSpacing: "-0.04em",
+        color:         ED_TOK.ink,
+        lineHeight:    0.9,
+        textAlign:     "center",
+      }}>
+        {item.rank != null ? (
+          <>
+            <span style={{
+              fontFamily: ED_TOK.mono,
+              fontSize:   13,
+              fontWeight: 700,
+              color:      ED_TOK.muted,
+              marginRight: 1,
+            }}>#</span>
+            {item.rank}
+          </>
+        ) : "·"}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      16,
+          fontWeight:    600,
+          letterSpacing: "-0.015em",
+          lineHeight:    1.1,
+          whiteSpace:    "nowrap",
+          overflow:      "hidden",
+          textOverflow:  "ellipsis",
+        }}>
+          {item.name}
+        </div>
+        <div style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      10.5,
+          fontWeight:    600,
+          color:         ED_TOK.muted,
+          marginTop:     3,
+          letterSpacing: "0.04em",
+        }}>
+          {item.type} · {item.record}
+        </div>
+      </div>
+      <span style={{
+        width:        8,
+        height:       8,
+        borderRadius: "50%",
+        flex:         "0 0 auto",
+        background:   dotColor,
+      }}/>
+    </button>
+  );
+}
+
+// ── PastRow ─────────────────────────────────────────────────────
+
+function PastRow({ item, onOpen }) {
+  var tagStyle = item.tag === "cancelled"
+    ? { background: "#F0C8B8", color: "#6B2D1A" }
+    : item.tag === "completed"
+      ? { background: "#C8E0CA", color: "#1F4A28" }
+      : { background: ED_TOK.bg2, color: ED_TOK.muted, border: "1px solid " + ED_TOK.line };
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        display:      "flex",
+        alignItems:   "center",
+        gap:          14,
+        padding:      "16px 22px",
+        borderBottom: "1px solid " + ED_TOK.line,
+        cursor:       "pointer",
+      }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      16,
+          fontWeight:    600,
+          letterSpacing: "-0.015em",
+          lineHeight:    1.1,
+          color:         ED_TOK.ink,
+        }}>
+          {item.name}
+        </div>
+        <div style={{
+          fontFamily: ED_TOK.sans,
+          fontSize:   12.5,
+          color:      ED_TOK.muted,
+          marginTop:  4,
+          lineHeight: 1.4,
+        }}>
+          {item.reason}
+        </div>
+      </div>
+      <span style={Object.assign({
+        fontFamily:    ED_TOK.mono,
+        fontSize:      10,
+        fontWeight:    700,
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        padding:       "4px 10px",
+        borderRadius:  999,
+        flex:          "0 0 auto",
+      }, tagStyle)}>
+        {item.tag}
+      </span>
+    </div>
+  );
+}
+
+// ── EmptyState ──────────────────────────────────────────────────
+
+function EmptyState({ onPlus }) {
+  return (
+    <div style={{
+      margin:       "0 22px 22px",
+      padding:      "32px 24px",
+      border:       "1px dashed " + ED_TOK.lineStrong,
+      borderRadius: 18,
+      textAlign:    "center",
+    }}>
+      <h3 style={{
+        fontFamily:    ED_TOK.display,
+        fontSize:      22,
+        fontWeight:    600,
+        letterSpacing: "-0.025em",
+        lineHeight:    1.1,
+        margin:        "12px 0 8px",
+      }}>
+        No competitions yet
+      </h3>
+      <p style={{
+        fontFamily: ED_TOK.sans,
+        fontSize:   14,
+        color:      ED_TOK.muted,
+        margin:     0,
+        lineHeight: 1.5,
+      }}>
+        Challenge a friend or start a league to get on the board.
+      </p>
+    </div>
+  );
+}
+
+// ── PlusSheet ───────────────────────────────────────────────────
+
+function PlusSheet({ open, onClose, onPick }) {
+  if (!open) return null;
+  return (
+    <>
+      <div
+        className="cs-sheet-scrim"
+        onClick={onClose}
+      />
+      <div
+        className="cs-sheet-panel"
+        onClick={function (e) { e.stopPropagation(); }}
+        style={{
+          background:    ED_TOK.bg,
+          color:         ED_TOK.ink,
+          borderRadius:  "28px 28px 0 0",
+          borderTop:     "1px solid " + ED_TOK.line,
+          padding:       "10px 22px calc(22px + env(safe-area-inset-bottom, 0px))",
+          fontFamily:    ED_TOK.sans,
+          maxHeight:     "86dvh",
+          overflowY:     "auto",
+          boxShadow:     "0 -10px 40px rgba(0,0,0,0.18)",
+        }}>
+        <div style={{
+          width:        36,
+          height:       4,
+          background:   ED_TOK.lineStrong,
+          borderRadius: 999,
+          margin:       "0 auto 12px",
+        }}/>
+        <div style={{
+          textAlign:     "center",
+          fontFamily:    ED_TOK.mono,
+          fontSize:      11,
+          letterSpacing: "0.2em",
+          textTransform: "uppercase",
+          fontWeight:    700,
+          color:         ED_TOK.ink,
+          marginBottom:  14,
+        }}>
+          Start something new
+        </div>
+        <SheetOption
+          name="Challenge someone"
+          desc="A single match. Quick."
+          icon={<path d="M5 3v18M19 3v18M5 8h14M5 16h14"/>}
+          onClick={function () { onPick("challenge"); }}/>
+        <SheetOption
+          name="Start a league"
+          desc="Multi-week, with friends."
+          icon={<path d="M6 4h12v3a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4zm6 7v6m-3 3h6"/>}
+          onClick={function () { onPick("league"); }}/>
+        <SheetOption
+          name="Browse tournaments"
+          desc="Public events near you."
+          icon={<path d="M8 21h8M12 17v4M7 4h10v6a5 5 0 0 1-10 0V4z"/>}
+          onClick={function () { onPick("tournament"); }}/>
+      </div>
+    </>
+  );
+}
+
+function SheetOption({ name, desc, icon, onClick }) {
+  var [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={function () { setHover(true); }}
+      onMouseLeave={function () { setHover(false); }}
+      style={{
+        display:      "flex",
+        alignItems:   "center",
+        gap:          14,
+        padding:      16,
+        background:   hover ? ED_TOK.ink : ED_TOK.bg2,
+        border:       "1px solid " + (hover ? ED_TOK.ink : ED_TOK.line),
+        borderRadius: 14,
+        cursor:       "pointer",
+        width:        "100%",
+        textAlign:    "left",
+        fontFamily:   "inherit",
+        color:        hover ? ED_TOK.bg : ED_TOK.ink,
+        marginBottom: 8,
+        transition:   "140ms",
+      }}>
+      <span style={{
+        width:        36,
+        height:       36,
+        borderRadius: 10,
+        background:   hover ? "rgba(255,255,255,0.14)" : ED_TOK.bg,
+        display:      "grid",
+        placeItems:   "center",
+        flex:         "0 0 auto",
+        color:        hover ? ED_TOK.bg : ED_TOK.ink,
+      }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="1.6"
+          strokeLinecap="round" strokeLinejoin="round">
+          {icon}
+        </svg>
+      </span>
+      <div>
+        <div style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      17,
+          fontWeight:    600,
+          letterSpacing: "-0.015em",
+        }}>
+          {name}
+        </div>
+        <div style={{
+          fontFamily: ED_TOK.mono,
+          fontSize:   11,
+          opacity:    0.7,
+          marginTop:  2,
+        }}>
+          {desc}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ── helpers ─────────────────────────────────────────────────────
+
+function SecondaryLink({ children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background:                "transparent",
+        border:                    "none",
+        fontFamily:                "inherit",
+        fontSize:                  "inherit",
+        color:                     ED_TOK.ink,
+        fontWeight:                700,
+        cursor:                    "pointer",
+        textDecoration:            "underline",
+        textUnderlineOffset:       "3px",
+        textDecorationThickness:   "1px",
+        textDecorationColor:       ED_TOK.lineStrong,
+        padding:                   0,
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.textDecorationColor = ED_TOK.ink; }}
+      onMouseLeave={function (e) { e.currentTarget.style.textDecorationColor = ED_TOK.lineStrong; }}>
+      {children}
+    </button>
+  );
+}
+
+function primaryCTAStyle() {
+  return {
+    width:          "100%",
+    background:     ED_TOK.ink,
+    color:          ED_TOK.bg,
+    border:         "none",
+    borderRadius:   999,
+    padding:        18,
+    fontFamily:     ED_TOK.mono,
+    fontSize:       12,
+    letterSpacing:  "0.2em",
+    textTransform:  "uppercase",
+    fontWeight:     700,
+    cursor:         "pointer",
+    display:        "inline-flex",
+    alignItems:     "center",
+    justifyContent: "center",
+    gap:            10,
+    transition:     "160ms",
+  };
+}
+
+function statBoldStyle() {
+  return {
+    color:         ED_TOK.bg,
+    fontFamily:    ED_TOK.display,
+    fontWeight:    500,
+    fontSize:      14,
+    letterSpacing: "-0.01em",
+    marginRight:   5,
+  };
+}
+
+// Last viewer-side league match — winning/losing + opponent name +
+// formatted score for the hero card's score chip. Mirrors the v1
+// utility but returns the structured shape the v2 hero expects.
+function lastLeagueResult(detail, leagueId, viewerId, profileMap) {
+  if (!detail || !detail.recent || !leagueId || !viewerId) return null;
+  var rows = (detail.recent || []).filter(function (m) {
+    if (m.status !== "confirmed") return false;
+    if (m.league_id && m.league_id !== leagueId) return false;
+    return m.user_id === viewerId || m.opponent_id === viewerId;
+  });
+  rows.sort(function (a, b) {
+    var ad = a.confirmed_at ? new Date(a.confirmed_at).getTime() : 0;
+    var bd = b.confirmed_at ? new Date(b.confirmed_at).getTime() : 0;
+    return bd - ad;
+  });
+  var last = rows[0];
+  if (!last) return { result: null, opp: null, score: null };
+  var viewerIsSubmitter = last.user_id === viewerId;
+  var iWon = viewerIsSubmitter ? (last.result === "win") : (last.result === "loss");
+  var oppId = viewerIsSubmitter ? last.opponent_id : last.user_id;
+  var oppP = profileMap && profileMap[oppId];
+  var oppName = (oppP && oppP.name) || "Opp";
+  return {
+    result: iWon ? "Won" : "Lost",
+    opp:    oppName,
+    score:  formatLastScore(last.sets) || "",
+  };
+}
+
+// Best-effort score formatter for a sets array. Matches the
+// "6–4, 6–3" shape used elsewhere on the editorial pages.
+function formatLastScore(sets) {
+  if (!Array.isArray(sets) || !sets.length) return "";
+  return sets
+    .map(function (s) {
+      if (!s) return null;
+      var y = s.you, t = s.them;
+      if (y == null || y === "" || t == null || t === "") return null;
+      return y + "–" + t;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+// Past-league reason copy. Mirrors the LIFECYCLE_LABELS lookup +
+// a handful of "why" mappings that are easier to read.
+function humaniseReason(lg) {
+  if (lg.status === "completed") {
+    return "Completed";
+  }
+  if (lg.status === "cancelled") {
+    if (lg.status_reason === "cancelled_by_creator") return "Cancelled by owner";
+    return "Cancelled";
+  }
+  if (lg.status_reason === "inactive") return "Went quiet";
+  return LIFECYCLE_LABELS[lg.status] || "Archived";
 }

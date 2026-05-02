@@ -167,6 +167,17 @@ export default function App(){
   // Reset on route change — each page is responsible for setting
   // it false on mount if it has a scroll observer.
   useEffect(function(){ setScrolledPastHero(true); },[tab,profilePathId]);
+  // Scroll reset on tab change — landing on a new page should
+  // start at the top of the page rather than carrying over the
+  // previous page's scroll position. Affects both the document
+  // (where html/body scroll on most pages) and any cs-center-col
+  // overflow scroll on desktop.
+  useEffect(function(){
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body)            document.body.scrollTop = 0;
+  },[tab,profilePathId]);
   // Title shown in the top nav center slot. Derived from the active
   // tab; pages can override via the topBarTitle prop pattern later
   // if needed (LogMatchPage stays a kicker-style microlabel — its
@@ -1111,34 +1122,20 @@ export default function App(){
             // notifications, feed cards, and profile callouts stay
             // unchanged.
             !pathParts[1] ? (
-              // Phase 2 — wrap the hub in EditorialScreen so /tournaments
-              // gets the back chevron + "Tournaments & leagues" kicker
-              // + 56px "Compete" hero title from the home-hub design
-              // language. CompeteHub's own CompeteHero is suppressed
-              // (hideHero) so the title doesn't double up. The
-              // ActiveNowBand + sections render below the editorial
-              // header unchanged.
-              <EditorialScreen kicker="Tournaments & leagues" title="Compete">
-                <CompeteHub
-                  t={t} authUser={auth.authUser}
-                  hideHero
-                  challenges={challenges}
-                  leagues={leagues}
-                  /* Slice 2: pass the full tournaments hook bundle so
-                     the hub can read isEntered / tournStatus for the
-                     Active now predicate, navigate to a tournament
-                     detail via setSelectedTournId, and surface entered
-                     tournaments in the active list. */
-                  tournaments={tournaments}
-                  /* Slice 3: viewer's match history powers the rematch
-                     suggestion + the league next-opponent picker.
-                     openChallenge is the App-level composer launcher
-                     the hub fires from the Rematch CTA. */
-                  history={matchHistory.history}
-                  openChallenge={openChallenge}
-                  toast={toast}
-                />
-              </EditorialScreen>
+              // Compete v2 (2026-05-02) — the v1 EditorialScreen
+              // wrapper is gone. CompeteHub now owns its own hero
+              // ("Tournaments · Leagues · Challenges" kicker + 72px
+              // "Compete" title) plus the AttentionBanner + Active
+              // hero card / mini list + PlusSheet + Past list.
+              <CompeteHub
+                authUser={auth.authUser}
+                challenges={challenges}
+                leagues={leagues}
+                tournaments={tournaments}
+                history={matchHistory.history}
+                openChallenge={openChallenge}
+                toast={toast}
+              />
             ) : (
               <TournamentsTab
                 t={t} myId={myId} authUser={auth.authUser}
