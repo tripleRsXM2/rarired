@@ -36,6 +36,7 @@ import MatchesScreen from "../features/home/pages/MatchesScreen.jsx";
 import ProfileScreen from "../features/home/pages/ProfileScreen.jsx";
 import EditorialScreen from "../features/home/components/EditorialScreen.jsx";
 import EditorialTabBar from "../features/home/components/EditorialTabBar.jsx";
+import LogMatchPage from "../features/scoring/pages/LogMatchPage.jsx";
 import TournamentsTab from "../features/tournaments/pages/TournamentsTab.jsx";
 import CompeteHub      from "../features/tournaments/pages/CompeteHub.jsx";
 import PeopleTab from "../features/people/pages/PeopleTab.jsx";
@@ -101,7 +102,10 @@ export default function App(){
   // 'matches' added 2026-05-01 — Editorial Tennis home redesign:
   // /home renders the new 3-tile HomeHub, the legacy feed list lives
   // at /matches (where the Matches tile from the hub deep-links).
-  var validTabs=["home","matches","map","tournaments","people","profile","admin"];
+  // 'match' added 2026-05-02 — /match/log mounts LogMatchPage (the
+  // single-screen editorial Log a Match flow). The bottom tab bar's
+  // raised "+" navigates here instead of opening the legacy modal.
+  var validTabs=["home","matches","match","map","tournaments","people","profile","admin"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -891,6 +895,27 @@ export default function App(){
 
           {/* Tab content. (Tindis retired; old deep-links bounce
               through validTabs above and land on home.) */}
+          {/* /match/log — Editorial Tennis "Log a Match v2" page.
+              Single-screen flow with the score as hero, detail rows
+              for opponent / type / completion / details, and a
+              celebration overlay on submit. The "+" in the tab bar
+              navigates here. submitMatch wires through the same
+              service path the legacy ScoreModal uses, so the row
+              hits match_history with the right status + match_type
+              and fires the existing match_tag / casual_match_logged
+              notifications. */}
+          {tab==="match"&&(
+            <LogMatchPage
+              authUser={auth.authUser}
+              profile={currentUser.profile}
+              history={matchHistory.history}
+              friends={social.friends}
+              myLeagues={leagues.leagues}
+              submitMatch={matchHistory.submitMatch}
+              toast={toast}
+            />
+          )}
+
           {/* /home — Editorial Tennis 3-tile hub (2026-05-01 redesign).
               Tiles deep-link into existing routes:
                 · Maps tile     → /tournaments (CompeteHub)
@@ -1203,7 +1228,7 @@ export default function App(){
             setTab(id);
             if (id !== "tournaments") tournaments.setSelectedTournId(null);
           }}
-          onLogMatch={openLogMatch}
+          onLogMatch={function () { navigate("/match/log"); }}
         />
       )}
 
