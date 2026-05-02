@@ -29,6 +29,7 @@ import {
   getKFactor,
   getMatchFormatWeight,
 } from "../../rating/utils/ratingSystem.js";
+import { validateMatchScore } from "../utils/tennisScoreValidation.js";
 
 // ── Page ─────────────────────────────────────────────────────────
 
@@ -478,6 +479,11 @@ export default function LogMatchPage({
           activeSide={activeSide}
           setActiveSide={setActiveSide}
           onDone={function () { setSheet(null); }}
+          // Validation context for the in-sheet Done button so the
+          // user catches score-shape errors before tapping Log
+          // match.
+          matchType={type === "casual" ? "casual" : "ranked"}
+          completionType={completion}
         />
       </BottomSheet>
 
@@ -951,7 +957,51 @@ function BottomSheet({ open, title, onClose, children }) {
 // last cell it just dismisses the sheet).
 // Tally mode: +/- per side, set selector at top.
 
-function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, activeSide, setActiveSide, onDone }) {
+function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, activeSide, setActiveSide, onDone, matchType, completionType }) {
+  // Validation error shown inline above the Done button. Cleared
+  // automatically as the user edits scores so they get fresh
+  // feedback after correcting.
+  var [validationError, setValidationError] = useState("");
+  useEffect(function () { setValidationError(""); }, [sets]);
+
+  function handleDone() {
+    var clean = (sets || []).filter(function (s) { return s.a !== "" || s.b !== ""; })
+      .map(function (s) {
+        var out = { you: s.a, them: s.b };
+        if (s.tieBreak && (s.tieBreak.a !== "" || s.tieBreak.b !== "")) {
+          out.tieBreak = { you: s.tieBreak.a, them: s.tieBreak.b };
+        }
+        return out;
+      });
+    if (!clean.length) {
+      setValidationError("Add at least one set score.");
+      return;
+    }
+    // Validate with the user's chosen match type / completion if
+    // known; default to ranked + completed for the strictest check
+    // when the user hasn't picked yet (catches the most score
+    // shape errors). Time-limited / retired allows partials.
+    var mt = matchType || "ranked";
+    var ct = completionType || "completed";
+    var allowPartial = mt === "casual" && ct !== "completed";
+    var result = validateMatchScore(clean, {
+      matchType:               mt,
+      completionType:          ct,
+      matchFormat:             null, // auto-derive from set count
+      finalSetFormat:          "normal_set",
+      allowPartialScores:      allowPartial,
+      requireTiebreakDetails:  mt === "ranked" && ct === "completed",
+      leagueMode:              null,
+      leagueAllowPartial:      false,
+    });
+    if (!result.ok) {
+      setValidationError(result.message || "That score isn't a valid tennis match.");
+      return;
+    }
+    setValidationError("");
+    onDone();
+  }
+
   // Smart advance — picks the next field to focus based on what's
   // empty in the current set (so a user who taps Opp first and
   // types a digit lands on You afterwards, not the next set's
@@ -1242,9 +1292,29 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
         </>
       )}
 
+      {/* Inline validation error — surfaces when the user taps
+          Done with an invalid score (e.g. 9-3, or 7-6 without
+          a tiebreak). Auto-clears as soon as the score changes
+          so the next tap of Done re-checks against fresh state. */}
+      {validationError && (
+        <div style={{
+          marginTop:    14,
+          padding:      "12px 14px",
+          background:   "rgba(195, 57, 43, 0.08)",
+          border:       "1px solid rgba(195, 57, 43, 0.28)",
+          borderRadius: 12,
+          fontFamily:   ED_TOK.sans,
+          fontSize:     13,
+          color:        ED_TOK.loss,
+          lineHeight:   1.45,
+        }}>
+          {validationError}
+        </div>
+      )}
+
       <button
-        onClick={onDone}
-        style={Object.assign({}, primaryBtn(ED_TOK, false), { width: "100%", marginTop: 18 })}>
+        onClick={handleDone}
+        style={Object.assign({}, primaryBtn(ED_TOK, false), { width: "100%", marginTop: 14 })}>
         Done
       </button>
     </div>

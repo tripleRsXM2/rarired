@@ -868,13 +868,13 @@ export default function App(){
               {/* Left slot — empty per the editorial design. */}
               <div/>
 
-              {/* Center — scroll-reveal page title. The wrapper
-                  takes the auto column; the inner span lays out
-                  on a single line, padded so the bell + avatar on
-                  the right can't overlap the descender on a
-                  trailing letter (the "g" in "Log a match" was
-                  getting clipped by the right column on narrow
-                  viewports). */}
+              {/* Center — scroll-reveal page title. Generous
+                  line-height + bottom padding so descenders (the
+                  "g" in "Log a match", "p" in "Compete", etc.)
+                  always have breathing room — without this the
+                  letterforms clipped at the nav's bottom border
+                  on iOS Safari (different glyph metrics than
+                  desktop Chrome). */}
               <span style={{
                 fontFamily:    "'Space Grotesk', -apple-system, sans-serif",
                 fontSize:      17,
@@ -886,8 +886,8 @@ export default function App(){
                 transition:    "opacity 220ms ease, transform 220ms ease",
                 pointerEvents: "none",
                 whiteSpace:    "nowrap",
-                padding:       "0 4px",
-                lineHeight:    1.3,
+                padding:       "0 4px 4px",
+                lineHeight:    1.6,
               }}>
                 {topBarTitle}
               </span>
