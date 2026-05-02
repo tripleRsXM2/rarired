@@ -7,7 +7,17 @@ export default function Providers({ t, theme, children }){
     el.id="cs-css";
     el.textContent=[
       // ── Base ──────────────────────────────────────────────────────────────
-      "body{background:"+t.bg+";color:"+t.text+";font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;margin:0}",
+      // html + body BOTH painted with the Editorial Tennis cream
+      // (#F0E9DA) regardless of which legacy `t` theme is selected.
+      // Otherwise the iOS safe-area regions (status bar at top,
+      // home-indicator at bottom) — which paint with the document
+      // root's bg, NOT t.bg — show as a different cream than the
+      // editorial chrome (top mob nav, LeagueDetailView, splash).
+      // Visible seam exactly where legacy and editorial layers meet.
+      // The legacy `t` tokens still drive text + accent + card
+      // surfaces; this just unifies the foundational page colour.
+      "html{background:#F0E9DA}",
+      "body{background:#F0E9DA;color:"+t.text+";font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;margin:0}",
       "button{cursor:pointer;font-family:inherit;letter-spacing:0.01em}",
       "input,select,textarea{font-family:inherit;letter-spacing:0.01em}",
       "input:focus,select:focus,textarea:focus{outline:none}",
@@ -94,7 +104,11 @@ export default function Providers({ t, theme, children }){
       // suppressed, so the global top bar stays locked.
       "html,body{margin:0;padding:0;overflow-x:hidden;overflow-x:clip;overscroll-behavior-y:none}",
       "body{min-height:100dvh}",
-      ".cs-shell{min-height:100dvh;display:block;background:"+t.bg+"}",
+      // Same reason as html/body above — cs-shell paints the area
+      // outside any feature page's own background, including the
+      // strip below a page that doesn't fill 100dvh. Use the
+      // editorial cream so seams disappear.
+      ".cs-shell{min-height:100dvh;display:block;background:#F0E9DA}",
       ".cs-center-col{flex:1;min-width:0}",
       ".cs-sidebar-col{display:none}",
       ".cs-right-col{display:none}",

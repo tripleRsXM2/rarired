@@ -402,9 +402,11 @@ export function useMatchHistory(opts){
     var cleanForDb = clean.map(serializeSetForDb).filter(Boolean);
 
     var localId='local-'+Date.now();
+    var nowIso=new Date().toISOString();
     var nm={
       id:localId, oppName, tournName,
       date:new Date(matchDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
+      rawDate: matchDate ? matchDate.slice(0,10) : '',
       sets:cleanForDb, result:scoreDraft.result, notes:'',
       venue:scoreDraft.venue||'', court:scoreDraft.court||'',
       status, opponent_id:opponentId, submitterId:authUser.id, isTagged:false,
@@ -417,6 +419,17 @@ export function useMatchHistory(opts){
       // feed-card "isRanked" check fires correctly the moment the match
       // appears (before loadHistory rehydrates from DB).
       match_type: matchType,
+      // confirmedAt drives the "NEW" pill in MatchesScreen for the
+      // first 24h after a confirmed log. For auto-confirmed casual
+      // matches the DB row may not carry confirmed_at (only set when
+      // a pending row transitions to confirmed), so seed it here on
+      // the optimistic row. Pending rows leave it null — they're
+      // handled by the Pending pill in the right slot.
+      confirmedAt: status === 'confirmed' ? nowIso : null,
+      // Mirror the inserted-at timestamp on the optimistic row too,
+      // so the NEW pill check has a fallback if confirmedAt drops
+      // off after a refresh.
+      submitted_at: nowIso,
     };
     setHistory(function(h){return [nm].concat(h);});
 

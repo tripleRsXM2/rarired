@@ -232,18 +232,30 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
     ? match.rating_delta
     : null;
 
-  // "NEW" pill — shows on confirmed rows for the first 24h since the
-  // match was confirmed. Pending rows keep the Pending pill (the
-  // freshness signal there isn't useful — the user already knows it's
-  // recent and unresolved); the moment a pending match flips to
-  // confirmed, the NEW pill takes over the right slot for the next
-  // 24h, then the regular delta returns. Falls back to `confirmed_at`
-  // (snake-case from older feed shapes) if the normalized field is
-  // missing.
-  var confirmedAt = match.confirmedAt || match.confirmed_at || null;
+  // "NEW" pill — shows on confirmed rows for the first 24h after the
+  // match landed. Pending rows keep the Pending pill (the freshness
+  // signal there isn't useful — the user already knows it's recent
+  // and unresolved); the moment a pending row flips to confirmed,
+  // the NEW pill takes over for the next 24h, then the regular
+  // delta returns.
+  //
+  // Fallback chain because not every code path populates the same
+  // timestamp: confirmedAt is set when a pending → confirmed
+  // transition happens (server function), but auto-confirmed casual
+  // standalone matches skip that transition, so they may only have
+  // submitted_at / created_at. The optimistic local row in
+  // useMatchHistory.submitMatch seeds both confirmedAt + submitted_at
+  // so the pill appears immediately on first paint.
+  var newAtIso = match.confirmedAt
+    || match.confirmed_at
+    || match.submitted_at
+    || match.submittedAt
+    || match.created_at
+    || match.createdAt
+    || null;
   var isNew = false;
-  if (!isPending && confirmedAt) {
-    var ageMs = Date.now() - new Date(confirmedAt).getTime();
+  if (!isPending && newAtIso) {
+    var ageMs = Date.now() - new Date(newAtIso).getTime();
     isNew = ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000;
   }
 
