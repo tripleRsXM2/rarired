@@ -81,7 +81,14 @@ export default function Providers({ t, theme, children }){
       // a single axis without that side effect. Mobile Safari ≥16
       // and Chrome ≥90 support clip; older fall back to hidden via
       // the second declaration.
-      "html,body{margin:0;padding:0;overflow-x:hidden;overflow-x:clip}",
+      //
+      // overscroll-behavior-y:none kills the iOS Safari elastic
+      // rubber-band — without it, dragging anywhere on a page
+      // (including the sticky top nav) bounces the document
+      // vertically. Pages can still scroll normally when content
+      // exceeds the viewport; only the past-the-edge bounce is
+      // suppressed, so the global top bar stays locked.
+      "html,body{margin:0;padding:0;overflow-x:hidden;overflow-x:clip;overscroll-behavior-y:none}",
       "body{min-height:100dvh}",
       ".cs-shell{min-height:100dvh;display:block;background:"+t.bg+"}",
       ".cs-center-col{flex:1;min-width:0}",
