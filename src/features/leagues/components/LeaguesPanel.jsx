@@ -528,9 +528,16 @@ function LeagueDetailView({
         alignItems:     "center",
         justifyContent: "space-between",
         gap:            12,
-        padding:        "16px 22px 12px",
+        // Top padding bakes in the iOS notch / status-bar safe-area
+        // inset so the cream background paints UP THROUGH that area.
+        // Without this, page content scrolls into the safe area
+        // (the status bar is a translucent overlay on top of the
+        // page on iOS PWAs with status-bar-style:black-translucent),
+        // which makes the hero title visually crash into the clock
+        // / signal indicators on first paint.
+        padding:        "calc(env(safe-area-inset-top, 0px) + 16px) 22px 12px",
         position:       "sticky",
-        top:            "var(--cs-nav-h, 0px)",
+        top:            0,
         background:     ED_TOK.bg,
         borderBottom:   "1px solid " + ED_TOK.line,
         zIndex:         2,
