@@ -208,9 +208,18 @@ export default function LogMatchPage({
 
     // Build the legacy submitMatch payload from our state. The hook
     // takes scoreDraft.sets in {you, them} format — translate.
+    // Tiebreak (set in 7-6 / 6-7 shape) carries `tieBreak: {a,b}`
+    // which becomes `tieBreak: {you, them}`. The validator +
+    // serializer downstream already handle the legacy shape.
     var draft = {
       sets:           sets.filter(function (s) { return s.a !== "" || s.b !== ""; })
-                       .map(function (s) { return { you: s.a, them: s.b }; }),
+                       .map(function (s) {
+                         var out = { you: s.a, them: s.b };
+                         if (s.tieBreak && (s.tieBreak.a !== "" || s.tieBreak.b !== "")) {
+                           out.tieBreak = { you: s.tieBreak.a, them: s.tieBreak.b };
+                         }
+                         return out;
+                       }),
       result:         won ? "win" : "loss",
       notes:          details.notes || "",
       date:           details.date,
@@ -613,16 +622,36 @@ function Scoreboard({ sets, activeSet, activeSide, onEditCell, onDelSet }) {
               <ScoreCell side="a" value={s.a} active={aActive} winner={aWins}
                 onClick={function () { onEditCell(i, "a"); }}/>
               <span style={{
-                fontFamily:    ED_TOK.mono,
-                fontSize:      9.5,
-                fontWeight:    700,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color:         "rgba(240, 233, 218, 0.4)",
-                textAlign:     "center",
-                whiteSpace:    "nowrap",
+                display:        "inline-flex",
+                flexDirection:  "column",
+                alignItems:     "center",
+                fontFamily:     ED_TOK.mono,
+                fontSize:       9.5,
+                fontWeight:     700,
+                letterSpacing:  "0.18em",
+                textTransform:  "uppercase",
+                color:          "rgba(240, 233, 218, 0.4)",
+                textAlign:      "center",
+                whiteSpace:     "nowrap",
+                lineHeight:     1.2,
               }}>
-                Set {i + 1}
+                <span>Set {i + 1}</span>
+                {/* Tiebreak indicator — only renders when this set
+                    is in 7-6 / 6-7 shape and has a recorded TB
+                    score. Sits under the "Set N" label so the
+                    main scoreboard stays calm. */}
+                {isTbShape(s) && s.tieBreak && (s.tieBreak.a !== "" || s.tieBreak.b !== "") && (
+                  <span style={{
+                    marginTop:     2,
+                    fontSize:      9,
+                    letterSpacing: "0.04em",
+                    color:         "rgba(240, 233, 218, 0.55)",
+                    fontFamily:    ED_TOK.display,
+                    fontWeight:    500,
+                  }}>
+                    Tb {s.tieBreak.a || "0"}–{s.tieBreak.b || "0"}
+                  </span>
+                )}
               </span>
               <ScoreCell side="b" value={s.b} active={bActive} winner={bWins}
                 onClick={function () { onEditCell(i, "b"); }}/>
@@ -923,8 +952,25 @@ function BottomSheet({ open, title, onClose, children }) {
 // Tally mode: +/- per side, set selector at top.
 
 function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, activeSide, setActiveSide, onDone }) {
+  // Smart advance — picks the next field to focus based on what's
+  // empty in the current set (so a user who taps Opp first and
+  // types a digit lands on You afterwards, not the next set's
+  // You). Order:
+  //   main "a" empty?  → "a"
+  //   main "b" empty?  → "b"
+  //   set is 7-6 / 6-7 (tiebreak shape) and TB still partial?
+  //                     → next empty TB cell (tba then tbb)
+  //   otherwise → next set's "a" (or onDone on last set)
   function advance() {
-    if (activeSide === "a") { setActiveSide("b"); return; }
+    var cur = sets[activeSet];
+    if (!cur) { onDone(); return; }
+    if (cur.a === "" && activeSide !== "a") { setActiveSide("a"); return; }
+    if (cur.b === "" && activeSide !== "b") { setActiveSide("b"); return; }
+    if (isTbShape(cur)) {
+      var tb = cur.tieBreak || { a: "", b: "" };
+      if (tb.a === "" && activeSide !== "tba") { setActiveSide("tba"); return; }
+      if (tb.b === "" && activeSide !== "tbb") { setActiveSide("tbb"); return; }
+    }
     if (activeSet < sets.length - 1) {
       setActiveSet(activeSet + 1);
       setActiveSide("a");
@@ -933,25 +979,48 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
     onDone();
   }
 
+  // Write the value of activeSide into the right cell. activeSide
+  // can be "a"/"b" (main score) or "tba"/"tbb" (tiebreak score).
+  // Side-effect: when the main score crosses the 7-6/6-7 line we
+  // ensure tieBreak exists so its inputs render; when it crosses
+  // back out, we drop the stale tieBreak.
   function updCell(val) {
-    var next = sets.map(function (s) { return Object.assign({}, s); });
+    var next = sets.map(function (s) {
+      return Object.assign({}, s, s.tieBreak ? { tieBreak: Object.assign({}, s.tieBreak) } : {});
+    });
+    var cur = next[activeSet];
     if (val === "del") {
-      next[activeSet][activeSide] = (next[activeSet][activeSide] || "").slice(0, -1);
+      if (activeSide === "a" || activeSide === "b") {
+        cur[activeSide] = (cur[activeSide] || "").slice(0, -1);
+      } else {
+        var tbk = activeSide === "tba" ? "a" : "b";
+        if (cur.tieBreak) cur.tieBreak[tbk] = (cur.tieBreak[tbk] || "").slice(0, -1);
+      }
+      reconcileTieBreak(cur);
       setSets(next);
       return;
     }
     // Single-digit entry replaces + auto-advances after a tiny delay
     // so the user sees the digit land before the cursor moves.
-    next[activeSet][activeSide] = val;
+    if (activeSide === "a" || activeSide === "b") {
+      cur[activeSide] = val;
+    } else {
+      cur.tieBreak = cur.tieBreak || { a: "", b: "" };
+      cur.tieBreak[activeSide === "tba" ? "a" : "b"] = val;
+    }
+    reconcileTieBreak(cur);
     setSets(next);
     setTimeout(advance, 90);
   }
 
   function tallyAdj(side, d) {
-    var next = sets.map(function (s) { return Object.assign({}, s); });
+    var next = sets.map(function (s) {
+      return Object.assign({}, s, s.tieBreak ? { tieBreak: Object.assign({}, s.tieBreak) } : {});
+    });
     var v = parseInt(next[activeSet][side]) || 0;
     var nv = Math.max(0, v + d);
     next[activeSet][side] = nv === 0 ? "" : String(nv);
+    reconcileTieBreak(next[activeSet]);
     setSets(next);
   }
 
@@ -987,7 +1056,13 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
           textTransform: "uppercase",
           color:         ED_TOK.muted,
         }}>
-          Set {activeSet + 1} · {activeSide === "a" ? "You" : "Opp"}
+          Set {activeSet + 1} · {(
+            activeSide === "a"   ? "You"    :
+            activeSide === "b"   ? "Opp"    :
+            activeSide === "tba" ? "Tb You" :
+            activeSide === "tbb" ? "Tb Opp" :
+            ""
+          )}
         </span>
       </div>
 
@@ -1047,6 +1122,46 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
               </button>
             )}
           </div>
+
+          {/* Tiebreak strip — appears under the mini preview only
+              when the active set is in 7-6/6-7 shape. Two small
+              cells the user taps + types into via the same pad. */}
+          {isTbShape(sets[activeSet]) && (
+            <div style={{
+              marginTop:    8,
+              padding:      "10px 14px",
+              background:   ED_TOK.bg2,
+              borderRadius: 12,
+              display:      "flex",
+              alignItems:   "center",
+              gap:          10,
+            }}>
+              <span style={{
+                fontFamily:    ED_TOK.mono,
+                fontSize:      9.5,
+                fontWeight:    700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color:         ED_TOK.muted,
+                flex:          "0 0 auto",
+              }}>
+                Tiebreak
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
+                <span
+                  onClick={function () { setActiveSide("tba"); }}
+                  style={miniTbStyle(ED_TOK, activeSide === "tba")}>
+                  {(sets[activeSet].tieBreak && sets[activeSet].tieBreak.a) || "0"}
+                </span>
+                <span style={{ fontFamily: ED_TOK.display, fontSize: 14, color: ED_TOK.muted }}>–</span>
+                <span
+                  onClick={function () { setActiveSide("tbb"); }}
+                  style={miniTbStyle(ED_TOK, activeSide === "tbb")}>
+                  {(sets[activeSet].tieBreak && sets[activeSet].tieBreak.b) || "0"}
+                </span>
+              </span>
+            </div>
+          )}
 
           {/* Number pad */}
           <div style={{
@@ -1921,6 +2036,24 @@ function miniNumStyle(tok, on) {
   };
 }
 
+// Tiebreak cell — smaller / quieter than the main mini-preview
+// numbers since the inner tiebreak score is a refinement, not the
+// hero number.
+function miniTbStyle(tok, on) {
+  return {
+    fontFamily:    tok.display,
+    fontSize:      18,
+    fontWeight:    500,
+    letterSpacing: "-0.02em",
+    color:         tok.ink,
+    cursor:        "pointer",
+    borderBottom:  "2px solid " + (on ? tok.accent : "transparent"),
+    minWidth:      14,
+    textAlign:     "center",
+    paddingBottom: 1,
+  };
+}
+
 function labelForType(type, leagueId, activeLeagues) {
   if (!type) return null;
   if (type === "casual") return "Casual match";
@@ -1978,6 +2111,28 @@ function quote(text, n) {
   if (!t) return null;
   if (t.length <= n) return "\"" + t + "\"";
   return "\"" + t.slice(0, n) + "…\"";
+}
+
+// ── Tiebreak helpers ────────────────────────────────────────────
+// A set is in "tiebreak shape" when its main score is exactly
+// 7-6 or 6-7 — that's the only valid main-score combo where a
+// tiebreak inner score actually decided the set. We auto-init the
+// tieBreak object when a set crosses INTO the shape so its
+// inputs render, and drop it when the set crosses back out so
+// stale TB digits don't persist on a re-edit.
+function isTbShape(s) {
+  if (!s) return false;
+  var a = Number(s.a), b = Number(s.b);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return (a === 7 && b === 6) || (a === 6 && b === 7);
+}
+
+function reconcileTieBreak(set) {
+  if (isTbShape(set)) {
+    if (!set.tieBreak) set.tieBreak = { a: "", b: "" };
+  } else {
+    if (set.tieBreak) delete set.tieBreak;
+  }
 }
 
 // ── Rating estimate ──────────────────────────────────────────────
