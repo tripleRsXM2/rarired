@@ -703,8 +703,8 @@ function DetailRow({ label, value, sub, empty, onClick }) {
       style={{
         display:        "flex",
         alignItems:     "center",
-        gap:            14,
-        padding:        "12px 22px",
+        gap:            12,
+        padding:        "12px 20px",
         borderBottom:   "1px solid " + ED_TOK.line,
         background:     hover ? ED_TOK.bg2 : "transparent",
         border:         "none",
@@ -720,25 +720,34 @@ function DetailRow({ label, value, sub, empty, onClick }) {
       }}>
       <span style={{
         fontFamily:    ED_TOK.mono,
-        fontSize:      10.5,
-        letterSpacing: "0.16em",
+        fontSize:      10,
+        letterSpacing: "0.12em",
         textTransform: "uppercase",
         color:         ED_TOK.muted,
         fontWeight:    600,
-        width:         100,
+        width:         92,
         flex:          "0 0 auto",
+        whiteSpace:    "nowrap",
       }}>
         {label}
       </span>
       <span style={{
         flex:          1,
+        minWidth:      0,
         fontFamily:    ED_TOK.display,
-        fontSize:      18,
+        // 15px fits the long "League, casual, or tournament"
+        // placeholder on a 375x812 viewport without truncation,
+        // yet still reads as the editorial display face. Wider
+        // viewports get a touch of extra breathing room.
+        fontSize:      15,
         fontWeight:    500,
         letterSpacing: "-0.02em",
         color:         empty ? ED_TOK.muted : ED_TOK.ink,
         opacity:       empty ? 0.7 : 1,
         lineHeight:    1.25,
+        overflow:      "hidden",
+        textOverflow:  "ellipsis",
+        whiteSpace:    "nowrap",
       }}>
         {value}
         {sub && (
@@ -749,7 +758,10 @@ function DetailRow({ label, value, sub, empty, onClick }) {
             fontWeight:    500,
             letterSpacing: "0.04em",
             color:         ED_TOK.muted,
-            marginTop:     3,
+            marginTop:     2,
+            overflow:      "hidden",
+            textOverflow:  "ellipsis",
+            whiteSpace:    "nowrap",
           }}>
             {sub}
           </small>
