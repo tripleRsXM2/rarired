@@ -164,9 +164,22 @@ export default function App(){
   // wire a scroll observer (Compete / Matches / Log Match) still
   // show their title.
   var [scrolledPastHero,setScrolledPastHero]=useState(true);
+  // Pages can request the global top mob nav be hidden when they own
+  // their own sticky chrome (LeagueDetailView is the first such case
+  // — it has its own back chevron + scroll-aware kicker, so the
+  // global "Compete" bar above it is redundant). The LeaguesPanel
+  // useEffect flips this on entering / leaving a detail view.
+  var [hideTopMobNav,setHideTopMobNav]=useState(false);
   // Reset on route change — each page is responsible for setting
   // it false on mount if it has a scroll observer.
   useEffect(function(){ setScrolledPastHero(true); },[tab,profilePathId]);
+
+  // (Splash → app handoff effect lives below `var auth = ...` —
+  // it has to read `auth.authUser` / `auth.authInitialized` and
+  // `var` hoists the binding but not the assignment, so referencing
+  // it before useAuthController() runs would deps-array crash on
+  // first render.)
+
   // Scroll reset on tab change — landing on a new page should
   // start at the top of the page rather than carrying over the
   // previous page's scroll position. Affects both the document
@@ -203,6 +216,32 @@ export default function App(){
     onFreshSignIn:function(u){if(coordRef.current.bootstrap)coordRef.current.bootstrap(u,true);},
     onSignOut:function(){if(coordRef.current.reset)coordRef.current.reset();},
   });
+
+  // Pre-React splash → app handoff. The splash paints in index.html
+  // on first frame (cream paper, Editorial Tennis wordmark, pulsing
+  // clay rule). It stays visible until window.__csReady() runs,
+  // which fades it out and drops it from the rendering tree.
+  //
+  // Fire as soon as auth has resolved one way or the other — either
+  // a session is restored (authUser non-null) or the controller
+  // explicitly flagged "no session" (authInitialized). Anything
+  // beyond that (profile, history, friends) streams in behind the
+  // already-interactive UI; gating on them would force several
+  // seconds of unnecessary splash time.
+  //
+  // The splash has its own 1s failsafe inside index.html, so a
+  // stuck network call can't lock the screen even if this effect
+  // never fires. Placed AFTER useAuthController() so the deps array
+  // can read auth.authUser / auth.authInitialized — `var` hoists
+  // the binding but not the assignment, so referencing them above
+  // would throw on first render.
+  useEffect(function () {
+    var ready = (auth.authUser != null) || auth.authInitialized;
+    if (!ready) return;
+    if (typeof window === "undefined") return;
+    if (typeof window.__csReady !== "function") return;
+    window.__csReady();
+  }, [auth.authUser, auth.authInitialized]);
 
   var currentUser=useCurrentUser();
   var matchHistory=useMatchHistory({
@@ -832,7 +871,16 @@ export default function App(){
         </div>
 
         {/* CENTER COLUMN */}
-        <div className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}>
+        <div
+          className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}
+          style={hideTopMobNav ? {
+            // Drop --cs-nav-h to just the safe-area inset so sticky
+            // children (LeagueDetailView's own chrome) hug the very
+            // top of the viewport rather than offsetting by the
+            // collapsed-but-still-tracked nav height.
+            ["--cs-nav-h"]: "env(safe-area-inset-top, 0px)",
+          } : undefined}
+        >
 
           {/* MOBILE top nav — Editorial Tennis pass (2026-05-02).
               Clean: empty left, centered scroll-reveal title, bell +
@@ -854,11 +902,18 @@ export default function App(){
             position:       "sticky",
             top:            0,
             zIndex:         40,
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
-            background:     "#F0E9DA",
-            borderBottom:   "1px solid rgba(42, 32, 26, 0.12)",
+            backdropFilter: hideTopMobNav ? "none" : "blur(24px)",
+            WebkitBackdropFilter: hideTopMobNav ? "none" : "blur(24px)",
+            background:     hideTopMobNav ? "transparent" : "#F0E9DA",
+            borderBottom:   hideTopMobNav ? "none" : "1px solid rgba(42, 32, 26, 0.12)",
             paddingTop:     "env(safe-area-inset-top, 0px)",
+            // When hidden the bar collapses to height:0 (just the
+            // safe-area-inset top kept by the page content via the
+            // --cs-nav-h override below). Page content slides up so
+            // the LeagueDetailView's own sticky chrome sits flush at
+            // the viewport top.
+            height:         hideTopMobNav ? 0 : undefined,
+            overflow:       hideTopMobNav ? "hidden" : undefined,
           }}>
             <div style={{
               width:               "100%",
@@ -1135,6 +1190,10 @@ export default function App(){
                    with the current league pre-selected when the
                    user taps "Log match" inside league detail. */
                 openLogMatchInLeague={openLogMatchInLeague}
+                /* Lets LeaguesPanel hide the global "Compete" top
+                   mob nav while a league detail view is open — the
+                   detail view owns its own sticky chrome. */
+                setHideTopMobNav={setHideTopMobNav}
                 tournaments={tournaments.tournaments}
                 selectedTournId={tournaments.selectedTournId} setSelectedTournId={tournaments.setSelectedTournId}
                 tournDetailTab={tournaments.tournDetailTab} setTournDetailTab={tournaments.setTournDetailTab}

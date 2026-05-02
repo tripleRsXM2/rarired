@@ -554,6 +554,14 @@ export default function TournamentsTab(props) {
   // which would flip the sidebar to the "Profile" item (user reported
   // that's misleading because Profile is meant to be *their* card).
   var [profilePreviewId, setProfilePreviewId] = useState(null);
+
+  // Sub-pages can request the "← Compete / {label}" chrome above them
+  // be hidden when they own their own full-bleed sticky chrome
+  // (LeagueDetailView is the first such case — it has its own back
+  // chevron + scroll-aware kicker, so the sub-tab chrome above it is
+  // redundant). LeaguesPanel flips this on entering / leaving a
+  // detail view.
+  var [hideSubChrome, setHideSubChrome] = useState(false);
   function openProfilePreview(userId) {
     if (!userId) return;
     if (props.authUser && userId === props.authUser.id) {
@@ -603,40 +611,42 @@ export default function TournamentsTab(props) {
 
   return (
     <div>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12,
-        padding: "10px clamp(20px, 4vw, 32px) 0",
-        maxWidth: 720, margin: "0 auto",
-      }}>
-        <button
-          onClick={function () {
-            if (props.setSelectedTournId) props.setSelectedTournId(null);
-            navigate("/tournaments");
-          }}
-          style={{
-            padding: "6px 12px",
-            background: "transparent",
-            border: "1px solid " + t.border,
-            borderRadius: 10,
-            color: t.textSecondary,
-            fontSize: 12, fontWeight: 600,
-            letterSpacing: "0.02em",
-            cursor: "pointer",
-            transition: "opacity 0.15s",
-          }}
-          onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
-          onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
-          ← Compete
-        </button>
-        {subPageLabel && (
-          <span style={{
-            fontSize: 11, fontWeight: 800, color: t.textTertiary,
-            textTransform: "uppercase", letterSpacing: "0.16em",
-          }}>
-            {subPageLabel}
-          </span>
-        )}
-      </div>
+      {!hideSubChrome && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "10px clamp(20px, 4vw, 32px) 0",
+          maxWidth: 720, margin: "0 auto",
+        }}>
+          <button
+            onClick={function () {
+              if (props.setSelectedTournId) props.setSelectedTournId(null);
+              navigate("/tournaments");
+            }}
+            style={{
+              padding: "6px 12px",
+              background: "transparent",
+              border: "1px solid " + t.border,
+              borderRadius: 10,
+              color: t.textSecondary,
+              fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.02em",
+              cursor: "pointer",
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}>
+            ← Compete
+          </button>
+          {subPageLabel && (
+            <span style={{
+              fontSize: 11, fontWeight: 800, color: t.textTertiary,
+              textTransform: "uppercase", letterSpacing: "0.16em",
+            }}>
+              {subPageLabel}
+            </span>
+          )}
+        </div>
+      )}
 
       {sub === "list"       && <TournamentList {...props}/>}
 
@@ -714,6 +724,13 @@ export default function TournamentsTab(props) {
                next-opponent suggestion) and challenge composer. */
             history={props.history}
             openChallenge={props.openChallenge}
+            /* Lets LeaguesPanel collapse the global top mob nav while
+               a league detail view is open. Forwarded from App.jsx. */
+            setHideTopMobNav={props.setHideTopMobNav}
+            /* Same idea but for the local "← Compete / Leagues"
+               sub-chrome above this panel. The detail view owns its
+               own back chevron, so both layers should hide together. */
+            setHideSubChrome={setHideSubChrome}
           />
         </div>
       )}

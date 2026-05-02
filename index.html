@@ -36,16 +36,144 @@
          uses for the Home Screen icon (manifest icons are ignored by
          iOS Safari for installation). apple-mobile-web-app-capable +
          status-bar-style let the standalone PWA paint into the notch
-         area like a native app. -->
-    <meta name="theme-color" content="#0c1124" />
+         area like a native app.
+         theme-color is now the Editorial Tennis cream so the Android
+         Chrome address bar tints in the same paper colour the splash
+         + app paint, instead of a dead dark blue from the legacy
+         theme. -->
+    <meta name="theme-color" content="#F0E9DA" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CourtSync" />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ─── Pre-React splash ─────────────────────────────────────────
+         Paints on first frame, BEFORE the JS bundle downloads. Inline
+         CSS only — no external dependencies. The actual app fades it
+         out by setting body[data-cs-ready="true"] once auth has
+         resolved (App.jsx → window.__csReady).
+         Failsafe in <body> below auto-hides after 1s if React never
+         marks ready, so a hung network request can't lock the user
+         out.
+         Editorial Tennis tokens: cream paper / espresso ink / clay
+         accent. The wordmark renders in Space Grotesk once the
+         font CSS resolves; until then it falls back to the system
+         sans (font-display:swap is the default on the Google Fonts
+         link above). -->
+    <style>
+      html, body { background: #F0E9DA; margin: 0; }
+      #cs-splash {
+        position: fixed; inset: 0; z-index: 99999;
+        background: #F0E9DA;
+        color: #2A201A;
+        display: grid; place-items: center;
+        font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        transition: opacity 320ms ease;
+      }
+      body[data-cs-ready="true"] #cs-splash {
+        opacity: 0;
+        pointer-events: none;
+      }
+      /* After the fade-out completes the wrapper is dropped from the
+         rendering tree so it can't intercept clicks. */
+      body[data-cs-ready="hidden"] #cs-splash {
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .cs-splash-inner {
+        text-align: center;
+        /* Lifted slightly off centre so the brand mark feels
+           "pinned" to the upper third — same composition the
+           HomeHub greeting uses. */
+        transform: translateY(-6vh);
+        padding: 0 24px;
+      }
+      .cs-splash-mark {
+        font-size: clamp(40px, 11vw, 64px);
+        font-weight: 500;
+        letter-spacing: -0.035em;
+        line-height: 0.94;
+        color: #2A201A;
+      }
+      .cs-splash-rule {
+        margin: 22px auto 0;
+        width: 84px;
+        height: 2px;
+        background: rgba(42, 32, 26, 0.14);
+        overflow: hidden;
+        position: relative;
+      }
+      .cs-splash-rule::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: #FF2D55;
+        transform: scaleX(0);
+        transform-origin: 0% 50%;
+        animation: cs-splash-bar 1400ms cubic-bezier(.65,0,.35,1) infinite;
+      }
+      @keyframes cs-splash-bar {
+        0%   { transform: scaleX(0);   transform-origin: 0% 50%; }
+        45%  { transform: scaleX(1);   transform-origin: 0% 50%; }
+        55%  { transform: scaleX(1);   transform-origin: 100% 50%; }
+        100% { transform: scaleX(0);   transform-origin: 100% 50%; }
+      }
+      .cs-splash-tag {
+        margin-top: 16px;
+        font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(42, 32, 26, 0.55);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cs-splash-rule::before {
+          animation: none;
+          transform: scaleX(0.55);
+          transform-origin: 50% 50%;
+          opacity: 0.7;
+        }
+      }
+    </style>
   </head>
   <body>
+    <!-- Splash — visible until React calls window.__csReady(). -->
+    <div id="cs-splash" aria-hidden="true">
+      <div class="cs-splash-inner">
+        <div class="cs-splash-mark">CourtSync</div>
+        <div class="cs-splash-rule"></div>
+        <div class="cs-splash-tag">Editorial Tennis</div>
+      </div>
+    </div>
+
     <div id="root"></div>
+
+    <script>
+      // Failsafe: hide splash after 1s even if React never marks
+      // ready. Stops a stuck network request from locking the screen.
+      window.__CS_SPLASH_FALLBACK = setTimeout(function () {
+        if (document.body) document.body.dataset.csReady = "true";
+      }, 1000);
+
+      // Public hook React calls when boot is complete (auth has
+      // resolved one way or the other). Triggers the CSS fade-out,
+      // then drops the wrapper from the rendering tree.
+      window.__csReady = function () {
+        try { clearTimeout(window.__CS_SPLASH_FALLBACK); } catch (_) {}
+        if (!document.body) return;
+        if (document.body.dataset.csReady === "hidden") return;
+        document.body.dataset.csReady = "true";
+        setTimeout(function () {
+          if (document.body && document.body.dataset.csReady === "true") {
+            document.body.dataset.csReady = "hidden";
+          }
+        }, 400);
+      };
+    </script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

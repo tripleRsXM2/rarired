@@ -155,30 +155,74 @@ export default function LogMatchPage({
     return by;
   }, [friends]);
 
+  // Resolve "the actual opponent of this match from the viewer's POV".
+  //
+  // history rows come in three flavours (see normalizeMatch):
+  //   own         — viewer = user_id, opponent = opponent_id
+  //   isTagged    — submitter = user_id, viewer = opponent_id; the real
+  //                 opponent (from viewer POV) is the submitter
+  //   isThirdParty — neither party is the viewer (friends-feed)
+  //
+  // The legacy code keyed only on m.opponent_id and filtered out rows
+  // where opponent_id === viewer, which silently dropped every tagged
+  // match. Friends who only ever LOG matches against the viewer never
+  // appeared in recents as a result. This helper returns null when
+  // there's no viewer-relative opponent (third-party rows, or the
+  // opponent slot is the viewer themselves).
+  function viewerOpponentOf(m, myId) {
+    if (!m) return null;
+    if (m.isThirdParty) return null;
+    if (m.isTagged) {
+      // Real opponent is the submitter; only return it if it isn't the viewer
+      if (!m.submitterId || m.submitterId === myId) return null;
+      return {
+        id:   m.submitterId,
+        // For tagged rows, normalizeMatch overwrites friendName with the
+        // submitter's actual display name, so prefer that over oppName
+        // (which is the viewer's own name as typed by the submitter).
+        name: m.friendName || "Player",
+      };
+    }
+    if (!m.opponent_id || m.opponent_id === myId) return null;
+    return {
+      id:   m.opponent_id,
+      name: m.opponentName || m.oppName || m.friendName || m.playerName || "Player",
+    };
+  }
+
   var recentOpponents = useMemo(function () {
     var seen = {};
     var out = [];
+    var myId = authUser && authUser.id;
     (history || []).forEach(function (m) {
-      if (!m.opponent_id || m.opponent_id === (authUser && authUser.id)) return;
-      if (seen[m.opponent_id]) return;
-      seen[m.opponent_id] = true;
+      var info = viewerOpponentOf(m, myId);
+      if (!info) return;
+      if (seen[info.id]) return;
+      seen[info.id] = true;
       out.push({
-        id:             m.opponent_id,
-        name:           m.friendName || m.opponentName || m.oppName || m.playerName || "Player",
+        id:             info.id,
+        name:           info.name,
         sub:            m.match_type === "ranked" ? "Played recently" : "Casual",
-        ranking_points: friendRatingById[m.opponent_id] != null ? friendRatingById[m.opponent_id] : null,
+        ranking_points: friendRatingById[info.id] != null ? friendRatingById[info.id] : null,
       });
     });
     return out.slice(0, 6);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, authUser, friendRatingById]);
 
   // All players list = recents + friends, deduped by id. Carries
   // ranking_points so the celebration can show an estimated delta.
+  // Defensive: never include the viewer themselves (would let you pick
+  // yourself as opponent → match insert would fail server-side).
   var allPlayers = useMemo(function () {
     var byId = {};
-    recentOpponents.forEach(function (p) { byId[p.id] = p; });
+    var myId = authUser && authUser.id;
+    recentOpponents.forEach(function (p) {
+      if (!p || !p.id || p.id === myId) return;
+      byId[p.id] = p;
+    });
     (friends || []).forEach(function (f) {
-      if (!f || !f.id || byId[f.id]) return;
+      if (!f || !f.id || f.id === myId || byId[f.id]) return;
       byId[f.id] = {
         id:             f.id,
         name:           f.name || "Player",
@@ -187,7 +231,7 @@ export default function LogMatchPage({
       };
     });
     return Object.values(byId);
-  }, [recentOpponents, friends]);
+  }, [recentOpponents, friends, authUser]);
 
   // When opened from a league, filter the opponent lists to active
   // league members only. Otherwise the user could pick a non-member
@@ -1514,13 +1558,31 @@ function CompletionSheet({ value, setValue, onDone }) {
 
 function OpponentSheet({ recents, allPlayers, onPick }) {
   var [q, setQ] = useState("");
-  var pool = q ? allPlayers : recents;
-  var filtered = q
-    ? pool.filter(function (p) { return p.name.toLowerCase().includes(q.toLowerCase()); })
-    : pool;
-  var headLabel = q
-    ? (filtered.length + " " + (filtered.length === 1 ? "result" : "results"))
-    : "Recent";
+
+  // Two pools when idle: "Recent" (recently played) + "Friends" (in
+  // friends list but not in recents). Friends-only-never-played
+  // showed as empty before — confusing if the user has friends in
+  // the system but hasn't logged against them yet (Mdawg case).
+  // When a query is typed, collapse to a single search-results list
+  // over allPlayers (already de-duped).
+  var recentIds = useMemo(function () {
+    var s = {};
+    (recents || []).forEach(function (p) { if (p && p.id) s[p.id] = true; });
+    return s;
+  }, [recents]);
+
+  var friendsOnly = useMemo(function () {
+    return (allPlayers || []).filter(function (p) {
+      return p && p.id && !recentIds[p.id];
+    });
+  }, [allPlayers, recentIds]);
+
+  var ql = q.trim().toLowerCase();
+  var searchResults = ql
+    ? (allPlayers || []).filter(function (p) {
+        return p && p.name && p.name.toLowerCase().indexOf(ql) !== -1;
+      })
+    : [];
 
   return (
     <>
@@ -1554,36 +1616,83 @@ function OpponentSheet({ recents, allPlayers, onPick }) {
             color:      ED_TOK.ink,
           }}/>
       </div>
-      <div style={{
-        fontFamily:    ED_TOK.mono,
-        fontSize:      10.5,
-        letterSpacing: "0.16em",
-        textTransform: "uppercase",
-        color:         ED_TOK.muted,
-        fontWeight:    700,
-        margin:        "6px 0 4px",
-      }}>
-        {headLabel}
-      </div>
-      {filtered.length === 0 ? (
-        <div style={{
-          padding:    "16px 0",
-          color:      ED_TOK.muted,
-          fontFamily: ED_TOK.sans,
-          fontSize:   14,
-        }}>
-          {q
-            ? "No matches. Add by name from your friends list."
-            : "No recent opponents yet — search by name."}
-        </div>
+
+      {ql ? (
+        // ── Search results ──────────────────────────────────────
+        <>
+          <SectionMicro label={searchResults.length + " " + (searchResults.length === 1 ? "result" : "results")} />
+          {searchResults.length === 0 ? (
+            <SheetEmpty>No matches. Add by name from your friends list.</SheetEmpty>
+          ) : (
+            searchResults.map(function (p) {
+              return (
+                <OpponentRow key={p.id} player={p} onClick={function () { onPick(p); }}/>
+              );
+            })
+          )}
+        </>
       ) : (
-        filtered.map(function (p) {
-          return (
-            <OpponentRow key={p.id} player={p} onClick={function () { onPick(p); }}/>
-          );
-        })
+        // ── Idle: Recent + Friends ──────────────────────────────
+        <>
+          {recents && recents.length > 0 && (
+            <>
+              <SectionMicro label="Recent" />
+              {recents.map(function (p) {
+                return (
+                  <OpponentRow key={"r:" + p.id} player={p} onClick={function () { onPick(p); }}/>
+                );
+              })}
+            </>
+          )}
+          {friendsOnly.length > 0 && (
+            <>
+              <SectionMicro label="Friends" topGap={recents && recents.length > 0} />
+              {friendsOnly.map(function (p) {
+                return (
+                  <OpponentRow key={"f:" + p.id} player={p} onClick={function () { onPick(p); }}/>
+                );
+              })}
+            </>
+          )}
+          {(!recents || recents.length === 0) && friendsOnly.length === 0 && (
+            <SheetEmpty>No opponents yet — search by name.</SheetEmpty>
+          )}
+        </>
       )}
     </>
+  );
+}
+
+// Mono uppercase eyebrow used between the Recent / Friends / Results
+// sub-sections inside the opponent sheet. Kept local — the editorial
+// MicroLabel imports cleanly but this variant takes a bit more vertical
+// breathing room above when it follows another section.
+function SectionMicro({ label, topGap }) {
+  return (
+    <div style={{
+      fontFamily:    ED_TOK.mono,
+      fontSize:      10.5,
+      letterSpacing: "0.16em",
+      textTransform: "uppercase",
+      color:         ED_TOK.muted,
+      fontWeight:    700,
+      margin:        (topGap ? 18 : 6) + "px 0 4px",
+    }}>
+      {label}
+    </div>
+  );
+}
+
+function SheetEmpty({ children }) {
+  return (
+    <div style={{
+      padding:    "16px 0",
+      color:      ED_TOK.muted,
+      fontFamily: ED_TOK.sans,
+      fontSize:   14,
+    }}>
+      {children}
+    </div>
   );
 }
 
