@@ -38,7 +38,6 @@ function PlayerCard({
 }) {
   var rel = friendRelationLabel(u.id);
   var loading = !!socialLoading[u.id];
-  var wr = u.matches_played ? Math.round((u.wins || 0) / u.matches_played * 100) : null;
   var [menuOpen, setMenuOpen] = useState(false);
   function goToProfile() { if (openProfile) openProfile(u.id); }
   var clickable = !!openProfile;
@@ -76,27 +75,9 @@ function PlayerCard({
           </div>
           <PresenceLabel profile={u} t={t} style={{ flexShrink: 0 }}/>
         </div>
-        <div style={{
-          fontFamily: ED_TOK.mono,
-          fontSize:   11,
-          color:      ED_TOK.muted,
-          marginTop:  4,
-          letterSpacing: "0.04em",
-        }}>
-          {[u.suburb, u.skill, wr != null ? wr + "% wins" : null].filter(Boolean).join(" · ")}
-        </div>
-        {u.ranking_points != null && (
-          <div style={{
-            fontFamily:    ED_TOK.mono,
-            fontSize:      10,
-            color:         ED_TOK.muted,
-            marginTop:     3,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}>
-            {u.ranking_points} pts · {u.matches_played || 0} matches
-          </div>
-        )}
+        {/* Stats stripped per design ask — the row now shows name +
+            presence only. Suburb / skill / wins / rating points all
+            still live on the friend's full profile (tap to open). */}
       </div>
 
       <div style={{
@@ -362,6 +343,37 @@ export default function PeopleTab({
       if (setHideBottomTabBar) setHideBottomTabBar(false);
     };
   }, [threadActive, setHideTopMobNav, setHideBottomTabBar]);
+
+  // Lock document-level scroll while a chat thread is open. The
+  // messages list owns its own internal overflow:auto and the input
+  // footer is sticky-pinned to the bottom — anything happening at
+  // the document layer (iOS rubber-band, ancestor scrollers, stray
+  // overflow from any sibling) just produces phantom drift in the
+  // thread. Toggle html + body overflow:hidden + position:fixed for
+  // the duration of the takeover; restore on exit.
+  useEffect(function () {
+    if (!threadActive) return;
+    if (typeof document === "undefined") return;
+    var html = document.documentElement;
+    var body = document.body;
+    var prevHtmlOverflow = html.style.overflow;
+    var prevBodyOverflow = body.style.overflow;
+    var prevBodyPosition = body.style.position;
+    var prevBodyWidth    = body.style.width;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    // position:fixed + width:100% guards against iOS Safari scrolling
+    // the body anyway when content is visually below the viewport
+    // (the dvh-vs-svh inconsistency on the address-bar transition).
+    body.style.position = "fixed";
+    body.style.width    = "100%";
+    return function () {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      body.style.position = prevBodyPosition;
+      body.style.width    = prevBodyWidth;
+    };
+  }, [threadActive]);
 
   if (!authUser) {
     return (
