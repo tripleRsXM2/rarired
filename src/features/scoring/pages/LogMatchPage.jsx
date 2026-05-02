@@ -24,6 +24,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
+import {
+  calculateRatingChange,
+  getKFactor,
+  getMatchFormatWeight,
+} from "../../rating/utils/ratingSystem.js";
 
 // ── Page ─────────────────────────────────────────────────────────
 
@@ -98,6 +103,17 @@ export default function LogMatchPage({
   }, [myLeagues]);
 
   // Recent opponents: most-recent confirmed match per linked opponent.
+  // We pull ranking_points from the friends list when available so the
+  // rating estimate in the celebration can use it; falls back to null
+  // (which surfaces "Pending" without a delta number).
+  var friendRatingById = useMemo(function () {
+    var by = {};
+    (friends || []).forEach(function (f) {
+      if (f && f.id && f.ranking_points != null) by[f.id] = f.ranking_points;
+    });
+    return by;
+  }, [friends]);
+
   var recentOpponents = useMemo(function () {
     var seen = {};
     var out = [];
@@ -106,24 +122,27 @@ export default function LogMatchPage({
       if (seen[m.opponent_id]) return;
       seen[m.opponent_id] = true;
       out.push({
-        id:   m.opponent_id,
-        name: m.friendName || m.opponentName || m.oppName || m.playerName || "Player",
-        sub:  m.match_type === "ranked" ? "Played recently" : "Casual",
+        id:             m.opponent_id,
+        name:           m.friendName || m.opponentName || m.oppName || m.playerName || "Player",
+        sub:            m.match_type === "ranked" ? "Played recently" : "Casual",
+        ranking_points: friendRatingById[m.opponent_id] != null ? friendRatingById[m.opponent_id] : null,
       });
     });
     return out.slice(0, 6);
-  }, [history, authUser]);
+  }, [history, authUser, friendRatingById]);
 
-  // All players list = recents + friends, deduped by id.
+  // All players list = recents + friends, deduped by id. Carries
+  // ranking_points so the celebration can show an estimated delta.
   var allPlayers = useMemo(function () {
     var byId = {};
     recentOpponents.forEach(function (p) { byId[p.id] = p; });
     (friends || []).forEach(function (f) {
       if (!f || !f.id || byId[f.id]) return;
       byId[f.id] = {
-        id:   f.id,
-        name: f.name || "Player",
-        sub:  (f.suburb || "Friend") + (f.skill ? " · " + f.skill : ""),
+        id:             f.id,
+        name:           f.name || "Player",
+        sub:            (f.suburb || "Friend") + (f.skill ? " · " + f.skill : ""),
+        ranking_points: f.ranking_points != null ? f.ranking_points : null,
       };
     });
     return Object.values(byId);
@@ -214,12 +233,30 @@ export default function LogMatchPage({
       return;
     }
 
+    // Estimate the rating delta the viewer can expect once the
+    // opponent confirms. Same Elo math the server uses
+    // (apply_match_outcome → calculateRatingChange) so the number
+    // we show should match the server's eventual write within ±1
+    // (rounding aside). Skips if we don't have both ratings or the
+    // match isn't ranked — server is the source of truth, this is
+    // just a UI hint while pending. Casual matches always show
+    // null here; the celebration falls back to a plain status pill.
+    var estDelta = estimateDelta({
+      profile:    profile,
+      opp:        opp,
+      sets:       draft.sets,
+      won:        won,
+      isRanked:   draft.matchType === "ranked",
+    });
+
     setCelebration({
-      won:    won,
-      score:  compactScore,
-      opp:    opp,
-      status: (res && res.status) || "pending_confirmation",
-      type:   type,
+      won:     won,
+      score:   compactScore,
+      opp:     opp,
+      status:  (res && res.status) || "pending_confirmation",
+      type:    type,
+      delta:   estDelta,
+      isRanked: draft.matchType === "ranked",
     });
   }
 
@@ -1693,16 +1730,44 @@ function MatchCelebration({ data, onDone }) {
             alignSelf:     "flex-start",
           }}>
             <span>Pending</span>
-            <span style={{
-              fontFamily:    ED_TOK.display,
-              fontSize:      14,
-              fontWeight:    600,
-              letterSpacing: "-0.02em",
-              color:         "rgba(240,233,218,0.85)",
-            }}>
-              · awaiting confirmation
-            </span>
+            {data.delta != null ? (
+              <span style={{
+                fontFamily:    ED_TOK.display,
+                fontSize:      22,
+                fontWeight:    600,
+                letterSpacing: "-0.02em",
+                color:         data.delta >= 0 ? "#B8E6C2" : "#F0B5A8",
+              }}>
+                {data.delta >= 0 ? "+" : ""}{data.delta}
+              </span>
+            ) : (
+              <span style={{
+                fontFamily:    ED_TOK.display,
+                fontSize:      14,
+                fontWeight:    600,
+                letterSpacing: "-0.02em",
+                color:         "rgba(240,233,218,0.85)",
+              }}>
+                · awaiting confirmation
+              </span>
+            )}
           </div>
+        )}
+        {/* Rating-system caption — gives the user context for what
+            the pending number means. Only shown for ranked matches
+            with a known opponent rating. */}
+        {data.isRanked && data.delta != null && (
+          <p style={{
+            marginTop:  14,
+            fontFamily: ED_TOK.mono,
+            fontSize:   10.5,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color:      "rgba(240,233,218,0.55)",
+            fontWeight: 600,
+          }}>
+            Estimated CourtSync Rating change
+          </p>
         )}
         <p style={{
           marginTop:  26,
@@ -1852,4 +1917,30 @@ function quote(text, n) {
   if (!t) return null;
   if (t.length <= n) return "\"" + t + "\"";
   return "\"" + t.slice(0, n) + "…\"";
+}
+
+// ── Rating estimate ──────────────────────────────────────────────
+// Returns the estimated viewer-side rating delta (a signed int) or
+// null when we can't compute it (casual match, missing ratings,
+// missing K-factor inputs). Mirrors the server's apply_match_outcome
+// math so the number we show should match the server's eventual
+// write within rounding tolerance.
+function estimateDelta(args) {
+  if (!args.isRanked) return null;
+  var pr = args.profile && args.profile.ranking_points;
+  var or = args.opp && args.opp.ranking_points;
+  if (pr == null || or == null) return null;
+  var k = getKFactor(
+    (args.profile && args.profile.confirmed_ranked_match_count) || 0,
+    args.profile && args.profile.rating_status
+  );
+  // The match-format weight downscales one-set / 2-of-3 matches
+  // per the existing ratingSystem rules. translateSetsForWeight
+  // converts the {a, b} state to the {you, them} shape the helper
+  // expects.
+  var setsForWeight = (args.sets || []).map(function (s) {
+    return { you: s.you, them: s.them };
+  });
+  var weight = getMatchFormatWeight(setsForWeight);
+  return calculateRatingChange(pr, or, args.won ? 1 : 0, { k: k, weight: weight });
 }
