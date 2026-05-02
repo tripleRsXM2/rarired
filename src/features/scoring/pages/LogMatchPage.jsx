@@ -960,10 +960,16 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
   //   main "b" empty?  → "b"
   //   set is 7-6 / 6-7 (tiebreak shape) and TB still partial?
   //                     → next empty TB cell (tba then tbb)
-  //   otherwise → next set's "a" (or onDone on last set)
+  //   otherwise → next set's "a"
+  //
+  // When there's nowhere left to advance to (last set, all cells
+  // filled), advance is a no-op — the sheet stays open and the
+  // user explicitly taps Done. Auto-closing on the last digit
+  // was disorienting because the user couldn't review the
+  // complete score before the sheet vanished.
   function advance() {
     var cur = sets[activeSet];
-    if (!cur) { onDone(); return; }
+    if (!cur) return;
     if (cur.a === "" && activeSide !== "a") { setActiveSide("a"); return; }
     if (cur.b === "" && activeSide !== "b") { setActiveSide("b"); return; }
     if (isTbShape(cur)) {
@@ -976,7 +982,7 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
       setActiveSide("a");
       return;
     }
-    onDone();
+    // Nowhere to advance — stay where we are; user taps Done.
   }
 
   // Write the value of activeSide into the right cell. activeSide
