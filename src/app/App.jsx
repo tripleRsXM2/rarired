@@ -170,6 +170,13 @@ export default function App(){
   // global "Compete" bar above it is redundant). The LeaguesPanel
   // useEffect flips this on entering / leaving a detail view.
   var [hideTopMobNav,setHideTopMobNav]=useState(false);
+  // Pages can request the global bottom tab bar be hidden when they
+  // own a full-screen takeover (Messages thread on mobile is the
+  // first such case — the conversation owns the entire screen,
+  // including the bottom edge for the input bar). League detail
+  // keeps the bottom tab so users can jump tabs from there; chat
+  // does not.
+  var [hideBottomTabBar,setHideBottomTabBar]=useState(false);
   // Reset on route change — each page is responsible for setting
   // it false on mount if it has a scroll observer.
   useEffect(function(){ setScrolledPastHero(true); },[tab,profilePathId]);
@@ -873,13 +880,22 @@ export default function App(){
         {/* CENTER COLUMN */}
         <div
           className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}
-          style={hideTopMobNav ? {
+          style={(hideTopMobNav || hideBottomTabBar) ? Object.assign(
+            {},
             // Drop --cs-nav-h to just the safe-area inset so sticky
-            // children (LeagueDetailView's own chrome) hug the very
-            // top of the viewport rather than offsetting by the
-            // collapsed-but-still-tracked nav height.
-            ["--cs-nav-h"]: "env(safe-area-inset-top, 0px)",
-          } : undefined}
+            // children (LeagueDetailView's own chrome, Messages
+            // thread header) hug the very top of the viewport
+            // rather than offsetting by the collapsed-but-still-
+            // tracked nav height.
+            hideTopMobNav ? { ["--cs-nav-h"]: "env(safe-area-inset-top, 0px)" } : null,
+            // Drop --cs-tab-h to 0 when the bottom tab bar is
+            // hidden — cs-dm-root + other height calcs use this
+            // variable to subtract the bar's height; with the bar
+            // gone, the page should fill the bottom edge above
+            // only the iOS home indicator (which is handled by
+            // the input bar's safe-area-inset-bottom padding).
+            hideBottomTabBar ? { ["--cs-tab-h"]: "0px" } : null
+          ) : undefined}
         >
 
           {/* MOBILE top nav — Editorial Tennis pass (2026-05-02).
@@ -1247,6 +1263,12 @@ export default function App(){
                top. Same setter we use from LeaguesPanel for the
                league detail takeover. */
             setHideTopMobNav={setHideTopMobNav}
+            /* Same idea for the bottom tab bar — chat thread is a
+               full-screen takeover (input bar lives at the page's
+               actual bottom edge). League detail does NOT use this
+               flag because users still need to jump tabs from a
+               league. */
+            setHideBottomTabBar={setHideBottomTabBar}
           />
         )}
         {tab==="profile"&&profilePathId&&(!auth.authUser||profilePathId!==auth.authUser.id)&&(
@@ -1346,7 +1368,7 @@ export default function App(){
           creates a containing block for fixed descendants and was
           breaking the bar's "+" button on every page except /home
           (where the wrapper has no transform). */}
-      {auth.authUser && (
+      {auth.authUser && !hideBottomTabBar && (
         <EditorialTabBar
           activeTab={tab}
           onTab={function (id) {

@@ -310,6 +310,10 @@ export default function PeopleTab({
   // owns its own header; stacking the global nav above it is
   // redundant chrome.
   setHideTopMobNav,
+  // Same idea for the bottom tab bar — the chat thread is a
+  // full-screen takeover and the input bar lives at the page's
+  // actual bottom edge.
+  setHideBottomTabBar,
 }) {
   var location = useLocation();
   var navigate = useNavigate();
@@ -351,10 +355,13 @@ export default function PeopleTab({
   //     sub-tabs only when this is false.
   var threadActive = peopleTab === "messages" && !!(dms && dms.activeConv);
   useEffect(function () {
-    if (!setHideTopMobNav) return;
-    setHideTopMobNav(threadActive);
-    return function () { setHideTopMobNav(false); };
-  }, [threadActive, setHideTopMobNav]);
+    if (setHideTopMobNav)    setHideTopMobNav(threadActive);
+    if (setHideBottomTabBar) setHideBottomTabBar(threadActive);
+    return function () {
+      if (setHideTopMobNav)    setHideTopMobNav(false);
+      if (setHideBottomTabBar) setHideBottomTabBar(false);
+    };
+  }, [threadActive, setHideTopMobNav, setHideBottomTabBar]);
 
   if (!authUser) {
     return (
