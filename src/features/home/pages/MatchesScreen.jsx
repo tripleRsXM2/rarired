@@ -220,27 +220,18 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, isLast }) {
         cursor:              "pointer",
         fontFamily:          ED_TOK.sans,
       }}>
-      {/* Date */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-        <div style={{
-          fontFamily:    ED_TOK.mono,
-          fontSize:      9.5,
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          color:         ED_TOK.muted,
-          fontWeight:    600,
-        }}>
-          {dateLabel.day}
-        </div>
-        <div style={{
-          fontFamily:    ED_TOK.display,
-          fontSize:      15,
-          fontWeight:    600,
-          letterSpacing: "-0.01em",
-          color:         ED_TOK.ink,
-        }}>
-          {dateLabel.short}
-        </div>
+      {/* Date — short label only ("Apr 28"). The weekday
+          abbreviation that used to sit above was redundant since
+          the short label already encodes the week-bucket the user
+          cares about. */}
+      <div style={{
+        fontFamily:    ED_TOK.display,
+        fontSize:      15,
+        fontWeight:    600,
+        letterSpacing: "-0.01em",
+        color:         ED_TOK.ink,
+      }}>
+        {dateLabel.short}
       </div>
 
       {/* W/L badge */}
