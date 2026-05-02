@@ -314,7 +314,19 @@ export default function LogMatchPage({
       {/* No page-specific top bar — the global cs-mob-nav handles
           the title ("Log a match") via App.jsx's topBarTitle wiring.
           Users escape via the bottom tab bar. */}
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8, minHeight: 0 }}>
+      {/* Body is a flex column so the submit zone can use
+          margin-top: auto and pin itself to the bottom of the
+          available space, right above the global bottom tab bar.
+          minHeight: 0 lets the inner overflow:auto behave when
+          content actually overflows (e.g. 5 sets added). */}
+      <div style={{
+        flex:           1,
+        overflowY:      "auto",
+        paddingBottom:  8,
+        minHeight:      0,
+        display:        "flex",
+        flexDirection:  "column",
+      }}>
         {/* HERO — verdict pill + scoreboard */}
         <div style={{ padding: "14px 22px 16px" }}>
           <VerdictPill won={won} />
@@ -358,8 +370,17 @@ export default function LogMatchPage({
           />
         </div>
 
-        {/* SUBMIT */}
-        <div style={{ padding: "14px 22px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* SUBMIT — pinned to the bottom of the body via
+            margin-top: auto so the button sits flush above the
+            bottom tab bar regardless of how compact the rest of
+            the form is. */}
+        <div style={{
+          padding:        "14px 22px 18px",
+          display:        "flex",
+          flexDirection:  "column",
+          gap:            8,
+          marginTop:      "auto",
+        }}>
           <span style={{
             fontFamily:    ED_TOK.mono,
             fontSize:      10.5,
