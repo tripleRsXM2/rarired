@@ -146,12 +146,17 @@ export default function EditorialTabBar({ activeTab, onTab, onLogMatch }) {
               }}
               onMouseEnter={function (e) { e.currentTarget.style.transform = "translateY(-2px)"; }}
               onMouseLeave={function (e) { e.currentTarget.style.transform = "translateY(0)"; }}>
-              <span style={{
-                fontFamily: ED_TOK.display,
-                fontSize:   28,
-                lineHeight: 1,
-                fontWeight: 400,
-              }}>+</span>
+              {/* SVG plus — geometrically centered. Using the
+                  text "+" character left it visually high in the
+                  circle because Space Grotesk's "+" glyph sits
+                  near the cap-height line, not the visual middle
+                  of the em-box. */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.4"
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{ display: "block" }}>
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
             </button>
           );
         }
