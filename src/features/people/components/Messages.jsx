@@ -767,6 +767,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       // edge above the tab nav.
       height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
       minHeight: 420,
+      // Clip overflow so any layout slip inside (messages list flex
+      // sizing, content taller than container, etc.) can't push the
+      // input footer past the viewport bottom. The messages list owns
+      // its own internal overflow:auto; nothing else should escape.
+      overflow: "hidden",
     }}>
       {/* ── List pane ─────────────────────────────────────────────────── */}
       {/*    Desktop: fixed to the LEFT EDGE of the main content area
@@ -1373,13 +1378,22 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       )}
 
-      {/* Input footer — non-shrinking row at the bottom of the flex
-          column. The messages area above owns the scroll, so this stays
-          pinned to the viewport bottom naturally without position:sticky. */}
+      {/* Input footer — pinned to the bottom of the thread column.
+          position:sticky belt-and-braces: even if some ancestor's
+          flex sizing breaks (cs-dm-root height not resolving cleanly,
+          messages list growing past its scroll container, etc.), the
+          input stays anchored to the bottom of the viewport.
+          Background is the editorial cream — was legacy t.bg which
+          differed slightly from ED_TOK.bg and made the input footer
+          read as a separate tonal band. */}
       <div style={{
         flexShrink: 0,
-        background: t.bg,
-        paddingTop: 8,
+        background: ED_TOK.bg,
+        paddingTop:  8,
+        position:    "sticky",
+        bottom:      0,
+        zIndex:      1,
+        borderTop:   "1px solid " + ED_TOK.line,
       }}>
       {/* Reply preview */}
       {dms.replyTo && (
