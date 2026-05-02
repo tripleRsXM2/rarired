@@ -49,15 +49,23 @@ export default function Providers({ t, theme, children }){
       ".cs-ed-push{animation:slideInRight .38s cubic-bezier(0.22,1,0.36,1) both}",
       // Bottom-sheet primitive — used by the redesigned Log Match
       // modal. The wrapper is fixed full-screen with a fading scrim;
-      // the panel slides up from the bottom. Same easing + 320ms
-      // duration the handoff specifies. .is-open toggles open state.
-      ".cs-sheet-scrim{position:fixed;inset:0;background:rgba(20,17,14,0);transition:background 240ms ease;z-index:200;pointer-events:none}",
-      ".cs-sheet-scrim.is-open{background:rgba(20,17,14,0.55);pointer-events:auto}",
-      ".cs-sheet-panel{position:fixed;left:0;right:0;bottom:0;transform:translateY(100%);transition:transform 320ms cubic-bezier(0.22,1,0.36,1);z-index:201;max-height:88dvh;display:flex;flex-direction:column}",
-      ".cs-sheet-panel.is-open{transform:translateY(0)}",
+      // the panel slides up from the bottom. Both animate in via
+      // CSS keyframes that run on MOUNT (not via a class flip), so
+      // the open transition is reliable across browsers without
+      // depending on a useEffect+setTimeout dance to add an
+      // .is-open class on the next frame. The previous class-flip
+      // approach was unreliable: under React StrictMode (and in
+      // some browsers under normal conditions) the cleanup of the
+      // first effect run cancelled the timeout before it set
+      // open=true, leaving the panel pinned at translateY(100%).
+      "@keyframes csSheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}",
+      "@keyframes csScrimIn{from{background:rgba(20,17,14,0)}to{background:rgba(20,17,14,0.55)}}",
+      ".cs-sheet-scrim{position:fixed;inset:0;background:rgba(20,17,14,0.55);z-index:200;animation:csScrimIn 240ms ease backwards;pointer-events:auto}",
+      ".cs-sheet-panel{position:fixed;left:0;right:0;bottom:0;transform:translateY(0);z-index:201;max-height:88dvh;display:flex;flex-direction:column;animation:csSheetIn 320ms cubic-bezier(0.22,1,0.36,1) backwards}",
       // Desktop ≥720px — center the sheet with a max-width so it
       // reads as a tall narrow card rather than a stretched bar.
-      "@media(min-width:720px){.cs-sheet-panel{left:50%;right:auto;transform:translate(-50%, 100%);max-width:540px;width:100%}.cs-sheet-panel.is-open{transform:translate(-50%, 0)}}",
+      "@keyframes csSheetInCentered{from{transform:translate(-50%, 100%)}to{transform:translate(-50%, 0)}}",
+      "@media(min-width:720px){.cs-sheet-panel{left:50%;right:auto;transform:translate(-50%, 0);max-width:540px;width:100%;animation:csSheetInCentered 320ms cubic-bezier(0.22,1,0.36,1) backwards}}",
 
       // ── Responsive layout shell ───────────────────────────────────────────
       // Mobile default: single column, block layout. Uses 100dvh so iOS

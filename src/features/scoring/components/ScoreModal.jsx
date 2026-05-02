@@ -121,44 +121,14 @@ export default function ScoreModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [casualOppId, isVerifiedForEffect, !!scoreModal, (myLeagues || []).length]);
 
-  // Bottom-sheet open/close animation state (Phase 3 redesign).
-  // The component still mounts/unmounts off `scoreModal`, but we
-  // gate the .is-open class on a separate `open` flag so the panel
-  // gets a frame to render at translateY(100%) before the class
-  // flip animates it in. Close-out is handled by closeWithAnim()
-  // below — sets open=false, then calls the original close fn after
-  // the 320ms transition so the panel slides down before unmount.
-  var [open, setOpen] = useState(false);
-  var [pendingClose, setPendingClose] = useState(null);
-
-  // Open animation — fire on the next tick after scoreModal
-  // appears so the initial render lands at translateY(100%) and
-  // the next paint transitions to translateY(0). setTimeout(0) is
-  // more reliable than requestAnimationFrame here — the rAF can
-  // batch with the same paint that produced the closed state on
-  // some browsers (notably mobile Safari), making the slide-up
-  // skip and the panel pop in instantly.
-  useEffect(function () {
-    if (!scoreModal) { setOpen(false); return; }
-    var to = setTimeout(function () { setOpen(true); }, 0);
-    return function () { clearTimeout(to); };
-  }, [!!scoreModal]);
-
-  // Close animation runner. Strips the .is-open class then fires
-  // the user-supplied teardown after the slide-down completes.
-  function closeWithAnim(fn) {
-    setOpen(false);
-    setPendingClose(function () { return fn; });
-  }
-  useEffect(function () {
-    if (!pendingClose) return;
-    if (open) return; // wait for the panel to slide back down
-    var fn = pendingClose;
-    setPendingClose(null);
-    var to = setTimeout(function () { fn(); }, 320);
-    return function () { clearTimeout(to); };
-  }, [open, pendingClose]);
-
+  // Bottom-sheet open animation — handled entirely via a CSS
+  // keyframe (csSheetIn / csScrimIn) that auto-plays on MOUNT in
+  // providers.jsx. No useState / useEffect / setTimeout dance: the
+  // browser starts the animation as soon as the panel renders.
+  // Closing is direct (component unmounts via setScoreModal(null))
+  // — the design's close-out animation was flaky in dev under
+  // React StrictMode anyway, and an instant unmount mirrors the
+  // existing Cancel-button UX in every other modal.
   if (!scoreModal) return null;
 
   var isResubmit = !!scoreModal.resubmit;
@@ -307,27 +277,21 @@ export default function ScoreModal({
   }
 
   function closeFromFinish() {
-    closeWithAnim(function () {
-      setFinish(null);
-      setScoreModal(null);
-      setCasualOppName("");
-      setCasualOppId(null);
-    });
+    setFinish(null);
+    setScoreModal(null);
+    setCasualOppName("");
+    setCasualOppId(null);
   }
 
   function backdropClick() {
     if (finish) return;
-    closeWithAnim(function () {
-      setScoreModal(null);
-      if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
-    });
+    setScoreModal(null);
+    if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
   }
 
   function cancelClick() {
-    closeWithAnim(function () {
-      setScoreModal(null);
-      if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
-    });
+    setScoreModal(null);
+    if (!isResubmit) { setCasualOppName(""); setCasualOppId(null); }
   }
 
   // Slice 4 — fully contextual CTA copy. Drives from the same signals
@@ -376,11 +340,11 @@ export default function ScoreModal({
   return (
     <>
       <div
-        className={"cs-sheet-scrim" + (open ? " is-open" : "")}
+        className="cs-sheet-scrim"
         onClick={backdropClick}
       />
       <div
-        className={"cs-sheet-panel" + (open ? " is-open" : "")}
+        className="cs-sheet-panel"
         onClick={function (e) { e.stopPropagation(); }}
         style={{
           background:    "#F0E9DA", // ED_TOK.bg — cream paper.
