@@ -74,8 +74,9 @@ export default function Sidebar({
           <button
             className="cs-nav-item"
             onClick={function() {
-              setShowNotifications(function(v) { return !v; });
-              if (!showNotifications && markSeen) markSeen();
+              // /notifications is a route now (App.jsx setTab knows
+              // about it). markSeen runs on the screen's mount effect.
+              setTab("notifications");
             }}
             style={{ color: unreadCount > 0 ? t.accent : t.textSecondary, position: "relative" }}
           >

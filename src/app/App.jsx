@@ -50,6 +50,7 @@ import { setHomeZone } from "../features/map/services/mapService.js";
 import SettingsScreen from "../features/settings/pages/SettingsScreen.jsx";
 
 import NotificationsPanel from "../features/notifications/components/NotificationsPanel.jsx";
+import NotificationsScreen from "../features/notifications/components/NotificationsScreen.jsx";
 import ActionReviewDrawer from "../features/notifications/components/ActionReviewDrawer.jsx";
 import AuthModal from "../features/auth/components/AuthModal.jsx";
 import InviteMatchPage from "../features/scoring/pages/InviteMatchPage.jsx";
@@ -105,7 +106,7 @@ export default function App(){
   // 'match' added 2026-05-02 — /match/log mounts LogMatchPage (the
   // single-screen editorial Log a Match flow). The bottom tab bar's
   // raised "+" navigates here instead of opening the legacy modal.
-  var validTabs=["home","matches","match","map","tournaments","people","profile","admin"];
+  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -203,13 +204,14 @@ export default function App(){
   // if needed (LogMatchPage stays a kicker-style microlabel — its
   // own top bar handles that).
   var topBarTitle = (
-    tab==="home"        ? "Home" :
-    tab==="matches"     ? "Activity" :
-    tab==="map"         ? "Maps" :
-    tab==="tournaments" ? "Compete" :
-    tab==="people"      ? "Friends" :
-    tab==="profile"     ? "Profile" :
-    tab==="match"       ? "Log a match" :
+    tab==="home"          ? "Home" :
+    tab==="matches"       ? "Activity" :
+    tab==="map"           ? "Maps" :
+    tab==="tournaments"   ? "Compete" :
+    tab==="people"        ? "Friends" :
+    tab==="profile"       ? "Profile" :
+    tab==="match"         ? "Log a match" :
+    tab==="notifications" ? "Notifications" :
     ""
   );
 
@@ -970,7 +972,12 @@ export default function App(){
               <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
                 {auth.authUser&&(
                   <button
-                    onClick={function(){notifications.setShowNotifications(function(v){return!v;});if(!notifications.showNotifications)notifications.markSeen();}}
+                    onClick={function(){
+                      // /notifications is a dedicated page now (no more
+                      // popup overlay). markSeen runs on the screen's
+                      // mount effect, so we don't need to call it here.
+                      navigate("/notifications");
+                    }}
                     title="Notifications"
                     style={{
                       position:"relative",width:34,height:34,
@@ -1093,6 +1100,36 @@ export default function App(){
               openProfile={openProfile}
               onReviewMatch={openReviewForMatch}
               setScrolledPastHero={setScrolledPastHero}
+            />
+          )}
+          {/* /notifications — Editorial Tennis dedicated inbox page.
+              Replaces the legacy popup overlay; bell icon now navigates
+              here. NotificationsScreen wraps NotificationsPanel
+              (pageMode) in editorial chrome (kicker + display title +
+              hairline divider). */}
+          {tab==="notifications"&&auth.authUser&&(
+            <NotificationsScreen
+              t={t}
+              notifications={notifications.notifications}
+              markAllRead={notifications.markAllRead}
+              markOneRead={notifications.markOneRead}
+              dismissNotification={notifications.dismissNotification}
+              dismissNotifications={notifications.dismissNotifications}
+              acceptMatchTag={notifications.acceptMatchTag}
+              declineMatchTag={notifications.declineMatchTag}
+              onAcceptFriendRequest={function(n){
+                social.acceptRequest({id:n.from_user_id,requestId:n.entity_id,name:n.fromName,avatar:n.fromAvatar});
+                notifications.dismissNotification(n.id);
+              }}
+              onDeclineFriendRequest={function(n){
+                social.declineRequest({id:n.from_user_id,requestId:n.entity_id});
+                notifications.dismissNotification(n.id);
+              }}
+              onReviewMatch={openReviewDrawer}
+              markSeen={notifications.markSeen}
+              refreshHistory={auth.authUser?function(){matchHistory.loadHistory(auth.authUser.id);}:null}
+              openConvById={openConvById}
+              openProfile={openProfile}
             />
           )}
           {/* (Legacy HomeTab mount preserved below for reference but

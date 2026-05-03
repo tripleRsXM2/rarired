@@ -305,10 +305,14 @@ function NotifRow({
     track("notification_opened", { type: n.type, deep_link_target: "feed" });
     if (refreshHistory) refreshHistory();
     // Carry the match id so the destination feed can scroll-to + highlight.
-    // Feed reads this via useLocation().state.highlightMatchId.
+    // The feed lives on /matches (Activity tab) — the editorial match
+    // history list. /home renders the 3-tile hub which is NOT the
+    // feed, so notifications used to land on a screen that didn't
+    // show the match they were referring to. MatchesScreen reads
+    // useLocation().state.highlightMatchId for the deep-link.
     var highlightMatchId = n.match_id || n.entity_id || null;
-    navigate("/home", highlightMatchId ? { state: { highlightMatchId: highlightMatchId } } : undefined);
-    setShowNotifications(false);
+    navigate("/matches", highlightMatchId ? { state: { highlightMatchId: highlightMatchId } } : undefined);
+    if (setShowNotifications) setShowNotifications(false);
     if (!n.read) onRead(n.id);
     dismissIfActivity();
   }
@@ -875,9 +879,19 @@ export default function NotificationsPanel({
   refreshHistory,
   openConvById,
   openProfile,
+  // pageMode: true → render as a full-bleed page body (no fixed
+  // overlay, no internal header — the outer screen wraps the chrome).
+  // false (default) preserves the legacy popup overlay behaviour for
+  // any caller still mounting this directly.
+  pageMode,
 }) {
   var navigate     = useNavigate();
   var _markAllRead = markAllRead || markNotificationsRead;
+  // setShowNotifications is the legacy "close the popup" hook. In
+  // pageMode it's a no-op — the user navigates away on click instead
+  // of dismissing an overlay. Wrap so internal call sites don't need
+  // to know which mode they're running in.
+  var closePanel = setShowNotifications || function () {};
 
   // Group + sort once per render (cheap — O(n) passes). Regular DM
   // notifications (`message` type) aren't generated anymore — the
@@ -912,8 +926,12 @@ export default function NotificationsPanel({
 
   function goFeed(n) {
     if (refreshHistory) refreshHistory();
-    navigate("/home");
-    setShowNotifications(false);
+    // /matches is the Activity feed (editorial match history list).
+    // /home renders the 3-tile hub. Carry highlightMatchId so the
+    // feed can scroll to + flash the referenced match.
+    var highlightMatchId = (n && (n.match_id || n.entity_id)) || null;
+    navigate("/matches", highlightMatchId ? { state: { highlightMatchId: highlightMatchId } } : undefined);
+    closePanel(false);
     if (n && markOneRead && !n.read) markOneRead(n.id);
     // Sticky rows (casual_match_logged) stay visible after read by
     // design — but when the user clicks through to the feed, the
@@ -965,7 +983,7 @@ export default function NotificationsPanel({
         declineMatchTag={declineMatchTag}
         onAcceptFriendRequest={onAcceptFriendRequest}
         onDeclineFriendRequest={onDeclineFriendRequest}
-        setShowNotifications={setShowNotifications}
+        setShowNotifications={closePanel}
         refreshHistory={refreshHistory}
         openConvById={openConvById}
         openProfile={openProfile}
@@ -973,10 +991,124 @@ export default function NotificationsPanel({
     );
   }
 
+  // ── Body — header + scrolling list. Used by both popup overlay and
+  //          page mode. Page mode skips the header (the screen wrapper
+  //          provides editorial chrome with kicker + hero title).
+  function renderBody() {
+    return (
+      <>
+        {!pageMode && (
+          <div style={{
+            padding: "18px 16px 14px",
+            borderBottom: "1px solid " + t.border,
+            display: "flex", justifyContent: "space-between", alignItems: "baseline",
+            flexShrink: 0,
+          }}>
+            <span style={{
+              fontSize: 18, fontWeight: 800, color: t.text,
+              letterSpacing: "-0.4px", lineHeight: 1,
+            }}>
+              Notifications
+            </span>
+            {hasMarkable && (
+              <button
+                onClick={_markAllRead}
+                style={{
+                  background: "none", border: "none",
+                  color: t.text, fontSize: 10, fontWeight: 800,
+                  letterSpacing: "0.12em", textTransform: "uppercase",
+                  borderBottom: "1px solid " + t.text,
+                  cursor: "pointer", padding: "0 0 2px 0",
+                  transition: "opacity 0.13s",
+                }}
+                onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
+                onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
+              >Mark all read</button>
+            )}
+          </div>
+        )}
+        <div style={pageMode
+          ? { flex: 1 }
+          : { overflowY: "auto", flex: 1 }
+        }>
+          {displayItems.length === 0 ? (
+            <div style={{
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              padding: pageMode ? "80px 24px 60px" : "60px 24px",
+              gap: 12,
+            }}>
+              <div style={{
+                fontSize: pageMode ? 44 : 32,
+                lineHeight: 1,
+                opacity: pageMode ? 0.7 : 1,
+              }}>🎾</div>
+              <div style={{
+                fontFamily: pageMode ? "'Space Grotesk', 'Sora', ui-sans-serif" : undefined,
+                fontSize: pageMode ? 22 : 18,
+                fontWeight: pageMode ? 500 : 800,
+                color: t.text,
+                letterSpacing: pageMode ? "-0.02em" : "-0.4px",
+                lineHeight: 1.15,
+                textAlign: "center",
+                marginTop: 4,
+              }}>You're all caught up.</div>
+              <div style={{
+                fontSize: 12.5, color: t.textSecondary,
+                textAlign: "center", maxWidth: 260, lineHeight: 1.55,
+                letterSpacing: "-0.05px",
+              }}>
+                New activity, match results, and requests will show up here.
+              </div>
+            </div>
+          ) : (
+            displayItems.map(renderItem)
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // Page mode: render body without the fixed-position overlay. Outer
+  // screen (NotificationsScreen) wraps with editorial chrome + scroll.
+  if (pageMode) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {renderBody()}
+        {hasMarkable && (
+          <div style={{ padding: "18px 22px 8px" }}>
+            <button
+              onClick={_markAllRead}
+              style={{
+                background:    "transparent",
+                border:        "1px solid rgba(42,32,26,0.22)",
+                color:         "#2A201A",
+                padding:       "12px 18px",
+                borderRadius:  999,
+                fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+                fontSize:      11,
+                fontWeight:    700,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor:        "pointer",
+                width:         "100%",
+              }}>
+              Mark all read
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Legacy popup overlay path. Kept so any caller still mounting this
+  // directly (without pageMode) keeps working — the module 11 panel
+  // had this shape and the bell icon used to toggle it open. New
+  // callers route through /notifications + NotificationsScreen.
   return (
     <div
       style={{ position: "fixed", inset: 0, zIndex: 45 }}
-      onClick={function () { setShowNotifications(false); }}
+      onClick={function () { closePanel(false); }}
     >
       <div
         className="cs-notif-panel"
@@ -991,69 +1123,7 @@ export default function NotificationsPanel({
           zIndex: 46,
         }}
       >
-        {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div style={{
-          padding: "18px 16px 14px",
-          borderBottom: "1px solid " + t.border,
-          display: "flex", justifyContent: "space-between", alignItems: "baseline",
-          flexShrink: 0,
-        }}>
-          <span style={{
-            fontSize: 18, fontWeight: 800, color: t.text,
-            letterSpacing: "-0.4px", lineHeight: 1,
-          }}>
-            Notifications
-          </span>
-          {hasMarkable && (
-            <button
-              onClick={_markAllRead}
-              style={{
-                background: "none", border: "none",
-                color: t.text, fontSize: 10, fontWeight: 800,
-                letterSpacing: "0.12em", textTransform: "uppercase",
-                borderBottom: "1px solid " + t.text,
-                cursor: "pointer", padding: "0 0 2px 0",
-                transition: "opacity 0.13s",
-              }}
-              onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.6"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
-            >Mark all read</button>
-          )}
-        </div>
-
-        {/* ── Body ──────────────────────────────────────────────────────────
-            Module 11 Slice 2: ONE list, newest first. No section headers.
-            Visibility = isActiveForUser (centralised in notifUtils).
-            Unresolved actionables soft-pin to the top inside the
-            grouping helper, but the user reads it as one continuous
-            inbox, not a dashboard.
-        */}
-        <div style={{ overflowY: "auto", flex: 1 }}>
-          {displayItems.length === 0 ? (
-            <div style={{
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              padding: "60px 24px", gap: 12,
-            }}>
-              <div style={{ fontSize: 32, lineHeight: 1 }}>🎾</div>
-              <div style={{
-                fontSize: 18, fontWeight: 800, color: t.text,
-                letterSpacing: "-0.4px", lineHeight: 1.1,
-                textAlign: "center",
-                marginTop: 4,
-              }}>You're all caught up.</div>
-              <div style={{
-                fontSize: 12, color: t.textSecondary,
-                textAlign: "center", maxWidth: 220, lineHeight: 1.5,
-                letterSpacing: "-0.1px",
-              }}>
-                New activity, match results, and requests will show up here.
-              </div>
-            </div>
-          ) : (
-            displayItems.map(renderItem)
-          )}
-        </div>
+        {renderBody()}
       </div>
     </div>
   );
