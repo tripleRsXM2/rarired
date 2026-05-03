@@ -23,10 +23,10 @@ import {
   LIFECYCLE_LABELS, lifecyclePillTokens,
   isActive, isPastLifecycle,
 } from "../utils/leagueLifecycle.js";
-// Editorial Tennis tokens — the league detail view (drill-down inside
-// a created league) is intentionally restyled to match Log Match /
-// Compete. The list view above keeps the legacy `t` palette for now
-// since it sits inside the multi-tab Compete page chrome.
+// Editorial Tennis tokens — the entire LeaguesPanel surface is locked
+// to ED_TOK so font + bg colors stay anchored to the editorial palette
+// regardless of which legacy theme is active. Same pattern as
+// LogMatchPage / CreateLeagueModal / NotificationsPanel.
 import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 
 export default function LeaguesPanel({
@@ -159,16 +159,16 @@ export default function LeaguesPanel({
     return (
       <div>
         <ListHeader t={t} onNew={function () { setShowCreate(true); }} />
-        <div style={{ textAlign: "center", padding: "40px 20px", background: t.bgCard, border: "1px solid " + t.border, borderRadius: 0 }}>
+        <div style={{ textAlign: "center", padding: "40px 20px", background: ED_TOK.bg2, border: "1px solid " + ED_TOK.line, borderRadius: 0 }}>
           <div style={{ fontSize: 32, marginBottom: 10 }}>🎾</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 6 }}>No leagues yet</div>
-          <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.5, maxWidth: 320, margin: "0 auto 14px" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: ED_TOK.ink, marginBottom: 6 }}>No leagues yet</div>
+          <div style={{ fontSize: 13, color: ED_TOK.ink2, lineHeight: 1.5, maxWidth: 320, margin: "0 auto 14px" }}>
             Start a private season with your friends. Log matches, climb the standings,
             bragging rights.
           </div>
           <button
             onClick={function () { setShowCreate(true); }}
-            style={{ padding: "10px 20px", borderRadius: 0, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer" }}>
+            style={{ padding: "10px 20px", borderRadius: 0, border: "none", background: ED_TOK.accent, color: "#fff", fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer" }}>
             + Create league
           </button>
         </div>
@@ -266,14 +266,14 @@ export default function LeaguesPanel({
 function SectionLabel({ t, label, count, extraTopMargin }) {
   return (
     <div style={{
-      fontSize: 9, fontWeight: 700, color: t.textTertiary,
+      fontSize: 9, fontWeight: 700, color: ED_TOK.muted,
       textTransform: "uppercase", letterSpacing: "0.14em",
       marginTop: extraTopMargin ? 18 : 0,
       marginBottom: 8,
     }}>
       {label}
       {count != null ? (
-        <span style={{ marginLeft: 6, color: t.textTertiary, fontWeight: 600, opacity: 0.7 }}>
+        <span style={{ marginLeft: 6, color: ED_TOK.muted, fontWeight: 600, opacity: 0.7 }}>
           · {count}
         </span>
       ) : null}
@@ -286,15 +286,15 @@ function ListHeader({ t, onNew }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
       <div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: ED_TOK.muted, textTransform: "uppercase", letterSpacing: "0.12em" }}>
           Your leagues
         </div>
-        <div style={{ fontSize: 11, color: t.textSecondary, marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: ED_TOK.ink2, marginTop: 2 }}>
           Private seasons with friends.
         </div>
       </div>
       <button onClick={onNew}
-        style={{ padding: "8px 14px", borderRadius: 0, border: "none", background: t.accent, color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", cursor: "pointer" }}>
+        style={{ padding: "8px 14px", borderRadius: 0, border: "none", background: ED_TOK.accent, color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", cursor: "pointer" }}>
         + New
       </button>
     </div>
@@ -322,10 +322,20 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
     if (r && r.error) { (toast ? toast(r.error.message || "Could not decline.", "error") : window.alert("Could not decline.")); }
   }
 
-  // Status pill: pull both colour + label from the lifecycle helper so
-  // any future status addition (e.g. paused) lands in one place.
+  // Status pill: map the lifecycle helper's theme-token names onto
+  // ED_TOK constants so the pill colour stays anchored to the
+  // editorial palette regardless of which legacy theme is active.
+  // Same set the helper returns; the lookup table is the single
+  // place the t-token → ED_TOK translation lives.
   var pillTokens = lifecyclePillTokens(league.status);
-  var statusColor = t[pillTokens.fg] || t.textTertiary;
+  var ED_PILL_FG = {
+    green:        ED_TOK.win,
+    accent:       ED_TOK.accent,
+    textTertiary: ED_TOK.muted,
+    orange:       ED_TOK.loss,
+    red:          ED_TOK.loss,
+  };
+  var statusColor = ED_PILL_FG[pillTokens.fg] || ED_TOK.muted;
   var statusLabel = LIFECYCLE_LABELS[league.status] || league.status;
 
   return (
@@ -333,8 +343,8 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
       {...(rowAnchor || {})}
       onClick={pending ? undefined : onOpen}
       style={{
-        background: t.bgCard,
-        border: pending ? "2px solid " + t.orange : "1px solid " + t.border,
+        background: ED_TOK.bg2,
+        border: pending ? "2px solid " + ED_TOK.loss : "1px solid " + ED_TOK.line,
         borderRadius: 0, padding: "12px 14px", marginBottom: 8,
         cursor: pending ? "default" : "pointer",
         transition: "border-color 0.15s",
@@ -345,7 +355,7 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: t.text, letterSpacing: "-0.15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: ED_TOK.ink, letterSpacing: "-0.15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {league.name}
             </div>
             <span style={{ fontSize: 9, fontWeight: 700, color: statusColor, textTransform: "uppercase", letterSpacing: "0.12em" }}>
@@ -353,11 +363,11 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
             </span>
           </div>
           {league.description && (
-            <div style={{ fontSize: 11, color: t.textSecondary, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 11, color: ED_TOK.ink2, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {league.description}
             </div>
           )}
-          <div style={{ fontSize: 10.5, color: t.textTertiary, letterSpacing: "0.01em" }}>
+          <div style={{ fontSize: 10.5, color: ED_TOK.muted, letterSpacing: "0.01em" }}>
             {formatMatchFormat(league.match_format)}
             {league.max_matches_per_opponent ? " · max " + league.max_matches_per_opponent + " vs each" : ""}
             {league.start_date || league.end_date
@@ -366,7 +376,7 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
           </div>
         </div>
         {!pending && (
-          <div style={{ color: t.textTertiary, flexShrink: 0, display: "flex", alignItems: "center" }}>
+          <div style={{ color: ED_TOK.muted, flexShrink: 0, display: "flex", alignItems: "center" }}>
             {/* chevron-right glyph to signal "tap to open" */}
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
               <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -379,12 +389,12 @@ function LeagueRow({ t, league, authUser, onOpen, onRespond, toast, rowAnchor })
       {pending && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button onClick={handleAccept} disabled={busy}
-            style={{ flex: 1, padding: "9px 10px", borderRadius: 0, border: "none", background: t.green, color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", cursor: "pointer", opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            style={{ flex: 1, padding: "9px 10px", borderRadius: 0, border: "none", background: ED_TOK.win, color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", cursor: "pointer", opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
             <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.check(13)}</span>
             Accept invite
           </button>
           <button onClick={handleDecline} disabled={busy}
-            style={{ flex: 1, padding: "9px 10px", borderRadius: 0, border: "1px solid " + t.red, background: "transparent", color: t.red, fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            style={{ flex: 1, padding: "9px 10px", borderRadius: 0, border: "1px solid " + ED_TOK.loss, background: "transparent", color: ED_TOK.loss, fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
             <span style={{ display: "flex", alignItems: "center" }}>{NAV_ICONS.x(13)}</span>
             Decline
           </button>
@@ -1359,60 +1369,182 @@ function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toa
     setInvited(function (v) { var n = Object.assign({}, v); n[friend.id] = true; return n; });
   }
 
-  // Same portal fix as CreateLeagueModal — the People tab wraps its content
-  // in a .fade-up div whose transform creates a CSS containing block that
-  // breaks position:fixed children. Portaling out escapes that.
+  // Editorial restyle — same realm as CreateLeagueModal /
+  // ActionReviewDrawer / LogMatchPage. Cream paper card, mono
+  // uppercase kicker, display-font hero title, hairline divider
+  // before the friend list, ink-on-cream pill INVITE buttons,
+  // hairline-outlined pill DONE button.
+  // Portaled to body — same .fade-up transform fix as the other
+  // editorial modals in this realm.
   return createPortal((
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "0 16px" }}>
+      style={{
+        position:       "fixed",
+        inset:          0,
+        background:     "rgba(20, 17, 14, 0.55)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display:        "flex",
+        alignItems:     "center",
+        justifyContent: "center",
+        zIndex:         200,
+        padding:        "0 16px",
+      }}>
       <div
         onClick={function (e) { e.stopPropagation(); }}
         className="pop"
-        style={{ background: t.modalBg, border: "1px solid " + t.border, borderRadius: 16, padding: "20px 20px 22px", width: "100%", maxWidth: 460, maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 50px rgba(0,0,0,0.35)" }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 4, letterSpacing: "-0.2px" }}>
+        style={{
+          background:    ED_TOK.bg,
+          color:         ED_TOK.ink,
+          fontFamily:    ED_TOK.sans,
+          border:        "1px solid " + ED_TOK.line,
+          borderRadius:  20,
+          padding:       "30px 24px 26px",
+          width:         "100%",
+          maxWidth:      480,
+          maxHeight:     "88vh",
+          overflowY:     "auto",
+          overflowX:     "hidden",
+          overscrollBehavior:      "contain",
+          WebkitOverflowScrolling: "touch",
+          touchAction:   "pan-y",
+          boxShadow:     "0 24px 80px rgba(20,17,14,0.35)",
+        }}>
+        {/* Header — mono kicker + display hero + lede */}
+        <div style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      10.5,
+          fontWeight:    700,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color:         ED_TOK.muted,
+          marginBottom:  10,
+        }}>Invite</div>
+        <h2 style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      "clamp(26px, 6.5vw, 32px)",
+          fontWeight:    600,
+          letterSpacing: "-0.025em",
+          lineHeight:    1.05,
+          color:         ED_TOK.ink,
+          margin:        "0 0 10px",
+          overflow:      "hidden",
+          textOverflow:  "ellipsis",
+        }}>
           Invite to {league.name}
         </h2>
-        <p style={{ fontSize: 12, color: t.textSecondary, marginBottom: 14 }}>
+        <p style={{
+          fontSize:   13.5,
+          color:      ED_TOK.ink2,
+          margin:     "0 0 22px",
+          lineHeight: 1.5,
+        }}>
           Invites are private. Invitees get a notification and choose whether to join.
         </p>
 
+        {/* Hairline opens the friend list section. */}
+        <div style={{ height: 1, background: ED_TOK.line, marginBottom: 4 }}/>
+
         {eligible.length === 0 && (
-          <div style={{ padding: "20px 14px", fontSize: 12, color: t.textTertiary, textAlign: "center" }}>
+          <div style={{
+            padding:    "28px 16px",
+            fontSize:   13,
+            color:      ED_TOK.muted,
+            textAlign:  "center",
+            lineHeight: 1.5,
+          }}>
             {friends && friends.length === 0
               ? "Add friends first — then you can invite them to a league."
               : "All your friends are already in this league."}
           </div>
         )}
 
-        {eligible.map(function (f) {
+        {eligible.map(function (f, i) {
+          var isBusy = !!busy[f.id];
           return (
             <div key={f.id} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 12px", borderTop: "1px solid " + t.border,
+              display:    "flex",
+              alignItems: "center",
+              gap:        12,
+              padding:    "14px 4px",
+              borderTop:  i === 0 ? "none" : "1px solid " + ED_TOK.line,
             }}>
-              <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={32}/>
+              <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={40}/>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                <div style={{
+                  fontFamily:    ED_TOK.display,
+                  fontSize:      17,
+                  fontWeight:    600,
+                  letterSpacing: "-0.02em",
+                  color:         ED_TOK.ink,
+                  overflow:      "hidden",
+                  textOverflow:  "ellipsis",
+                  whiteSpace:    "nowrap",
+                  lineHeight:    1.15,
+                }}>{f.name}</div>
                 {(f.suburb || f.skill) && (
-                  <div style={{ fontSize: 10.5, color: t.textTertiary, marginTop: 1 }}>
+                  <div style={{
+                    fontFamily:    ED_TOK.sans,
+                    fontSize:      12,
+                    color:         ED_TOK.muted,
+                    marginTop:     3,
+                  }}>
                     {[f.suburb, f.skill].filter(Boolean).join(" · ")}
                   </div>
                 )}
               </div>
               <button
+                type="button"
                 onClick={function () { handleInvite(f); }}
-                disabled={!!busy[f.id]}
-                style={{ padding: "7px 12px", borderRadius: 0, border: "none", background: t.accent, color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", cursor: "pointer", opacity: busy[f.id] ? 0.6 : 1 }}>
-                {busy[f.id] ? "…" : "Invite"}
+                disabled={isBusy}
+                style={{
+                  padding:        "10px 16px",
+                  borderRadius:   999,
+                  border:         "1px solid " + ED_TOK.ink,
+                  background:     ED_TOK.ink,
+                  color:          ED_TOK.bg,
+                  fontFamily:     ED_TOK.mono,
+                  fontSize:       10.5,
+                  fontWeight:     700,
+                  letterSpacing:  "0.18em",
+                  textTransform:  "uppercase",
+                  cursor:         isBusy ? "not-allowed" : "pointer",
+                  opacity:        isBusy ? 0.5 : 1,
+                  transition:     "opacity 140ms ease",
+                  flexShrink:     0,
+                }}>
+                {isBusy ? "…" : "Invite"}
               </button>
             </div>
           );
         })}
 
-        <div style={{ marginTop: 16, textAlign: "right" }}>
-          <button onClick={onClose}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.text, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+        {/* Done — hairline-outlined pill matching CreateLeagueModal Cancel. */}
+        <div style={{
+          marginTop:  20,
+          paddingTop: 16,
+          borderTop:  "1px solid " + ED_TOK.line,
+          display:    "flex",
+          justifyContent: "flex-end",
+        }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding:        "14px 28px",
+              borderRadius:   999,
+              border:         "1px solid " + ED_TOK.lineStrong,
+              background:     "transparent",
+              color:          ED_TOK.ink,
+              fontFamily:     ED_TOK.mono,
+              fontSize:       11,
+              fontWeight:     700,
+              letterSpacing:  "0.18em",
+              textTransform:  "uppercase",
+              cursor:         "pointer",
+              transition:     "background 140ms ease",
+            }}>
             Done
           </button>
         </div>
