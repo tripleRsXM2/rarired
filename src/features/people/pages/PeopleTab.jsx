@@ -353,21 +353,31 @@ export default function PeopleTab({
     };
   }, [threadActive, setHideTopMobNav, setHideBottomTabBar]);
 
-  // (Body-lock useEffect removed.) Earlier version set
-  // body.style.position = "fixed" + overflow:hidden when
-  // threadActive — defensive against iOS rubber-band — but was
-  // causing real bugs:
-  //   - scroll position reset to 0 on enter, lost on exit
-  //   - tug-of-war with iOS keyboard transitions (the body's
-  //     fixed layer didn't reflow when the keyboard pushed up)
-  //   - position:fixed on <body> created a new viewport for
-  //     position:fixed descendants, breaking some toasts/menus
-  // With the height-locked flex column above (outer wrapper
-  // height === viewport - chrome, overflow: hidden), the
-  // document already can't scroll — the Messages component's
-  // internal scroll surfaces (conv list pane, messages list)
-  // are the only scrollable layers. So the body lock isn't
-  // pulling its weight; remove it.
+  // Document-level overflow lock for the Messages view. iOS Safari
+  // still permits rubber-band scroll on the document even when
+  // descendants have overflow:hidden — that's why the chrome bar
+  // appeared to "unlock" on touch even though our flex column
+  // layout pins it. Setting html + body overflow:hidden defangs
+  // that without the side effects of position:fixed (which earlier
+  // broke scroll-position retention, fought the iOS keyboard, and
+  // created new viewports for position:fixed descendants).
+  //
+  // Active for the entire Messages view (conv list AND thread).
+  // Cleanup restores previous values on unmount / tab switch.
+  useEffect(function () {
+    if (!messagesView) return;
+    if (typeof document === "undefined") return;
+    var html = document.documentElement;
+    var body = document.body;
+    var prevHtmlOverflow = html.style.overflow;
+    var prevBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return function () {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, [messagesView]);
 
   if (!authUser) {
     return (
