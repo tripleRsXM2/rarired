@@ -324,14 +324,27 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     if (dms.editingId && editInputRef.current) editInputRef.current.focus();
   }, [dms.editingId]);
 
-  // Auto-grow the main message textarea up to 5 lines.
-  function autoGrow(el) {
+  // Sync state → contentEditable DOM. The composer is now a
+  // contentEditable <div> (see the JSX below). contentEditable is a
+  // naturally uncontrolled component — the DOM is the source of truth
+  // for caret position, IME composition, etc. Re-rendering React with
+  // a new innerText every keystroke would destroy the caret.
+  //
+  // So: only write to the DOM when state diverges from it AND the
+  // editor isn't currently focused (i.e. the change came from outside
+  // — send completed, draft cleared, emoji inserted, conv switched).
+  // Live user typing flows the other way via onInput → setMsgDraft;
+  // we leave the DOM alone in that case.
+  useEffect(function () {
+    var el = inputRef.current;
     if (!el) return;
-    el.style.height = "auto";
-    var max = 5 * 22 + 20; // ~5 lines at 14px/1.4 + padding
-    el.style.height = Math.min(el.scrollHeight, max) + "px";
-  }
-  useEffect(function () { autoGrow(inputRef.current); }, [dms.msgDraft, dms.activeConv && dms.activeConv.id]);
+    var draft = dms.msgDraft || "";
+    if (el.innerText === draft) return;
+    // Skip the resync while the user is actively typing — prevents
+    // flicker / caret jumps from racing renders.
+    if (document.activeElement === el && el.innerText.replace(/\n$/, "") === draft) return;
+    el.innerText = draft;
+  }, [dms.msgDraft, dms.activeConv && dms.activeConv.id]);
 
   // IMPORTANT — every hook must be called before the conditional `return`
   // below. `visibleMessages` was a useMemo placed after the early-return
@@ -434,21 +447,67 @@ export default function Messages({ t, authUser, dms, openProfile }) {
     }
   }
 
+  // Insert emoji at the current caret position in the contentEditable
+  // composer. textarea had selectionStart / selectionEnd; the
+  // contentEditable equivalent is the Selection / Range API. We
+  // approximate the offset by walking the editor's text nodes up to
+  // the current selection — good enough for a flat single-line /
+  // multi-line plain-text editor (no nested spans / mentions yet).
   function insertEmojiAtCursor(emoji) {
     var el = inputRef.current;
-    if (!el) { dms.setMsgDraft((dms.msgDraft || "") + emoji); return; }
-    var start = el.selectionStart != null ? el.selectionStart : (dms.msgDraft || "").length;
-    var end = el.selectionEnd != null ? el.selectionEnd : start;
     var cur = dms.msgDraft || "";
+    if (!el) { dms.setMsgDraft(cur + emoji); return; }
+    var start = cur.length;
+    var end   = cur.length;
+    try {
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+        // Walk text nodes inside the editor, summing lengths up to the
+        // selection's anchor + focus to derive plain-text offsets.
+        var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+        var seen = 0;
+        var foundStart = false, foundEnd = false;
+        while (walker.nextNode()) {
+          var node = walker.currentNode;
+          if (!foundStart && node === sel.anchorNode) {
+            start = seen + sel.anchorOffset;
+            foundStart = true;
+          }
+          if (!foundEnd && node === sel.focusNode) {
+            end = seen + sel.focusOffset;
+            foundEnd = true;
+          }
+          seen += node.nodeValue.length;
+          if (foundStart && foundEnd) break;
+        }
+        if (start > end) { var tmp = start; start = end; end = tmp; }
+      }
+    } catch (_) {}
     var next = cur.slice(0, start) + emoji + cur.slice(end);
     dms.setMsgDraft(next);
-    // Restore focus + caret position after React re-renders.
+    var caretPos = start + emoji.length;
     requestAnimationFrame(function () {
-      if (!inputRef.current) return;
-      inputRef.current.focus();
-      var pos = start + emoji.length;
-      try { inputRef.current.setSelectionRange(pos, pos); } catch (e) {}
-      autoGrow(inputRef.current);
+      var node = inputRef.current;
+      if (!node) return;
+      // Sync DOM since the state→DOM useEffect bails when the editor
+      // is focused, and we want the new text visible immediately.
+      node.innerText = next;
+      node.focus();
+      try {
+        var range = document.createRange();
+        var sel2 = window.getSelection();
+        // Find the text node containing caretPos; if the editor has
+        // a single text node (typical), this is just it. Fallback to
+        // placing the caret at the end.
+        var textNode = node.firstChild;
+        if (textNode && textNode.nodeType === 3) {
+          var pos = Math.min(caretPos, textNode.nodeValue.length);
+          range.setStart(textNode, pos);
+          range.collapse(true);
+          sel2.removeAllRanges();
+          sel2.addRange(range);
+        }
+      } catch (_) {}
     });
   }
 
@@ -1576,34 +1635,54 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             }}>
             {uploading ? <span style={{ fontFamily: ED_TOK.mono, fontSize: 11 }}>…</span> : <IconPaperclip/>}
           </button>
-          {/* Textarea — editorial pill input, cream bg2 + hairline.
-              iOS keyboard tuning:
-                - autoComplete="off" + autoCorrect="on" + spellCheck:
-                  cuts the "Passwords / Contacts" QuickType strip above
-                  the keyboard down to the plain suggestions strip,
-                  closer to the Strava feel. iOS won't fully hide the
-                  accessory bar in Safari browser mode — but installed
-                  as PWA (Add to Home Screen) the theme-color cream
-                  (#F0E9DA in index.html) tints the bar to match the
-                  app, which is what Strava is doing as a native app.
-                - enterKeyHint="send" makes the return key read "Send".
-                - inputMode="text" picks the standard text keyboard.
-                - caretColor: pink accent so the cursor reads as part
-                  of the design system, not the system blue. */}
-          <textarea
+          {/* Composer — contentEditable <div> instead of <textarea>.
+              Why: iOS Safari shows a "form navigation bar" (white pill
+              above the keyboard with up/down arrows + Done) for any
+              focused <input> or <textarea>. contentEditable doesn't
+              trigger it — same trick Strava / WhatsApp Web / Telegram
+              Web use. The bar gone, the input sits flush against the
+              QuickType suggestions strip, which is the integrated
+              feel the user wanted.
+
+              Controlled-component caveat: contentEditable is naturally
+              uncontrolled (the DOM is the source of truth). We treat
+              dms.msgDraft as the source of truth for OUTBOUND writes
+              only — the effect below imperatively syncs innerText
+              when state diverges from the DOM (e.g. after send clears
+              the draft, or after insertEmojiAtCursor mutates state).
+              Inbound user typing fires onInput which writes to state
+              without touching the DOM, preserving caret position.
+
+              autoGrow is no longer needed — contentEditable grows with
+              its content automatically; min/max-height + overflow:auto
+              clamp it to the same 1-to-5-line range the textarea had. */}
+          <div
             ref={inputRef}
-            rows={1}
-            value={dms.msgDraft}
-            placeholder={conv.isGroup ? "Message group…" : ("Message " + conv.partner.name + "…")}
-            autoComplete="off"
-            autoCorrect="on"
-            autoCapitalize="sentences"
+            className="cs-dm-input"
+            contentEditable
+            role="textbox"
+            aria-multiline="true"
+            aria-label="Message"
+            data-placeholder={conv.isGroup ? "Message group…" : ("Message " + conv.partner.name + "…")}
+            suppressContentEditableWarning
             spellCheck={true}
             inputMode="text"
             enterKeyHint="send"
-            onChange={function (e) {
-              dms.setMsgDraft(e.target.value);
-              autoGrow(e.target);
+            onInput={function (e) {
+              var node = e.currentTarget;
+              var text = node.innerText || "";
+              // Backspace-to-empty often leaves a residual <br> in
+              // the editor (Safari + Chrome both do this), which
+              // breaks the :empty::before placeholder. Force clear
+              // children so :empty matches and the placeholder paints.
+              // Use textContent (no trailing-line semantics) for the
+              // emptiness check so a stray <br> from Enter-press
+              // doesn't trip this branch.
+              if ((node.textContent || "") === "" && node.firstChild) {
+                while (node.firstChild) node.removeChild(node.firstChild);
+                text = "";
+              }
+              if (text !== dms.msgDraft) dms.setMsgDraft(text);
               if (dms.activeConv && dms.activeConv.isGroup) return;
               var now = Date.now();
               if (!typingSentRef.current || now - typingSentRef.current > 2000) {
@@ -1613,21 +1692,40 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 }
               }
             }}
+            onPaste={function (e) {
+              // Force plain-text paste — otherwise iOS / Safari pastes
+              // styled HTML (font, color, link tags) into the editor,
+              // which would round-trip through innerText fine but
+              // looks wrong while composing.
+              e.preventDefault();
+              var data = (e.clipboardData || window.clipboardData);
+              var text = data ? (data.getData("text/plain") || "") : "";
+              try { document.execCommand("insertText", false, text); }
+              catch (_) {
+                // Fallback for browsers where execCommand is blocked.
+                var sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0) return;
+                var range = sel.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(text));
+                range.collapse(false);
+              }
+            }}
             onKeyDown={function (e) {
               var isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
               if (e.key === "Enter" && !e.shiftKey && !isMobile) { e.preventDefault(); trySend(); }
             }}
             style={{
               flex:                   1,
-              resize:                 "none",
               fontFamily:             ED_TOK.sans,
               fontSize:               16, // 16 prevents iOS auto-zoom
               padding:                "10px 16px",
-              borderRadius:           999,
+              borderRadius:           22,  // matches old textarea pill end caps
               minHeight:              42,
               maxHeight:              140,
               lineHeight:             1.4,
-              overflow:               "auto",
+              overflowY:              "auto",
+              overflowX:              "hidden",
               background:             ED_TOK.bg2,
               border:                 "1px solid " + ED_TOK.line,
               color:                  ED_TOK.ink,
@@ -1635,6 +1733,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               caretColor:             ED_TOK.accent,
               WebkitTapHighlightColor:"transparent",
               WebkitAppearance:       "none",
+              whiteSpace:             "pre-wrap",
+              wordBreak:              "break-word",
+              cursor:                 "text",
+              minWidth:               0,
             }}/>
           {/* Send — ink-on-cream pill, mono uppercase. Disabled state
               holds the same shape so the bar geometry stays stable

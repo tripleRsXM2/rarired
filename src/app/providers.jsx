@@ -314,6 +314,18 @@ export default function Providers({ t, theme, children }){
       // rule flips it to inline-flex at ≥1024px. Keeping the drawer off
       // mobile avoids cramming a 300px pane beside a 390px thread.
       "@media(min-width:1024px){.cs-dm-details-btn{display:inline-flex!important}}",
+
+      // ── DM message input — contentEditable placeholder ───────────────────
+      // We render the message composer as a contentEditable <div> instead
+      // of a <textarea> so iOS Safari doesn't show the form navigation bar
+      // (the white pill with up / down arrows + Done) above the keyboard.
+      // contentEditable doesn't support the `placeholder` attribute, so we
+      // simulate it via :empty::before — only renders when there's no text
+      // and we set data-placeholder on the element. pointer-events:none on
+      // the pseudo so taps go through to the editor.
+      ".cs-dm-input[contenteditable=true]:empty::before{content:attr(data-placeholder);color:"+t.textTertiary+";pointer-events:none;}",
+      // Strip the default focus halo — outline lives on the parent border.
+      ".cs-dm-input[contenteditable=true]:focus{outline:none;}",
     ].join("");
     document.head.appendChild(el);
     document.body.style.background=t.bg;

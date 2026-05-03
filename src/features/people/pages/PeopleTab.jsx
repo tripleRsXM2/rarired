@@ -379,6 +379,41 @@ export default function PeopleTab({
     };
   }, [messagesView]);
 
+  // Visual viewport tracking — when the iOS keyboard opens, the
+  // visual viewport shrinks while the layout viewport (and 100dvh)
+  // stays at full screen. That's what produces the cream gap below
+  // the input bar: iOS auto-scrolls the focused textarea to the top
+  // of the visible band, then the rest of the layout (which extends
+  // behind the keyboard) shows through as empty cream above it.
+  //
+  // Fix: write the keyboard offset (window.innerHeight − vv.height)
+  // to a CSS var, and have the messagesView outer wrapper subtract
+  // it from its height. The thread column shrinks with the keyboard,
+  // the sticky input footer naturally rises with it, and there's no
+  // dead band between input and keyboard.
+  //
+  // visualViewport "scroll" fires on iOS during the rubber-band
+  // tween that follows focus — listening to both events keeps the
+  // offset in sync through the whole transition.
+  useEffect(function () {
+    if (!messagesView) return;
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    var vv = window.visualViewport;
+    var html = document.documentElement;
+    function syncKbOffset() {
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height));
+      html.style.setProperty("--cs-kb-offset", kb + "px");
+    }
+    syncKbOffset();
+    vv.addEventListener("resize", syncKbOffset);
+    vv.addEventListener("scroll", syncKbOffset);
+    return function () {
+      vv.removeEventListener("resize", syncKbOffset);
+      vv.removeEventListener("scroll", syncKbOffset);
+      html.style.removeProperty("--cs-kb-offset");
+    };
+  }, [messagesView]);
+
   if (!authUser) {
     return (
       <div style={{
@@ -470,7 +505,11 @@ export default function PeopleTab({
       //     but long lists still scroll the document naturally.
       ...(messagesView
         ? {
-            height:        "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
+            // --cs-kb-offset is set by the visualViewport effect above
+            // when the iOS keyboard is open. Subtracting it shrinks the
+            // outer column with the keyboard, so the sticky input footer
+            // rises with it instead of leaving a cream gap below.
+            height:        "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px) - var(--cs-kb-offset, 0px))",
             overflow:      "hidden",
             display:       "flex",
             flexDirection: "column",
