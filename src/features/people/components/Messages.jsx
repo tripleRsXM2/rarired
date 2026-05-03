@@ -801,8 +801,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         : (
           <div className="cs-dm-list-pane" style={{
             width: "100%",
-            flexShrink: 0, minWidth: 0,
-            overflowY: "auto",
+            flexShrink: 0, minWidth: 0, minHeight: 0,
+            overflowY:               "auto",
+            WebkitOverflowScrolling: "touch",
+            touchAction:             "pan-y",
+            overscrollBehavior:      "contain",
           }}>
             {renderConvList()}
           </div>
@@ -895,7 +898,15 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {/* ── Thread pane (or desktop empty state) ──────────────────────── */}
       {showThreadPane && !conv && renderDesktopEmptyState()}
       {showThreadPane && conv && (<>
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+      {/* Thread column. minHeight:0 + height:100% are critical: without
+          minHeight:0 the inner messages list (flex:1 + overflow:auto)
+          can't be height-bounded by the parent — flex children default
+          to min-content height. Before the document overflow lock, an
+          oversized list silently leaked into the page scroll; now that
+          html + body are overflow:hidden, an unbounded child means the
+          inner scroller never realises it has overflow → touch scroll
+          dies. */}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, height: "100%" }}>
 
       {/* Conversation settings. Desktop: centered modal with a modest
           width. Mobile: bottom-sheet with a grab handle. Decided via a
@@ -1123,8 +1134,26 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       )}
 
       {/* Messages — scroll region. flex:1 fills between the fixed-height
-          header (above) and the fixed-height input footer (below). */}
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingRight: 4 }}>
+          header (above) and the fixed-height input footer (below).
+          Touch scroll guarantees:
+            - WebkitOverflowScrolling: touch  → momentum scrolling on
+              iOS Safari (without it the scroller feels dead, especially
+              once document overflow is locked).
+            - touchAction: pan-y              → tell the browser this
+              region only scrolls vertically, so iOS doesn't escalate
+              the gesture to body-level rubber-band that we've now
+              disabled.
+            - overscrollBehavior: contain     → keep flick momentum
+              inside this scroller; never bubble to the document. */}
+      <div style={{
+        flex:                    1,
+        overflowY:               "auto",
+        WebkitOverflowScrolling: "touch",
+        touchAction:             "pan-y",
+        overscrollBehavior:      "contain",
+        minHeight:               0,
+        paddingRight:            4,
+      }}>
         {dms.threadLoading ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: t.textTertiary, fontSize: 13 }}>Loading…</div>
         ) : visibleMessages.length === 0 ? (
@@ -1545,12 +1574,31 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             }}>
             {uploading ? <span style={{ fontFamily: ED_TOK.mono, fontSize: 11 }}>…</span> : <IconPaperclip/>}
           </button>
-          {/* Textarea — editorial pill input, cream bg2 + hairline. */}
+          {/* Textarea — editorial pill input, cream bg2 + hairline.
+              iOS keyboard tuning:
+                - autoComplete="off" + autoCorrect="on" + spellCheck:
+                  cuts the "Passwords / Contacts" QuickType strip above
+                  the keyboard down to the plain suggestions strip,
+                  closer to the Strava feel. iOS won't fully hide the
+                  accessory bar in Safari browser mode — but installed
+                  as PWA (Add to Home Screen) the theme-color cream
+                  (#F0E9DA in index.html) tints the bar to match the
+                  app, which is what Strava is doing as a native app.
+                - enterKeyHint="send" makes the return key read "Send".
+                - inputMode="text" picks the standard text keyboard.
+                - caretColor: pink accent so the cursor reads as part
+                  of the design system, not the system blue. */}
           <textarea
             ref={inputRef}
             rows={1}
             value={dms.msgDraft}
             placeholder={conv.isGroup ? "Message group…" : ("Message " + conv.partner.name + "…")}
+            autoComplete="off"
+            autoCorrect="on"
+            autoCapitalize="sentences"
+            spellCheck={true}
+            inputMode="text"
+            enterKeyHint="send"
             onChange={function (e) {
               dms.setMsgDraft(e.target.value);
               autoGrow(e.target);
@@ -1568,20 +1616,23 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               if (e.key === "Enter" && !e.shiftKey && !isMobile) { e.preventDefault(); trySend(); }
             }}
             style={{
-              flex:          1,
-              resize:        "none",
-              fontFamily:    ED_TOK.sans,
-              fontSize:      16, // 16 prevents iOS auto-zoom
-              padding:       "10px 16px",
-              borderRadius:  999,
-              minHeight:     42,
-              maxHeight:     140,
-              lineHeight:    1.4,
-              overflow:      "auto",
-              background:    ED_TOK.bg2,
-              border:        "1px solid " + ED_TOK.line,
-              color:         ED_TOK.ink,
-              outline:       "none",
+              flex:                   1,
+              resize:                 "none",
+              fontFamily:             ED_TOK.sans,
+              fontSize:               16, // 16 prevents iOS auto-zoom
+              padding:                "10px 16px",
+              borderRadius:           999,
+              minHeight:              42,
+              maxHeight:              140,
+              lineHeight:             1.4,
+              overflow:               "auto",
+              background:             ED_TOK.bg2,
+              border:                 "1px solid " + ED_TOK.line,
+              color:                  ED_TOK.ink,
+              outline:                "none",
+              caretColor:             ED_TOK.accent,
+              WebkitTapHighlightColor:"transparent",
+              WebkitAppearance:       "none",
             }}/>
           {/* Send — ink-on-cream pill, mono uppercase. Disabled state
               holds the same shape so the bar geometry stays stable
