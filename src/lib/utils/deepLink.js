@@ -39,7 +39,10 @@ export function useDeepLinkHighlight(stateKey) {
     if (el && el.scrollIntoView) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    var tid = setTimeout(function () { setActiveId(null); }, 2000);
+    // 2500ms: matches the 2.4s deeplinkPulse animation in providers.jsx
+    // with a small buffer so the row keeps the cs-deeplink-pulse class
+    // until the keyframes finish settling back to baseline.
+    var tid = setTimeout(function () { setActiveId(null); }, 2500);
     return function () { clearTimeout(tid); };
   }, [activeId]);
 

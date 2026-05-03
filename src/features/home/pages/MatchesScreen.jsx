@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
 import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
+import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 
 var FILTERS = ["All", "Ranked", "League", "Casual", "Tournament"];
 
@@ -31,6 +32,13 @@ var PENDING_STATUSES = ["pending_confirmation", "disputed", "pending_reconfirmat
 export default function MatchesScreen({ authUser, history, leaguesIndex, openProfile, onReviewMatch, setScrolledPastHero }) {
   var [filter, setFilter] = useState("All");
   var heroRef = useRef(null);
+
+  // Deep-link highlight — when arrived from a notification's
+  // "View in feed →" CTA (NotificationsPanel passes the match id
+  // via location.state.highlightMatchId), scroll the matching row
+  // into view and pulse it with a 2.4s ring + bg flash so the user
+  // can spot the row the notification was about.
+  var matchHL = useDeepLinkHighlight("highlightMatchId");
 
   // Scroll observer — fades "Activity" into the global top bar
   // when the stat strip (the page hero) leaves the viewport.
@@ -178,6 +186,7 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
                   openProfile={openProfile}
                   onReviewMatch={onReviewMatch}
                   isLast={idx === filtered.length - 1}
+                  rowAnchor={matchHL.rowProps(m.id)}
                 />
               </li>
             );
@@ -196,7 +205,7 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
 // instead of the rating delta, and route the tap to onReviewMatch
 // (opens the existing ActionReviewDrawer) instead of the
 // opponent's profile.
-function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, isLast }) {
+function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, isLast, rowAnchor }) {
   var isPending = match.status !== "confirmed";
   var won  = !isPending && match.result === "win";
 
@@ -294,6 +303,7 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
 
   return (
     <button
+      {...(rowAnchor || {})}
       onClick={handleClick}
       style={{
         width:               "100%",
@@ -303,7 +313,7 @@ function MatchRow({ match, authUser, leaguesIndex, openProfile, onReviewMatch, i
         gridTemplateColumns: "44px 28px 1fr auto",
         gap:                 14,
         alignItems:          "center",
-        padding:             "14px 0",
+        padding:             "14px 8px",
         borderBottom:        isLast ? "none" : "1px solid " + ED_TOK.line,
         textAlign:           "left",
         color:               "inherit",

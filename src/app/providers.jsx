@@ -39,9 +39,21 @@ export default function Providers({ t, theme, children }){
       // visually guide the eye to the row that was just targeted (e.g.
       // tapping a challenge_received notification scrolls to + pulses
       // the matching row on /tournaments/challenges).
-      "@keyframes deeplinkPulse{0%{box-shadow:0 0 0 0 "+t.accent+"00,0 0 0 0 "+t.accent+"00}"+
-        "10%{box-shadow:0 0 0 4px "+t.accent+",0 0 24px 0 "+t.accent+"66}"+
-        "100%{box-shadow:0 0 0 0 "+t.accent+"00,0 0 0 0 "+t.accent+"00}}",
+      // Deep-link highlight — combines a ring pulse and a background
+      // tint flash so the row reads as "highlighted" not just outlined.
+      // 2.4s total: holds the bg tint for ~1.4s before fading back to
+      // transparent so the user has time to register the deep-linked
+      // row before it returns to the editorial baseline.
+      // Colour locked to the editorial clay accent (#FF2D55 =
+      // rgba(255,45,85,*)) regardless of which legacy theme is
+      // active — the ring used to flip blue/green/orange depending
+      // on theme.t.accent, breaking the cream realm.
+      "@keyframes deeplinkPulse{"+
+        "0%{box-shadow:0 0 0 0 rgba(255,45,85,0),0 0 0 0 rgba(255,45,85,0);background-color:rgba(255,45,85,0)}"+
+        "10%{box-shadow:0 0 0 4px rgba(255,45,85,1),0 0 24px 0 rgba(255,45,85,0.4);background-color:rgba(255,45,85,0.14)}"+
+        "55%{box-shadow:0 0 0 0 rgba(255,45,85,0),0 0 0 0 rgba(255,45,85,0);background-color:rgba(255,45,85,0.10)}"+
+        "100%{box-shadow:0 0 0 0 rgba(255,45,85,0),0 0 0 0 rgba(255,45,85,0);background-color:rgba(255,45,85,0)}"+
+      "}",
 
       // ── Animation classes ─────────────────────────────────────────────────
       ".slide-in-right{animation:slideInRight .28s cubic-bezier(.32,.72,0,1) both}",
@@ -49,7 +61,7 @@ export default function Providers({ t, theme, children }){
       ".pop{animation:pop .22s cubic-bezier(.34,2.27,.64,1) both}",
       ".slide-up{animation:slideUp .36s cubic-bezier(.32,.72,0,1) both}",
       ".reveal{animation:reveal .4s cubic-bezier(.32,.72,0,1) both}",
-      ".cs-deeplink-pulse{animation:deeplinkPulse 1.8s cubic-bezier(.32,.72,0,1) both;border-radius:inherit}",
+      ".cs-deeplink-pulse{animation:deeplinkPulse 2.4s cubic-bezier(.32,.72,0,1) both;border-radius:inherit}",
       // Editorial Tennis push transitions (Phase 3) — 380ms with the
       // design's signature ease so the home-hub destination screens
       // feel like they push in from the right (per
