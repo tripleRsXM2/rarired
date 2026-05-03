@@ -344,36 +344,21 @@ export default function PeopleTab({
     };
   }, [threadActive, setHideTopMobNav, setHideBottomTabBar]);
 
-  // Lock document-level scroll while a chat thread is open. The
-  // messages list owns its own internal overflow:auto and the input
-  // footer is sticky-pinned to the bottom — anything happening at
-  // the document layer (iOS rubber-band, ancestor scrollers, stray
-  // overflow from any sibling) just produces phantom drift in the
-  // thread. Toggle html + body overflow:hidden + position:fixed for
-  // the duration of the takeover; restore on exit.
-  useEffect(function () {
-    if (!threadActive) return;
-    if (typeof document === "undefined") return;
-    var html = document.documentElement;
-    var body = document.body;
-    var prevHtmlOverflow = html.style.overflow;
-    var prevBodyOverflow = body.style.overflow;
-    var prevBodyPosition = body.style.position;
-    var prevBodyWidth    = body.style.width;
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    // position:fixed + width:100% guards against iOS Safari scrolling
-    // the body anyway when content is visually below the viewport
-    // (the dvh-vs-svh inconsistency on the address-bar transition).
-    body.style.position = "fixed";
-    body.style.width    = "100%";
-    return function () {
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-      body.style.position = prevBodyPosition;
-      body.style.width    = prevBodyWidth;
-    };
-  }, [threadActive]);
+  // (Body-lock useEffect removed.) Earlier version set
+  // body.style.position = "fixed" + overflow:hidden when
+  // threadActive — defensive against iOS rubber-band — but was
+  // causing real bugs:
+  //   - scroll position reset to 0 on enter, lost on exit
+  //   - tug-of-war with iOS keyboard transitions (the body's
+  //     fixed layer didn't reflow when the keyboard pushed up)
+  //   - position:fixed on <body> created a new viewport for
+  //     position:fixed descendants, breaking some toasts/menus
+  // With the height-locked flex column above (outer wrapper
+  // height === viewport - chrome, overflow: hidden), the
+  // document already can't scroll — the Messages component's
+  // internal scroll surfaces (conv list pane, messages list)
+  // are the only scrollable layers. So the body lock isn't
+  // pulling its weight; remove it.
 
   if (!authUser) {
     return (
