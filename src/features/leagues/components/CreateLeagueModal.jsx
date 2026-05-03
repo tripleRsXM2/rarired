@@ -284,7 +284,6 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
         <Microlabel>Description (optional)</Microlabel>
         <textarea
           value={description}
-          placeholder="A short note so friends know what this league is."
           rows={2}
           onChange={function (e) { setDescription(e.target.value); }}
           style={{
