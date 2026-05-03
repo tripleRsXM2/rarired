@@ -97,11 +97,11 @@ function PlayerCard({
         flexShrink:     0,
         position:       "relative",
       }}>
-        {onMessage && (
-          <PillButton variant="ghost" onClick={function () { onMessage(u); }}>
-            Message
-          </PillButton>
-        )}
+        {/* Relation-specific primary affordance — only the inline
+            actions that depend on the friend-request state stay
+            visible on the row. Message + Challenge moved into the
+            ⋯ menu below so a long row doesn't overflow on narrow
+            viewports (was overlapping the presence label). */}
         {rel === "none" && (
           <PillButton variant="solid" disabled={loading} onClick={function () { sendFriendRequest(u); }}>
             {loading ? "…" : "Add"}
@@ -125,91 +125,90 @@ function PlayerCard({
             </PillButton>
           </>
         )}
-        {rel === "friends" && openChallenge && (
-          <PillButton
-            variant="ghost"
-            onClick={function () { openChallenge(u, "profile"); }}
-            iconLeft={NAV_ICONS.rematch(13)}>
-            Challenge
-          </PillButton>
-        )}
 
-        {rel === "friends" ? (
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={function (e) { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-              aria-label="More actions"
-              title="More actions"
-              style={{
-                width:        30,
-                height:       30,
-                padding:      0,
-                borderRadius: "50%",
-                border:       "1px solid " + ED_TOK.line,
-                background:   "transparent",
-                color:        ED_TOK.muted,
-                fontSize:     16,
-                fontWeight:   700,
-                lineHeight:   1,
-                cursor:       "pointer",
-              }}>⋯</button>
-            {menuOpen && (
-              <>
-                <div
-                  onClick={function () { setMenuOpen(false); }}
-                  style={{ position: "fixed", inset: 0, zIndex: 50 }}/>
-                <div style={{
-                  position:     "absolute",
-                  right:        0,
-                  top:          "calc(100% + 6px)",
-                  minWidth:     160,
-                  background:   ED_TOK.bg,
-                  border:       "1px solid " + ED_TOK.line,
-                  borderRadius: 12,
-                  boxShadow:    "0 12px 28px rgba(42, 32, 26, 0.18)",
-                  overflow:     "hidden",
-                  zIndex:       60,
-                }}>
-                  <button disabled={loading}
-                    onClick={function () {
-                      setMenuOpen(false);
-                      if (window.confirm("Unfriend " + u.name + "?")) unfriend(u);
-                    }}
-                    style={menuItemStyle(ED_TOK.ink)}>
-                    Unfriend
-                  </button>
-                  <div style={{ height: 1, background: ED_TOK.line }}/>
-                  <button disabled={loading}
-                    onClick={function () {
-                      setMenuOpen(false);
-                      if (window.confirm("Block " + u.name + "? They won't be able to message you and will disappear from your map and discovery surfaces.")) blockUser(u);
-                    }}
-                    style={menuItemStyle(ED_TOK.loss)}>
-                    Block
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
+        {/* Overflow menu — Message + Challenge live here for any
+            relation (so the row stays compact). Friends also get
+            Unfriend + Block; non-friends get Block only. */}
+        <div style={{ position: "relative" }}>
           <button
-            onClick={function () { blockUser(u); }}
+            onClick={function (e) { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+            aria-label="More actions"
+            title="More actions"
             style={{
-              padding:       "5px 10px",
-              borderRadius:  999,
-              border:        "1px solid " + ED_TOK.line,
-              background:    "transparent",
-              color:         ED_TOK.muted,
-              fontFamily:    ED_TOK.mono,
-              fontSize:      9.5,
-              fontWeight:    700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              cursor:        "pointer",
-            }}>
-            Block
-          </button>
-        )}
+              width:        32,
+              height:       32,
+              padding:      0,
+              borderRadius: "50%",
+              border:       "1px solid " + ED_TOK.line,
+              background:   "transparent",
+              color:        ED_TOK.muted,
+              fontSize:     16,
+              fontWeight:   700,
+              lineHeight:   1,
+              cursor:       "pointer",
+            }}>⋯</button>
+          {menuOpen && (
+            <>
+              <div
+                onClick={function () { setMenuOpen(false); }}
+                style={{ position: "fixed", inset: 0, zIndex: 50 }}/>
+              <div style={{
+                position:     "absolute",
+                right:        0,
+                top:          "calc(100% + 6px)",
+                minWidth:     180,
+                background:   ED_TOK.bg,
+                border:       "1px solid " + ED_TOK.line,
+                borderRadius: 12,
+                boxShadow:    "0 12px 28px rgba(42, 32, 26, 0.18)",
+                overflow:     "hidden",
+                zIndex:       60,
+              }}>
+                {onMessage && (
+                  <>
+                    <button disabled={loading}
+                      onClick={function () { setMenuOpen(false); onMessage(u); }}
+                      style={menuItemStyle(ED_TOK.ink)}>
+                      Message
+                    </button>
+                    <div style={{ height: 1, background: ED_TOK.line }}/>
+                  </>
+                )}
+                {openChallenge && (
+                  <>
+                    <button disabled={loading}
+                      onClick={function () { setMenuOpen(false); openChallenge(u, "profile"); }}
+                      style={menuItemStyle(ED_TOK.ink)}>
+                      Challenge
+                    </button>
+                    <div style={{ height: 1, background: ED_TOK.line }}/>
+                  </>
+                )}
+                {rel === "friends" && (
+                  <>
+                    <button disabled={loading}
+                      onClick={function () {
+                        setMenuOpen(false);
+                        if (window.confirm("Unfriend " + u.name + "?")) unfriend(u);
+                      }}
+                      style={menuItemStyle(ED_TOK.ink)}>
+                      Unfriend
+                    </button>
+                    <div style={{ height: 1, background: ED_TOK.line }}/>
+                  </>
+                )}
+                <button disabled={loading}
+                  onClick={function () {
+                    setMenuOpen(false);
+                    if (window.confirm("Block " + u.name + "? They won't be able to message you and will disappear from your map and discovery surfaces.")) blockUser(u);
+                  }}
+                  style={menuItemStyle(ED_TOK.loss)}>
+                  Block
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -475,24 +474,26 @@ export default function PeopleTab({
           this surface ("Friends"), and the redundant count was
           competing with the search bar for the eye. */}
 
-      {/* Sticky chrome — search + sub-tabs stay pinned to the top of
-          the viewport (just under the global top mob nav) while the
-          list below scrolls. Single sticky wrapper so search and
-          sub-tabs move as one block; background paints over scrolling
-          content so nothing bleeds through.
-          Hidden when a Messages thread is open on mobile — the
-          conversation header is then the page's actual top, so the
-          search + sub-tabs would just be redundant chrome above it. */}
+      {/* Page chrome — search + sub-tabs sit at the top of the
+          flex column. NOT position:sticky any more: the height-
+          locked outer wrapper already keeps the chrome in its
+          natural top slot via the flex column flow. position:
+          sticky inside an overflow:hidden ancestor was cascading
+          oddly on iOS Safari — sometimes sticking the chrome to
+          the top of the conv-list-pane's scroll context and
+          overlapping the first row.
+          flexShrink:0 + zIndex:20 retained:
+            - flexShrink:0 so the chrome doesn't get squeezed when
+              the inner flex:1 child wants more space
+            - zIndex:20 so any portaled / fixed descendant of a row
+              (avatar stack with z-index 10) can't bleed over the
+              chrome during scroll
+          Hidden entirely when a Messages thread is open — the
+          conversation header is then the page's actual top. */}
       {!threadActive && (
       <div style={{
-        position:   "sticky",
-        top:        "var(--cs-nav-h, 0px)",
-        // z-index needs to clear AvatarStack (which sets zIndex:10-idx
-        // on stacked group avatars in the conv list rows below) so a
-        // group conv's avatar pile doesn't bleed through the sticky
-        // chrome when the list scrolls under it. 20 is comfortably
-        // above the 10-cap on AvatarStack and below the modal scrim
-        // tier (200+).
+        flexShrink: 0,
+        position:   "relative",
         zIndex:     20,
         background: ED_TOK.bg,
       }}>
