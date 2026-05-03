@@ -342,20 +342,11 @@ export default function LogMatchPage({
       return;
     }
 
-    // Belt-and-braces success toast. The MatchCelebration overlay
-    // also fires below, but the toast guarantees the user sees an
-    // explicit "logged" confirmation even if the celebration is
-    // dismissed before they read it (or never paints because of a
-    // mid-flight navigation). For pending-confirmation rows we
-    // surface that the opponent still needs to confirm, so the
-    // user knows it's not final yet.
-    if (toast) {
-      var resStatus = (res && res.status) || "confirmed";
-      var successMsg = resStatus === "pending_confirmation"
-        ? "Match logged · awaiting opponent confirmation"
-        : "Match logged";
-      toast(successMsg, "success");
-    }
+    // Removed: belt-and-braces "Match logged" toast that used to
+    // pop bottom-right alongside the celebration overlay. Per user
+    // feedback the celebration card already states the outcome
+    // (and the pending-confirmation case carries its own banner)
+    // — the toast was redundant noise on top of the moment.
 
     // Estimate the rating delta the viewer can expect once the
     // opponent confirms. Same Elo math the server uses

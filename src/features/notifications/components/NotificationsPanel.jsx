@@ -8,6 +8,7 @@ import { avColor } from "../../../lib/utils/avatar.js";
 import { track } from "../../../lib/analytics.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { formatSetScore } from "../../scoring/utils/tennisScoreValidation.js";
+import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 import {
   getNotifLabel,
   getThreadContextLabel,
@@ -80,7 +81,7 @@ function MatchScoreCard({ t, n, viewerId }) {
   // display green-for-win.
   var neutral = m.status === "disputed" || m.status === "pending_reconfirmation"
              || m.status === "voided"   || m.status === "expired";
-  var pillColor = neutral ? t.textTertiary : (won ? t.green : t.red);
+  var pillColor = neutral ? ED_TOK.muted : (won ? ED_TOK.win : ED_TOK.loss);
   var pillLabel = neutral
     ? (m.status === "voided"   ? "Voided"
       : m.status === "expired" ? "Expired"
@@ -91,8 +92,8 @@ function MatchScoreCard({ t, n, viewerId }) {
     <div style={{
       marginTop: 8,
       paddingTop: 8, paddingBottom: 8, paddingLeft: 10,
-      borderTop: "1px solid " + t.border,
-      borderBottom: "1px solid " + t.border,
+      borderTop: "1px solid " + ED_TOK.line,
+      borderBottom: "1px solid " + ED_TOK.line,
       borderLeft: "2px solid " + pillColor,
       display: "flex", alignItems: "center", gap: 10,
     }}>
@@ -105,12 +106,12 @@ function MatchScoreCard({ t, n, viewerId }) {
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         fontVariantNumeric: "tabular-nums",
-        fontSize: 13, fontWeight: 800, color: t.text,
+        fontSize: 13, fontWeight: 800, color: ED_TOK.ink,
         letterSpacing: "-0.1px",
         flex: 1, minWidth: 0, overflow: "hidden",
       }}>
         {viewerSets.length === 0 ? (
-          <span style={{ fontSize: 11, color: t.textTertiary, fontWeight: 500 }}>
+          <span style={{ fontSize: 11, color: ED_TOK.muted, fontWeight: 500 }}>
             No score recorded
           </span>
         ) : viewerSets.map(function (s, i) {
@@ -120,7 +121,7 @@ function MatchScoreCard({ t, n, viewerId }) {
           // depending on the set shape and any inner tiebreak.
           return (
             <span key={i} style={{
-              color: wonSet ? t.text : t.textTertiary,
+              color: wonSet ? ED_TOK.ink : ED_TOK.muted,
               fontWeight: wonSet ? 800 : 500,
             }}>
               {formatSetScore(s)}{i < viewerSets.length - 1 ? "," : ""}
@@ -133,7 +134,7 @@ function MatchScoreCard({ t, n, viewerId }) {
         <span style={{
           fontSize: 9, fontWeight: 800, letterSpacing: "0.12em",
           textTransform: "uppercase",
-          color: t.textTertiary, flexShrink: 0,
+          color: ED_TOK.muted, flexShrink: 0,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           maxWidth: 100,
           paddingRight: 10,
@@ -207,15 +208,15 @@ function DismissBtn({ t, onDismiss }) {
       title="Dismiss notification"
       aria-label="Dismiss notification"
       style={{
-        background: "none", border: "1px solid " + t.border,
-        color: t.textSecondary,
+        background: "none", border: "1px solid " + ED_TOK.line,
+        color: ED_TOK.ink2,
         padding: "4px", cursor: "pointer",
         borderRadius: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
         transition: "color 0.13s, border-color 0.13s, background 0.13s",
         flexShrink: 0, lineHeight: 0,
       }}
-      onMouseEnter={function (e) { e.currentTarget.style.color = t.red; e.currentTarget.style.borderColor = t.red; }}
-      onMouseLeave={function (e) { e.currentTarget.style.color = t.textSecondary; e.currentTarget.style.borderColor = t.border; }}
+      onMouseEnter={function (e) { e.currentTarget.style.color = ED_TOK.loss; e.currentTarget.style.borderColor = ED_TOK.loss; }}
+      onMouseLeave={function (e) { e.currentTarget.style.color = ED_TOK.ink2; e.currentTarget.style.borderColor = ED_TOK.line; }}
     >
       {NAV_ICONS.x(12)}
     </button>
@@ -231,8 +232,8 @@ function SectionLabel({ label, t }) {
     <div style={{
       padding: "12px 16px 8px",
       fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-      textTransform: "uppercase", color: t.textTertiary,
-      background: t.bg, borderBottom: "1px solid " + t.border,
+      textTransform: "uppercase", color: ED_TOK.muted,
+      background: ED_TOK.bg, borderBottom: "1px solid " + ED_TOK.line,
     }}>{label}</div>
   );
 }
@@ -397,10 +398,10 @@ function NotifRow({
         style={{
           display: "flex", alignItems: "flex-start", gap: 11,
           padding: "13px 14px 13px 13px",
-          borderBottom: "1px solid " + t.border,
+          borderBottom: "1px solid " + ED_TOK.line,
           borderLeft: "3px solid " + (isUnread ? accent : "transparent"),
           background: isUnread
-            ? (isAction ? accent + "0c" : t.accentSubtle)
+            ? (isAction ? accent + "0c" : "rgba(255,45,85,0.10)")
             : "transparent",
           cursor: "default",
           transform: "translateX(" + swipeX + "px)",
@@ -417,7 +418,7 @@ function NotifRow({
             <div style={{
               position: "absolute", bottom: -2, right: -2,
               width: 13, height: 13, borderRadius: "50%",
-              background: accent, border: "2px solid " + t.modalBg,
+              background: accent, border: "2px solid " + ED_TOK.bg,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 7, fontWeight: 900, color: "#fff",
             }}>!</div>
@@ -428,7 +429,7 @@ function NotifRow({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 13, lineHeight: 1.45,
-            color: isUnread ? t.text : t.textSecondary,
+            color: isUnread ? ED_TOK.ink : ED_TOK.ink2,
             fontWeight: isUnread ? 600 : 400,
           }}>
             {getNotifLabel(n)}
@@ -446,7 +447,7 @@ function NotifRow({
           {/* Message preview */}
           {n.type === "message" && n.metadata && n.metadata.preview && (
             <div style={{
-              fontSize: 12, color: t.textTertiary, marginTop: 3,
+              fontSize: 12, color: ED_TOK.muted, marginTop: 3,
               fontStyle: "italic", overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
@@ -454,7 +455,7 @@ function NotifRow({
             </div>
           )}
 
-          <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: ED_TOK.muted, marginTop: 4 }}>
             {notifTimeLabel(n.created_at)}
           </div>
 
@@ -464,21 +465,21 @@ function NotifRow({
               Opens ActionReviewDrawer which shows the match details and lets
               the recipient Confirm / Dispute / Mark "not my match" in one
               place — same flow as every other review-worthy notification. */}
-          {n.type === "match_tag" && !n.tag_status && primaryCta(t, t.accent, "Review →", function (e) {
+          {n.type === "match_tag" && !n.tag_status && primaryCta(t, ED_TOK.accent, "Review →", function (e) {
             if (!n.read) onRead(n.id);
             if (onReviewMatch) onReviewMatch(n);
           })}
           {n.type === "match_tag" && n.tag_status === "accepted" && (
             <div style={{
               fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-              textTransform: "uppercase", color: t.green,
+              textTransform: "uppercase", color: ED_TOK.win,
               marginTop: 6,
             }}>Confirmed</div>
           )}
           {n.type === "match_tag" && n.tag_status === "declined" && (
             <div style={{
               fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-              textTransform: "uppercase", color: t.textTertiary,
+              textTransform: "uppercase", color: ED_TOK.muted,
               marginTop: 6,
             }}>Declined</div>
           )}
@@ -491,7 +492,7 @@ function NotifRow({
                     onMouseDown={function (e) { e.stopPropagation(); onAcceptFriendRequest(n); }}
                     style={{
                       padding: "7px 14px", borderRadius: 6, border: "none",
-                      background: t.accent, color: "#fff",
+                      background: ED_TOK.accent, color: "#fff",
                       fontSize: 10, fontWeight: 800,
                       letterSpacing: "0.12em", textTransform: "uppercase",
                       cursor: "pointer", transition: "opacity 0.15s",
@@ -499,7 +500,7 @@ function NotifRow({
                     onMouseEnter={function (e) { e.currentTarget.style.opacity = "0.82"; }}
                     onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
                   >Accept</button>
-                : ctaButton(t, t.text, false, "View requests →", function () { navigate("/people/requests"); setShowNotifications(false); })
+                : ctaButton(t, ED_TOK.ink, false, "View requests →", function () { navigate("/people/requests"); setShowNotifications(false); })
               }
               {onDeclineFriendRequest && (
                 <button
@@ -508,8 +509,8 @@ function NotifRow({
                     padding: "0 0 2px 0",
                     background: "transparent",
                     border: "none",
-                    borderBottom: "1px solid " + t.textTertiary,
-                    color: t.textTertiary,
+                    borderBottom: "1px solid " + ED_TOK.muted,
+                    color: ED_TOK.muted,
                     fontSize: 10, fontWeight: 800,
                     letterSpacing: "0.12em", textTransform: "uppercase",
                     cursor: "pointer", transition: "opacity 0.15s",
@@ -523,24 +524,24 @@ function NotifRow({
 
           {/* message / message_request / group_added */}
           {(n.type === "message" || n.type === "message_request" || n.type === "message_request_accepted") && (
-            ctaButton(t, t.accent, false, "View message →", goMessages)
+            ctaButton(t, ED_TOK.accent, false, "View message →", goMessages)
           )}
           {n.type === "group_added" && (
-            ctaButton(t, t.accent, false, "Open group →", goMessages)
+            ctaButton(t, ED_TOK.accent, false, "Open group →", goMessages)
           )}
 
           {/* match reminder */}
-          {n.type === "match_reminder" && ctaButton(t, t.orange, true, "View in feed →", goFeed)}
+          {n.type === "match_reminder" && ctaButton(t, ED_TOK.loss, true, "View in feed →", goFeed)}
 
           {/* dispute / correction — opens in-context review drawer, no navigation */}
-          {(n.type === "match_disputed" || n.type === "match_correction_requested" || n.type === "match_counter_proposed") && primaryCta(t, t.orange, "Review →", function (e) {
+          {(n.type === "match_disputed" || n.type === "match_correction_requested" || n.type === "match_counter_proposed") && primaryCta(t, ED_TOK.loss, "Review →", function (e) {
             if (!n.read) onRead(n.id);
             if (onReviewMatch) onReviewMatch(n);
           })}
 
           {/* voided / demoted — soft CTA */}
           {(n.type === "match_voided" || n._demoted) && (
-            ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
+            ctaButton(t, ED_TOK.ink2, false, "View in feed →", goFeed)
           )}
 
           {/* match_confirmed: positive feedback + deep-link */}
@@ -548,47 +549,47 @@ function NotifRow({
             <>
               <div style={{
                 fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                textTransform: "uppercase", color: t.green,
+                textTransform: "uppercase", color: ED_TOK.win,
                 marginTop: 6,
               }}>Stats updated</div>
-              {ctaButton(t, t.green, true, "View in feed →", goFeed)}
+              {ctaButton(t, ED_TOK.win, true, "View in feed →", goFeed)}
             </>
           )}
 
           {/* match_expired / match_deleted — soft CTAs into feed */}
           {(n.type === "match_expired" || n.type === "match_deleted") && (
-            ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
+            ctaButton(t, ED_TOK.ink2, false, "View in feed →", goFeed)
           )}
 
           {/* Module 9.1.5 — informational heads-up. No action required.
               Soft "View in feed →" matching the match_voided/expired
               treatment so it doesn't shout for attention. */}
           {n.type === "casual_match_logged" && (
-            ctaButton(t, t.textSecondary, false, "View in feed →", goFeed)
+            ctaButton(t, ED_TOK.ink2, false, "View in feed →", goFeed)
           )}
 
           {/* like / comment — "View match" CTA, lands in feed */}
           {(n.type === "like" || n.type === "comment") && (
-            ctaButton(t, t.accent, true, "View match →", goFeed)
+            ctaButton(t, ED_TOK.accent, true, "View match →", goFeed)
           )}
 
           {/* request_accepted — route to the accepter's profile */}
           {n.type === "request_accepted" && n.from_user_id && (
-            ctaButton(t, t.accent, true, "View profile →", goProfile)
+            ctaButton(t, ED_TOK.accent, true, "View profile →", goProfile)
           )}
 
           {/* Module 4: challenge notifications all land in the Challenges
               sub-tab where the right action lives. challenge_received is
               "action" so it gets primary styling. */}
-          {n.type === "challenge_received" && primaryCta(t, t.accent, "Open challenge →", function (e) {
+          {n.type === "challenge_received" && primaryCta(t, ED_TOK.accent, "Open challenge →", function (e) {
             if (!n.read) onRead(n.id);
             goChallenges(e);
           })}
           {n.type === "challenge_accepted" && (
-            ctaButton(t, t.green, true, "Log result →", goChallenges)
+            ctaButton(t, ED_TOK.win, true, "Log result →", goChallenges)
           )}
           {(n.type === "challenge_declined" || n.type === "challenge_expired") && (
-            ctaButton(t, t.textSecondary, false, "View challenges →", goChallenges)
+            ctaButton(t, ED_TOK.ink2, false, "View challenges →", goChallenges)
           )}
 
           {/* Module 7: league notifications deep-link to People → Leagues
@@ -597,10 +598,10 @@ function NotifRow({
               since the inline Accept button exists inside the leagues panel
               already and the nag value is lower than an unresolved dispute. */}
           {n.type === "league_invite" && (
-            ctaButton(t, t.accent, true, "View invite →", goLeagues)
+            ctaButton(t, ED_TOK.accent, true, "View invite →", goLeagues)
           )}
           {n.type === "league_joined" && (
-            ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
+            ctaButton(t, ED_TOK.ink2, false, "View league →", goLeagues)
           )}
 
           {/* Module 12 Slice 2 — owner lifecycle transitions. league_voided
@@ -609,7 +610,7 @@ function NotifRow({
               dead-end. The other three deep-link to the (now Past)
               league for closure / standings review. */}
           {(n.type === "league_completed" || n.type === "league_archived" || n.type === "league_cancelled") && (
-            ctaButton(t, t.textSecondary, false, "View league →", goLeagues)
+            ctaButton(t, ED_TOK.ink2, false, "View league →", goLeagues)
           )}
 
           {/* Tindis pact CTAs retired — feature removed pre-launch. */}
@@ -688,10 +689,10 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
         onTouchEnd={onTouchEnd}
         style={{
           padding: "13px 14px 0 13px",
-          borderBottom: context.length ? "none" : "1px solid " + t.border,
+          borderBottom: context.length ? "none" : "1px solid " + ED_TOK.line,
           borderLeft: "3px solid " + (isUnread ? accent : "transparent"),
           background: isUnread
-            ? (isAction ? accent + "0c" : t.accentSubtle)
+            ? (isAction ? accent + "0c" : "rgba(255,45,85,0.10)")
             : "transparent",
           transform: "translateX(" + swipeX + "px)",
           transition: isSwiping ? "none" : "transform 0.25s cubic-bezier(0.32,0.72,0,1), background 0.15s",
@@ -706,7 +707,7 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
               <div style={{
                 position: "absolute", bottom: -2, right: -2,
                 width: 13, height: 13, borderRadius: "50%",
-                background: accent, border: "2px solid " + t.modalBg,
+                background: accent, border: "2px solid " + ED_TOK.bg,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 7, fontWeight: 900, color: "#fff",
               }}>!</div>
@@ -715,12 +716,12 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
               fontSize: 13, lineHeight: 1.45,
-              color: isUnread ? t.text : t.textSecondary,
+              color: isUnread ? ED_TOK.ink : ED_TOK.ink2,
               fontWeight: isUnread ? 600 : 400,
             }}>
               {getNotifLabel(primary)}
             </div>
-            <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 4, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: ED_TOK.muted, marginTop: 4, marginBottom: 10 }}>
               {notifTimeLabel(primary.created_at)}
             </div>
             {primary.match && (
@@ -766,7 +767,7 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
             marginLeft: 45, // align with text column
             marginBottom: 10,
             paddingLeft: 10,
-            borderLeft: "1px solid " + t.border,
+            borderLeft: "1px solid " + ED_TOK.line,
           }}>
             {context.slice(0, 3).map(function (cn, i) {
               return (
@@ -776,10 +777,10 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
                 }}>
                   <div style={{
                     width: 5, height: 5, borderRadius: "50%",
-                    background: t.textTertiary, flexShrink: 0,
+                    background: ED_TOK.muted, flexShrink: 0,
                     marginTop: 2,
                   }} />
-                  <span style={{ fontSize: 11, color: t.textTertiary, lineHeight: 1.4 }}>
+                  <span style={{ fontSize: 11, color: ED_TOK.muted, lineHeight: 1.4 }}>
                     {getThreadContextLabel(cn)}
                     <span style={{ marginLeft: 5, opacity: 0.65 }}>
                       · {notifTimeLabel(cn.created_at)}
@@ -794,7 +795,7 @@ function ThreadRow({ item, t, onRead, onDismiss, onReviewMatch, panelProps }) {
 
       {/* Separator after thread */}
       {context.length > 0 && (
-        <div style={{ borderBottom: "1px solid " + t.border }} />
+        <div style={{ borderBottom: "1px solid " + ED_TOK.line }} />
       )}
     </div>
   );
@@ -832,7 +833,7 @@ function LikeGroupRow({ item, t, onDismiss }) {
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
         padding: "12px 14px 12px 16px",
-        borderBottom: "1px solid " + t.border,
+        borderBottom: "1px solid " + ED_TOK.line,
         borderLeft: "3px solid transparent",
         background: "transparent",
       }}>
@@ -844,10 +845,10 @@ function LikeGroupRow({ item, t, onDismiss }) {
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 13, color: ED_TOK.ink2, lineHeight: 1.4 }}>
             {label}
           </div>
-          <div style={{ fontSize: 11, color: t.textTertiary, marginTop: 3 }}>
+          <div style={{ fontSize: 11, color: ED_TOK.muted, marginTop: 3 }}>
             {notifTimeLabel(first.created_at)}
           </div>
         </div>
@@ -1000,12 +1001,12 @@ export default function NotificationsPanel({
         {!pageMode && (
           <div style={{
             padding: "18px 16px 14px",
-            borderBottom: "1px solid " + t.border,
+            borderBottom: "1px solid " + ED_TOK.line,
             display: "flex", justifyContent: "space-between", alignItems: "baseline",
             flexShrink: 0,
           }}>
             <span style={{
-              fontSize: 18, fontWeight: 800, color: t.text,
+              fontSize: 18, fontWeight: 800, color: ED_TOK.ink,
               letterSpacing: "-0.4px", lineHeight: 1,
             }}>
               Notifications
@@ -1015,9 +1016,9 @@ export default function NotificationsPanel({
                 onClick={_markAllRead}
                 style={{
                   background: "none", border: "none",
-                  color: t.text, fontSize: 10, fontWeight: 800,
+                  color: ED_TOK.ink, fontSize: 10, fontWeight: 800,
                   letterSpacing: "0.12em", textTransform: "uppercase",
-                  borderBottom: "1px solid " + t.text,
+                  borderBottom: "1px solid " + ED_TOK.ink,
                   cursor: "pointer", padding: "0 0 2px 0",
                   transition: "opacity 0.13s",
                 }}
@@ -1047,14 +1048,14 @@ export default function NotificationsPanel({
                 fontFamily: pageMode ? "'Space Grotesk', 'Sora', ui-sans-serif" : undefined,
                 fontSize: pageMode ? 22 : 18,
                 fontWeight: pageMode ? 500 : 800,
-                color: t.text,
+                color: ED_TOK.ink,
                 letterSpacing: pageMode ? "-0.02em" : "-0.4px",
                 lineHeight: 1.15,
                 textAlign: "center",
                 marginTop: 4,
               }}>You're all caught up.</div>
               <div style={{
-                fontSize: 12.5, color: t.textSecondary,
+                fontSize: 12.5, color: ED_TOK.ink2,
                 textAlign: "center", maxWidth: 260, lineHeight: 1.55,
                 letterSpacing: "-0.05px",
               }}>
@@ -1114,8 +1115,8 @@ export default function NotificationsPanel({
         className="cs-notif-panel"
         onClick={function (e) { e.stopPropagation(); }}
         style={{
-          background: t.modalBg,
-          border: "1px solid " + t.border,
+          background: ED_TOK.bg,
+          border: "1px solid " + ED_TOK.line,
           boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
           display: "flex",
           flexDirection: "column",
