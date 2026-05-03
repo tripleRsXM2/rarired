@@ -639,14 +639,16 @@ export default function ActionReviewDrawer({
           {/* ── Actions — LogMatch primaryBtn vocabulary.
                  Primary (Accept): ink-on-cream pill, mono uppercase,
                  999 radius. Secondary (Dispute / Counter, Not my match):
-                 hairline-outlined pills, same shape. */}
+                 hairline-outlined pills, same shape.
+                 No top rule — the FieldRow stack above already ends with
+                 its own bottom border, so an extra divider here was
+                 reading as a stutter line above the Confirm pill. */}
           <div style={{
             display:        "flex",
             flexDirection:  "column",
             gap:            10,
             marginTop:      8,
             paddingTop:     20,
-            borderTop:      "1px solid " + ED_TOK.line,
           }}>
 
             {/* Primary: Accept / Confirm */}
