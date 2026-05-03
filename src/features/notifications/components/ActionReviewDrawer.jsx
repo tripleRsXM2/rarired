@@ -148,12 +148,14 @@ function FieldRow({ label, value, changed }) {
 }
 
 // Editorial hairline-strip section — used for LOGGED BY, REASON,
-// AUTO-VOID, ERROR. Mono kicker + body, hairline above.
-function HairlineStrip({ eyebrow, eyebrowColor, children, marginBottom }) {
+// AUTO-VOID, ERROR. Mono kicker + body, hairline above by default.
+// noTopRule skips the top hairline (used when the strip immediately
+// follows another visual block that already terminates the section).
+function HairlineStrip({ eyebrow, eyebrowColor, children, marginBottom, noTopRule }) {
   return (
     <div style={{
-      borderTop:    "1px solid " + ED_TOK.line,
-      paddingTop:   14,
+      borderTop:    noTopRule ? "none" : "1px solid " + ED_TOK.line,
+      paddingTop:   noTopRule ? 0 : 14,
       paddingBottom:14,
       marginBottom: marginBottom == null ? 16 : marginBottom,
     }}>
@@ -381,18 +383,16 @@ export default function ActionReviewDrawer({
             </button>
           </div>
 
-          {/* ── Match context — hairline strip with avatar + tabular result.
-                 Same hairline divider language as CreateLeagueModal section
-                 breaks. */}
+          {/* ── Match context — avatar + tabular result. Sits without
+                 its own top/bottom rules; the section below opens with
+                 a single hairline divider so the strip floats cleanly. */}
           <div style={{
             display:      "flex",
             alignItems:   "center",
             gap:          14,
-            paddingTop:   16,
-            paddingBottom:16,
-            borderTop:    "1px solid " + ED_TOK.line,
-            borderBottom: "1px solid " + ED_TOK.line,
-            marginBottom: 22,
+            paddingTop:   4,
+            paddingBottom:18,
+            marginBottom: 8,
           }}>
             <Avatar name={fromName} size={44} />
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -465,9 +465,12 @@ export default function ActionReviewDrawer({
             </div>
           </div>
 
-          {/* ── For match_tag: show the logged match details (original only). */}
+          {/* ── For match_tag: show the logged match details (original only).
+                 noTopRule: the vs strip above already provides visual
+                 separation; a fresh top hairline here was reading as a
+                 stutter rule under the vs row. */}
           {isMatchTag && (
-            <HairlineStrip eyebrow={"Logged by " + fromName}>
+            <HairlineStrip eyebrow={"Logged by " + fromName} noTopRule>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <FieldRow label="Result" value={origResult + " (" + fromName + "'s view)"} changed={false} />
                 {origSets && origSets !== "—" && (
