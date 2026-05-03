@@ -61,23 +61,33 @@ function PlayerCard({
       <div
         onClick={clickable ? goToProfile : undefined}
         style={{ flex: 1, minWidth: 0, cursor: clickable ? "pointer" : "default" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <div style={{
-            fontSize:      14.5,
-            fontWeight:    600,
-            color:         ED_TOK.ink,
-            letterSpacing: "-0.005em",
-            overflow:      "hidden",
-            textOverflow:  "ellipsis",
-            whiteSpace:    "nowrap",
-          }}>
-            {u.name}
-          </div>
-          <PresenceLabel profile={u} t={t} style={{ flexShrink: 0 }}/>
+        {/* Name — single line with ellipsis truncation. */}
+        <div style={{
+          fontSize:      14.5,
+          fontWeight:    600,
+          color:         ED_TOK.ink,
+          letterSpacing: "-0.005em",
+          overflow:      "hidden",
+          textOverflow:  "ellipsis",
+          whiteSpace:    "nowrap",
+        }}>
+          {u.name}
         </div>
-        {/* Stats stripped per design ask — the row now shows name +
-            presence only. Suburb / skill / wins / rating points all
-            still live on the friend's full profile (tap to open). */}
+        {/* Presence label on its OWN sub-line so a long
+            "Last seen yesterday at 10:34 PM" string can't push the
+            action buttons (Message / Challenge / ⋯) sideways or
+            overlap them. Pattern matches WhatsApp / Messenger
+            inbox rows. Truncates with ellipsis if the line is
+            still wider than the column. */}
+        <div style={{
+          marginTop:     3,
+          minWidth:      0,
+          overflow:      "hidden",
+          textOverflow:  "ellipsis",
+          whiteSpace:    "nowrap",
+        }}>
+          <PresenceLabel profile={u} t={t}/>
+        </div>
       </div>
 
       <div style={{
