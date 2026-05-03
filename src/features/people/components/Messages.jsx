@@ -417,16 +417,59 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   }
 
   // ── Image attachment ─────────────────────────────────────────────────────
+  //
+  // The file input is now created on-demand instead of mounted as a hidden
+  // <input type="file"> next to the composer. Why: iOS Safari's "form
+  // navigation bar" (the white pill above the keyboard with up/down arrows
+  // and Done) appears whenever there are multiple form-control elements
+  // on the page — even hidden ones. With a permanently-mounted file
+  // input, the arrows had a navigation target, so iOS rendered the bar
+  // even though the focused element was our contentEditable composer.
+  // Spawning the input on click and removing it on change/cancel keeps
+  // the page input-free during chat composition, so iOS shows only the
+  // QuickType suggestions strip — the integrated Strava feel.
 
   function pickImageFile() {
     setUploadError(null);
-    if (fileInputRef.current) fileInputRef.current.click();
+    if (typeof document === "undefined") return;
+    // If a previous picker is still in flight, ignore — the dialog is
+    // single-instance and we don't want to leak two inputs into the DOM.
+    if (fileInputRef.current) return;
+    var el = document.createElement("input");
+    el.type = "file";
+    el.accept = "image/png,image/jpeg,image/webp,image/gif";
+    el.style.position = "fixed";
+    el.style.left     = "-9999px";
+    el.style.top      = "-9999px";
+    el.style.opacity  = "0";
+    el.tabIndex       = -1;
+    fileInputRef.current = el;
+    function cleanup() {
+      try { document.body.removeChild(el); } catch (_) {}
+      fileInputRef.current = null;
+    }
+    el.addEventListener("change", function (e) {
+      onImageFilePicked(e);
+      cleanup();
+    });
+    // Picker cancellation doesn't fire a reliable event in Safari. Use a
+    // window focus listener as a heuristic — when the picker closes the
+    // tab regains focus. Wait a tick so we don't catch the same focus
+    // that triggered the click.
+    setTimeout(function () {
+      window.addEventListener("focus", function onFocus() {
+        window.removeEventListener("focus", onFocus);
+        // Defer one more tick so the change handler (if a file was
+        // picked) gets the chance to run cleanup first.
+        setTimeout(function () { if (fileInputRef.current === el) cleanup(); }, 100);
+      }, { once: true });
+    }, 0);
+    document.body.appendChild(el);
+    el.click();
   }
 
   async function onImageFilePicked(e) {
     var file = e.target.files && e.target.files[0];
-    // Reset so selecting the same file again re-fires onChange.
-    e.target.value = "";
     if (!file) return;
     setUploading(true);
     setUploadError(null);
@@ -1574,14 +1617,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         </div>
       )}
 
-      {/* Hidden file input driven by the paperclip button. */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        style={{ display: "none" }}
-        onChange={onImageFilePicked}
-      />
+      {/* The file input is created on-demand inside pickImageFile() —
+          NOT kept in the DOM permanently. See the comment block on
+          pickImageFile() for why (iOS Safari form-nav bar). */}
 
       {/* Input */}
       {(!isPending || iAmSender) && (
@@ -1733,6 +1771,13 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               caretColor:             ED_TOK.accent,
               WebkitTapHighlightColor:"transparent",
               WebkitAppearance:       "none",
+              // -webkit-user-modify: read-write-plaintext-only —
+              // tells iOS Safari this is a plaintext-only editor.
+              // Some iOS versions skip the form navigation bar
+              // (white pill above the keyboard) for plaintext
+              // editors specifically. Belt-and-braces with the
+              // lazy-mounted file input — that's the primary fix.
+              WebkitUserModify:       "read-write-plaintext-only",
               whiteSpace:             "pre-wrap",
               wordBreak:              "break-word",
               cursor:                 "text",
