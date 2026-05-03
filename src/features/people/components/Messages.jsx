@@ -758,20 +758,22 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   return (
     <div className="cs-dm-root" style={{
       display: "flex",
-      // Fill the viewport minus the global top mob nav and bottom
-      // tab bar. The legacy "- 140px" reserved an oversized gap for
-      // the old input bar; the new editorial bar is ~42px and sits
-      // INSIDE this root, so the extra subtraction left a visible
-      // dead band below the bar. Letting the root span the full
-      // remaining viewport pins the input bar to the actual bottom
-      // edge above the tab nav.
-      height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
-      minHeight: 420,
+      // Flex-aware sizing — the parent (PeopleTab → inner wrapper)
+      // is now a height-locked flex column, so cs-dm-root grows to
+      // fill the remaining space inside that column. flex:1 +
+      // minHeight:0 lets it shrink as needed (so child overflow
+      // scrolls internally instead of pushing the parent taller),
+      // and the safety net `height: 100%` keeps the legacy callers
+      // (anywhere that mounts Messages outside a flex column) at
+      // their old behaviour by falling back to "fill parent".
+      flex:       1,
+      minHeight:  0,
+      height:     "100%",
       // Clip overflow so any layout slip inside (messages list flex
       // sizing, content taller than container, etc.) can't push the
       // input footer past the viewport bottom. The messages list owns
       // its own internal overflow:auto; nothing else should escape.
-      overflow: "hidden",
+      overflow:   "hidden",
     }}>
       {/* ── List pane ─────────────────────────────────────────────────── */}
       {/*    Desktop: fixed to the LEFT EDGE of the main content area
@@ -1018,8 +1020,16 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         marginBottom: 4,
         background:   ED_TOK.bg,
         borderBottom: "1px solid " + ED_TOK.line,
+        // Sticky at viewport top (cs-mob-nav is collapsed during the
+        // thread takeover, so the global --cs-nav-h is just the
+        // safe-area-inset-top — already baked into this element's
+        // paddingTop). top:0 + flexShrink:0 anchors the chrome
+        // permanently at the top of the thread column; messages
+        // scroll under it via the messages list's internal
+        // overflow:auto.
         position:     "sticky",
-        top:          "var(--cs-nav-h, 0px)",
+        top:          0,
+        flexShrink:   0,
         zIndex:       3,
       }}>
         <button

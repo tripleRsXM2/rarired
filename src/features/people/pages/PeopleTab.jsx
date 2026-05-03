@@ -441,26 +441,40 @@ export default function PeopleTab({
     if (r && r.error && toast) toast(r.error, "error");
   }
 
+  // Whether the Messages component owns the body of the page (conv
+  // list view OR an open thread). On those routes the layout is a
+  // height-locked flex column: sticky chrome at top (search + sub
+  // tabs when no thread, hidden during thread), Messages fills the
+  // rest with its own internal scrolling. Locking height + overflow
+  // here is what makes "list shorter than viewport doesn't scroll"
+  // and "long list scrolls inside the list pane only" both work.
+  var messagesView = peopleTab === "messages" && !!dms;
+
   return (
     <div style={{
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
-      // minHeight = available viewport minus the global top mob nav
-      // AND the bottom tab bar. Hardcoded "100dvh - 64px" was wrong:
-      // on a notched iPhone the actual top nav is ~99px (52 + safe-
-      // area-inset-top) and the tab bar is ~78px, so the wrapper was
-      // sized 113px taller than the available space. Combined with
-      // the cs-mob-nav above it, total page height exceeded 100dvh
-      // by ~35px, forcing the page to scroll even when content fit.
-      // Using --cs-nav-h + --cs-tab-h keeps the wrapper exactly the
-      // size of the available viewport — no scroll on short lists.
-      //
-      // When the chat thread takes over (threadActive), drop the
-      // minHeight + paddingBottom entirely — cs-dm-root sizes itself
-      // and the input bar handles env(safe-area-inset-bottom).
-      minHeight:     threadActive ? undefined : "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
-      paddingBottom: threadActive ? 0 : 96,
+      // Two layout modes:
+      //   - Messages view (conv list or thread): height-LOCKED flex
+      //     column, overflow:hidden. Internal scroll lives inside
+      //     the Messages component (list pane / thread). Document
+      //     never scrolls.
+      //   - Other tabs (Friends, Requests, Discover, Blocked):
+      //     content-sized with a minHeight floor matching the
+      //     available viewport so short lists don't force scroll
+      //     but long lists still scroll the document naturally.
+      ...(messagesView
+        ? {
+            height:        "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
+            overflow:      "hidden",
+            display:       "flex",
+            flexDirection: "column",
+          }
+        : {
+            minHeight:     "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
+            paddingBottom: 96,
+          }),
     }}>
       {/* Hero block removed — the global top mob nav already labels
           this surface ("Friends"), and the redundant count was
@@ -710,7 +724,19 @@ export default function PeopleTab({
       )}{/* /sticky chrome wrapper (search + sub-tabs) */}
 
       <div
-        style={peopleTab === "messages" && dms ? { padding: 0 } : { padding: "16px 22px 16px" }}>
+        style={peopleTab === "messages" && dms ? {
+          // Messages view body — flex item that takes remaining
+          // space inside the height-locked outer flex column. Its
+          // child (Messages → cs-dm-root) flexes to fill via flex:1
+          // / minHeight:0; overflow:hidden contains any layout slip
+          // so the document layer can never scroll.
+          padding:       0,
+          flex:          1,
+          minHeight:     0,
+          overflow:      "hidden",
+          display:       "flex",
+          flexDirection: "column",
+        } : { padding: "16px 22px 16px" }}>
         {/* Messages — owns its own layout. */}
         {peopleTab === "messages" && dms && (
           <Messages t={t} authUser={authUser} dms={dms} openProfile={openProfile}/>
