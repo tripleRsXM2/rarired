@@ -1,12 +1,15 @@
 // src/features/leagues/components/CreateLeagueModal.jsx
 //
-// Centred dialog (matches the app's ScoreModal / DisputeModal chrome)
-// for creating a new private league. Deliberately lean: one screen, no
-// wizards. Invites happen after creation from the league detail view.
+// Centred dialog for creating a new private league. Restyled to the
+// Editorial Tennis palette so it sits in the same realm as LogMatch /
+// MatchComposer / ProfileScreen — cream paper, espresso ink, mono
+// uppercase microlabels, hairline section dividers, ink-on-cream
+// primary CTA. Single screen, no wizards. Invites happen after
+// creation from the league detail view.
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { inputStyle } from "../../../lib/theme.js";
+import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 
 var MATCH_FORMATS = [
   { id: "best_of_3", label: "Best of 3" },
@@ -17,31 +20,147 @@ var TIEBREAK_FORMATS = [
   { id: "super_tiebreak_final",  label: "Super tiebreak final set" },
 ];
 var MAX_MATCHES_OPTIONS = [
+  // Short labels — three pills must fit on a 375px viewport, and
+  // breaking words mid-character (Unlimite-d, opponen-t) reads worse
+  // than a snappy abbreviation.
   { id: null, label: "Unlimited" },
-  { id: 1,    label: "1 per opponent" },
-  { id: 2,    label: "2 per opponent" },
+  { id: 1,    label: "1 per opp." },
+  { id: 2,    label: "2 per opp." },
 ];
 
-export default function CreateLeagueModal({ t, onClose, createLeague, onCreated, toast }) {
-  var iStyle = inputStyle(t);
+// ── Editorial atoms — local to this modal ───────────────────────────
 
-  var [name, setName]                                       = useState("");
-  var [description, setDescription]                         = useState("");
-  var [startDate, setStartDate]                             = useState("");
-  var [endDate, setEndDate]                                 = useState("");
-  var [maxMembers, setMaxMembers]                           = useState("");
+// Uppercase mono section eyebrow. Same letter-spacing / weight as the
+// FieldGroup label in LogMatchPage so the two surfaces read as part of
+// the same family.
+function Microlabel({ children, style }) {
+  return (
+    <div style={Object.assign({
+      fontFamily:    ED_TOK.mono,
+      fontSize:      10.5,
+      fontWeight:    700,
+      letterSpacing: "0.16em",
+      textTransform: "uppercase",
+      color:         ED_TOK.muted,
+      marginBottom:  10,
+    }, style || {})}>
+      {children}
+    </div>
+  );
+}
+
+// Editorial line input — transparent body, hairline bottom border,
+// display font for the value so each entry feels like a typeset card,
+// not a form widget. Mirrors LogMatchPage's FieldInput.
+function LineInput(props) {
+  var size = props.size || "lg";
+  var fontSize = size === "sm" ? 16 : 22;
+  var rest = Object.assign({}, props);
+  delete rest.size;
+  return (
+    <input
+      {...rest}
+      style={Object.assign({
+        background:    "transparent",
+        border:        "none",
+        borderBottom:  "1.5px solid " + ED_TOK.lineStrong,
+        padding:       "10px 0",
+        fontFamily:    size === "sm" ? ED_TOK.sans : ED_TOK.display,
+        fontSize:      fontSize,
+        fontWeight:    500,
+        letterSpacing: size === "sm" ? 0 : "-0.02em",
+        color:         ED_TOK.ink,
+        outline:       "none",
+        width:         "100%",
+      }, props.style || {})}
+      onFocus={function (e) { e.target.style.borderBottomColor = ED_TOK.ink; }}
+      onBlur={function (e)  { e.target.style.borderBottomColor = ED_TOK.lineStrong; }}
+    />
+  );
+}
+
+// Segmented option pill — same vocabulary as the LogMatchPage chips:
+// rounded 999, ink fill when active, hairline outline when inactive,
+// mono uppercase microlabel beneath an optional larger label.
+function OptionPill({ on, label, hint, onClick, flex }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex:           flex == null ? 1 : flex,
+        padding:        hint ? "12px 14px" : "13px 14px",
+        borderRadius:   999,
+        border:         "1px solid " + (on ? ED_TOK.ink : ED_TOK.lineStrong),
+        background:     on ? ED_TOK.ink : "transparent",
+        color:          on ? ED_TOK.bg  : ED_TOK.ink,
+        cursor:         "pointer",
+        textAlign:      "center",
+        transition:     "background 140ms ease, color 140ms ease, border-color 140ms ease",
+        display:        "flex",
+        flexDirection:  "column",
+        alignItems:     "center",
+        justifyContent: "center",
+        gap:            hint ? 3 : 0,
+        minWidth:       0,
+      }}>
+      <span style={{
+        fontFamily:    ED_TOK.sans,
+        fontSize:      13,
+        fontWeight:    600,
+        letterSpacing: "-0.005em",
+        // Allow multi-word labels (e.g. "Standard tiebreak") to wrap
+        // onto a second line at word boundaries. overflowWrap (not
+        // wordBreak:break-word) keeps single words intact — we don't
+        // want "Unlimited" rendering as "Unlimite-d".
+        whiteSpace:    "normal",
+        overflowWrap:  "normal",
+        lineHeight:    1.2,
+        textAlign:     "center",
+        maxWidth:      "100%",
+      }}>{label}</span>
+      {hint && (
+        <span style={{
+          fontFamily:    ED_TOK.mono,
+          fontSize:      9.5,
+          fontWeight:    600,
+          letterSpacing: "0.10em",
+          textTransform: "uppercase",
+          color:         on ? "rgba(240,233,218,0.7)" : ED_TOK.muted,
+        }}>{hint}</span>
+      )}
+    </button>
+  );
+}
+
+function HairlineDivider() {
+  return <div style={{ height: 1, background: ED_TOK.line, margin: "22px 0" }}/>;
+}
+
+// ── Modal body ──────────────────────────────────────────────────────
+
+export default function CreateLeagueModal({ t, onClose, createLeague, onCreated, toast }) {
+  // t is still threaded in for any legacy callers, but the visuals are
+  // owned by ED_TOK now — the editorial palette is the source of truth.
+  void t;
+
+  var [name, setName]                                   = useState("");
+  var [description, setDescription]                     = useState("");
+  var [startDate, setStartDate]                         = useState("");
+  var [endDate, setEndDate]                             = useState("");
+  var [maxMembers, setMaxMembers]                       = useState("");
   // Module 7.5: leagues now have a mode — 'ranked' (Elo-bearing matches)
   // or 'casual' (per-league standings only, no global Elo). The
   // validate_match_league trigger enforces that league matches must have
   // a matching match_type, so this choice can't be changed after creation.
-  var [mode, setMode]                                       = useState("ranked");
-  var [matchFormat, setMatchFormat]                         = useState("best_of_3");
-  var [tiebreakFormat, setTiebreakFormat]                   = useState("standard");
-  var [maxMatchesPerOpponent, setMaxMatchesPerOpponent]     = useState(null);
-  var [winPoints, setWinPoints]                             = useState(3);
-  var [lossPoints, setLossPoints]                           = useState(0);
-  var [saving, setSaving]                                   = useState(false);
-  var [error, setError]                                     = useState("");
+  var [mode, setMode]                                   = useState("ranked");
+  var [matchFormat, setMatchFormat]                     = useState("best_of_3");
+  var [tiebreakFormat, setTiebreakFormat]               = useState("standard");
+  var [maxMatchesPerOpponent, setMaxMatchesPerOpponent] = useState(null);
+  var [winPoints, setWinPoints]                         = useState(3);
+  var [lossPoints, setLossPoints]                       = useState(0);
+  var [saving, setSaving]                               = useState(false);
+  var [error, setError]                                 = useState("");
 
   function report(msg) { if (toast) toast(msg, "error"); else setError(msg); }
 
@@ -76,189 +195,312 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
     onClose();
   }
 
-  // Chrome matches ScoreModal exactly — same backdrop opacity, same blur,
-  // same padding, same borderRadius, same maxWidth, same maxHeight, same
-  // internal 28/24px inset. The only difference is content.
-  //
-  // Rendered via createPortal to document.body because the People tab wraps
-  // its content in a `.fade-up` div whose `transform` creates a CSS
-  // containing block for position:fixed descendants — that's what was
-  // pushing the modal off-center when it lived inside the tab. Portaling
-  // out escapes the transformed ancestor so the backdrop is fixed to the
-  // actual viewport, exactly like ScoreModal (which is rendered at the
-  // App root and therefore never hits this problem).
+  // Rendered via createPortal to document.body because the People tab
+  // wraps its content in a `.fade-up` div whose `transform` creates a
+  // CSS containing block for position:fixed descendants — that's what
+  // was pushing the modal off-center when it lived inside the tab.
+  // Portaling out escapes the transformed ancestor.
   return createPortal((
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "0 16px" }}>
+      style={{
+        position:       "fixed",
+        inset:          0,
+        background:     "rgba(20, 17, 14, 0.55)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display:        "flex",
+        alignItems:     "center",
+        justifyContent: "center",
+        zIndex:         200,
+        padding:        "0 16px",
+      }}>
       <div
         onClick={function (e) { e.stopPropagation(); }}
         className="pop"
-        style={{ background: t.modalBg, border: "1px solid " + t.border, borderRadius: 16, padding: "28px 24px", width: "100%", maxWidth: 540, maxHeight: "92vh", overflowY: "auto" }}>
+        style={{
+          background:    ED_TOK.bg,
+          color:         ED_TOK.ink,
+          fontFamily:    ED_TOK.sans,
+          border:        "1px solid " + ED_TOK.line,
+          borderRadius:  20,
+          padding:       "30px 24px",
+          width:         "100%",
+          maxWidth:      540,
+          maxHeight:     "92vh",
+          // Lock scroll to the vertical axis. overflowX:hidden kills any
+          // accidental horizontal pan / rubber-band; overscrollBehavior:
+          // contain stops flick momentum from bubbling to the page.
+          // touchAction:pan-y tells iOS this region is vertical-only so
+          // it doesn't escalate gestures to body-level scrolling.
+          overflowY:     "auto",
+          overflowX:     "hidden",
+          overscrollBehavior:      "contain",
+          WebkitOverflowScrolling: "touch",
+          touchAction:   "pan-y",
+          boxShadow:     "0 24px 80px rgba(20,17,14,0.35)",
+        }}>
 
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: t.text, marginBottom: 4, letterSpacing: "-0.3px" }}>
-          New league
+        {/* Hero header — kicker microlabel + display title + body lede.
+            Same composition as the LogMatchPage hero band. */}
+        <Microlabel style={{ marginBottom: 8 }}>New league</Microlabel>
+        <h2 style={{
+          fontFamily:    ED_TOK.display,
+          fontSize:      "clamp(28px, 7vw, 36px)",
+          fontWeight:    600,
+          letterSpacing: "-0.025em",
+          lineHeight:    1.0,
+          color:         ED_TOK.ink,
+          margin:        "0 0 10px",
+        }}>
+          Start a season
         </h2>
-        <p style={{ fontSize: 12, color: t.textSecondary, marginBottom: 18 }}>
+        <p style={{
+          fontSize:   13.5,
+          lineHeight: 1.5,
+          color:      ED_TOK.ink2,
+          margin:     "0 0 22px",
+        }}>
           Private season with your friends. Invite members after you create it.
         </p>
 
+        <HairlineDivider/>
+
         {/* Name */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Name</label>
-          <input value={name} placeholder="e.g. Sunday Crew Autumn"
-            autoFocus
-            onChange={function (e) { setName(e.target.value); }}
-            style={Object.assign({}, iStyle, { fontSize: 14, marginBottom: 0 })}/>
-        </div>
+        <Microlabel>Name</Microlabel>
+        <LineInput
+          autoFocus
+          value={name}
+          placeholder="e.g. Sunday Crew Autumn"
+          onChange={function (e) { setName(e.target.value); }}
+        />
 
-        {/* Description */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Description (optional)</label>
-          <textarea value={description}
-            placeholder="A short note so friends know what this league is."
-            rows={2}
-            onChange={function (e) { setDescription(e.target.value); }}
-            style={Object.assign({}, iStyle, { fontSize: 13, resize: "none", marginBottom: 0 })}/>
-        </div>
+        {/* Description — borderless, no underline. The textarea body
+            sits on its own without the field-bottom rule that lined
+            inputs get; the explicit HairlineDivider below opens the
+            next section. Two stacked hairlines (textarea border-bottom
+            + section divider) read as a visual stutter on screen. */}
+        <div style={{ marginTop: 22 }}/>
+        <Microlabel>Description (optional)</Microlabel>
+        <textarea
+          value={description}
+          placeholder="A short note so friends know what this league is."
+          rows={2}
+          onChange={function (e) { setDescription(e.target.value); }}
+          style={{
+            background:    "transparent",
+            border:        "none",
+            padding:       "0",
+            fontFamily:    ED_TOK.sans,
+            fontSize:      15,
+            lineHeight:    1.5,
+            color:         ED_TOK.ink,
+            outline:       "none",
+            width:         "100%",
+            resize:        "none",
+          }}
+        />
 
-        {/* Mode — Ranked or Casual. Locked at create time because it
-            controls which match_type can be tagged into the league
-            (DB trigger enforces match_type === league.mode). */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Mode</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[
-              { id: "ranked", label: "Ranked", hint: "Counts toward Elo + W/L" },
-              { id: "casual", label: "Casual", hint: "League standings only" },
-            ].map(function (o) {
-              var on = mode === o.id;
-              return (
-                <button key={o.id} type="button"
-                  onClick={function () { setMode(o.id); }}
-                  style={{ flex: 1, padding: "11px", borderRadius: 9, border: "1px solid " + (on ? t.accent : t.border), background: on ? t.accentSubtle : "transparent", color: on ? t.accent : t.textSecondary, fontSize: 13, fontWeight: on ? 700 : 500, cursor: "pointer", textAlign: "center" }}>
-                  <div>{o.label}</div>
-                  <div style={{ fontSize: 9.5, color: on ? t.accent : t.textTertiary, marginTop: 2, fontWeight: 500, letterSpacing: "0.01em" }}>{o.hint}</div>
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 6, lineHeight: 1.4 }}>
-            Locked at creation. Ranked leagues only accept ranked matches; casual leagues only accept casual matches.
-          </div>
-        </div>
+        <HairlineDivider/>
 
-        {/* Dates + Max members — Start + End side-by-side on row 1,
-            Max members on its own row below. The previous 1fr/1fr/1fr
-            layout squeezed each native date input to ~110px on a
-            375px viewport, which forced the "Max members" label to
-            wrap to two lines and clipped its input. */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Start</label>
-            <input type="date" value={startDate}
+        {/* Mode */}
+        <Microlabel>Mode</Microlabel>
+        <div style={{ display: "flex", gap: 10 }}>
+          <OptionPill
+            on={mode === "ranked"}
+            label="Ranked"
+            hint="Counts toward Elo + W/L"
+            onClick={function () { setMode("ranked"); }}
+          />
+          <OptionPill
+            on={mode === "casual"}
+            label="Casual"
+            hint="League standings only"
+            onClick={function () { setMode("casual"); }}
+          />
+        </div>
+        <p style={{
+          fontFamily:    ED_TOK.sans,
+          fontSize:      11.5,
+          lineHeight:    1.5,
+          color:         ED_TOK.muted,
+          margin:        "10px 0 0",
+        }}>
+          Locked at creation. Ranked leagues only accept ranked matches; casual leagues only accept casual matches.
+        </p>
+
+        <HairlineDivider/>
+
+        {/* Dates */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
+            <Microlabel>Start</Microlabel>
+            <LineInput
+              type="date"
+              size="sm"
+              value={startDate}
               onChange={function (e) { setStartDate(e.target.value); }}
-              style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
+            />
           </div>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>End</label>
-            <input type="date" value={endDate}
+          <div style={{ minWidth: 0 }}>
+            <Microlabel>End</Microlabel>
+            <LineInput
+              type="date"
+              size="sm"
+              value={endDate}
               onChange={function (e) { setEndDate(e.target.value); }}
-              style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
+            />
           </div>
         </div>
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Max members</label>
-          <input type="number" min="2" value={maxMembers} placeholder="—"
-            onChange={function (e) { setMaxMembers(e.target.value); }}
-            style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
-        </div>
+
+        <div style={{ marginTop: 22 }}/>
+        <Microlabel>Max members</Microlabel>
+        <LineInput
+          type="number"
+          min="2"
+          size="sm"
+          value={maxMembers}
+          placeholder="—"
+          onChange={function (e) { setMaxMembers(e.target.value); }}
+        />
+
+        <HairlineDivider/>
 
         {/* Match format */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Match format</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {MATCH_FORMATS.map(function (o) {
-              var on = matchFormat === o.id;
-              return (
-                <button key={o.id}
-                  onClick={function () { setMatchFormat(o.id); }}
-                  style={{ flex: 1, padding: "11px", borderRadius: 9, border: "1px solid " + (on ? t.accent : t.border), background: on ? t.accentSubtle : "transparent", color: on ? t.accent : t.textSecondary, fontSize: 14, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
+        <Microlabel>Match format</Microlabel>
+        <div style={{ display: "flex", gap: 10 }}>
+          {MATCH_FORMATS.map(function (o) {
+            return (
+              <OptionPill
+                key={o.id}
+                on={matchFormat === o.id}
+                label={o.label}
+                onClick={function () { setMatchFormat(o.id); }}
+              />
+            );
+          })}
         </div>
 
         {/* Tiebreak */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Tiebreak</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {TIEBREAK_FORMATS.map(function (o) {
-              var on = tiebreakFormat === o.id;
-              return (
-                <button key={o.id}
-                  onClick={function () { setTiebreakFormat(o.id); }}
-                  style={{ flex: 1, padding: "11px", borderRadius: 9, border: "1px solid " + (on ? t.accent : t.border), background: on ? t.accentSubtle : "transparent", color: on ? t.accent : t.textSecondary, fontSize: 13, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
+        <div style={{ marginTop: 22 }}/>
+        <Microlabel>Tiebreak</Microlabel>
+        <div style={{ display: "flex", gap: 10 }}>
+          {TIEBREAK_FORMATS.map(function (o) {
+            return (
+              <OptionPill
+                key={o.id}
+                on={tiebreakFormat === o.id}
+                label={o.label}
+                onClick={function () { setTiebreakFormat(o.id); }}
+              />
+            );
+          })}
         </div>
 
         {/* Max matches per opponent */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Max matches per opponent</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {MAX_MATCHES_OPTIONS.map(function (o) {
-              var on = maxMatchesPerOpponent === o.id;
-              return (
-                <button key={String(o.id)}
-                  onClick={function () { setMaxMatchesPerOpponent(o.id); }}
-                  style={{ flex: 1, padding: "11px", borderRadius: 9, border: "1px solid " + (on ? t.accent : t.border), background: on ? t.accentSubtle : "transparent", color: on ? t.accent : t.textSecondary, fontSize: 13, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
+        <div style={{ marginTop: 22 }}/>
+        <Microlabel>Max matches per opponent</Microlabel>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {MAX_MATCHES_OPTIONS.map(function (o) {
+            return (
+              <OptionPill
+                key={String(o.id)}
+                on={maxMatchesPerOpponent === o.id}
+                label={o.label}
+                onClick={function () { setMaxMatchesPerOpponent(o.id); }}
+                flex="1 1 calc(33% - 7px)"
+              />
+            );
+          })}
         </div>
 
+        <HairlineDivider/>
+
         {/* Points */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Win points</label>
-            <input type="number" min="0" value={winPoints}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
+            <Microlabel>Win points</Microlabel>
+            <LineInput
+              type="number"
+              min="0"
+              size="sm"
+              value={winPoints}
               onChange={function (e) { setWinPoints(parseInt(e.target.value || "0", 10)); }}
-              style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
+            />
           </div>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: t.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>Loss points</label>
-            <input type="number" min="0" value={lossPoints}
+          <div style={{ minWidth: 0 }}>
+            <Microlabel>Loss points</Microlabel>
+            <LineInput
+              type="number"
+              min="0"
+              size="sm"
+              value={lossPoints}
               onChange={function (e) { setLossPoints(parseInt(e.target.value || "0", 10)); }}
-              style={Object.assign({}, iStyle, { fontSize: 13, marginBottom: 0 })}/>
+            />
           </div>
         </div>
 
         {/* Error */}
         {error && (
-          <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: t.redSubtle, border: "1px solid " + t.red + "44", fontSize: 12, color: t.red, fontWeight: 500 }}>
+          <div style={{
+            marginTop:    20,
+            padding:      "12px 14px",
+            borderRadius: 12,
+            background:   "rgba(195, 57, 43, 0.10)",
+            border:       "1px solid rgba(195, 57, 43, 0.30)",
+            fontFamily:   ED_TOK.sans,
+            fontSize:     13,
+            lineHeight:   1.4,
+            color:        ED_TOK.loss,
+          }}>
             {error}
           </div>
         )}
 
-        {/* Actions — same layout as ScoreModal's Cancel / Save row. */}
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* Actions — Cancel hairline pill + Create league ink-on-cream
+            primary, both 999-radius mono uppercase per LogMatchPage's
+            primaryBtn vocabulary. */}
+        <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
           <button
+            type="button"
             onClick={onClose}
-            style={{ flex: 1, padding: "12px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.text, fontSize: 13, fontWeight: 500 }}>
+            style={{
+              flex:           1,
+              padding:        "16px 18px",
+              borderRadius:   999,
+              border:         "1px solid " + ED_TOK.lineStrong,
+              background:     "transparent",
+              color:          ED_TOK.ink,
+              fontFamily:     ED_TOK.mono,
+              fontSize:       11.5,
+              fontWeight:     700,
+              letterSpacing:  "0.18em",
+              textTransform:  "uppercase",
+              cursor:         "pointer",
+              transition:     "background 140ms ease, border-color 140ms ease",
+            }}>
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={saving}
-            style={{ flex: 2, padding: "12px", borderRadius: 8, border: "none", background: saving ? t.border : t.accent, color: "#fff", fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+            style={{
+              flex:           2,
+              padding:        "16px 18px",
+              borderRadius:   999,
+              border:         "1px solid " + ED_TOK.ink,
+              background:     ED_TOK.ink,
+              color:          ED_TOK.bg,
+              fontFamily:     ED_TOK.mono,
+              fontSize:       11.5,
+              fontWeight:     700,
+              letterSpacing:  "0.18em",
+              textTransform:  "uppercase",
+              cursor:         saving ? "not-allowed" : "pointer",
+              opacity:        saving ? 0.5 : 1,
+              transition:     "opacity 140ms ease",
+            }}>
             {saving ? "Creating…" : "Create league"}
           </button>
         </div>
