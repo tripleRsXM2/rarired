@@ -898,15 +898,17 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {/* ── Thread pane (or desktop empty state) ──────────────────────── */}
       {showThreadPane && !conv && renderDesktopEmptyState()}
       {showThreadPane && conv && (<>
-      {/* Thread column. minHeight:0 + height:100% are critical: without
-          minHeight:0 the inner messages list (flex:1 + overflow:auto)
-          can't be height-bounded by the parent — flex children default
-          to min-content height. Before the document overflow lock, an
-          oversized list silently leaked into the page scroll; now that
-          html + body are overflow:hidden, an unbounded child means the
-          inner scroller never realises it has overflow → touch scroll
-          dies. */}
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, height: "100%" }}>
+      {/* Thread column. cs-dm-root is a row flex container, so the
+          cross-axis (height) is already pinned to the parent via the
+          default align-items:stretch. We DON'T add height:100% on top
+          of that — doing so makes the column overflow its flex line on
+          iOS Safari, hiding the sticky header at the top and leaving a
+          cream gap above the input footer at the bottom.
+          minHeight:0 is the one bit we need: without it, the inner
+          messages list (flex:1 + overflow:auto) can't shrink below its
+          content height, so it silently grows past the column and the
+          internal scroller never engages. */}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
 
       {/* Conversation settings. Desktop: centered modal with a modest
           width. Mobile: bottom-sheet with a grab handle. Decided via a
