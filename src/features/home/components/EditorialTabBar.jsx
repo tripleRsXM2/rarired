@@ -107,8 +107,10 @@ export default function EditorialTabBar({ activeTab, onTab, onLogMatch }) {
       zIndex:         50,
       background:     ED_TOK.bg,
       borderTop:      "1px solid " + ED_TOK.line,
-      backdropFilter: "blur(8px)",
-      WebkitBackdropFilter: "blur(8px)",
+      // No backdrop-filter — the solid cream bg reads cleaner than
+      // a blurred frost over cream, and on iOS the frost was
+      // tinting the safe-area-inset-bottom region a hair darker
+      // than the page above the bar.
       // Distribute 5 columns evenly. Padding at the bottom respects
       // the iOS home-bar inset so labels don't sit under the system
       // gesture indicator.

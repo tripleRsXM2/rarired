@@ -938,8 +938,12 @@ export default function App(){
             position:       "sticky",
             top:            0,
             zIndex:         40,
-            backdropFilter: hideTopMobNav ? "none" : "blur(24px)",
-            WebkitBackdropFilter: hideTopMobNav ? "none" : "blur(24px)",
+            // Solid cream — no backdrop-filter. The blur made the
+            // safe-area-inset-top region (the iPhone status bar area)
+            // render in a slightly frosted off-cream that read as a
+            // different "theme colour" than the page below. With a
+            // solid bg the cream now flows uninterrupted from the
+            // status bar through the nav into the page body.
             background:     hideTopMobNav ? "transparent" : "#F0E9DA",
             borderBottom:   hideTopMobNav ? "none" : "1px solid rgba(42, 32, 26, 0.12)",
             paddingTop:     "env(safe-area-inset-top, 0px)",
