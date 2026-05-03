@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
 import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
+import { ED_TOK } from "../../home/components/EditorialScreen.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -92,36 +93,53 @@ function Avatar({ name, size }) {
   );
 }
 
-// Editorial label/value row used inside ORIGINAL / PROPOSED columns.
-// One per field. Diff = orange "CHANGED" eyebrow on the right.
-function FieldRow({ label, value, changed, t }) {
+// Editorial label/value row used inside the logged-match summary and
+// the ORIGINAL / PROPOSED diff columns. Mono uppercase microlabel on
+// the left, display-font value on the right.
+function FieldRow({ label, value, changed }) {
   if (!value) return null;
   return (
     <div style={{
-      display: "flex", alignItems: "baseline", justifyContent: "space-between",
-      gap: 8, padding: "8px 0",
-      borderTop: "1px solid " + t.border,
+      display:        "flex",
+      alignItems:     "baseline",
+      justifyContent: "space-between",
+      gap:            10,
+      padding:        "10px 0",
+      borderTop:      "1px solid " + ED_TOK.line,
     }}>
       <span style={{
-        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+        fontFamily:    ED_TOK.mono,
+        fontSize:      10,
+        fontWeight:    700,
+        letterSpacing: "0.16em",
         textTransform: "uppercase",
-        color: t.textTertiary, flexShrink: 0,
+        color:         ED_TOK.muted,
+        flexShrink:    0,
       }}>
         {label}
       </span>
       <span style={{
-        fontSize: 13, color: changed ? t.text : t.textSecondary,
-        fontWeight: changed ? 800 : 500,
-        textAlign: "right", letterSpacing: "-0.1px",
+        fontFamily:         ED_TOK.sans,
+        fontSize:           14,
+        color:              changed ? ED_TOK.ink : ED_TOK.ink2,
+        fontWeight:         changed ? 600 : 500,
+        textAlign:          "right",
+        letterSpacing:      "-0.1px",
         fontVariantNumeric: "tabular-nums",
-        display: "flex", alignItems: "baseline", gap: 8,
+        display:            "flex",
+        alignItems:         "baseline",
+        gap:                8,
       }}>
         {value}
         {changed && (
           <span style={{
-            fontSize: 9, fontWeight: 800,
-            color: t.orange, letterSpacing: "0.16em",
-            textTransform: "uppercase", flexShrink: 0,
+            fontFamily:    ED_TOK.mono,
+            fontSize:      9.5,
+            fontWeight:    700,
+            color:         ED_TOK.loss,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            flexShrink:    0,
           }}>changed</span>
         )}
       </span>
@@ -129,21 +147,24 @@ function FieldRow({ label, value, changed, t }) {
   );
 }
 
-// Editorial hairline-strip section — used for LOGGED BY, REASON, AUTO-VOID,
-// ERROR. Replaces the old `bgTertiary + radius + border` cards.
-function HairlineStrip({ eyebrow, eyebrowColor, t, children, marginBottom }) {
+// Editorial hairline-strip section — used for LOGGED BY, REASON,
+// AUTO-VOID, ERROR. Mono kicker + body, hairline above.
+function HairlineStrip({ eyebrow, eyebrowColor, children, marginBottom }) {
   return (
     <div style={{
-      borderTop: "1px solid " + t.border,
-      paddingTop: 12,
-      paddingBottom: 12,
-      marginBottom: marginBottom == null ? 14 : marginBottom,
+      borderTop:    "1px solid " + ED_TOK.line,
+      paddingTop:   14,
+      paddingBottom:14,
+      marginBottom: marginBottom == null ? 16 : marginBottom,
     }}>
       <div style={{
-        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+        fontFamily:    ED_TOK.mono,
+        fontSize:      10,
+        fontWeight:    700,
+        letterSpacing: "0.16em",
         textTransform: "uppercase",
-        color: eyebrowColor || t.textTertiary,
-        marginBottom: 6,
+        color:         eyebrowColor || ED_TOK.muted,
+        marginBottom:  8,
       }}>{eyebrow}</div>
       {children}
     </div>
@@ -249,125 +270,195 @@ export default function ActionReviewDrawer({
   // counter use orange for "needs your attention".
   var headerEyebrowColor = isMatchTag ? t.text : t.orange;
 
+  // Eyebrow color — match_tag is the neutral confirm flow (use muted ink).
+  // Dispute / correction / counter route push the eyebrow to the clay/red
+  // signal so the trust moment reads as "needs your attention."
+  var ED_eyebrowColor = isMatchTag ? ED_TOK.muted : ED_TOK.loss;
+
   return (
-    // Backdrop — centered dialog (was bottom-sheet slide-up).
+    // Backdrop — ink-tinted blur, same wash as CreateLeagueModal so the
+    // confirm flow reads as part of the editorial realm.
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, zIndex: 200,
-        background: "rgba(0,0,0,0.4)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "0 16px",
+        position:       "fixed",
+        inset:          0,
+        zIndex:         200,
+        background:     "rgba(20, 17, 14, 0.55)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display:        "flex",
+        alignItems:     "center",
+        justifyContent: "center",
+        padding:        "0 16px",
       }}
     >
-      {/* Sheet */}
+      {/* Sheet — cream paper, espresso ink, 20px radius, soft shadow.
+          Same chrome vocabulary as CreateLeagueModal / LogMatchPage. */}
       <div
         onClick={function (e) { e.stopPropagation(); }}
         className="pop"
         style={{
-          background: t.modalBg,
-          border: "1px solid " + t.border,
-          borderRadius: 14,
-          width: "100%",
-          maxWidth: 540,
-          maxHeight: "92vh",
-          overflowY: "auto",
+          background:   ED_TOK.bg,
+          color:        ED_TOK.ink,
+          fontFamily:   ED_TOK.sans,
+          border:       "1px solid " + ED_TOK.line,
+          borderRadius: 20,
+          width:        "100%",
+          maxWidth:     540,
+          maxHeight:    "92vh",
+          overflowY:    "auto",
+          overflowX:    "hidden",
+          overscrollBehavior:      "contain",
+          WebkitOverflowScrolling: "touch",
+          touchAction:  "pan-y",
+          boxShadow:    "0 24px 80px rgba(20,17,14,0.35)",
         }}
       >
-        <div style={{ padding: "26px 22px 26px" }}>
+        <div style={{ padding: "30px 24px 28px" }}>
 
-          {/* ── Header ───────────────────────────────────────────────────── */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+          {/* ── Header — mono kicker + display hero + lede ───────────────── */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: "0.16em",
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10.5,
+                fontWeight:    700,
+                letterSpacing: "0.16em",
                 textTransform: "uppercase",
-                color: headerEyebrowColor, marginBottom: 6,
+                color:         ED_eyebrowColor,
+                marginBottom:  10,
               }}>
                 {meta.eyebrow}
               </div>
               <h2 style={{
-                fontSize: 22, fontWeight: 800,
-                color: t.text, letterSpacing: "-0.6px",
-                margin: 0, marginBottom: 4, lineHeight: 1.1,
+                fontFamily:    ED_TOK.display,
+                fontSize:      "clamp(28px, 7vw, 36px)",
+                fontWeight:    600,
+                letterSpacing: "-0.025em",
+                lineHeight:    1.0,
+                color:         ED_TOK.ink,
+                margin:        "0 0 10px",
               }}>
                 {meta.title}
               </h2>
               <p style={{
-                fontSize: 13, color: t.textSecondary,
-                margin: 0, lineHeight: 1.45, letterSpacing: "-0.1px",
+                fontSize:   13.5,
+                color:      ED_TOK.ink2,
+                margin:     0,
+                lineHeight: 1.5,
               }}>
                 {meta.subtitle(fromName)}
               </p>
             </div>
             <button
               onClick={onClose}
+              aria-label="Close"
               style={{
-                background: "none", border: "none",
-                color: t.textTertiary, fontSize: 22,
-                padding: "0 0 0 12px", cursor: "pointer",
-                lineHeight: 1, flexShrink: 0,
-                fontWeight: 300,
-                transition: "color 0.13s",
+                background:   "transparent",
+                border:       "1px solid " + ED_TOK.line,
+                width:        32,
+                height:       32,
+                borderRadius: "50%",
+                color:        ED_TOK.ink,
+                padding:      0,
+                cursor:       "pointer",
+                lineHeight:   1,
+                flexShrink:   0,
+                marginLeft:   12,
+                display:      "grid",
+                placeItems:   "center",
+                transition:   "background 160ms ease",
               }}
-              onMouseEnter={function (e) { e.currentTarget.style.color = t.text; }}
-              onMouseLeave={function (e) { e.currentTarget.style.color = t.textTertiary; }}
-            >×</button>
+              onMouseEnter={function (e) { e.currentTarget.style.background = ED_TOK.bg2; }}
+              onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
           </div>
 
-          {/* ── Match context — hairline strip with avatar + tabular result */}
+          {/* ── Match context — hairline strip with avatar + tabular result.
+                 Same hairline divider language as CreateLeagueModal section
+                 breaks. */}
           <div style={{
-            display: "flex", alignItems: "center", gap: 12,
-            paddingTop: 14, paddingBottom: 14,
-            borderTop: "1px solid " + t.border,
-            borderBottom: "1px solid " + t.border,
-            marginBottom: 18,
+            display:      "flex",
+            alignItems:   "center",
+            gap:          14,
+            paddingTop:   16,
+            paddingBottom:16,
+            borderTop:    "1px solid " + ED_TOK.line,
+            borderBottom: "1px solid " + ED_TOK.line,
+            marginBottom: 22,
           }}>
-            <Avatar name={fromName} size={40} />
+            <Avatar name={fromName} size={44} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                textTransform: "uppercase", color: t.textTertiary,
-                marginBottom: 3,
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10,
+                fontWeight:    700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color:         ED_TOK.muted,
+                marginBottom:  4,
               }}>
                 vs
               </div>
               <div style={{
-                fontSize: 16, fontWeight: 800, color: t.text,
-                letterSpacing: "-0.3px", lineHeight: 1.1,
+                fontFamily:    ED_TOK.display,
+                fontSize:      20,
+                fontWeight:    600,
+                letterSpacing: "-0.02em",
+                lineHeight:    1.05,
+                color:         ED_TOK.ink,
               }}>
                 {fromName}
               </div>
               <div style={{
-                fontSize: 11, color: t.textTertiary, marginTop: 4,
-                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                fontFamily:  ED_TOK.sans,
+                fontSize:    12,
+                color:       ED_TOK.muted,
+                marginTop:   4,
+                display:     "flex",
+                alignItems:  "center",
+                gap:         8,
+                flexWrap:    "wrap",
               }}>
                 <span>{origDate}</span>
                 {revisionLabel && (
                   <span style={{
-                    fontSize: 9, fontWeight: 800,
-                    color: t.orange, letterSpacing: "0.16em",
+                    fontFamily:    ED_TOK.mono,
+                    fontSize:      9.5,
+                    fontWeight:    700,
+                    color:         ED_TOK.loss,
+                    letterSpacing: "0.16em",
                     textTransform: "uppercase",
                   }}>· {revisionLabel}</span>
                 )}
               </div>
             </div>
-            <div style={{
-              textAlign: "right", flexShrink: 0,
-            }}>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
               <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                textTransform: "uppercase", color: t.textTertiary,
-                marginBottom: 2,
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10,
+                fontWeight:    700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color:         ED_TOK.muted,
+                marginBottom:  4,
               }}>
                 Result
               </div>
               <div style={{
-                fontSize: 18, fontWeight: 800,
-                color: match.result === "win" ? t.green : t.red,
-                letterSpacing: "-0.3px", lineHeight: 1,
+                fontFamily:    ED_TOK.display,
+                fontSize:      22,
+                fontWeight:    600,
+                letterSpacing: "-0.02em",
+                lineHeight:    1.0,
+                color:         match.result === "win" ? ED_TOK.win : ED_TOK.loss,
               }}>
                 {origResult}
               </div>
@@ -376,17 +467,17 @@ export default function ActionReviewDrawer({
 
           {/* ── For match_tag: show the logged match details (original only). */}
           {isMatchTag && (
-            <HairlineStrip eyebrow={"Logged by " + fromName} t={t}>
+            <HairlineStrip eyebrow={"Logged by " + fromName}>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <FieldRow label="Result" value={origResult + " (" + fromName + "'s view)"} changed={false} t={t} />
+                <FieldRow label="Result" value={origResult + " (" + fromName + "'s view)"} changed={false} />
                 {origSets && origSets !== "—" && (
-                  <FieldRow label="Score" value={origSets} changed={false} t={t} />
+                  <FieldRow label="Score" value={origSets} changed={false} />
                 )}
                 {origDate && (
-                  <FieldRow label="Date" value={origDate} changed={false} t={t} />
+                  <FieldRow label="Date" value={origDate} changed={false} />
                 )}
                 {origVenue && origVenue !== "—" && (
-                  <FieldRow label="Venue" value={origVenue} changed={false} t={t} />
+                  <FieldRow label="Venue" value={origVenue} changed={false} />
                 )}
               </div>
             </HairlineStrip>
@@ -394,7 +485,7 @@ export default function ActionReviewDrawer({
 
           {/* ── No proposal yet (only for correction/dispute notifs, not match_tag) */}
           {!proposal && !isMatchTag && (
-            <HairlineStrip eyebrow="Proposal unavailable" t={t}>
+            <HairlineStrip eyebrow="Proposal unavailable">
               <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.45 }}>
                 The correction details are not available yet. Reload the app if this persists.
               </div>
@@ -403,42 +494,53 @@ export default function ActionReviewDrawer({
 
           {/* ── Comparison ── two stacked editorial columns. */}
           {proposal && (
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ marginBottom: 20 }}>
               <div style={{
-                fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                textTransform: "uppercase", color: t.textTertiary,
-                marginBottom: 12,
+                fontFamily:    ED_TOK.mono,
+                fontSize:      10,
+                fontWeight:    700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color:         ED_TOK.muted,
+                marginBottom:  14,
               }}>
                 {anyDiff ? "What changed" : "Proposed (no changes)"}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 {/* Original */}
                 <div>
                   <div style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                    textTransform: "uppercase", color: t.textTertiary,
-                    marginBottom: 4,
+                    fontFamily:    ED_TOK.mono,
+                    fontSize:      10,
+                    fontWeight:    700,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color:         ED_TOK.muted,
+                    marginBottom:  4,
                   }}>Original</div>
-                  <FieldRow label="Result" value={origResult} changed={false} t={t} />
-                  <FieldRow label="Score" value={origSets} changed={false} t={t} />
+                  <FieldRow label="Result" value={origResult} changed={false} />
+                  <FieldRow label="Score" value={origSets} changed={false} />
                   {(match.venue || match.court) && (
-                    <FieldRow label="Venue" value={origVenue} changed={false} t={t} />
+                    <FieldRow label="Venue" value={origVenue} changed={false} />
                   )}
                 </div>
 
                 {/* Proposed */}
                 <div>
                   <div style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                    fontFamily:    ED_TOK.mono,
+                    fontSize:      10,
+                    fontWeight:    700,
+                    letterSpacing: "0.16em",
                     textTransform: "uppercase",
-                    color: anyDiff ? t.orange : t.textTertiary,
-                    marginBottom: 4,
+                    color:         anyDiff ? ED_TOK.loss : ED_TOK.muted,
+                    marginBottom:  4,
                   }}>Proposed</div>
-                  <FieldRow label="Result" value={propResult} changed={diff.result} t={t} />
-                  <FieldRow label="Score" value={propSets} changed={diff.sets} t={t} />
+                  <FieldRow label="Result" value={propResult} changed={diff.result} />
+                  <FieldRow label="Score" value={propSets} changed={diff.sets} />
                   {(proposal.venue || proposal.court || match.venue || match.court) && (
-                    <FieldRow label="Venue" value={propVenue} changed={diff.venue || diff.court} t={t} />
+                    <FieldRow label="Venue" value={propVenue} changed={diff.venue || diff.court} />
                   )}
                 </div>
               </div>
@@ -446,17 +548,28 @@ export default function ActionReviewDrawer({
               {/* Date change */}
               {diff.date && propDate && (
                 <div style={{
-                  marginTop: 12,
-                  paddingTop: 10, paddingBottom: 10,
-                  borderTop: "1px solid " + t.border,
-                  display: "flex", gap: 10, alignItems: "baseline",
+                  marginTop:    14,
+                  paddingTop:   12,
+                  paddingBottom:12,
+                  borderTop:    "1px solid " + ED_TOK.line,
+                  display:      "flex",
+                  gap:          10,
+                  alignItems:   "baseline",
                 }}>
                   <span style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                    textTransform: "uppercase", color: t.orange, flexShrink: 0,
+                    fontFamily:    ED_TOK.mono,
+                    fontSize:      10,
+                    fontWeight:    700,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color:         ED_TOK.loss,
+                    flexShrink:    0,
                   }}>Date changed</span>
                   <span style={{
-                    fontSize: 12, color: t.textSecondary, letterSpacing: "-0.1px",
+                    fontFamily:    ED_TOK.sans,
+                    fontSize:      13,
+                    color:         ED_TOK.ink2,
+                    letterSpacing: "-0.05px",
                   }}>
                     {origDate} → {propDate}
                   </span>
@@ -467,17 +580,24 @@ export default function ActionReviewDrawer({
 
           {/* ── Reason ────────────────────────────────────────────────────── */}
           {match.disputeReasonCode && (
-            <HairlineStrip eyebrow={"Their reason"} t={t}>
+            <HairlineStrip eyebrow={"Their reason"}>
               <div style={{
-                fontSize: 13, color: t.text, fontWeight: 600,
-                letterSpacing: "-0.1px",
+                fontFamily:    ED_TOK.sans,
+                fontSize:      14,
+                color:         ED_TOK.ink,
+                fontWeight:    600,
+                letterSpacing: "-0.05px",
               }}>
                 {REASON_LABELS[match.disputeReasonCode] || match.disputeReasonCode}
               </div>
               {match.disputeReasonDetail && (
                 <div style={{
-                  fontSize: 12, color: t.textSecondary,
-                  marginTop: 4, fontStyle: "italic", letterSpacing: "-0.1px",
+                  fontFamily: ED_TOK.sans,
+                  fontSize:   12.5,
+                  color:      ED_TOK.muted,
+                  marginTop:  4,
+                  fontStyle:  "italic",
+                  lineHeight: 1.5,
                 }}>
                   "{match.disputeReasonDetail}"
                 </div>
@@ -487,10 +607,12 @@ export default function ActionReviewDrawer({
 
           {/* ── Auto-void warning ─────────────────────────────────────────── */}
           {wouldAutoVoid && (
-            <HairlineStrip eyebrow="Max rounds reached" eyebrowColor={t.orange} t={t}>
+            <HairlineStrip eyebrow="Max rounds reached" eyebrowColor={ED_TOK.loss}>
               <div style={{
-                fontSize: 13, color: t.text, lineHeight: 1.4,
-                letterSpacing: "-0.1px",
+                fontFamily: ED_TOK.sans,
+                fontSize:   13.5,
+                color:      ED_TOK.ink,
+                lineHeight: 1.5,
               }}>
                 Counter-proposing now will void the match automatically.
               </div>
@@ -499,65 +621,79 @@ export default function ActionReviewDrawer({
 
           {/* ── Error ─────────────────────────────────────────────────────── */}
           {error && (
-            <HairlineStrip eyebrow="Can't save" eyebrowColor={t.red} t={t}>
+            <HairlineStrip eyebrow="Can't save" eyebrowColor={ED_TOK.loss}>
               <div style={{
-                fontSize: 13, color: t.text, lineHeight: 1.4,
-                letterSpacing: "-0.1px",
+                fontFamily: ED_TOK.sans,
+                fontSize:   13.5,
+                color:      ED_TOK.ink,
+                lineHeight: 1.5,
               }}>
                 {error}
               </div>
             </HairlineStrip>
           )}
 
-          {/* ── Actions ───────────────────────────────────────────────────── */}
+          {/* ── Actions — LogMatch primaryBtn vocabulary.
+                 Primary (Accept): ink-on-cream pill, mono uppercase,
+                 999 radius. Secondary (Dispute / Counter, Not my match):
+                 hairline-outlined pills, same shape. */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 8,
-            marginTop: 8,
-            paddingTop: 16,
-            borderTop: "1px solid " + t.border,
+            display:        "flex",
+            flexDirection:  "column",
+            gap:            10,
+            marginTop:      8,
+            paddingTop:     20,
+            borderTop:      "1px solid " + ED_TOK.line,
           }}>
 
-            {/* Primary: Accept */}
+            {/* Primary: Accept / Confirm */}
             <button
               onClick={handleAccept}
               disabled={saving}
               style={{
-                width: "100%", padding: "14px",
-                borderRadius: 10, border: "none",
-                background: saving && action === "accept" ? t.border : t.green,
-                color: "#fff", fontSize: 13, fontWeight: 800,
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                cursor: saving ? "default" : "pointer",
-                opacity: saving && action !== "accept" ? 0.5 : 1,
-                transition: "opacity 0.15s, background 0.15s",
+                width:          "100%",
+                padding:        "16px 18px",
+                borderRadius:   999,
+                border:         "1px solid " + ED_TOK.ink,
+                background:     ED_TOK.ink,
+                color:          ED_TOK.bg,
+                fontFamily:     ED_TOK.mono,
+                fontSize:       11.5,
+                fontWeight:     700,
+                letterSpacing:  "0.18em",
+                textTransform:  "uppercase",
+                cursor:         saving ? "not-allowed" : "pointer",
+                opacity:        saving && action !== "accept" ? 0.4
+                              : saving                         ? 0.7 : 1,
+                transition:     "opacity 140ms ease",
               }}
-              onMouseEnter={function (e) { if (!saving) e.currentTarget.style.opacity = "0.88"; }}
-              onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
             >
               {saving && action === "accept"
                 ? (isMatchTag ? "Confirming…" : "Accepting…")
                 : (isMatchTag ? "Confirm match" : "Accept correction")}
             </button>
 
-            {/* Secondary row: Counter + Void */}
-            <div style={{ display: "flex", gap: 8 }}>
+            {/* Secondary row: Counter / Dispute + Not my match */}
+            <div style={{ display: "flex", gap: 10 }}>
               <button
                 onClick={handleCounter}
                 disabled={saving}
                 style={{
-                  flex: 1, padding: "12px",
-                  borderRadius: 10,
-                  border: "1px solid " + t.border,
-                  background: "transparent",
-                  color: t.text,
-                  fontSize: 11, fontWeight: 800,
-                  letterSpacing: "0.08em", textTransform: "uppercase",
-                  cursor: saving ? "default" : "pointer",
-                  opacity: saving ? 0.5 : 1,
-                  transition: "opacity 0.15s",
+                  flex:           1,
+                  padding:        "14px 14px",
+                  borderRadius:   999,
+                  border:         "1px solid " + ED_TOK.lineStrong,
+                  background:     "transparent",
+                  color:          ED_TOK.ink,
+                  fontFamily:     ED_TOK.mono,
+                  fontSize:       11,
+                  fontWeight:     700,
+                  letterSpacing:  "0.16em",
+                  textTransform:  "uppercase",
+                  cursor:         saving ? "not-allowed" : "pointer",
+                  opacity:        saving ? 0.5 : 1,
+                  transition:     "opacity 140ms ease, background 140ms ease",
                 }}
-                onMouseEnter={function (e) { if (!saving) e.currentTarget.style.opacity = "0.7"; }}
-                onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
               >
                 {wouldAutoVoid ? "Void match" : (isMatchTag ? "Dispute score" : "Propose correction")}
               </button>
@@ -566,20 +702,23 @@ export default function ActionReviewDrawer({
                 onClick={handleVoid}
                 disabled={saving}
                 style={{
-                  padding: "12px 16px",
-                  borderRadius: 10,
-                  border: "1px solid " + t.border,
-                  background: "transparent",
-                  color: t.red,
-                  fontSize: 11, fontWeight: 800,
-                  letterSpacing: "0.08em", textTransform: "uppercase",
-                  cursor: saving ? "default" : "pointer",
-                  opacity: saving && action !== "void" ? 0.5 : 1,
-                  transition: "opacity 0.15s",
-                  whiteSpace: "nowrap",
+                  flex:           1,
+                  padding:        "14px 14px",
+                  borderRadius:   999,
+                  border:         "1px solid " + ED_TOK.lineStrong,
+                  background:     "transparent",
+                  color:          ED_TOK.loss,
+                  fontFamily:     ED_TOK.mono,
+                  fontSize:       11,
+                  fontWeight:     700,
+                  letterSpacing:  "0.16em",
+                  textTransform:  "uppercase",
+                  cursor:         saving ? "not-allowed" : "pointer",
+                  opacity:        saving && action !== "void" ? 0.4
+                                : saving                       ? 0.7 : 1,
+                  transition:     "opacity 140ms ease",
+                  whiteSpace:     "nowrap",
                 }}
-                onMouseEnter={function (e) { if (!saving) e.currentTarget.style.opacity = "0.75"; }}
-                onMouseLeave={function (e) { e.currentTarget.style.opacity = "1"; }}
               >
                 {saving && action === "void" ? "Voiding…" : "Not my match"}
               </button>

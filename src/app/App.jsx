@@ -668,6 +668,18 @@ export default function App(){
       : match.status === "disputed" ? "match_disputed"
       : null;
     if(!notifType) return;
+    // The "Confirm this match" drawer is the OPPONENT's response surface
+    // — they got tagged and owe a confirm/dispute. The match creator
+    // (submitter) has nothing to do but wait, so opening the same drawer
+    // for them showed an action panel for an action they can't take.
+    // Gate match_tag on isTagged: only the tagged side gets the drawer.
+    // The submitter sees the PENDING pill in their Activity row and a
+    // soft toast on tap explaining they're waiting on the opponent.
+    if (notifType === "match_tag" && !match.isTagged) {
+      var waitingOn = match.oppName || "your opponent";
+      if (toast) toast("Waiting on " + waitingOn + " to confirm.", "info");
+      return;
+    }
     // fromName is the OTHER party — if we're the tagged user, it's the submitter
     // (best effort from normalizeMatch's enrichment: friendName || oppName).
     var fromName = match.isTagged
