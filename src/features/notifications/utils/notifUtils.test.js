@@ -153,6 +153,39 @@ describe("isActiveForUser", function () {
     expect(isActiveForUser({ type: "casual_match_logged" })).toBe(true);
   });
 
+  it("keeps sticky_after_read informational rows visible after read", function () {
+    // Module 9.1.5 — casual_match_logged is informational but flagged
+    // sticky_after_read in the registry. The badge clears on tray open
+    // (markSeen sets read_at), but the row itself must stay visible
+    // until the user explicitly dismisses or clicks through. Without
+    // this, the recipient never gets a chance to actually notice the
+    // heads-up — opening the tray once nukes it on next render.
+    expect(isActiveForUser({
+      type: "casual_match_logged",
+      read_at: "2026-01-01T00:00:00Z",
+      read: true,
+    })).toBe(true);
+  });
+
+  it("hides sticky rows once explicitly dismissed", function () {
+    expect(isActiveForUser({
+      type: "casual_match_logged",
+      read_at: "2026-01-01T00:00:00Z",
+      dismissed_at: "2026-01-01T00:00:01Z",
+    })).toBe(false);
+  });
+
+  it("hides sticky rows once the underlying entity resolves", function () {
+    // The cleanup_match_notifications trigger flips resolved_at when
+    // the match transitions to a terminal state. Sticky bypass is
+    // gated on resolved_at being null, so a resolved row drops.
+    expect(isActiveForUser({
+      type: "casual_match_logged",
+      read_at: "2026-01-01T00:00:00Z",
+      resolved_at: "2026-01-02T00:00:00Z",
+    })).toBe(false);
+  });
+
   it("returns false for null / undefined", function () {
     expect(isActiveForUser(null)).toBe(false);
     expect(isActiveForUser(undefined)).toBe(false);

@@ -43,6 +43,16 @@
 //                        V1: nothing flagged true. Reserved for the
 //                        future "dispute escalation" pattern where each
 //                        bump genuinely needs a new device alert.
+//   sticky_after_read  → default false. If true, the row stays visible
+//                        in the centre AFTER read_at is set, even though
+//                        it's informational. The badge still clears on
+//                        tray open (markSeen marks it read), but the row
+//                        itself doesn't vanish — the user has to click
+//                        it (which navigates and dismisses) or dismiss
+//                        it explicitly. Used for "real-world event"
+//                        heads-ups the recipient might want to verify
+//                        on their own time, not the moment they glance
+//                        at the tray.
 //
 // Types not present in this map are treated as 'unknown' — informational,
 // no entity, no push, no special routing.
@@ -120,13 +130,20 @@ export var NOTIF_TYPES = {
     renotify_on_update: false,
   },
 
-  // Module 9.1.5 — informational casual heads-up
+  // Module 9.1.5 — informational casual heads-up.
+  // sticky_after_read: a casual match against you is a real-world
+  // event you might want to verify in the feed before the
+  // notification clears. Without sticky, opening the tray once
+  // marks all informational rows read and they vanish on next
+  // render — the recipient never gets a chance to actually
+  // notice the heads-up.
   casual_match_logged: {
     action_required:    false,
     entity_type:        "match",
     click:              "feed",
     push_category:      "match_updates",
     renotify_on_update: false,
+    sticky_after_read:  true,
   },
 
   // Match-invite (Module 9 — opponent invite flow)

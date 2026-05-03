@@ -17,6 +17,7 @@ import {
   notifAccentColor,
   notifTimeLabel,
   isActionable,
+  isSticky,
 } from "../utils/notifUtils.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -914,6 +915,13 @@ export default function NotificationsPanel({
     navigate("/home");
     setShowNotifications(false);
     if (n && markOneRead && !n.read) markOneRead(n.id);
+    // Sticky rows (casual_match_logged) stay visible after read by
+    // design — but when the user clicks through to the feed, the
+    // navigation IS the resolution. Dismiss so it falls out of the
+    // tray on next render instead of sitting there forever.
+    if (n && isSticky(n) && dismissNotification) {
+      dismissNotification(n.id);
+    }
   }
 
   // ── Render a display item ────────────────────────────────────────────────

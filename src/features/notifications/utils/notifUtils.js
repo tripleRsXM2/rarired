@@ -36,6 +36,17 @@ export function isActionable(n) {
   return getTypeMeta(n.type).action_required === true;
 }
 
+// True for informational types whose registry entry sets
+// sticky_after_read: keep visible in the centre AFTER read_at is
+// stamped, until the user explicitly clicks (which dismisses) or
+// dismisses the row. Lets the user actually notice a real-world
+// heads-up like "John logged a casual match with you" instead of
+// having it auto-clear the moment they glance at the tray.
+export function isSticky(n) {
+  if (!n) return false;
+  return getTypeMeta(n.type).sticky_after_read === true;
+}
+
 // THE canonical "is this row visible in the notification centre right
 // now?" filter. Used by the panel render, the badge count, every
 // future "active notifications" surface. If you need a different
@@ -65,6 +76,15 @@ export function isActiveForUser(n) {
 
   if (isActionable(n)) {
     // Actionable + unresolved: always visible (read or unread).
+    return true;
+  }
+  if (isSticky(n)) {
+    // Informational + sticky_after_read: stays visible despite read.
+    // Cleared only when the user clicks (markOneRead → dismiss) or
+    // dismisses, OR when the underlying entity resolves (resolved_at
+    // set by the cleanup trigger — already short-circuited above).
+    // The badge still clears via markSeen, so the user gets a "you've
+    // seen this" signal without losing the row itself.
     return true;
   }
   // Informational: visible only until first read.
