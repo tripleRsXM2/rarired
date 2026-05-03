@@ -133,8 +133,12 @@ function OptionPill({ on, label, hint, onClick, flex }) {
   );
 }
 
-function HairlineDivider() {
-  return <div style={{ height: 1, background: ED_TOK.line, margin: "22px 0" }}/>;
+function HairlineDivider({ tight }) {
+  return <div style={{
+    height:     1,
+    background: ED_TOK.line,
+    margin:     tight ? "12px 0 18px" : "22px 0",
+  }}/>;
 }
 
 // ── Modal body ──────────────────────────────────────────────────────
@@ -275,17 +279,24 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
           onChange={function (e) { setName(e.target.value); }}
         />
 
-        {/* Description — borderless, no underline. The textarea body
-            sits on its own without the field-bottom rule that lined
-            inputs get; the explicit HairlineDivider below opens the
-            next section. Two stacked hairlines (textarea border-bottom
-            + section divider) read as a visual stutter on screen. */}
+        {/* Description — borderless, no underline. Single empty row
+            by default; textarea auto-grows up to 5 rows as the user
+            types so the field doesn't waste cream paper while empty.
+            The explicit HairlineDivider below opens the next section
+            with a tighter margin (description has no terminating
+            field rule, so the section break can sit closer). */}
         <div style={{ marginTop: 22 }}/>
         <Microlabel>Description (optional)</Microlabel>
         <textarea
           value={description}
-          rows={2}
-          onChange={function (e) { setDescription(e.target.value); }}
+          rows={1}
+          onChange={function (e) {
+            setDescription(e.target.value);
+            // Auto-grow up to ~5 lines (15px * 1.5 line-height per row).
+            var el = e.target;
+            el.style.height = "auto";
+            el.style.height = Math.min(el.scrollHeight, 5 * 22) + "px";
+          }}
           style={{
             background:    "transparent",
             border:        "none",
@@ -297,10 +308,15 @@ export default function CreateLeagueModal({ t, onClose, createLeague, onCreated,
             outline:       "none",
             width:         "100%",
             resize:        "none",
+            // Single-row default so the section doesn't open with a
+            // big empty cream slab when the field is unused.
+            minHeight:     22,
+            display:       "block",
+            overflow:      "hidden",
           }}
         />
 
-        <HairlineDivider/>
+        <HairlineDivider tight/>
 
         {/* Mode */}
         <Microlabel>Mode</Microlabel>
