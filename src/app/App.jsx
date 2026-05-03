@@ -877,9 +877,15 @@ export default function App(){
           />
         </div>
 
-        {/* CENTER COLUMN */}
+        {/* CENTER COLUMN
+            cs-outer-pad reserves 80px at the bottom for the floating
+            tab bar. When hideBottomTabBar is on (Messages thread takes
+            over the whole screen), drop that padding — otherwise the
+            body grows 80px taller than the viewport and the document
+            ends up 80px scrolled below 0, hiding the chat header
+            above the visible area. */}
         <div
-          className={"cs-center-col cs-outer-pad" + (tab==="map" ? " cs-center-col-map" : "")}
+          className={"cs-center-col" + (hideBottomTabBar ? "" : " cs-outer-pad") + (tab==="map" ? " cs-center-col-map" : "")}
           style={(hideTopMobNav || hideBottomTabBar) ? Object.assign(
             {},
             // Drop --cs-nav-h to just the safe-area inset so sticky

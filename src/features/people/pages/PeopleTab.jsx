@@ -371,11 +371,21 @@ export default function PeopleTab({
     var body = document.body;
     var prevHtmlOverflow = html.style.overflow;
     var prevBodyOverflow = body.style.overflow;
+    var prevScrollY = window.scrollY || 0;
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
+    // Pin the document to scrollTop=0. overflow:hidden locks the
+    // CURRENT scroll position; if the user scrolled the document
+    // before opening the thread (or auto-scrolled to a focused
+    // input), the existing offset would persist and yank the chat
+    // header above the visible viewport. Force reset.
+    window.scrollTo(0, 0);
     return function () {
       html.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
+      // Restore scroll on the way out so the user lands where they
+      // were on the previous page (Friends list, etc.).
+      window.scrollTo(0, prevScrollY);
     };
   }, [messagesView]);
 
