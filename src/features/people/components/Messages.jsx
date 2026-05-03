@@ -129,7 +129,7 @@ function AvatarStack(props) {
             top: 0,
             width: size, height: size,
             borderRadius: "50%",
-            boxShadow: "0 0 0 2px " + (t && t.bgCard ? t.bgCard : "#fff"),
+            boxShadow: "0 0 0 2px " + (t && ED_TOK.bg2 ? ED_TOK.bg2 : "#fff"),
             zIndex: 10 - idx,
             overflow: "hidden",
           }}>
@@ -596,15 +596,15 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         }}
         style={{
           width: "100%",
-          background: isActive ? t.accentSubtle : "transparent",
+          background: isActive ? "rgba(255,45,85,0.10)" : "transparent",
           border: "none",
-          borderLeft: "3px solid " + (isActive ? t.accent : "transparent"),
+          borderLeft: "3px solid " + (isActive ? ED_TOK.accent : "transparent"),
           padding: "10px 14px",
           display: "flex", gap: 12, alignItems: "center",
           cursor: "pointer", textAlign: "left",
           transition: "background 0.12s ease",
         }}
-        onMouseEnter={function (e) { if (!isActive) e.currentTarget.style.background = t.bgTertiary; }}
+        onMouseEnter={function (e) { if (!isActive) e.currentTarget.style.background = ED_TOK.bg2; }}
         onMouseLeave={function (e) { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
         <div style={{ position: "relative", flexShrink: 0 }}>
           {isGroup ? (
@@ -620,14 +620,14 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{
               fontSize: 14, fontWeight: hasUnread ? 700 : 600,
-              color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              color: ED_TOK.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{rowTitle}</span>
-            {isPinnedFlag && <span style={{ color: t.textTertiary, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
-            {isMuted && <span title="Muted" style={{ color: t.textTertiary, fontSize: 12, flexShrink: 0, lineHeight: 1 }}>🔕</span>}
+            {isPinnedFlag && <span style={{ color: ED_TOK.muted, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
+            {isMuted && <span title="Muted" style={{ color: ED_TOK.muted, fontSize: 12, flexShrink: 0, lineHeight: 1 }}>🔕</span>}
             <span style={{ flex: 1 }}/>
             <span style={{
               fontSize: 11, flexShrink: 0,
-              color: hasUnread ? t.accent : t.textTertiary,
+              color: hasUnread ? ED_TOK.accent : ED_TOK.muted,
               fontWeight: hasUnread ? 600 : 400,
             }}>{formatMessageTime(conv.last_message_at)}</span>
           </div>
@@ -635,7 +635,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             <span style={{
               flex: 1, minWidth: 0,
               fontSize: 13,
-              color: isTyping ? t.accent : (hasUnread ? t.text : t.textSecondary),
+              color: isTyping ? ED_TOK.accent : (hasUnread ? ED_TOK.ink : ED_TOK.ink2),
               fontWeight: hasUnread || isTyping ? 500 : 400,
               fontStyle: isTyping ? "italic" : "normal",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -648,7 +648,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 title={seenByPartner ? "Seen" : "Sent"}
                 style={{
                   flexShrink: 0, display: "inline-flex", alignItems: "center",
-                  color: seenByPartner ? t.accent : t.textTertiary,
+                  color: seenByPartner ? ED_TOK.accent : ED_TOK.muted,
                   fontSize: 11, lineHeight: 1,
                 }}>
                 {seenByPartner ? "✓✓" : "✓"}
@@ -656,7 +656,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             )}
             {hasUnread && (
               <span style={{
-                background: t.accent, color: "#fff",
+                background: ED_TOK.accent, color: "#fff",
                 fontSize: 10, fontWeight: 700,
                 minWidth: 18, height: 18, borderRadius: 9,
                 padding: "0 6px", display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -688,7 +688,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: 12,
                 padding: "12px 16px",
-                borderBottom: "1px solid " + t.border,
+                borderBottom: "1px solid " + ED_TOK.line,
               }}>
                 <div className="cs-skeleton" style={{ width: 40, height: 40, borderRadius: "50%" }}/>
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -698,7 +698,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               </div>
             );
           })}
-          <div style={{ textAlign: "center", color: t.textTertiary, fontSize: 11, padding: "20px 0 0" }}>
+          <div style={{ textAlign: "center", color: ED_TOK.muted, fontSize: 11, padding: "20px 0 0" }}>
             Loading messages…
           </div>
         </div>
@@ -715,7 +715,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
     function sectionHeader(label) {
       return (
-        <div style={{ padding: "12px 14px 4px", fontSize: 11, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+        <div style={{ padding: "12px 14px 4px", fontSize: 11, fontWeight: 700, color: ED_TOK.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
       );
     }
 
@@ -723,32 +723,32 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       <div>
         {dms.requests.length > 0 && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ padding: "12px 14px 6px", fontSize: 11, fontWeight: 700, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <div style={{ padding: "12px 14px 6px", fontSize: 11, fontWeight: 700, color: ED_TOK.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Message Requests · {dms.requests.length}
             </div>
             <div style={{ padding: "0 10px" }}>
               {dms.requests.map(function (conv) {
                 return (
-                  <div key={conv.id} style={{ background: t.accentSubtle, border: "1px solid " + t.accent, borderRadius: 12, padding: 12, marginBottom: 8 }}>
+                  <div key={conv.id} style={{ background: "rgba(255,45,85,0.10)", border: "1px solid " + ED_TOK.accent, borderRadius: 12, padding: 12, marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                       <PlayerAvatar name={conv.partner.name} avatar={conv.partner.avatar} avatarUrl={conv.partner.avatar_url} size={38} />
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>{conv.partner.name}</div>
-                        <div style={{ fontSize: 12, color: t.textSecondary }}>wants to message you</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: ED_TOK.ink }}>{conv.partner.name}</div>
+                        <div style={{ fontSize: 12, color: ED_TOK.ink2 }}>wants to message you</div>
                       </div>
                     </div>
                     {conv.last_message_preview && (
-                      <div style={{ fontSize: 12, color: t.textSecondary, background: t.bg, padding: "8px 10px", borderRadius: 8, marginBottom: 10, fontStyle: "italic", lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 12, color: ED_TOK.ink2, background: ED_TOK.bg, padding: "8px 10px", borderRadius: 8, marginBottom: 10, fontStyle: "italic", lineHeight: 1.4 }}>
                         "{conv.last_message_preview}"
                       </div>
                     )}
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={function () { dms.acceptRequest(conv.id); dms.openConversation(conv); }}
-                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: t.accent, color: t.accentText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: ED_TOK.accent, color: ED_TOK.accentText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                         Accept
                       </button>
                       <button onClick={function () { dms.declineRequest(conv.id); }}
-                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid " + ED_TOK.line, background: "transparent", color: ED_TOK.ink2, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
                         Decline
                       </button>
                     </div>
@@ -762,8 +762,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         {allEmpty && dms.conversationsLoaded ? (
           <div style={{ textAlign: "center", padding: "48px 20px" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>💬</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>No messages yet</div>
-            <div style={{ fontSize: 13, color: t.textSecondary }}>Go to Friends and tap Message to start a conversation.</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: ED_TOK.ink, marginBottom: 6 }}>No messages yet</div>
+            <div style={{ fontSize: 13, color: ED_TOK.ink2 }}>Go to Friends and tap Message to start a conversation.</div>
           </div>
         ) : (
           <div>
@@ -784,16 +784,16 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       <div style={{
         flex: 1, display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        background: t.bg, padding: 40, textAlign: "center",
+        background: ED_TOK.bg, padding: 40, textAlign: "center",
       }}>
         <div style={{
           width: 88, height: 88, borderRadius: 22,
-          background: t.accentSubtle,
+          background: "rgba(255,45,85,0.10)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 40, marginBottom: 18,
         }}>💬</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: t.text }}>Your messages</div>
-        <div style={{ fontSize: 13, color: t.textSecondary, marginTop: 6, maxWidth: 320 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: ED_TOK.ink }}>Your messages</div>
+        <div style={{ fontSize: 13, color: ED_TOK.ink2, marginTop: 6, maxWidth: 320 }}>
           Pick a conversation on the left to open the thread, or start a new one from the Friends tab.
         </div>
       </div>
@@ -892,8 +892,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               left: LIST_LEFT + "px",
               width: LIST_W + "px",
               height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
-              background: t.bg,
-              borderRight: "1px solid " + t.border,
+              background: ED_TOK.bg,
+              borderRight: "1px solid " + ED_TOK.line,
               overflowY: "auto",
               zIndex: 5,
             }}>
@@ -952,7 +952,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           var itemStyle = {
             display: "flex", alignItems: "center", gap: 10, width: "100%",
             padding: "11px 14px", border: "none", background: "transparent",
-            color: t.text, fontSize: 14, textAlign: "left", cursor: "pointer",
+            color: ED_TOK.ink, fontSize: 14, textAlign: "left", cursor: "pointer",
           };
           return (
             <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={close} onContextMenu={function(e){e.preventDefault();close();}}>
@@ -961,19 +961,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 style={{
                   position: "fixed", top: top, left: left,
                   width: menuW,
-                  background: t.bgCard, border: "1px solid " + t.border,
+                  background: ED_TOK.bg2, border: "1px solid " + ED_TOK.line,
                   borderRadius: 12, overflow: "hidden",
                   boxShadow: "0 12px 40px rgba(0,0,0,0.32)",
                   zIndex: 201,
                 }}>
                 <button onClick={onMute} style={itemStyle}
-                  onMouseEnter={function (e) { e.currentTarget.style.background = t.bgTertiary; }}
+                  onMouseEnter={function (e) { e.currentTarget.style.background = ED_TOK.bg2; }}
                   onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
                   <span>{isMuted ? "🔔" : "🔕"}</span>
                   <span>{isMuted ? "Unmute" : "Mute"} conversation</span>
                 </button>
-                <button onClick={onPin} style={Object.assign({}, itemStyle, { borderTop: "1px solid " + t.border })}
-                  onMouseEnter={function (e) { e.currentTarget.style.background = t.bgTertiary; }}
+                <button onClick={onPin} style={Object.assign({}, itemStyle, { borderTop: "1px solid " + ED_TOK.line })}
+                  onMouseEnter={function (e) { e.currentTarget.style.background = ED_TOK.bg2; }}
                   onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
                   <span style={{ display: "inline-flex" }}><IconPin/></span>
                   <span>{isPinned ? "Unpin" : "Pin"} conversation</span>
@@ -982,10 +982,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                     a leave/delete affordance from this menu yet. */}
                 {!targetConv.isGroup && (
                   <button onClick={onDelete} style={Object.assign({}, itemStyle, {
-                    borderTop: "1px solid " + t.border,
-                    color: t.red, fontWeight: 600,
+                    borderTop: "1px solid " + ED_TOK.line,
+                    color: ED_TOK.loss, fontWeight: 600,
                   })}
-                    onMouseEnter={function (e) { e.currentTarget.style.background = (t.redSubtle || "rgba(220,38,38,0.08)"); }}
+                    onMouseEnter={function (e) { e.currentTarget.style.background = (ED_TOK.lossSubtle || "rgba(220,38,38,0.08)"); }}
                     onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}>
                     <span style={{ display: "inline-flex" }}><IconTrash/></span>
                     <span>Delete conversation</span>
@@ -1034,29 +1034,29 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               ? {
                   // Desktop modal
                   width: "100%", maxWidth: 360,
-                  background: t.bgCard, border: "1px solid " + t.border,
+                  background: ED_TOK.bg2, border: "1px solid " + ED_TOK.line,
                   borderRadius: 14, padding: "20px",
                   boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
                 }
               : {
                   // Mobile bottom sheet
                   width: "100%",
-                  background: t.bgCard,
+                  background: ED_TOK.bg2,
                   borderRadius: "20px 20px 0 0",
                   padding: "20px 20px calc(20px + env(safe-area-inset-bottom))",
                 }
             }>
             {!(typeof window !== "undefined" && window.innerWidth >= 700) && (
-              <div style={{ width: 32, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 20px" }} />
+              <div style={{ width: 32, height: 4, borderRadius: 2, background: ED_TOK.line, margin: "0 auto 20px" }} />
             )}
-            <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 4 }}>{conv.partner.name}</div>
-            <div style={{ fontSize: 12, color: t.textTertiary, marginBottom: 20 }}>Conversation settings</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: ED_TOK.ink, marginBottom: 4 }}>{conv.partner.name}</div>
+            <div style={{ fontSize: 12, color: ED_TOK.muted, marginBottom: 20 }}>Conversation settings</div>
             <button onClick={function () { setShowSettings(false); setShowDeleteConfirm(true); }}
-              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + t.red, background: "transparent", color: t.red, fontSize: 14, fontWeight: 600, marginBottom: 8, cursor: "pointer" }}>
+              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + ED_TOK.loss, background: "transparent", color: ED_TOK.loss, fontSize: 14, fontWeight: 600, marginBottom: 8, cursor: "pointer" }}>
               Delete Conversation
             </button>
             <button onClick={function () { setShowSettings(false); }}
-              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 14, cursor: "pointer" }}>
+              style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid " + ED_TOK.line, background: "transparent", color: ED_TOK.ink2, fontSize: 14, cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -1081,15 +1081,15 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             onClick={function (e) { e.stopPropagation(); }}
             style={{
               width: "100%", maxWidth: 340,
-              background: t.bgCard, border: "1px solid " + t.border,
+              background: ED_TOK.bg2, border: "1px solid " + ED_TOK.line,
               borderRadius: 14, overflow: "hidden",
               boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
             }}>
             <div style={{ padding: "20px 20px 12px" }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 6 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: ED_TOK.ink, marginBottom: 6 }}>
                 Delete conversation?
               </div>
-              <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 13, color: ED_TOK.ink2, lineHeight: 1.5 }}>
                 This removes the thread for both of you. Neither of you will see it again.
               </div>
             </div>
@@ -1098,8 +1098,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 onClick={function () { setShowDeleteConfirm(false); }}
                 style={{
                   flex: 1, padding: "11px", borderRadius: 8,
-                  border: "1px solid " + t.border, background: "transparent",
-                  color: t.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  border: "1px solid " + ED_TOK.line, background: "transparent",
+                  color: ED_TOK.ink, fontSize: 13, fontWeight: 600, cursor: "pointer",
                 }}>
                 Cancel
               </button>
@@ -1110,7 +1110,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 }}
                 style={{
                   flex: 1, padding: "11px", borderRadius: 8, border: "none",
-                  background: t.red, color: "#fff",
+                  background: ED_TOK.loss, color: "#fff",
                   fontSize: 13, fontWeight: 700, cursor: "pointer",
                 }}>
                 Delete
@@ -1182,10 +1182,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               <AvatarStack t={t} participants={(conv.participants || []).filter(function (p) { return p && p.id !== myId; })} size={36} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{convTitle(conv, myId)}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: ED_TOK.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{convTitle(conv, myId)}</div>
               {dms.typingConvs && dms.typingConvs[conv.id]
-                ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
-                : <div style={{ fontSize: 11, color: t.textTertiary }}>{((conv.participants || []).length) + " participants"}</div>
+                ? <div style={{ fontSize: 11, color: ED_TOK.accent, fontStyle: "italic" }}>typing…</div>
+                : <div style={{ fontSize: 11, color: ED_TOK.muted }}>{((conv.participants || []).length) + " participants"}</div>
               }
             </div>
           </button>
@@ -1200,10 +1200,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             <div
               onClick={openProfile && conv.partner.id ? function () { openProfile(conv.partner.id); } : undefined}
               style={{ flex: 1, minWidth: 0, cursor: openProfile && conv.partner.id ? "pointer" : "default" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: ED_TOK.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.partner.name}</div>
               {dms.typingConvs && dms.typingConvs[conv.id]
-                ? <div style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>typing…</div>
-                : (presence.label && <div style={{ fontSize: 11, color: presence.online ? t.green : t.textTertiary }}>{presence.label}</div>)
+                ? <div style={{ fontSize: 11, color: ED_TOK.accent, fontStyle: "italic" }}>typing…</div>
+                : (presence.label && <div style={{ fontSize: 11, color: presence.online ? ED_TOK.win : ED_TOK.muted }}>{presence.label}</div>)
               }
             </div>
           </>
@@ -1216,8 +1216,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           aria-label={showDetails ? "Hide details" : "Show details"}
           className="cs-dm-details-btn"
           style={{
-            background: showDetails ? t.accentSubtle : "transparent",
-            border: "none", color: showDetails ? t.accent : t.textTertiary,
+            background: showDetails ? "rgba(255,45,85,0.10)" : "transparent",
+            border: "none", color: showDetails ? ED_TOK.accent : ED_TOK.muted,
             width: 32, height: 32, borderRadius: 8,
             display: "none", alignItems: "center", justifyContent: "center",
             padding: 0, flexShrink: 0, cursor: "pointer",
@@ -1232,7 +1232,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
       {/* Pending banner — sender-side */}
       {isPending && iAmSender && (
-        <div style={{ background: t.accentSubtle, border: "1px solid " + t.accent, borderRadius: 10, padding: "10px 14px", marginBottom: 10, fontSize: 13, color: t.accent, textAlign: "center", lineHeight: 1.4 }}>
+        <div style={{ background: "rgba(255,45,85,0.10)", border: "1px solid " + ED_TOK.accent, borderRadius: 10, padding: "10px 14px", marginBottom: 10, fontSize: 13, color: ED_TOK.accent, textAlign: "center", lineHeight: 1.4 }}>
           Request sent — waiting for {conv.partner.name} to accept
         </div>
       )}
@@ -1259,11 +1259,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         paddingRight:            4,
       }}>
         {dms.threadLoading ? (
-          <div style={{ textAlign: "center", padding: "40px 0", color: t.textTertiary, fontSize: 13 }}>Loading…</div>
+          <div style={{ textAlign: "center", padding: "40px 0", color: ED_TOK.muted, fontSize: 13 }}>Loading…</div>
         ) : visibleMessages.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0" }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>
-            <div style={{ fontSize: 13, color: t.textTertiary }}>
+            <div style={{ fontSize: 13, color: ED_TOK.muted }}>
               {isPending && !iAmSender ? "Accept to start chatting" : "Say hello!"}
             </div>
           </div>
@@ -1287,24 +1287,24 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               <div key={msg.id}>
                 {showDateSep && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, margin: idx === 0 ? "4px 0 10px" : "18px 0 10px" }}>
-                    <div style={{ flex: 1, height: 1, background: t.border }} />
-                    <span style={{ fontSize: 9, fontWeight: 800, color: t.textTertiary, textTransform: "uppercase", letterSpacing: "0.16em", flexShrink: 0 }}>
+                    <div style={{ flex: 1, height: 1, background: ED_TOK.line }} />
+                    <span style={{ fontSize: 9, fontWeight: 800, color: ED_TOK.muted, textTransform: "uppercase", letterSpacing: "0.16em", flexShrink: 0 }}>
                       {dateSeparatorLabel(msg.created_at)}
                     </span>
-                    <div style={{ flex: 1, height: 1, background: t.border }} />
+                    <div style={{ flex: 1, height: 1, background: ED_TOK.line }} />
                   </div>
                 )}
                 {showUnread && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 10px" }}>
-                    <div style={{ flex: 1, height: 1, background: t.accent, opacity: 0.35 }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: t.accent, textTransform: "uppercase", letterSpacing: "0.1em", flexShrink: 0 }}>Unread Messages</span>
-                    <div style={{ flex: 1, height: 1, background: t.accent, opacity: 0.35 }} />
+                    <div style={{ flex: 1, height: 1, background: ED_TOK.accent, opacity: 0.35 }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: ED_TOK.accent, textTransform: "uppercase", letterSpacing: "0.1em", flexShrink: 0 }}>Unread Messages</span>
+                    <div style={{ flex: 1, height: 1, background: ED_TOK.accent, opacity: 0.35 }} />
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: rowMargin }}>
                   <div style={{ maxWidth: "75%" }}>
                     {replyMsg && (
-                      <div style={{ background: t.bgTertiary, borderLeft: "3px solid " + t.accent, padding: "5px 10px", borderRadius: "6px 6px 0 0", fontSize: 11, color: t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ background: ED_TOK.bg2, borderLeft: "3px solid " + ED_TOK.accent, padding: "5px 10px", borderRadius: "6px 6px 0 0", fontSize: 11, color: ED_TOK.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {replyMsg.deleted_at ? "Deleted message" : previewify(replyMsg.content, 120)}
                       </div>
                     )}
@@ -1314,8 +1314,8 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                           onChange={function (e) { dms.setEditDraft(e.target.value); }}
                           onKeyDown={function (e) { if (e.key === "Enter") dms.submitEdit(msg.id); if (e.key === "Escape") dms.cancelEdit(); }}
                           style={Object.assign({}, inputStyle(t), { fontSize: 16, padding: "8px 12px", borderRadius: 10, flex: 1 })} />
-                        <button onClick={function () { dms.submitEdit(msg.id); }} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: t.accent, color: t.accentText, fontSize: 12, fontWeight: 700, flexShrink: 0, cursor: "pointer" }}>Save</button>
-                        <button onClick={dms.cancelEdit} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 12, flexShrink: 0, cursor: "pointer" }}>✕</button>
+                        <button onClick={function () { dms.submitEdit(msg.id); }} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: ED_TOK.accent, color: ED_TOK.accentText, fontSize: 12, fontWeight: 700, flexShrink: 0, cursor: "pointer" }}>Save</button>
+                        <button onClick={dms.cancelEdit} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid " + ED_TOK.line, background: "transparent", color: ED_TOK.ink2, fontSize: 12, flexShrink: 0, cursor: "pointer" }}>✕</button>
                       </div>
                     ) : (() => {
                       var isImg = !msg.deleted_at && isImageMessageContent(msg.content);
@@ -1326,16 +1326,16 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                         // + tail to match text bubbles.
                         background: "transparent",
                         padding: 0,
-                        border: mine ? "none" : "1px solid " + t.border,
+                        border: mine ? "none" : "1px solid " + ED_TOK.line,
                         borderRadius: mine ? (replyMsg ? "0 16px 4px 16px" : "16px 16px 4px 16px") : (replyMsg ? "16px 0 16px 4px" : "16px 16px 16px 4px"),
                         overflow: "hidden",
                         cursor: "pointer", userSelect: "none", WebkitUserSelect: "none",
                         WebkitTouchCallout: "none",
                         maxWidth: 260,
                       } : {
-                        background: mine ? t.accent : t.bgCard,
-                        color: mine ? t.accentText : t.text,
-                        border: mine ? "none" : "1px solid " + t.border,
+                        background: mine ? ED_TOK.accent : ED_TOK.bg2,
+                        color: mine ? ED_TOK.accentText : ED_TOK.ink,
+                        border: mine ? "none" : "1px solid " + ED_TOK.line,
                         borderRadius: mine ? (replyMsg ? "0 16px 4px 16px" : "16px 16px 4px 16px") : (replyMsg ? "16px 0 16px 4px" : "16px 16px 16px 4px"),
                         padding: "9px 13px", fontSize: 14, lineHeight: 1.45,
                         wordBreak: "break-word", whiteSpace: "pre-wrap",
@@ -1380,21 +1380,21 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                           var iReacted = users.includes(myId);
                           return (
                             <button key={emoji} onClick={function () { dms.toggleReaction(msg.id, emoji); }}
-                              style={{ padding: "2px 8px", borderRadius: 20, border: "1px solid " + (iReacted ? t.accent : t.border), background: iReacted ? t.accentSubtle : t.bgCard, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                              {emoji}<span style={{ fontSize: 10, color: t.textSecondary }}>{users.length}</span>
+                              style={{ padding: "2px 8px", borderRadius: 20, border: "1px solid " + (iReacted ? ED_TOK.accent : ED_TOK.line), background: iReacted ? "rgba(255,45,85,0.10)" : ED_TOK.bg2, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                              {emoji}<span style={{ fontSize: 10, color: ED_TOK.ink2 }}>{users.length}</span>
                             </button>
                           );
                         })}
                       </div>
                     )}
-                    <div style={{ fontSize: 10, color: t.textTertiary, marginTop: 3, textAlign: mine ? "right" : "left" }}>
+                    <div style={{ fontSize: 10, color: ED_TOK.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>
                       {formatMessageTime(msg.created_at)}
                       {/* Seen/Sent receipt is 1:1 only for v1 — groups
                           would need per-participant read tracking. */}
                       {!conv.isGroup && mine && idx === lastMineIdx && (
                         idx === lastSeenByPartnerIdx
-                          ? <span style={{ marginLeft: 6, color: t.accent, fontWeight: 600 }}>· Seen</span>
-                          : <span style={{ marginLeft: 6, color: t.textTertiary }}>· Sent</span>
+                          ? <span style={{ marginLeft: 6, color: ED_TOK.accent, fontWeight: 600 }}>· Seen</span>
+                          : <span style={{ marginLeft: 6, color: ED_TOK.muted }}>· Sent</span>
                       )}
                     </div>
                   </div>
@@ -1442,11 +1442,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             <div style={{
               position: "fixed",
               top: pos.top, left: pos.left,
-              background: t.bgCard, border: "1px solid " + t.border, borderRadius: 14,
+              background: ED_TOK.bg2, border: "1px solid " + ED_TOK.line, borderRadius: 14,
               boxShadow: "0 8px 40px rgba(0,0,0,0.22)", overflow: "hidden", zIndex: 201, minWidth: 200,
             }} onClick={function (e) { e.stopPropagation(); }}>
               {/* Emoji reaction strip */}
-              <div style={{ display: "flex", gap: 2, padding: "10px 12px", borderBottom: "1px solid " + t.border, justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 2, padding: "10px 12px", borderBottom: "1px solid " + ED_TOK.line, justifyContent: "space-between", alignItems: "center" }}>
                 {QUICK_REACTIONS.map(function (e) {
                   return (
                     <button key={e} onClick={function () { dms.toggleReaction(menuState.message.id, e); closeMenu(); }}
@@ -1463,9 +1463,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                   }}
                   aria-label="More reactions"
                   style={{
-                    background: t.bgTertiary, border: "none",
+                    background: ED_TOK.bg2, border: "none",
                     width: 28, height: 28, borderRadius: "50%",
-                    fontSize: 16, color: t.text, cursor: "pointer",
+                    fontSize: 16, color: ED_TOK.ink, cursor: "pointer",
                     lineHeight: 1, padding: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>+</button>
@@ -1476,11 +1476,11 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                   <button key={item.label} onClick={item.action}
                     style={{ display: "flex", alignItems: "center", gap: 12, width: "100%",
                       padding: "11px 14px", border: "none",
-                      background: item.danger ? (t.redSubtle || "rgba(220,38,38,0.08)") : "transparent",
-                      color: item.danger ? t.red : t.text,
+                      background: item.danger ? (ED_TOK.lossSubtle || "rgba(220,38,38,0.08)") : "transparent",
+                      color: item.danger ? ED_TOK.loss : ED_TOK.ink,
                       fontSize: 14, fontWeight: item.danger ? 600 : 500,
                       textAlign: "left", cursor: "pointer",
-                      borderTop: "1px solid " + t.border }}>
+                      borderTop: "1px solid " + ED_TOK.line }}>
                     <span style={{ display: "inline-flex", flexShrink: 0 }}>{Icon ? <Icon/> : null}</span>
                     <span>{item.label}</span>
                   </button>
@@ -1506,15 +1506,15 @@ export default function Messages({ t, authUser, dms, openProfile }) {
 
       {/* Accept banner — recipient side */}
       {isPending && !iAmSender && (
-        <div style={{ background: t.bgCard, border: "1px solid " + t.border, borderRadius: 12, padding: "12px", marginTop: 10 }}>
-          <div style={{ fontSize: 13, color: t.textSecondary, marginBottom: 10, textAlign: "center" }}>Accept this request to reply</div>
+        <div style={{ background: ED_TOK.bg2, border: "1px solid " + ED_TOK.line, borderRadius: 12, padding: "12px", marginTop: 10 }}>
+          <div style={{ fontSize: 13, color: ED_TOK.ink2, marginBottom: 10, textAlign: "center" }}>Accept this request to reply</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={function () { dms.acceptRequest(conv.id); }}
-              style={{ flex: 1, padding: "10px", borderRadius: 9, border: "none", background: t.accent, color: t.accentText, fontSize: 13, fontWeight: 700 }}>
+              style={{ flex: 1, padding: "10px", borderRadius: 9, border: "none", background: ED_TOK.accent, color: ED_TOK.accentText, fontSize: 13, fontWeight: 700 }}>
               Accept
             </button>
             <button onClick={function () { dms.declineRequest(conv.id); }}
-              style={{ flex: 1, padding: "10px", borderRadius: 9, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 13 }}>
+              style={{ flex: 1, padding: "10px", borderRadius: 9, border: "1px solid " + ED_TOK.line, background: "transparent", color: ED_TOK.ink2, fontSize: 13 }}>
               Decline
             </button>
           </div>
@@ -1526,7 +1526,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           flex sizing breaks (cs-dm-root height not resolving cleanly,
           messages list growing past its scroll container, etc.), the
           input stays anchored to the bottom of the viewport.
-          Background is the editorial cream — was legacy t.bg which
+          Background is the editorial cream — was legacy ED_TOK.bg which
           differed slightly from ED_TOK.bg and made the input footer
           read as a separate tonal band. */}
       <div style={{
@@ -1540,12 +1540,12 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       }}>
       {/* Reply preview */}
       {dms.replyTo && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: t.bgTertiary, borderTop: "2px solid " + t.accent, borderRadius: "8px 8px 0 0" }}>
-          <div style={{ flex: 1, fontSize: 12, color: t.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            <span style={{ fontWeight: 700, color: t.accent, marginRight: 4 }}>Replying</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: ED_TOK.bg2, borderTop: "2px solid " + ED_TOK.accent, borderRadius: "8px 8px 0 0" }}>
+          <div style={{ flex: 1, fontSize: 12, color: ED_TOK.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 700, color: ED_TOK.accent, marginRight: 4 }}>Replying</span>
             {previewify(dms.replyTo.content, 140)}
           </div>
-          <button onClick={dms.clearReplyTo} style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
+          <button onClick={dms.clearReplyTo} style={{ background: "transparent", border: "none", color: ED_TOK.muted, fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
         </div>
       )}
 
@@ -1569,26 +1569,26 @@ export default function Messages({ t, authUser, dms, openProfile }) {
             dms.setProposedSlot(Object.assign({}, slot, patch));
           }
           return (
-            <div style={{ padding: "10px 12px", background: t.bgTertiary, borderTop: "2px solid " + t.accent, borderRadius: "8px 8px 0 0", marginBottom: 6 }}>
+            <div style={{ padding: "10px 12px", background: ED_TOK.bg2, borderTop: "2px solid " + ED_TOK.accent, borderRadius: "8px 8px 0 0", marginBottom: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: t.accent, letterSpacing: "0.05em", textTransform: "uppercase" }}>Proposing</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: ED_TOK.accent, letterSpacing: "0.05em", textTransform: "uppercase" }}>Proposing</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: ED_TOK.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
                   {slot.venue || "Venue"}
                 </span>
                 <button onClick={function () { dms.setProposedSlot(null); }}
                   title="Clear proposed slot"
-                  style={{ background: "transparent", border: "none", color: t.textTertiary, fontSize: 16, lineHeight: 1, padding: "0 2px", cursor: "pointer", flexShrink: 0 }}>×</button>
+                  style={{ background: "transparent", border: "none", color: ED_TOK.muted, fontSize: 16, lineHeight: 1, padding: "0 2px", cursor: "pointer", flexShrink: 0 }}>×</button>
               </div>
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <input type="date" value={slot.date || ""}
                   onChange={function (e) { updateSlot({ date: e.target.value }); }}
-                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid " + t.border, background: t.inputBg, color: t.text, fontSize: 12 }}/>
+                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid " + ED_TOK.line, background: ED_TOK.bg2, color: ED_TOK.ink, fontSize: 12 }}/>
                 <input type="time" value={slot.time || ""}
                   onChange={function (e) { updateSlot({ time: e.target.value }); }}
-                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid " + t.border, background: t.inputBg, color: t.text, fontSize: 12 }}/>
+                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid " + ED_TOK.line, background: ED_TOK.bg2, color: ED_TOK.ink, fontSize: 12 }}/>
               </div>
               {validation.hint && (
-                <div style={{ fontSize: 10.5, color: validation.ok ? t.textTertiary : t.red, marginBottom: 8, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 10.5, color: validation.ok ? ED_TOK.muted : ED_TOK.loss, marginBottom: 8, lineHeight: 1.4 }}>
                   {validation.hint}
                 </div>
               )}
@@ -1596,9 +1596,9 @@ export default function Messages({ t, authUser, dms, openProfile }) {
                 {DM_TEMPLATES.map(function (tmpl) {
                   return (
                     <button key={tmpl.id} onClick={function () { applyTemplate(tmpl.id); }}
-                      style={{ padding: "4px 10px", borderRadius: 14, border: "1px solid " + t.border, background: "transparent", color: t.textSecondary, fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}
-                      onMouseEnter={function (e) { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.color = t.accent; }}
-                      onMouseLeave={function (e) { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.color = t.textSecondary; }}>
+                      style={{ padding: "4px 10px", borderRadius: 14, border: "1px solid " + ED_TOK.line, background: "transparent", color: ED_TOK.ink2, fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}
+                      onMouseEnter={function (e) { e.currentTarget.style.borderColor = ED_TOK.accent; e.currentTarget.style.color = ED_TOK.accent; }}
+                      onMouseLeave={function (e) { e.currentTarget.style.borderColor = ED_TOK.line; e.currentTarget.style.color = ED_TOK.ink2; }}>
                       {tmpl.label}
                     </button>
                   );
@@ -1612,7 +1612,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       {/* Upload-error toast — small inline strip above input, disappears
           when the user next successfully picks a file or types. */}
       {uploadError && (
-        <div style={{ padding: "6px 10px", background: (t.redSubtle || "rgba(220,38,38,0.1)"), color: t.red, fontSize: 12, borderRadius: 8, marginBottom: 6 }}>
+        <div style={{ padding: "6px 10px", background: (ED_TOK.lossSubtle || "rgba(220,38,38,0.1)"), color: ED_TOK.loss, fontSize: 12, borderRadius: 8, marginBottom: 6 }}>
           {uploadError}
         </div>
       )}
