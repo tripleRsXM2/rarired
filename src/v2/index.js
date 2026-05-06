@@ -4,3 +4,4 @@
 // from `src/app/`, `src/features/`, or other v1 paths.
 
 export * from "./features/matches/index.js";
+export { default as BaselineApp } from "./shell/BaselineApp.jsx";

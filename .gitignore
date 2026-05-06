@@ -36,3 +36,4 @@ supabase/.temp/
 supabase/.branches/
 __screenshots__/
 .vercel
+.tmp-v2-design/

@@ -238,6 +238,38 @@ export function StatBar({ label, a, b, theme, accent }) {
   );
 }
 
+export function TimerRing({ remainingMs, totalMs, size = 220, theme, accent, paused = false }) {
+  const pct = Math.max(0, Math.min(1, remainingMs / totalMs));
+  const r = (size - 14) / 2;
+  const c = 2 * Math.PI * r;
+  const dash = c * pct;
+  const s = Math.floor(remainingMs / 1000);
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return (
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={theme.line} strokeWidth="6" fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r}
+          stroke={accent} strokeWidth="6" fill="none" strokeLinecap="round"
+          strokeDasharray={`${dash} ${c}`}
+          style={{ transition: paused ? "none" : "stroke-dasharray .9s linear" }} />
+      </svg>
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 2,
+      }}>
+        <div className="t-num" style={{
+          fontSize: size * 0.32, fontWeight: 500, color: theme.ink, letterSpacing: "-0.04em",
+          fontVariantNumeric: "tabular-nums",
+        }}>
+          {String(mm).padStart(1, "0")}:{String(ss).padStart(2, "0")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Pill({ children, theme, accent, bg, ink }) {
   return (
     <div className="t-cap" style={{

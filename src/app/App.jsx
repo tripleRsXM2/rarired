@@ -65,7 +65,7 @@ import VersionPicker, { V2Placeholder, getAppVersion, setAppVersion, clearAppVer
 // branches) keep importing without breakage even though we no longer
 // render it. When the v2 design is promoted, swap the route gate, not
 // the import surface.
-import { V2MatchHome } from "../v2/index.js";
+import { BaselineApp } from "../v2/index.js";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -923,7 +923,7 @@ export default function App(){
   if (auth.authUser && v2Path) {
     return (
       <Providers t={t} theme={theme}>
-        <V2MatchHome onBack={function(){
+        <BaselineApp onBack={function(){
           // "Back to picker" → wipe flag + bounce home so the picker
           // overlay re-mounts on the next render.
           clearAppVersion();
