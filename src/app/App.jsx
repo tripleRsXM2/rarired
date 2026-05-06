@@ -60,6 +60,12 @@ import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
 import FindPlayersWelcome from "../features/home/components/FindPlayersWelcome.jsx";
 import VersionPicker, { V2Placeholder, getAppVersion, setAppVersion, clearAppVersion } from "../features/version-picker/VersionPicker.jsx";
+// V2 namespace — kept under `src/v2/` and gated behind the `/v2` route.
+// `V2Placeholder` is left exported above so v1 callers (and any in-flight
+// branches) keep importing without breakage even though we no longer
+// render it. When the v2 design is promoted, swap the route gate, not
+// the import surface.
+import { V2MatchHome } from "../v2/index.js";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -912,12 +918,13 @@ export default function App(){
       </Providers>
     );
   }
-  // V2 route — placeholder until the user hands over the V2 design.
+  // V2 route — Claude Design "Live scoring · key states" prototype.
+  // The v2 namespace lives in `src/v2/` and is fully isolated from v1.
   if (auth.authUser && v2Path) {
     return (
       <Providers t={t} theme={theme}>
-        <V2Placeholder onBack={function(){
-          // "Back to picker" → wipe flag + reload so the picker
+        <V2MatchHome onBack={function(){
+          // "Back to picker" → wipe flag + bounce home so the picker
           // overlay re-mounts on the next render.
           clearAppVersion();
           setAppVersionState(null);
