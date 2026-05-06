@@ -902,6 +902,21 @@ export default function App(){
       navigate("/version-pick", { replace: true });
     }
   }, [auth.authUser && auth.authUser.id, auth.authInitialized, appVersion, pickerPath, resetVersionPath]);
+  // Safety net for the BLANK PAGE bug: if the user is on /v2 or
+  // /version-pick but currently signed-OUT (e.g. they hit signout
+  // while in the picker / V2 placeholder, or arrived via direct
+  // deep-link) AND the OnboardingFlow gate didn't fire (cs-onb-done
+  // missing, etc.), the main shell has no render branch for those
+  // tabs and would render blank. Push them to /home so either the
+  // home content or the OnboardingFlow gate handles them.
+  // Same fallback for /version-reset (the reset-then-redirect effect
+  // above might race with a signin transition).
+  useEffect(function () {
+    if (!auth.authInitialized) return;
+    var stuckUnauth = !auth.authUser && (pickerPath || v2Path);
+    var stuckOnReset = pathParts[0] === "version-reset" && pathParts[0] !== "version-pick";
+    if (stuckUnauth) navigate("/home", { replace: true });
+  }, [auth.authInitialized, auth.authUser, pickerPath, v2Path]);
 
   // Picker route — renders any time the URL is /version-pick (auth
   // required). Independent of the flag, so a returning user can hit
