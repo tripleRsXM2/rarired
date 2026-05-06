@@ -350,6 +350,11 @@ export default function App(){
         setProfileTab("overview");
         setShowSettings(false);
         setReviewDrawer(null);
+        // Mdawg-only: clear the V1/V2 picker flag on signout so the
+        // picker re-shows on the next signin. User feedback (testing
+        // mode): 'we want to see this everytime we sign in'.
+        clearAppVersion();
+        setAppVersionState(null);
       },
       // Module 4: bridges the useMatchHistory→useChallenges call from inside a
       // coordRef so we don't have to re-order the hook declarations.
