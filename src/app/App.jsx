@@ -59,6 +59,13 @@ import ComposeMessageModal from "../features/people/components/ComposeMessageMod
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
 import FindPlayersWelcome from "../features/home/components/FindPlayersWelcome.jsx";
+import VersionPicker, { V2Placeholder, getAppVersion, setAppVersion, clearAppVersion } from "../features/version-picker/VersionPicker.jsx";
+// V2 namespace — kept under `src/v2/` and gated behind the `/v2` route.
+// `V2Placeholder` is left exported above so v1 callers (and any in-flight
+// branches) keep importing without breakage even though we no longer
+// render it. When the v2 design is promoted, swap the route gate, not
+// the import surface.
+import { BaselineApp } from "../v2/index.js";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -107,7 +114,7 @@ export default function App(){
   // 'match' added 2026-05-02 — /match/log mounts LogMatchPage (the
   // single-screen editorial Log a Match flow). The bottom tab bar's
   // raised "+" navigates here instead of opening the legacy modal.
-  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications"];
+  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications","version-reset","version-pick","v2"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -349,6 +356,11 @@ export default function App(){
         setProfileTab("overview");
         setShowSettings(false);
         setReviewDrawer(null);
+        // Mdawg-only: clear the V1/V2 picker flag on signout so the
+        // picker re-shows on the next signin. User feedback (testing
+        // mode): 'we want to see this everytime we sign in'.
+        clearAppVersion();
+        setAppVersionState(null);
       },
       // Module 4: bridges the useMatchHistory→useChallenges call from inside a
       // coordRef so we don't have to re-order the hook declarations.
@@ -738,11 +750,32 @@ export default function App(){
   }
 
   // ── Module 9: opponent-invite landing page ────────────────────────────
-  // /invite/match/<token> short-circuits the regular shell. The page
+  // /invite/match/<token> short-keys the regular shell. The page
   // handles its own auth-redirect via the AuthModal hook so we render
   // it for both logged-in and logged-out users. parseInvitePath
   // validates the token shape so a bogus URL falls through to /home.
   var invitePath = parseInvitePath(location.pathname);
+
+  // ── V1 / V2 splash gate state (Mdawg-only experiment) ────────────
+  // CRITICAL: these hooks MUST be declared BEFORE any conditional
+  // early returns (invitePath, showOnboardingFlow, etc.) — React's
+  // rules of hooks require the hook count to be stable across
+  // renders. A previous version had the useState/useEffect AFTER the
+  // OnboardingFlow early-return, which triggered React error #300
+  // ('Rendered more hooks than during the previous render') the
+  // moment the OnboardingFlow gate flipped between renders. User
+  // feedback: 'when i signed out on mdawg and try to login I get a
+  // blank page'.
+  var [appVersion, setAppVersionState] = useState(function () { return getAppVersion(); });
+  var v2Path           = pathParts[0] === "v2";
+  var resetVersionPath = pathParts[0] === "version-reset";
+  useEffect(function () {
+    if (resetVersionPath) {
+      clearAppVersion();
+      setAppVersionState(null);
+      navigate("/home", { replace: true });
+    }
+  }, [resetVersionPath]);
   if (invitePath) {
     return (
       <Providers t={t} theme={theme}>
@@ -863,6 +896,40 @@ export default function App(){
             navigate("/match/log", { replace: true });
           }}
         />
+      </Providers>
+    );
+  }
+
+  // V1 / V2 splash gate render (state + effect declared above with
+  // the rest of the hooks, BEFORE any early returns).
+  var showPickerOverlay = !!auth.authUser && auth.authInitialized
+    && !appVersion && !invitePath && !resetVersionPath;
+  if (showPickerOverlay) {
+    return (
+      <Providers t={t} theme={theme}>
+        <VersionPicker onPick={function (v) {
+          setAppVersion(v);
+          setAppVersionState(v);
+          // V1 → URL stays where they are; the next render falls
+          // through to the main shell. V2 → push /v2 so the V2
+          // placeholder renders.
+          if (v === "v2") navigate("/v2");
+        }}/>
+      </Providers>
+    );
+  }
+  // V2 route — Claude Design "Live scoring · key states" prototype.
+  // The v2 namespace lives in `src/v2/` and is fully isolated from v1.
+  if (auth.authUser && v2Path) {
+    return (
+      <Providers t={t} theme={theme}>
+        <BaselineApp onBack={function(){
+          // "Back to picker" → wipe flag + bounce home so the picker
+          // overlay re-mounts on the next render.
+          clearAppVersion();
+          setAppVersionState(null);
+          navigate("/home", { replace: true });
+        }}/>
       </Providers>
     );
   }
