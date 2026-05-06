@@ -59,6 +59,7 @@ import ComposeMessageModal from "../features/people/components/ComposeMessageMod
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
 import FindPlayersWelcome from "../features/home/components/FindPlayersWelcome.jsx";
+import VersionPicker, { V2Placeholder, getAppVersion, setAppVersion, clearAppVersion } from "../features/version-picker/VersionPicker.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -107,7 +108,7 @@ export default function App(){
   // 'match' added 2026-05-02 — /match/log mounts LogMatchPage (the
   // single-screen editorial Log a Match flow). The bottom tab bar's
   // raised "+" navigates here instead of opening the legacy modal.
-  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications"];
+  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications","version-reset"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -863,6 +864,49 @@ export default function App(){
             navigate("/match/log", { replace: true });
           }}
         />
+      </Providers>
+    );
+  }
+
+  // ── V1 / V2 splash gate (Mdawg-only experiment) ─────────────────
+  // After sign-in, if the user hasn't picked an app version yet, show
+  // the full-screen V1/V2 picker. Choice persists in localStorage
+  // (`cs-app-version`). Hit /version-reset to clear it and re-pick.
+  // Production main is unaffected — main has no commit reference to
+  // this component AND the flag default is null which is treated as
+  // "show picker" only on Mdawg-deployed code paths. If the gate is
+  // accidentally merged to main, it's still safe — main users will
+  // just get the picker once on their next sign-in.
+  var [appVersion, setAppVersionState] = useState(function () { return getAppVersion(); });
+  // /version-reset path → clear flag + redirect to /home so the
+  // picker re-shows.
+  var resetVersionPath = pathParts[0] === "version-reset";
+  useEffect(function () {
+    if (resetVersionPath) {
+      clearAppVersion();
+      setAppVersionState(null);
+      navigate("/home", { replace: true });
+    }
+  }, [resetVersionPath]);
+  var showVersionPicker = !!auth.authUser && auth.authInitialized && !appVersion;
+  if (showVersionPicker) {
+    return (
+      <Providers t={t} theme={theme}>
+        <VersionPicker onPick={function (v) {
+          setAppVersion(v);
+          setAppVersionState(v);
+          // V1 → drop into the main shell at /home (clears any deep
+          // link memory from the picker route). V2 → falls through
+          // to the V2Placeholder render branch below.
+          if (v === "v1") navigate("/home", { replace: true });
+        }}/>
+      </Providers>
+    );
+  }
+  if (appVersion === "v2") {
+    return (
+      <Providers t={t} theme={theme}>
+        <V2Placeholder/>
       </Providers>
     );
   }
