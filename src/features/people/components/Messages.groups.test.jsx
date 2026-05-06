@@ -116,9 +116,13 @@ describe("Messages — group conversations", function () {
 
   it("composer placeholder reads 'Message group…' for group threads", function () {
     var dms = makeDms({ activeConv: groupConv, threadMessages: [] });
-    render(<Messages t={t} authUser={authUser} dms={dms} />);
-    var textarea = screen.getByPlaceholderText(/message group…/i);
-    expect(textarea).toBeInTheDocument();
+    var { container } = render(<Messages t={t} authUser={authUser} dms={dms} />);
+    // The composer was migrated from a <textarea placeholder> to a
+    // contentEditable <div data-placeholder> in commit 0eb6ff7
+    // (editorial Messages refactor). Query the attribute directly.
+    var el = container.querySelector('[data-placeholder]');
+    expect(el).toBeTruthy();
+    expect(el.getAttribute("data-placeholder")).toMatch(/message group…/i);
   });
 
   it("self participant card has no profile chevron / open handler", function () {

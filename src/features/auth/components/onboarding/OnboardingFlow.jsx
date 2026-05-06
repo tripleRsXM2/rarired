@@ -298,7 +298,15 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
     if (!auth.authUser) {
       try {
         localStorage.setItem(DONE_KEY, "1");
-        localStorage.removeItem(STORAGE_KEY);
+        // Deliberately KEEP cs-onb (the typed state). On email-confirm-
+        // required projects, auth.authUser is null all the way through
+        // onboarding, so flushedRef and persistPatch never wrote anything
+        // to the profile row. After the user confirms their email and
+        // signs in, useCurrentUser.loadProfile picks up cs-onb and
+        // replays every typed field (name, age, skill, zone, courts,
+        // availability) into the profile, then clears the stash. User
+        // feedback: 'after I login for the first time it says your
+        // name. The name given at the onboarding should be used here.'
         localStorage.removeItem(STARTED_KEY);
       } catch (_) {}
       setShowVerifyEmail(true);

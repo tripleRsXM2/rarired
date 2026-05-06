@@ -45,10 +45,14 @@ export function useCurrentUser(){
     //     defaults + upsert + flag isNew=true so onboarding fires.
     if(r.error){
       console.warn("[useCurrentUser] loadProfile error — preserving prior state:", r.error.message || r.error);
-      // Don't clobber profile state when we can't read. Mark
-      // unloaded so the UI's profileLoaded gate stays closed and
-      // the user doesn't accidentally save a stale draft.
-      setProfileLoaded(false);
+      // Don't clobber profile state when we can't read. We DO flip
+      // profileLoaded → true so Settings' Save button isn't permanently
+      // disabled when an RLS denial / network blip blocks the initial
+      // fetch. The save itself will fail gracefully with a visible
+      // toast and the user can retry. User feedback: 'after I signed
+      // up, the settings get stuck at loading... it doesn't allow me
+      // to save.'
+      setProfileLoaded(true);
       return { profile: null, isNew: false, error: r.error };
     }
     var isNewUser = !r.data;
@@ -56,6 +60,13 @@ export function useCurrentUser(){
     if(r.data){
       loaded=r.data;
       setProfile(r.data); setProfileDraft(r.data);
+      // Replay leftover onboarding state (see helper below). Covers
+      // the case where the user typed name/age/skill/zone/courts/avail
+      // during onboarding but auth.authUser was null at the time
+      // (email-confirm-required projects), so the OnboardingFlow's
+      // flushedRef effect never fired and persistPatch was a no-op.
+      // Now that they're signed in, write everything they typed.
+      replayLeftoverOnboardingState(user.id, r.data);
     } else {
       // Race-fix: when the user is mid-onboarding (cs-onb-started=1 +
       // cs-onb-done not set), skip the auto-defaults upsert. The
@@ -82,10 +93,95 @@ export function useCurrentUser(){
         loaded = defaults;
         setProfile(defaults); setProfileDraft(defaults);
         await upsertProfile(defaults);
+        // Brand new user, defaults just landed. Now overlay any
+        // leftover onboarding state on top so the typed name/age/etc
+        // beat the defaults. Awaited inside replay; the local state
+        // is reset from fetchProfile after the upsert completes.
+        var refreshed = await replayLeftoverOnboardingState(user.id, defaults);
+        if (refreshed) loaded = refreshed;
       }
     }
     setProfileLoaded(true);
     return { profile:loaded, isNew:isNewUser };
+  }
+
+  // Replay onboarding-screen state that the user typed pre-auth.
+  // The OnboardingFlow stashes screen state under "cs-onb"; on email-
+  // confirm-required projects, the user types a full profile but
+  // auth.authUser is null so nothing gets written to the DB row. This
+  // helper runs on the first authenticated loadProfile and applies
+  // every typed field, then clears the localStorage. Best-effort —
+  // any failure leaves the row alone but the user can still edit
+  // via Settings. Idempotent: cs-onb is cleared after the upsert so
+  // subsequent loadProfile calls find nothing.
+  async function replayLeftoverOnboardingState(userId, baseProfile){
+    if (!userId || typeof localStorage === "undefined") return null;
+    var raw;
+    try { raw = localStorage.getItem("cs-onb"); } catch(_) { return null; }
+    if (!raw) return null;
+    var stash;
+    try { stash = JSON.parse(raw); } catch(_) { return null; }
+    var s = stash && stash.state;
+    if (!s) return null;
+    var fullName = ((s.first||"").trim() + " " + (s.last||"").trim()).trim();
+    var patch = { id: userId };
+    var any = false;
+    if (fullName)             { patch.name = fullName; patch.avatar = initials(fullName); any = true; }
+    if (s.age)                { patch.age_bracket = s.age; any = true; }
+    if (s.level)              { patch.skill = s.level; any = true; }
+    if (s.zone)               { patch.home_zone = s.zone; any = true; }
+    if (s.courts && s.courts.length) { patch.played_courts = s.courts; any = true; }
+    // Availability: the design's chip ids ("wd-am", "wd-pm", "we",
+    // "flex") get expanded to the {Mon:["Morning"], …} shape that
+    // the rest of the app expects. We deliberately avoid importing
+    // the converter from OnboardingFlow to keep the layering clean
+    // — instead we inline a minimal version below that matches what
+    // availChipsToProfileShape produces. Empty avail → leave column
+    // alone (no-op).
+    if (s.avail && s.avail.length) {
+      var weekdayMornings = s.avail.indexOf("wd-am") >= 0 || s.avail.indexOf("flex") >= 0;
+      var weekdayEvenings = s.avail.indexOf("wd-pm") >= 0 || s.avail.indexOf("flex") >= 0;
+      var weekendMornings = s.avail.indexOf("we")    >= 0 || s.avail.indexOf("flex") >= 0;
+      var av = {};
+      ["Mon","Tue","Wed","Thu","Fri"].forEach(function(d){
+        var slots = [];
+        if (weekdayMornings) slots.push("Morning");
+        if (weekdayEvenings) slots.push("Evening");
+        if (slots.length) av[d] = slots;
+      });
+      ["Sat","Sun"].forEach(function(d){
+        var slots = [];
+        if (weekendMornings) slots.push("Morning");
+        if (slots.length) av[d] = slots;
+      });
+      if (Object.keys(av).length){ patch.availability = av; any = true; }
+    }
+    if (!any) {
+      // Nothing meaningful to replay — clear the stash so we don't
+      // re-check on every loadProfile (cheap but tidy).
+      try { localStorage.removeItem("cs-onb"); } catch(_) {}
+      return null;
+    }
+    try {
+      await upsertProfile(patch);
+    } catch(e) {
+      console.warn("[useCurrentUser] replay leftover onboarding state failed:", e && e.message);
+      return null;
+    }
+    // Clear the stash so this only ever runs once.
+    try { localStorage.removeItem("cs-onb"); } catch(_) {}
+    // Refetch so the in-memory profile + draft reflect the merged row.
+    var fresh = await fetchProfile(userId);
+    if (fresh.data) {
+      setProfile(fresh.data);
+      setProfileDraft(fresh.data);
+      return fresh.data;
+    }
+    // Fall back to client-side merge if the refetch failed.
+    var merged = Object.assign({}, baseProfile || {}, patch);
+    setProfile(merged);
+    setProfileDraft(merged);
+    return merged;
   }
 
   function triggerOnboarding(){

@@ -173,10 +173,12 @@ describe("OnboardingFlow", () => {
     await waitFor(() => {
       expect(screen.getByText(/verify your email/i)).toBeTruthy();
     });
-    // Done flag flipped, transient state cleared.
+    // Done flag flipped, in-progress flag cleared. cs-onb (the typed
+    // state) is INTENTIONALLY KEPT so useCurrentUser.loadProfile can
+    // replay it when the user signs in after confirming their email.
     expect(localStorage.getItem("cs-onb-done")).toBe("1");
-    expect(localStorage.getItem("cs-onb")).toBeNull();
     expect(localStorage.getItem("cs-onb-started")).toBeNull();
+    expect(localStorage.getItem("cs-onb")).not.toBeNull();
     // onComplete is NOT called — user must explicitly click 'Back to
     // sign in' from VerifyEmail to proceed.
     expect(onComplete).not.toHaveBeenCalled();

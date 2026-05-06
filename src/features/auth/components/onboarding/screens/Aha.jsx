@@ -61,6 +61,10 @@ export default function Aha({ state, T, onFinish, onSkip, onOpenProfile, busy, v
 
   const zoneName = (ZONE_BY_ID[state.zone] || {}).name || "your area";
   const count = players ? players.length : 0;
+  // When viewerId is undefined the user hasn't completed email
+  // verification yet — RLS blocks profile reads entirely. Don't
+  // pretend the zone is empty; tell them the real reason.
+  const unconfirmed = !viewerId;
 
   return (
     <ScreenIn k="s7">
@@ -77,15 +81,19 @@ export default function Aha({ state, T, onFinish, onSkip, onOpenProfile, busy, v
         }}>
           {players === null
             ? "Finding players…"
-            : count === 0
-              ? "You're early in this area."
-              : `${count} ${count === 1 ? "player" : "players"} near you, ready to hit.`
+            : unconfirmed
+              ? "Almost there."
+              : count === 0
+                ? "You're early in this area."
+                : `${count} ${count === 1 ? "player" : "players"} near you, ready to hit.`
           }
         </h1>
         <p style={{ fontFamily: T.font, fontSize: 14, lineHeight: 1.4, color: T.muted, margin: 0 }}>
-          {count === 0
-            ? "We'll notify you the moment someone joins. In the meantime, log a match or invite a friend."
-            : "Matched on level, area, and when you play."
+          {unconfirmed
+            ? "Confirm your email to unlock your zone — we'll show everyone who plays near you the moment you sign back in."
+            : count === 0
+              ? "We'll notify you the moment someone joins. In the meantime, log a match or invite a friend."
+              : "Matched on level, area, and when you play."
           }
         </p>
 
