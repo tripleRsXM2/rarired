@@ -60,46 +60,33 @@ export function useCurrentUser(){
     if(r.data){
       loaded=r.data;
       setProfile(r.data); setProfileDraft(r.data);
-      // Replay leftover onboarding state (see helper below). Covers
-      // the case where the user typed name/age/skill/zone/courts/avail
-      // during onboarding but auth.authUser was null at the time
-      // (email-confirm-required projects), so the OnboardingFlow's
-      // flushedRef effect never fired and persistPatch was a no-op.
-      // Now that they're signed in, write everything they typed.
-      replayLeftoverOnboardingState(user.id, r.data);
+      // Replay any leftover onboarding state (e.g. user signed in
+      // after email confirmation; cs-onb still has the typed
+      // name/age/skill/zone/courts/avail).
+      var refreshedExisting = await replayLeftoverOnboardingState(user.id, r.data);
+      if (refreshedExisting) loaded = refreshedExisting;
     } else {
-      // Race-fix: when the user is mid-onboarding (cs-onb-started=1 +
-      // cs-onb-done not set), skip the auto-defaults upsert. The
-      // OnboardingFlow's auth-flip effect writes a name-overlaid full
-      // default profile in one atomic shot — having loadProfile ALSO
-      // upsert defaults here was causing a race where 'Your Name' won
-      // and the user's actual name from Welcome→Name was lost, plus
-      // all the per-screen persistPatch writes ended up on whatever
-      // row landed first. User feedback: 'when they put in their
-      // name... it needs to be auto registered to their account...
-      // your profile is Default Your Name'.
-      var midOnboarding = false;
-      try {
-        midOnboarding =
-          typeof localStorage !== "undefined" &&
-          localStorage.getItem("cs-onb-started") === "1" &&
-          localStorage.getItem("cs-onb-done") !== "1";
-      } catch (_) {}
-      if (midOnboarding) {
-        // Hold defaults in memory only — OnboardingFlow owns the DB write.
-        loaded = defaults;
-        setProfile(defaults); setProfileDraft(defaults);
-      } else {
-        loaded = defaults;
-        setProfile(defaults); setProfileDraft(defaults);
-        await upsertProfile(defaults);
-        // Brand new user, defaults just landed. Now overlay any
-        // leftover onboarding state on top so the typed name/age/etc
-        // beat the defaults. Awaited inside replay; the local state
-        // is reset from fetchProfile after the upsert completes.
-        var refreshed = await replayLeftoverOnboardingState(user.id, defaults);
-        if (refreshed) loaded = refreshed;
+      // Brand-new user — no profile row yet. ALWAYS create it. The
+      // previous midOnboarding gate skipped this write to avoid a race
+      // with OnboardingFlow.flushedRef, but flushedRef's silent
+      // .catch(() => {}) was hiding errors and leaving rows missing
+      // entirely (verified live: 7 recent users had auth.users entries
+      // with name in metadata but ZERO profile rows). User feedback:
+      // 'I made a john doe account name and it still shows up as Your
+      // Name. Can you fix that?' Defaults include name pulled from
+      // user.user_metadata.name (set at signUp via options.data.name)
+      // so even if cs-onb is empty the row gets the typed name.
+      loaded = defaults;
+      setProfile(defaults); setProfileDraft(defaults);
+      var ur = await upsertProfile(defaults);
+      if (ur && ur.error) {
+        console.warn("[useCurrentUser] defaults upsert failed:", ur.error.message || ur.error);
       }
+      // Overlay any leftover onboarding state on top so the typed
+      // name/age/skill/etc beat the defaults (which fall back to
+      // email-prefix when user_metadata.name is missing).
+      var refreshed = await replayLeftoverOnboardingState(user.id, defaults);
+      if (refreshed) loaded = refreshed;
     }
     setProfileLoaded(true);
     return { profile:loaded, isNew:isNewUser };

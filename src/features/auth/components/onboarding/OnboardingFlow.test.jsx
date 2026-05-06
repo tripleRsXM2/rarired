@@ -83,11 +83,13 @@ describe("OnboardingFlow", () => {
     expect(screen.getByText(/sign in to courtsync/i)).toBeTruthy();
   });
 
-  it("finishOnboarding writes a comprehensive profile patch + flags + lands on VerifyEmail", async () => {
-    // Hydrate the flow at the Aha step with a fully-populated state so
-    // we can verify finishOnboarding's final patch contains every field.
+  it("Avail's 'Find my players' CTA writes the comprehensive patch + closes the flow (authed)", async () => {
+    // Aha was retired from the linear flow — Avail is now the last
+    // step and its 'Find my players' button calls finishOnboarding
+    // directly. For an authed user, finishOnboarding upserts every
+    // collected field then fires onComplete (no VerifyEmail terminal).
     localStorage.setItem("cs-onb", JSON.stringify({
-      stepIdx: 9, // "aha"
+      stepIdx: 8, // "avail"
       state: {
         first: "Ada", last: "Lovelace",
         email: "ada@example.com", password: "",
@@ -107,18 +109,14 @@ describe("OnboardingFlow", () => {
         refreshProfile={refreshProfile}
       />
     );
-    // Aha screen has two CTAs that both call finishOnboarding.
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /get started/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /find my players/i })).toBeTruthy();
     });
-    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
-    // Final step: lands on VerifyEmail with the user's email visible.
-    // (onComplete fires later from the VerifyEmail "Back to sign in" path.)
+    fireEvent.click(screen.getByRole("button", { name: /find my players/i }));
     await waitFor(() => {
-      expect(screen.getByText(/verify your email/i)).toBeTruthy();
+      expect(onComplete).toHaveBeenCalled();
     });
-    expect(screen.getByText(/ada@example\.com/)).toBeTruthy();
-    // upsertProfile was called with all collected fields.
+    // upsertProfile called with all collected fields.
     expect(upsertProfile).toHaveBeenCalled();
     const patch = upsertProfile.mock.calls[upsertProfile.mock.calls.length - 1][0];
     expect(patch.id).toBe("user-abc");
@@ -127,87 +125,78 @@ describe("OnboardingFlow", () => {
     expect(patch.skill).toBe("Intermediate 2");
     expect(patch.home_zone).toBe("inner-east");
     expect(patch.played_courts).toEqual(["Prince Alfred Park"]);
-    // availability is the chip→day-shape conversion.
     expect(patch.availability).toBeTruthy();
     expect(patch.availability.Mon).toContain("Morning");
     expect(patch.availability.Sat).toContain("Morning");
     // refreshProfile fires so Settings reflects the new values.
     expect(refreshProfile).toHaveBeenCalledWith("user-abc");
-    // cs-onb-done flag set, transient keys cleared.
+    // cs-onb-done flag set, in-progress + state cleared. find-players
+    // flag set so the post-signin modal pops on /home once.
     expect(localStorage.getItem("cs-onb-done")).toBe("1");
     expect(localStorage.getItem("cs-onb")).toBeNull();
     expect(localStorage.getItem("cs-onb-started")).toBeNull();
-    // onComplete is NOT called yet — that fires later from the VerifyEmail
-    // "Back to sign in" CTA in App.jsx (it doesn't navigate the user
-    // straight to /home; they first need to confirm their email).
-    expect(onComplete).not.toHaveBeenCalled();
+    expect(localStorage.getItem("cs-find-players-pending")).toBe("1");
   });
 
-  it("Aha CTA on UNAUTH user still produces a visible state change (VerifyEmail)", async () => {
-    // Repro: localStorage has stepIdx=9 but auth.authUser is null
-    // (e.g. signUp pending email confirmation, browser refresh before
-    // session hydrated, etc.). Previous behaviour called onComplete +
-    // navigate("/home") — invisible state change if user was already
-    // on /home. Now we always land on VerifyEmail so the CTA is never
-    // a dead button.
+  it("Avail CTA on UNAUTH user lands on VerifyEmail + flags find-players", async () => {
+    // Email-confirm-required project: auth.authUser is null all the
+    // way through onboarding. Avail's 'Find my players' tap fires
+    // finishOnboarding which bails to VerifyEmail. cs-onb (typed
+    // state) is KEPT so useCurrentUser.loadProfile replays it on
+    // first signin.
     localStorage.setItem("cs-onb", JSON.stringify({
-      stepIdx: 9,
+      stepIdx: 8,
       state: {
         first: "Ada", last: "Lovelace",
         email: "ada@example.com", password: "",
-        age: "", level: "", utr: "", intent: [],
-        zone: "inner-east", courts: [], avail: [],
+        age: "25-34", level: "Intermediate 2", utr: "", intent: [],
+        zone: "inner-east", courts: [], avail: ["wd-am"],
       },
     }));
     const onComplete = vi.fn();
     render(
       <OnboardingFlow
-        auth={makeAuthStub({ authUser: null })} // ← unauth
+        auth={makeAuthStub({ authUser: null })}
         onComplete={onComplete}
       />
     );
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /get started/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /find my players/i })).toBeTruthy();
     });
-    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+    fireEvent.click(screen.getByRole("button", { name: /find my players/i }));
     await waitFor(() => {
       expect(screen.getByText(/verify your email/i)).toBeTruthy();
     });
-    // Done flag flipped, in-progress flag cleared. cs-onb (the typed
-    // state) is INTENTIONALLY KEPT so useCurrentUser.loadProfile can
-    // replay it when the user signs in after confirming their email.
     expect(localStorage.getItem("cs-onb-done")).toBe("1");
     expect(localStorage.getItem("cs-onb-started")).toBeNull();
     expect(localStorage.getItem("cs-onb")).not.toBeNull();
-    // onComplete is NOT called — user must explicitly click 'Back to
-    // sign in' from VerifyEmail to proceed.
+    expect(localStorage.getItem("cs-find-players-pending")).toBe("1");
+    // onComplete is NOT called — VerifyEmail handles the next nav.
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("'I'll explore on my own' lands on VerifyEmail + flips the done flag", async () => {
+  it("Stale stepIdx=9 from old cs-onb stash gets clamped to last step", async () => {
+    // Users who started onboarding before Aha was removed had stepIdx=9
+    // (Aha) stashed. After hydration we now clamp to STEPS.length-1 (8,
+    // i.e. Avail) so they land on a real screen.
     localStorage.setItem("cs-onb", JSON.stringify({
       stepIdx: 9,
       state: {
         first: "Ada", last: "Lovelace",
         email: "", password: "",
         age: "", level: "", utr: "", intent: [],
-        zone: "inner-east", courts: [], avail: [],
+        zone: "inner-east", courts: [], avail: ["wd-am"],
       },
     }));
-    const onComplete = vi.fn();
     render(
       <OnboardingFlow
         auth={makeAuthStub({ authUser: { id: "user-abc", email: "ada@example.com" } })}
-        onComplete={onComplete}
+        onComplete={vi.fn()}
       />
     );
+    // Should render Avail (the new last step), not a blank screen.
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /explore on my own/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /find my players/i })).toBeTruthy();
     });
-    fireEvent.click(screen.getByRole("button", { name: /explore on my own/i }));
-    await waitFor(() => {
-      expect(screen.getByText(/verify your email/i)).toBeTruthy();
-    });
-    expect(localStorage.getItem("cs-onb-done")).toBe("1");
   });
 });

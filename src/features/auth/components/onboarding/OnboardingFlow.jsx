@@ -33,7 +33,10 @@ import Intent         from "./screens/Intent.jsx";
 import Zone           from "./screens/Zone.jsx";
 import Courts         from "./screens/Courts.jsx";
 import Availability, { availChipsToProfileShape } from "./screens/Availability.jsx";
-import Aha            from "./screens/Aha.jsx";
+// Aha screen retired from the linear flow — the post-signin
+// FindPlayersWelcome banner shows the same content as a one-time
+// non-disruptive surface on /home. The Aha component itself is kept
+// for potential reuse but is no longer imported here.
 import SignIn         from "./screens/SignIn.jsx";
 import SetPassword    from "./screens/SetPassword.jsx";
 import VerifyEmail    from "./screens/VerifyEmail.jsx";
@@ -60,8 +63,17 @@ const T = {
   fontDisplay: "'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, sans-serif",
 };
 
-const STEPS = ["welcome", "name", "email", "age", "level", "intent", "zone", "courts", "avail", "aha"];
+// Aha (find-players reveal) is intentionally OUT of the linear flow —
+// per user feedback ('Find players - this should be removed from the
+// onboarding. Have this pop up the first time someone signs in. Make
+// it a new menu, ask the design team to make it look good and not
+// disruptive.'). Avail is now the last step; finishOnboarding fires
+// directly from its Continue button, and a localStorage flag
+// (cs-find-players-pending=1) gets set so the post-signin shell can
+// render a non-disruptive modal once.
+const STEPS = ["welcome", "name", "email", "age", "level", "intent", "zone", "courts", "avail"];
 const PROGRESS_STEPS = ["name", "email", "age", "level", "intent", "zone", "courts", "avail"];
+const FIND_PLAYERS_PENDING_KEY = "cs-find-players-pending";
 const STORAGE_KEY = "cs-onb";
 const DONE_KEY    = "cs-onb-done";
 // User-started flag — set the moment they tap "Get started" on Welcome.
@@ -181,7 +193,11 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
       if (raw) {
         const j = JSON.parse(raw);
         if (j && j.state) setState((s) => ({ ...s, ...j.state, password: "" })); // never persist password
-        if (j && typeof j.stepIdx === "number") setStepIdx(j.stepIdx);
+        if (j && typeof j.stepIdx === "number") {
+          // Clamp to STEPS bounds — old stashes from before Aha was
+          // removed had stepIdx=9 (Aha) which now points past the end.
+          setStepIdx(Math.max(0, Math.min(j.stepIdx, STEPS.length - 1)));
+        }
       }
     } catch (_) {}
     hydrated.current = true;
@@ -241,7 +257,18 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
       wins: 0, losses: 0, matches_played: 0,
       streak_count: 0, streak_type: null,
       home_zone: null,
-    }).catch(() => {});
+    }).then(function(r){
+      if (r && r.error) {
+        // Surface upsert errors to the console so silent
+        // RLS denials / network blips don't disappear (which
+        // is how the 'no profile row' bug went undiagnosed
+        // for 7 users). loadProfile has its own retry path
+        // so this is observability, not the failure mode.
+        console.warn("[OnboardingFlow] flushedRef upsert error:", r.error.message || r.error);
+      }
+    }).catch(function(e){
+      console.warn("[OnboardingFlow] flushedRef upsert threw:", e && e.message);
+    });
   }, [auth.authUser && auth.authUser.id, state.first, state.last]);
 
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
@@ -281,7 +308,13 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
   }
   async function advanceFromZone()  { await persistPatch({ home_zone: state.zone }); next(); }
   async function advanceFromCourts(){ await persistPatch({ played_courts: state.courts }); next(); }
-  async function advanceFromAvail() { await persistPatch({ availability: availChipsToProfileShape(state.avail) }); next(); }
+  async function advanceFromAvail() {
+    await persistPatch({ availability: availChipsToProfileShape(state.avail) });
+    // Avail is the last step — go straight to finishOnboarding.
+    // Aha (find-players reveal) used to come next; it now lives as a
+    // separate post-signin modal so the linear flow ends cleanly.
+    await finishOnboarding();
+  }
 
   async function finishOnboarding() {
     // Bail-safe path: if we somehow reached the finish CTA without a
@@ -303,11 +336,13 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
         // onboarding, so flushedRef and persistPatch never wrote anything
         // to the profile row. After the user confirms their email and
         // signs in, useCurrentUser.loadProfile picks up cs-onb and
-        // replays every typed field (name, age, skill, zone, courts,
-        // availability) into the profile, then clears the stash. User
-        // feedback: 'after I login for the first time it says your
-        // name. The name given at the onboarding should be used here.'
+        // replays every typed field. User feedback: 'after I login for
+        // the first time it says your name. The name given at the
+        // onboarding should be used here.'
         localStorage.removeItem(STARTED_KEY);
+        // Flag the find-players modal so it pops up after the user's
+        // first authenticated load. Cleared by the modal on dismiss.
+        localStorage.setItem(FIND_PLAYERS_PENDING_KEY, "1");
       } catch (_) {}
       setShowVerifyEmail(true);
       return;
@@ -350,13 +385,15 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
       localStorage.setItem(DONE_KEY, "1");
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(STARTED_KEY);
+      // Flag the find-players modal so the post-signin shell can
+      // surface it once. Cleared by the modal on dismiss.
+      localStorage.setItem(FIND_PLAYERS_PENDING_KEY, "1");
     } catch (_) {}
-    // Land on the verify-email terminal screen instead of immediately
-    // closing the flow. Two CTAs there: 'Back to sign in' (signs out,
-    // shows SignIn) and 'Resend email'. When the user clicks back, we
-    // keep them inside the OnboardingFlow shell (showSignIn=true) so
-    // the existing render branch handles it cleanly.
-    setShowVerifyEmail(true);
+    // User is authenticated (auto-confirmed signup) — close the flow
+    // and drop them into the main shell. The find-players modal
+    // (separately mounted) will pop once on the home screen. No
+    // VerifyEmail terminal needed since they already have a session.
+    if (onComplete) onComplete();
   }
 
   // Render the right screen for the current step, with all wiring threaded
@@ -373,7 +410,7 @@ export default function OnboardingFlow({ onComplete, auth, forceSignIn = false, 
     if (stepName === "zone")    return <Zone    {...props} next={advanceFromZone} />;
     if (stepName === "courts")  return <Courts  {...props} next={advanceFromCourts} />;
     if (stepName === "avail")   return <Availability {...props} next={advanceFromAvail} />;
-    if (stepName === "aha")     return <Aha state={state} T={T} busy={busy} onFinish={finishOnboarding} onSkip={finishOnboarding} onOpenProfile={onOpenProfile} viewerId={auth.authUser && auth.authUser.id} />;
+    // Aha removed from the linear flow — see import block above.
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx, state, busy, signupError, auth.authUser && auth.authUser.id]);

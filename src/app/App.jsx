@@ -58,6 +58,7 @@ import { parseInvitePath } from "../features/scoring/utils/inviteUrl.js";
 import ComposeMessageModal from "../features/people/components/ComposeMessageModal.jsx";
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
+import FindPlayersWelcome from "../features/home/components/FindPlayersWelcome.jsx";
 import ScheduleModal from "../features/tournaments/components/ScheduleModal.jsx";
 import ScoreModal from "../features/scoring/components/ScoreModal.jsx";
 // CommentModal retired — replaced by FeedInteractionsModal (Kudos + Comments
@@ -873,6 +874,18 @@ export default function App(){
           for the state machine + lib/supabase for the wrapped fetch
           that feeds it. */}
       <ServiceHealthBanner/>
+      {/* One-time welcome surface that fires the first time a user
+          lands in the main shell after onboarding. Replaces the old
+          in-flow Aha screen. Self-mounts via the cs-find-players-
+          pending localStorage flag set by OnboardingFlow.finishOnboarding,
+          self-clears on dismiss. Renders nothing if the flag is unset
+          OR no auth user, so the cost of mounting it everywhere is
+          ~zero for repeat visits. */}
+      <FindPlayersWelcome
+        authUser={auth.authUser}
+        profile={currentUser.profile}
+        onOpenProfile={function(uid){ if (uid) navigate("/profile/" + uid); }}
+      />
       {/* ── 3-column shell: sidebar | center | right ──────────────────────── */}
       <div className="cs-shell" style={{color:t.text}}>
 
