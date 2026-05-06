@@ -108,7 +108,7 @@ export default function App(){
   // 'match' added 2026-05-02 — /match/log mounts LogMatchPage (the
   // single-screen editorial Log a Match flow). The bottom tab bar's
   // raised "+" navigates here instead of opening the legacy modal.
-  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications","version-reset"];
+  var validTabs=["home","matches","match","map","tournaments","people","profile","admin","notifications","version-reset","version-pick","v2"];
   var pathParts=location.pathname.split("/").filter(Boolean);
   var tab=(pathParts[0]&&validTabs.includes(pathParts[0]))?pathParts[0]:"home";
 
@@ -869,44 +869,61 @@ export default function App(){
   }
 
   // ── V1 / V2 splash gate (Mdawg-only experiment) ─────────────────
-  // After sign-in, if the user hasn't picked an app version yet, show
-  // the full-screen V1/V2 picker. Choice persists in localStorage
-  // (`cs-app-version`). Hit /version-reset to clear it and re-pick.
-  // Production main is unaffected — main has no commit reference to
-  // this component AND the flag default is null which is treated as
-  // "show picker" only on Mdawg-deployed code paths. If the gate is
-  // accidentally merged to main, it's still safe — main users will
-  // just get the picker once on their next sign-in.
+  // Route-based picker so the browser back button reliably returns
+  // to the picker after the user has chosen. URL drives rendering:
+  //
+  //   /version-pick  → picker (regardless of flag)
+  //   /v2           → V2 placeholder
+  //   anything else → main shell (V1)
+  //
+  // localStorage `cs-app-version` flag persists the LAST choice so
+  // that on a brand-new session we know whether to redirect them to
+  // the picker or let them stay on the existing entry URL. /version-
+  // reset clears the flag + bounces to the picker.
   var [appVersion, setAppVersionState] = useState(function () { return getAppVersion(); });
-  // /version-reset path → clear flag + redirect to /home so the
-  // picker re-shows.
-  var resetVersionPath = pathParts[0] === "version-reset";
+  var pickerPath        = pathParts[0] === "version-pick";
+  var v2Path            = pathParts[0] === "v2";
+  var resetVersionPath  = pathParts[0] === "version-reset";
+  // /version-reset → wipe + redirect to picker.
   useEffect(function () {
     if (resetVersionPath) {
       clearAppVersion();
       setAppVersionState(null);
-      navigate("/home", { replace: true });
+      navigate("/version-pick", { replace: true });
     }
   }, [resetVersionPath]);
-  var showVersionPicker = !!auth.authUser && auth.authInitialized && !appVersion;
-  if (showVersionPicker) {
+  // First-time-after-signin redirect: if signed in AND no flag yet
+  // AND not already on the picker route, push them onto the picker.
+  // `replace: true` — we don't want the user's pre-picker URL polluting
+  // the back stack; once they pick, navigate() pushes a fresh entry
+  // so back-from-V1-or-V2 returns to the picker.
+  useEffect(function () {
+    if (auth.authUser && auth.authInitialized && !appVersion && !pickerPath && !resetVersionPath) {
+      navigate("/version-pick", { replace: true });
+    }
+  }, [auth.authUser && auth.authUser.id, auth.authInitialized, appVersion, pickerPath, resetVersionPath]);
+
+  // Picker route — renders any time the URL is /version-pick (auth
+  // required). Independent of the flag, so a returning user can hit
+  // /version-pick or press back from /home or /v2 to re-pick.
+  if (auth.authUser && pickerPath) {
     return (
       <Providers t={t} theme={theme}>
         <VersionPicker onPick={function (v) {
           setAppVersion(v);
           setAppVersionState(v);
-          // V1 → drop into the main shell at /home (clears any deep
-          // link memory from the picker route). V2 → falls through
-          // to the V2Placeholder render branch below.
-          if (v === "v1") navigate("/home", { replace: true });
+          // navigate (no replace) → pushes a new history entry so
+          // browser back from /home or /v2 returns here to the picker.
+          navigate(v === "v1" ? "/home" : "/v2");
         }}/>
       </Providers>
     );
   }
-  if (appVersion === "v2") {
+  // V2 route — placeholder until the user hands over the V2 design.
+  if (auth.authUser && v2Path) {
     return (
       <Providers t={t} theme={theme}>
-        <V2Placeholder/>
+        <V2Placeholder onBack={function(){ navigate("/version-pick"); }}/>
       </Providers>
     );
   }

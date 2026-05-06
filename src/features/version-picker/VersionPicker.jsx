@@ -208,10 +208,12 @@ function Half({ kind, title, subtitle, body, bg, fg, muted, onClick }) {
 }
 
 // ─── V2 placeholder ────────────────────────────────────────────────
-// Shown when the user has picked V2 but we don't have the V2 design
-// yet. Once the user hands over the V2 Claude Design we swap this
-// for the real screens.
-export function V2Placeholder() {
+// Shown when the user is on /v2 but we don't have the V2 design yet.
+// Once the user hands over the V2 Claude Design we swap this for the
+// real screens. `onBack` (passed by App.jsx) pushes the user back to
+// /version-pick so they can re-pick — no flag-clear or reload needed
+// because the URL drives rendering now.
+export function V2Placeholder({ onBack }) {
   return (
     <div style={{
       minHeight:      "100dvh",
@@ -255,7 +257,7 @@ export function V2Placeholder() {
       </p>
       <button
         type="button"
-        onClick={function () { clearAppVersion(); window.location.reload(); }}
+        onClick={function () { if (onBack) onBack(); }}
         style={{
           marginTop:    24,
           appearance:   "none",
