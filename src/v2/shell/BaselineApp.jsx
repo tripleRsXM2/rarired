@@ -20,6 +20,7 @@ import React from "react";
 
 import Sidebar from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
+import AppearanceToggle from "./AppearanceToggle.jsx";
 import CompetitionsScreen from "../features/competitions/CompetitionsScreen.jsx";
 import MessagesScreen from "../features/messages/MessagesScreen.jsx";
 
@@ -51,10 +52,16 @@ export default function BaselineApp({ onBack }) {
   const [look, setLook] = React.useState("modern");
   React.useEffect(() => { if (look === "modern") ensureModernCss(); }, [look]);
 
+  // User-pickable court — wired into the Live screens via the
+  // pressable CourtPicker chip in the top-right. Defaults to grass.
+  // User feedback: 'the grass icon in the top right, can you make
+  // it pressable? and have you be able to change it to hard court
+  // clay etc.'
+  const [courtId, setCourtId] = React.useState(DEFAULTS.court);
   const themes = look === "modern" ? MODERN_THEMES : THEMES;
   const courts = look === "modern" ? MODERN_COURTS : COURTS;
   const theme = themes[DEFAULTS.theme] || themes.paper;
-  const court = courts[DEFAULTS.court] || courts.grass;
+  const court = courts[courtId] || courts.grass;
   const accent = court.accent;
 
   const [route, setRoute] = React.useState("home");
@@ -110,11 +117,7 @@ export default function BaselineApp({ onBack }) {
             </svg>
             Back
           </button>
-          <span style={{
-            fontFamily: "JetBrains Mono, ui-monospace, monospace",
-            fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase",
-            color: theme.inkSoft,
-          }}>Baseline</span>
+          <AppearanceToggle value={look} onChange={setLook} theme={theme} compact />
         </div>
 
         {/* Content — flex 1, scrolls within itself. */}
@@ -122,6 +125,7 @@ export default function BaselineApp({ onBack }) {
           <MobileRouteView
             route={route}
             theme={theme} accent={accent} court={court}
+            courts={courts} currentCourtId={courtId} onCourtChange={setCourtId}
             liveMatch={liveMatch} finishedMatch={finishedMatch}
             onPoint={onPoint} onUndo={onUndoLive}
             onGo={onGo} onNewMatch={onNewMatch}
@@ -174,11 +178,12 @@ export default function BaselineApp({ onBack }) {
         boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
         display: "flex",
       }}>
-        <Sidebar theme={theme} accent={accent} route={route} onGo={onGo} onBack={onBack} />
+        <Sidebar theme={theme} accent={accent} route={route} onGo={onGo} onBack={onBack} look={look} onLookChange={setLook} />
         <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "auto" }}>
           <RouteView
             route={route}
             theme={theme} accent={accent} court={court}
+            courts={courts} currentCourtId={courtId} onCourtChange={setCourtId}
             liveMatch={liveMatch} finishedMatch={finishedMatch}
             onPoint={onPoint} onUndo={onUndoLive}
             onGo={onGo} onNewMatch={onNewMatch}
@@ -194,6 +199,7 @@ export default function BaselineApp({ onBack }) {
 
 function RouteView({
   route, theme, accent, court,
+  courts, currentCourtId, onCourtChange,
   liveMatch, finishedMatch,
   onPoint, onUndo, onGo, onNewMatch,
   look, onLookChange,
@@ -209,6 +215,7 @@ function RouteView({
     case "live":
       return <DesktopLiveScreen
         match={liveMatch} theme={theme} accent={accent} court={court}
+        courts={courts} currentCourtId={currentCourtId} onCourtChange={onCourtChange}
         onPoint={onPoint} onUndo={onUndo}
         onChangeover={() => onGo("changeover")}
       />;
@@ -250,6 +257,7 @@ function RouteView({
 
 function MobileRouteView({
   route, theme, accent, court,
+  courts, currentCourtId, onCourtChange,
   liveMatch, finishedMatch,
   onPoint, onUndo, onGo, onNewMatch,
   look, onLookChange,
@@ -267,6 +275,7 @@ function MobileRouteView({
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <LiveScoringScreen
             match={liveMatch} theme={theme} accent={accent} court={court}
+            courts={courts} currentCourtId={currentCourtId} onCourtChange={onCourtChange}
             onPoint={onPoint} onUndo={onUndo}
             onChangeover={() => onGo("changeover")}
           />
@@ -297,15 +306,18 @@ function MobileRouteView({
 // ─── Mobile tab bar ────────────────────────────────────────────────
 
 function MobileTabBar({ route, onGo, theme, accent }) {
-  // 5 primary tabs. Added Messages per user feedback ('mobile: is
-  // missing the message tab'). Quick log dropped from the bar — it's
-  // still reachable via the Home → Quick Actions grid tile.
+  // 6 primary tabs — labels and order match the design zip
+  // (`/tmp/v2-design/main-app.jsx` lines 231-236) verbatim:
+  // Home / Score / Comps / Inbox / History / Log. User feedback:
+  // 'on mobile v2: We should see the tabs at the bottom: Home Score
+  // Comps Inbox History Log. Please match the zip.'
   const TABS = [
-    { id: "home",         label: "Home",      Icon: HomeIcon },
-    { id: "live",         label: "Live",      Icon: LiveIcon },
-    { id: "competitions", label: "Compete",   Icon: TrophyIcon },
-    { id: "messages",     label: "Messages",  Icon: ChatIcon },
-    { id: "history",      label: "History",   Icon: HistoryIcon },
+    { id: "home",         label: "Home",    Icon: HomeIcon },
+    { id: "live",         label: "Score",   Icon: LiveIcon },
+    { id: "competitions", label: "Comps",   Icon: TrophyIcon },
+    { id: "messages",     label: "Inbox",   Icon: ChatIcon },
+    { id: "history",      label: "History", Icon: HistoryIcon },
+    { id: "quicklog",     label: "Log",     Icon: PenIcon },
   ];
   return (
     <div style={{

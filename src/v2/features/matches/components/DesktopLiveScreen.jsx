@@ -8,12 +8,15 @@ import React from "react";
 import {
   Ball, Eyebrow, LiveDot, CourtMini, ServeDot, StatBar,
 } from "./atoms.jsx";
+import CourtPicker from "./CourtPicker.jsx";
 import {
   isDeuce, isMatchPoint, pointLabel, fmtDuration, elapsedMs,
 } from "../utils/tennisEngine.js";
 
 export default function DesktopLiveScreen({
   match, theme, accent, court, onPoint, onUndo, onChangeover,
+  // Court picker (optional, see LiveScoringScreen).
+  courts, currentCourtId, onCourtChange,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
 
@@ -40,8 +43,21 @@ export default function DesktopLiveScreen({
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <LiveDot accent={accent} />
             <span style={{ color: theme.inkSoft, fontSize: 13 }} className="t-num">{fmtDuration(elapsedMs(match))}</span>
-            <CourtMini surface={court.surface} size={22} />
-            <span className="t-cap" style={{ color: theme.inkSoft }}>{court.label}</span>
+            {courts && onCourtChange ? (
+              <CourtPicker
+                courts={courts}
+                currentId={currentCourtId || "grass"}
+                onChange={onCourtChange}
+                theme={theme}
+                accent={accent}
+                size={22}
+              />
+            ) : (
+              <>
+                <CourtMini surface={court.surface} size={22} />
+                <span className="t-cap" style={{ color: theme.inkSoft }}>{court.label}</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -71,8 +87,8 @@ export default function DesktopLiveScreen({
 
         {/* point area */}
         <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
-          <DesktopTapZone player={match.p1} server={match.serverIndex === 0} onTap={() => onPoint(0)} theme={theme} accent={accent} />
-          <DesktopTapZone player={match.p2} server={match.serverIndex === 1} onTap={() => onPoint(1)} theme={theme} accent={accent} />
+          <DesktopTapZone player={match.p1} server={match.serverIndex === 0} onTap={() => onPoint(0)} onMinus={onUndo} theme={theme} accent={accent} />
+          <DesktopTapZone player={match.p2} server={match.serverIndex === 1} onTap={() => onPoint(1)} onMinus={onUndo} theme={theme} accent={accent} />
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
@@ -181,20 +197,49 @@ function BigPlayerLine({ match, side, accent, theme }) {
   );
 }
 
-function DesktopTapZone({ player, server, onTap, theme, accent }) {
+function DesktopTapZone({ player, server, onTap, onMinus, theme, accent }) {
+  // Card-as-div (not <button>) so the inner +/- circles can be real
+  // buttons. The whole card is still tap-to-score on click except when
+  // the click originates inside one of the +/- circles. User feedback:
+  // 'on the web version in live scoring. Can you add the - and +
+  // buttons for scoring in the names?'
   return (
-    <button onClick={onTap} className="t-btn" style={{
-      appearance: "none", border: `1px solid ${theme.line}`,
+    <div onClick={onTap} className="t-btn" role="button" tabIndex={0} style={{
+      border: `1px solid ${theme.line}`,
       background: theme.bgRaised, borderRadius: 18, padding: "24px",
-      display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "space-between",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
       color: theme.ink, textAlign: "left", cursor: "pointer", minHeight: 160,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <ServeDot active={server} color={accent} size={9} />
-        <span className="t-cap" style={{ color: theme.inkSoft }}>Point for</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ServeDot active={server} color={accent} size={9} />
+          <span className="t-cap" style={{ color: theme.inkSoft }}>Point for</span>
+        </div>
+        <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 22, marginTop: 12 }}>{player.name}</div>
+        <div style={{ marginTop: 6, color: theme.inkFaint, fontSize: 12 }}>tap to score</div>
       </div>
-      <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 22, marginTop: 24 }}>{player.name}</div>
-      <div style={{ marginTop: 6, color: theme.inkFaint, fontSize: 12 }}>tap to score</div>
-    </button>
+      {/* +/- buttons — identical size + style (only icon differs), to
+          mirror the mobile Live screen. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={(e) => { e.stopPropagation(); onMinus && onMinus(); }} className="t-btn" aria-label="Remove point" style={{
+          width: 56, height: 56, borderRadius: "50%",
+          appearance: "none", border: 0, cursor: "pointer",
+          background: theme.chip, color: theme.ink,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "background .2s",
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onTap && onTap(); }} className="t-btn" aria-label="Add point" style={{
+          width: 56, height: 56, borderRadius: "50%",
+          appearance: "none", border: 0, cursor: "pointer",
+          background: theme.chip, color: theme.ink,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "background .2s",
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+        </button>
+      </div>
+    </div>
   );
 }

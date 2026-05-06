@@ -69,7 +69,10 @@ export default function HomeScreen({
         </button>
       )}
 
-      {onLookChange && <AppearanceToggle value={look} onChange={onLookChange} theme={theme} />}
+      {/* Appearance toggle moved to global header (mobile top bar +
+          desktop sidebar) per user feedback: 'In home: Can you move
+          the appearance option to the top tab heading? so you always
+          able to change the look at any tab'. */}
 
       <QuickActionsGrid theme={theme} accent={accent} onGo={onGo} historyCount={history.length} />
 

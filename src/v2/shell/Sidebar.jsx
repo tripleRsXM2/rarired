@@ -6,6 +6,7 @@
 
 import React from "react";
 import { Ball } from "../features/matches/components/atoms.jsx";
+import AppearanceToggle from "./AppearanceToggle.jsx";
 
 export const ROUTES = [
   { id: "home",         label: "Home",         icon: "home" },
@@ -37,7 +38,7 @@ export function NavIcon({ name, size = 16 }) {
   }
 }
 
-export default function Sidebar({ theme, accent, route, onGo, onBack }) {
+export default function Sidebar({ theme, accent, route, onGo, onBack, look, onLookChange }) {
   return (
     <div style={{
       width: 220, background: theme.bgRaised, color: theme.ink,
@@ -85,6 +86,14 @@ export default function Sidebar({ theme, accent, route, onGo, onBack }) {
         );
       })}
       <div style={{ flex: 1 }} />
+      {/* Appearance toggle — global so it's reachable from every tab.
+          User feedback: 'can you move the appearance option to the top
+          tab heading? so you always able to change the look at any tab' */}
+      {onLookChange && (
+        <div style={{ padding: "10px 6px 4px" }}>
+          <AppearanceToggle value={look} onChange={onLookChange} theme={theme} compact />
+        </div>
+      )}
       <div style={{ borderTop: `0.5px solid ${theme.line}`, paddingTop: 14, fontSize: 10, color: theme.inkFaint, padding: "14px 10px 0" }}>
         <div className="t-cap">v0.1 · Baseline</div>
         <div style={{ marginTop: 4, fontFamily: "Inter" }}>Score the game,<br/>not the app.</div>

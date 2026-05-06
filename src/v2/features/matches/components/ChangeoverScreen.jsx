@@ -24,8 +24,14 @@ export default function ChangeoverScreen({ match, theme, accent, court, onResume
 
   return (
     <div style={{
-      height: "100%", width: "100%", background: court.surface, color: "#fbf6e9",
-      display: "flex", flexDirection: "column", position: "relative", overflow: "hidden",
+      minHeight: "100%", width: "100%", background: court.surface, color: "#fbf6e9",
+      display: "flex", flexDirection: "column", position: "relative",
+      // overflowY: auto so on short viewports (mobile landscape, small
+      // phones) the user can scroll down to reach the Pause / Skip
+      // buttons. User feedback: 'when you click change over on mobile;
+      // the two buttons pause, skip & resume are hidden on some format
+      // mobile, if so can we make the window slidable?'
+      overflowY: "auto",
     }}>
       <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.18 }} preserveAspectRatio="none" viewBox="0 0 400 800">
         <rect x="20" y="60" width="360" height="680" fill="none" stroke="#fff" strokeWidth="2" />
@@ -41,7 +47,7 @@ export default function ChangeoverScreen({ match, theme, accent, court, onResume
         </h1>
       </div>
 
-      <div style={{ flex: 1, position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ flex: "1 1 auto", minHeight: 280, position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 0" }}>
         <TimerRing
           remainingMs={remaining * 1000}
           totalMs={totalSec * 1000}

@@ -9,6 +9,7 @@ import React from "react";
 import {
   Scoreboard, Pill, ServeDot, CourtMini, LiveDot,
 } from "./atoms.jsx";
+import CourtPicker from "./CourtPicker.jsx";
 import {
   isDeuce, isMatchPoint, fmtDuration, elapsedMs,
 } from "../utils/tennisEngine.js";
@@ -17,6 +18,10 @@ export default function LiveScoringScreen({
   match, theme, accent, court,
   onPoint, onUndo, onChangeover,
   showServeClock = true,
+  // Court picker (optional). When `courts` and `onCourtChange` are
+  // provided, the court chip in the top-right becomes a pressable
+  // dropdown that lets the user change surfaces on the fly.
+  courts, currentCourtId, onCourtChange,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [serveSec, setServeSec] = React.useState(25);
@@ -57,10 +62,21 @@ export default function LiveScoringScreen({
             {fmtDuration(elapsedMs(match))}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <CourtMini surface={court.surface} size={20} />
-          <span className="t-cap" style={{ color: theme.inkSoft }}>{court.label}</span>
-        </div>
+        {courts && onCourtChange ? (
+          <CourtPicker
+            courts={courts}
+            currentId={currentCourtId || "grass"}
+            onChange={onCourtChange}
+            theme={theme}
+            accent={accent}
+            size={20}
+          />
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <CourtMini surface={court.surface} size={20} />
+            <span className="t-cap" style={{ color: theme.inkSoft }}>{court.label}</span>
+          </div>
+        )}
       </div>
 
       {/* scoreboard */}
@@ -151,14 +167,18 @@ function BigPointTap({ player, server, onTap, onMinus, flash, theme, accent }) {
           <span className="t-cap" style={{ color: theme.inkSoft }}>tap to win point</span>
         </div>
       </button>
+      {/* +/- score buttons. User feedback: 'I dont like how the two
+          buttons are different' — match size, background, border so
+          they only differ by icon. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button onClick={(e) => { e.stopPropagation(); onMinus && onMinus(); }} className="t-btn" aria-label="Remove point" style={{
-          width: 40, height: 40, borderRadius: "50%",
-          appearance: "none", border: `1px solid ${theme.line}`,
-          background: "transparent", color: theme.inkSoft,
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+          width: 56, height: 56, borderRadius: "50%",
+          appearance: "none", border: 0, cursor: "pointer",
+          background: theme.chip, color: theme.ink,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "background .2s",
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
         </button>
         <button onClick={onTap} className="t-btn" aria-label="Add point" style={{
           width: 56, height: 56, borderRadius: "50%",
