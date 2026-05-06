@@ -138,26 +138,53 @@ export default function BaselineApp({ onBack }) {
   }
 
   // ── Desktop / iPad layout (≥700px) ──────────────────────────
-  // Full-bleed: NO browser-chrome wrapper, NO macOS dots, NO URL
-  // bar. Sidebar fixed-width on the left, main content fills the
-  // rest. The whole shell takes 100vh.
+  // No browser-chrome wrapper (no macOS dots, no URL pill) but the
+  // shell does sit inside a centered max-width card so it doesn't
+  // stretch edge-to-edge on wide monitors. User feedback: 'web: the
+  // windows stretch all the way when full screen. can we have it
+  // fit inside a window like before? but without the actual window?
+  // So that it doesnt extend all the way to the sides of the frame
+  // when full screen.'
+  //
+  // Outer = page bg + flex centering + breathing padding.
+  // Inner = the card (sidebar + main) with rounded corners + soft
+  // shadow + hairline border.
   return (
     <div className={look === "modern" ? "v2-modern-root" : ""} style={{
       position: "fixed", inset: 0, zIndex: 0,
-      background: theme.bg, color: theme.ink,
+      // Page bg — slightly cooler than the card so the card reads
+      // as a distinct surface.
+      background: "#e8e6df",
+      color: theme.ink,
       fontFamily: "Inter, -apple-system, system-ui, sans-serif",
-      display: "flex", overflow: "hidden",
+      display: "flex", alignItems: "stretch", justifyContent: "center",
+      padding: "clamp(16px, 2.5vw, 32px)",
+      overflow: "hidden",
     }}>
-      <Sidebar theme={theme} accent={accent} route={route} onGo={onGo} onBack={onBack} />
-      <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "auto" }}>
-        <RouteView
-          route={route}
-          theme={theme} accent={accent} court={court}
-          liveMatch={liveMatch} finishedMatch={finishedMatch}
-          onPoint={onPoint} onUndo={onUndoLive}
-          onGo={onGo} onNewMatch={onNewMatch}
-          look={look} onLookChange={setLook}
-        />
+      <div className="desktop-shell" style={{
+        flex: 1,
+        // Caps the layout so it never stretches edge-to-edge on
+        // wide monitors. Tracks the design's prototype width.
+        maxWidth: 1280,
+        height: "100%",
+        background: theme.bg,
+        borderRadius: 18,
+        overflow: "hidden",
+        border: `0.5px solid ${theme.line}`,
+        boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
+        display: "flex",
+      }}>
+        <Sidebar theme={theme} accent={accent} route={route} onGo={onGo} onBack={onBack} />
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "auto" }}>
+          <RouteView
+            route={route}
+            theme={theme} accent={accent} court={court}
+            liveMatch={liveMatch} finishedMatch={finishedMatch}
+            onPoint={onPoint} onUndo={onUndoLive}
+            onGo={onGo} onNewMatch={onNewMatch}
+            look={look} onLookChange={setLook}
+          />
+        </div>
       </div>
     </div>
   );
@@ -270,12 +297,15 @@ function MobileRouteView({
 // ─── Mobile tab bar ────────────────────────────────────────────────
 
 function MobileTabBar({ route, onGo, theme, accent }) {
+  // 5 primary tabs. Added Messages per user feedback ('mobile: is
+  // missing the message tab'). Quick log dropped from the bar — it's
+  // still reachable via the Home → Quick Actions grid tile.
   const TABS = [
-    { id: "home",         label: "Home",        Icon: HomeIcon },
-    { id: "live",         label: "Live",        Icon: LiveIcon },
-    { id: "competitions", label: "Compete",     Icon: TrophyIcon },
-    { id: "history",      label: "History",     Icon: HistoryIcon },
-    { id: "quicklog",     label: "Quick log",   Icon: PenIcon },
+    { id: "home",         label: "Home",      Icon: HomeIcon },
+    { id: "live",         label: "Live",      Icon: LiveIcon },
+    { id: "competitions", label: "Compete",   Icon: TrophyIcon },
+    { id: "messages",     label: "Messages",  Icon: ChatIcon },
+    { id: "history",      label: "History",   Icon: HistoryIcon },
   ];
   return (
     <div style={{
@@ -315,5 +345,6 @@ function LiveIcon({ size=20, active }){ return (<svg width={size} height={size} 
 function TrophyIcon({ size=20 }){ return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4 H 17 V 8 C 17 11.5, 14.5 14, 12 14 C 9.5 14, 7 11.5, 7 8 Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none"/><path d="M7 5 H 4 C 4 8, 6 9, 7 9 M 17 5 H 20 C 20 8, 18 9, 17 9" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"/><path d="M9 21 H 15 M 12 14 V 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
 function HistoryIcon({ size=20 }){ return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6 H 20 M 4 12 H 20 M 4 18 H 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
 function PenIcon({ size=20 }){ return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20 H 9 L 19 10 L 14 5 L 4 15 Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none"/><path d="M12 7 L 17 12" stroke="currentColor" strokeWidth="1.2"/></svg>); }
+function ChatIcon({ size=20 }){ return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>); }
 
 export { LiveScoringScreen };
