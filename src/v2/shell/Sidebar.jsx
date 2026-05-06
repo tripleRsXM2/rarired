@@ -37,18 +37,36 @@ export function NavIcon({ name, size = 16 }) {
   }
 }
 
-export default function Sidebar({ theme, accent, route, onGo }) {
+export default function Sidebar({ theme, accent, route, onGo, onBack }) {
   return (
     <div style={{
       width: 220, background: theme.bgRaised, color: theme.ink,
       borderRight: `0.5px solid ${theme.line}`, padding: "20px 12px",
       display: "flex", flexDirection: "column", gap: 4,
-      flexShrink: 0,
+      flexShrink: 0, height: "100%",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 10px 18px" }}>
         <Ball size={20} color={accent} />
         <span className="t-serif" style={{ fontSize: 22, lineHeight: 1, letterSpacing: "-0.01em" }}>Baseline</span>
       </div>
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          title="Back to V1/V2 picker"
+          style={{
+            appearance: "none", border: 0, background: "transparent",
+            color: theme.inkSoft, fontFamily: "JetBrains Mono, ui-monospace, monospace",
+            fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase",
+            padding: "4px 10px 14px", display: "flex", alignItems: "center", gap: 6,
+            cursor: "pointer",
+          }}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M10 4 L 6 8 L 10 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Back to picker
+        </button>
+      )}
       {ROUTES.map((r) => {
         const active = route === r.id;
         return (
