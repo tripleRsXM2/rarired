@@ -739,11 +739,32 @@ export default function App(){
   }
 
   // ── Module 9: opponent-invite landing page ────────────────────────────
-  // /invite/match/<token> short-circuits the regular shell. The page
+  // /invite/match/<token> short-keys the regular shell. The page
   // handles its own auth-redirect via the AuthModal hook so we render
   // it for both logged-in and logged-out users. parseInvitePath
   // validates the token shape so a bogus URL falls through to /home.
   var invitePath = parseInvitePath(location.pathname);
+
+  // ── V1 / V2 splash gate state (Mdawg-only experiment) ────────────
+  // CRITICAL: these hooks MUST be declared BEFORE any conditional
+  // early returns (invitePath, showOnboardingFlow, etc.) — React's
+  // rules of hooks require the hook count to be stable across
+  // renders. A previous version had the useState/useEffect AFTER the
+  // OnboardingFlow early-return, which triggered React error #300
+  // ('Rendered more hooks than during the previous render') the
+  // moment the OnboardingFlow gate flipped between renders. User
+  // feedback: 'when i signed out on mdawg and try to login I get a
+  // blank page'.
+  var [appVersion, setAppVersionState] = useState(function () { return getAppVersion(); });
+  var v2Path           = pathParts[0] === "v2";
+  var resetVersionPath = pathParts[0] === "version-reset";
+  useEffect(function () {
+    if (resetVersionPath) {
+      clearAppVersion();
+      setAppVersionState(null);
+      navigate("/home", { replace: true });
+    }
+  }, [resetVersionPath]);
   if (invitePath) {
     return (
       <Providers t={t} theme={theme}>
@@ -868,34 +889,8 @@ export default function App(){
     );
   }
 
-  // ── V1 / V2 splash gate (Mdawg-only experiment) ─────────────────
-  // Pure-overlay picker: shown as a fixed-position overlay any time
-  // the user is signed in AND has no chosen version yet. NO navigation
-  // happens during render or in useEffect — all state changes are
-  // event-handler driven, eliminating any chance of an infinite-render
-  // loop. (Earlier route-based version was triggering React error #300
-  // on /match/log signin because the auto-redirect effect was racing
-  // with the LogMatchPage hooks during the auth-restore window.)
-  //
-  // Flow:
-  //   - Picker overlay shows when flag is null + signed in.
-  //   - Pick V1 → setFlag('v1'). URL stays where it is. Picker unmounts.
-  //   - Pick V2 → setFlag('v2'). User clicks again to navigate /v2 (or
-  //     we route there in the click handler).
-  //   - /v2 route renders V2Placeholder when flag is 'v2'.
-  //   - /version-reset path clears the flag + drops them on /home.
-  var [appVersion, setAppVersionState] = useState(function () { return getAppVersion(); });
-  var v2Path           = pathParts[0] === "v2";
-  var resetVersionPath = pathParts[0] === "version-reset";
-  // /version-reset → wipe flag + drop on /home (re-trigger picker).
-  useEffect(function () {
-    if (resetVersionPath) {
-      clearAppVersion();
-      setAppVersionState(null);
-      navigate("/home", { replace: true });
-    }
-  }, [resetVersionPath]);
-
+  // V1 / V2 splash gate render (state + effect declared above with
+  // the rest of the hooks, BEFORE any early returns).
   var showPickerOverlay = !!auth.authUser && auth.authInitialized
     && !appVersion && !invitePath && !resetVersionPath;
   if (showPickerOverlay) {
