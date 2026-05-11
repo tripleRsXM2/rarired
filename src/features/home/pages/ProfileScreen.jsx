@@ -38,6 +38,15 @@ export default function ProfileScreen({
   // top nav can fade in "Profile". Defaults to a no-op so the page
   // still renders if mounted outside the App.jsx hierarchy.
   setScrolledPastHero,
+  // When true, ProfileScreen is being rendered INSIDE another page
+  // (e.g. as the hero of MatchesScreen on the Activity tab). The
+  // outer min-height + bottom padding are dropped so the embedding
+  // page's own content can sit immediately below the achievements
+  // row without a viewport-tall gap. User feedback (2026-05-11):
+  // 'there is a big gap inbetween achievements and then the next
+  // line of games played wins and rate. Can you make that a little
+  // more neat.'
+  embedded = false,
 }) {
   var heroRef = useRef(null);
   useEffect(function () {
@@ -100,13 +109,14 @@ export default function ProfileScreen({
   }, [history]);
 
   return (
-    <div className="cs-ed-push" style={{
+    <div className={embedded ? "" : "cs-ed-push"} style={Object.assign({
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
+    }, embedded ? {} : {
       minHeight:     "calc(100dvh - 64px)",
       paddingBottom: 96,
-    }}>
+    })}>
       {/* Avatar + region/level/joined block — the hero. The global
           top mob-nav fades "Profile" in once this block scrolls out
           of view, per the editorial design. */}
@@ -263,8 +273,9 @@ export default function ProfileScreen({
 
       {/* Achievements row (placeholder until trust badges + streak
           milestones are surfaced from the profile object — see
-          docs/trust-and-ranking-rules.md). */}
-      <div style={{ padding: "4px 22px 24px" }}>
+          docs/trust-and-ranking-rules.md). Bottom padding tightens
+          when embedded so the host page's next section sits close. */}
+      <div style={{ padding: embedded ? "4px 22px 10px" : "4px 22px 24px" }}>
         <div style={{ marginBottom: 12 }}>
           <MicroLabel>Achievements</MicroLabel>
         </div>

@@ -120,15 +120,19 @@ export default function MatchesScreen({ authUser, profile, history, leaguesIndex
           authUser={authUser}
           profile={profile}
           history={history}
+          embedded
         />
       )}
       {/* Stat strip — 3 columns with hairline dividers. When `profile`
           is shown above, this strip sits BELOW it but still acts as
-          the scroll-past sentinel for the "Activity" top-bar title. */}
+          the scroll-past sentinel for the "Activity" top-bar title.
+          Top padding tightens when embedded so achievements → stats
+          sits close. */}
       <div ref={heroRef} style={{
         display:             "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
-        padding:             "20px 22px 18px",
+        padding:             profile ? "10px 22px 18px" : "20px 22px 18px",
+        borderTop:           profile ? "1px solid " + ED_TOK.line : "none",
         borderBottom:        "1px solid " + ED_TOK.line,
         marginBottom:        6,
       }}>
