@@ -565,6 +565,40 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var viewport = useDMViewport();
   var isDesktopDM = viewport.isDesktop;
 
+  // Measure the cs-dm-root's top in viewport coords so the desktop
+  // (position:fixed, portaled-to-body) conv-list pane starts BELOW the
+  // PeopleTab's sticky chrome (search bar + sub-tabs) instead of being
+  // partially hidden behind it. User report: 'On the web version in
+  // people>messages — the first message icon is cut off more than half
+  // way. this isnt the case on mobile.' Cause: portal-list was pinned
+  // to top:var(--cs-nav-h) which is 0px on desktop, so the chrome
+  // (zIndex:20, in normal flow) covered the top ~140px of the fixed
+  // list (zIndex:5) — clipping the first row's avatar.
+  var rootRef = useRef(null);
+  var [rootTop, setRootTop] = useState(0);
+  useEffect(function () {
+    if (typeof window === "undefined") return;
+    function measure() {
+      if (!rootRef.current) return;
+      var r = rootRef.current.getBoundingClientRect();
+      setRootTop(Math.max(0, Math.round(r.top)));
+    }
+    measure();
+    // Re-measure on resize (chrome can wrap to a different height) and
+    // on a couple of next animation frames so the layout has settled
+    // after the React commit (sticky chrome + flex column).
+    window.addEventListener("resize", measure);
+    var raf1 = window.requestAnimationFrame(measure);
+    var raf2 = window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(measure);
+    });
+    return function () {
+      window.removeEventListener("resize", measure);
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+    };
+  }, [isDesktopDM]);
+
   function renderConvRow(conv, isPinnedFlag) {
     var hasUnread = conv.hasUnread;
     var isPending = conv.status === "pending";
@@ -858,7 +892,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   var showList = twoPane || !conv;
   var showThreadPane = twoPane || conv;
   return (
-    <div className="cs-dm-root" style={{
+    <div ref={rootRef} className="cs-dm-root" style={{
       display: "flex",
       // Flex-aware sizing — the parent (PeopleTab → inner wrapper)
       // is now a height-locked flex column, so cs-dm-root grows to
@@ -888,10 +922,19 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         ? createPortal((
             <div className="cs-dm-list-pane" style={{
               position: "fixed",
-              top: "var(--cs-nav-h)",
+              // Pin to where cs-dm-root actually sits, not to the
+              // viewport top — otherwise the PeopleTab sticky chrome
+              // (zIndex 20) covers the top of this fixed list (zIndex
+              // 5) and the first conv-row's avatar is clipped. We use
+              // a measured rootTop fallback to var(--cs-nav-h) so the
+              // pane still has a sensible top before the first
+              // measurement lands.
+              top: (rootTop > 0 ? rootTop + "px" : "var(--cs-nav-h)"),
               left: LIST_LEFT + "px",
               width: LIST_W + "px",
-              height: "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))",
+              height: (rootTop > 0
+                ? "calc(100dvh - " + rootTop + "px - var(--cs-tab-h))"
+                : "calc(100dvh - var(--cs-nav-h) - var(--cs-tab-h))"),
               background: ED_TOK.bg,
               borderRight: "1px solid " + ED_TOK.line,
               overflowY: "auto",
