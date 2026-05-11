@@ -1,7 +1,7 @@
 // Messages.jsx — render + interaction smoke tests.
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, within, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import MessagesRaw from "./Messages.jsx";
 import { makeTheme } from "../../../lib/theme.js";
@@ -120,6 +120,62 @@ describe("Messages — conversation list", function () {
     render(<Messages t={t} authUser={authUser} dms={dms} />);
     fireEvent.click(screen.getByText("Alex"));
     expect(dms.openConversation).toHaveBeenCalled();
+  });
+
+  // Regression: 'On the web version in people>messages — the first
+  // message icon is cut off more than half way.' The desktop portal-
+  // pinned conv-list pane has zIndex 5 and was pinned to top:0 (because
+  // --cs-nav-h is 0px on desktop). PeopleTab's sticky chrome (search
+  // bar + sub-tabs) at zIndex 20 then covered the top ~140px of the
+  // fixed list, clipping the first row's avatar.
+  //
+  // Fix: measure cs-dm-root.getBoundingClientRect().top in viewport
+  // coords and use that for the portal's top + height. This test fakes
+  // a getBoundingClientRect that returns top=140 and asserts the
+  // portaled list pane uses that offset.
+  it("desktop list pane starts BELOW the PeopleTab chrome (top = measured cs-dm-root top)", async function () {
+    // Force desktop viewport so the two-pane portal path is taken.
+    var origInner = window.innerWidth;
+    // 1920px ensures gap between fixed list and centered 680px thread
+    // column exceeds LIST_GAP, so the two-pane portal branch is taken.
+    Object.defineProperty(window, "innerWidth", { value: 1920, writable: true, configurable: true });
+
+    // Fake getBoundingClientRect so cs-dm-root reports top=140 (the
+    // PeopleTab chrome height) — emulating its position-in-document.
+    var origGetBCR = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.classList && this.classList.contains("cs-dm-root")) {
+        return { top: 140, left: 0, right: 280, bottom: 800, width: 280, height: 660, x: 0, y: 140, toJSON: function () { return {}; } };
+      }
+      return origGetBCR.apply(this, arguments);
+    };
+
+    try {
+      var dms = makeDms({
+        conversations: [{
+          id: "c1", partner: { id: "p1", name: "Alex", avatar: "AL" },
+          status: "accepted", last_message_preview: "hi", last_message_at: new Date().toISOString(),
+          last_message_sender_id: "p1", hasUnread: false,
+        }],
+      });
+      render(<Messages t={t} authUser={authUser} dms={dms} />);
+
+      // Wait two rAFs (wrapped in act) for the measure-on-mount
+      // effect's setState to settle.
+      await act(async function () {
+        await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+        await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+      });
+
+      var pane = document.querySelector(".cs-dm-list-pane");
+      expect(pane).toBeTruthy();
+      // After measurement, top should equal the chrome height (140px),
+      // not 0/var(--cs-nav-h).
+      expect(pane.style.top).toBe("140px");
+    } finally {
+      Element.prototype.getBoundingClientRect = origGetBCR;
+      Object.defineProperty(window, "innerWidth", { value: origInner, writable: true, configurable: true });
+    }
   });
 });
 

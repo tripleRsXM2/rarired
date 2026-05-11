@@ -6,19 +6,22 @@ import { avColor } from "../lib/utils/avatar.js";
 import { NAV_ICONS } from "../lib/constants/navIcons.jsx";
 import { PresenceDot } from "../features/people/components/PresenceIndicator.jsx";
 
-// Label overrides — the TABS constant is the canonical nav order/ids/labels;
-// Sidebar can override the label text where it wants (e.g. "Feed" over the
-// generic label) without diverging from that order.
-// Tindis (match-pacts) feature was removed pre-launch — both nav
-// and route are gone; old /tindis deep links bounce through
-// App.jsx validTabs and land on home.
+// Web sidebar nav — unified with the mobile bottom tab bar so both
+// surfaces have the same four destinations in the same order:
+// Home / Map / Friends / Activity. User feedback: 'can we unify the
+// tabs for both web and mobile? First tab should be home (change web
+// feed to home) but home should be what we see on the Compete tab.
+// Web will not have a compete tab because that is now home. … friends
+// (change web from people to friends) … activity (web will have
+// profile changed to activity).' Home now renders CompeteHub (see
+// App.jsx tab==="home"); Activity routes to /matches and shows the
+// profile hero at the top with the activity stream below.
 var NAV_ITEMS = [
-  { id: "home",        label: "Feed",     icon: NAV_ICONS.home },
-  { id: "map",         label: "Map",      icon: NAV_ICONS.map },
-  { id: "tournaments", label: "Compete",  icon: NAV_ICONS.tournaments },
-  { id: "people",      label: "People",   icon: NAV_ICONS.people },
-  { id: "profile",     label: "Profile",  icon: NAV_ICONS.profile },
-  { id: "admin",       label: "Admin",    icon: NAV_ICONS.admin },
+  { id: "home",    label: "Home",     icon: NAV_ICONS.home },
+  { id: "map",     label: "Map",      icon: NAV_ICONS.map },
+  { id: "people",  label: "Friends",  icon: NAV_ICONS.people },
+  { id: "matches", label: "Activity", icon: NAV_ICONS.profile },
+  { id: "admin",   label: "Admin",    icon: NAV_ICONS.admin },
 ];
 
 export default function Sidebar({
