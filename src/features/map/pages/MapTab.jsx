@@ -37,8 +37,14 @@ var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
 //                   coloured polygons. Power users opt out.
 //   activity  OFF — flame badges are seasonal/editorial; loud red as a
 //                   default reads like notifications you didn't subscribe to.
-//   mapTheme  AUTO — follow app theme unless explicitly overridden.
-var DEFAULT_LAYERS = { homes: true, courts: true, zoneNames: true, activity: false, mapTheme: "auto" };
+//   mapTheme  DARK — the editorial cream UI sits nicely above a dark
+//                    basemap; courts/zones read clearer on it than on
+//                    the near-white CARTO light tiles. User feedback:
+//                    'can you also make the default option of the map
+//                    dark.' Users who explicitly picked auto/light in
+//                    the layers picker keep their saved preference
+//                    (loadLayers merges persisted values over DEFAULT).
+var DEFAULT_LAYERS = { homes: true, courts: true, zoneNames: true, activity: false, mapTheme: "dark" };
 function loadLayers(){
   try{
     var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
@@ -835,7 +841,14 @@ export default function MapTab({
               context now)
             • playMode is engaged (legacy guard; playMode is unset
               today but harmless to keep) */}
-      {playMode === "off" && !sidePanelZone && (
+      {/* Mobile: 'Tap a zone to play' overlay removed entirely per
+          user feedback ('on mobile on Maps tab. can you remove the
+          words Tap Zone to play. Then make sure that the zones are
+          nicely centered now we taken out the words'). The map is
+          the affordance; the giant overlay was redundant on a small
+          viewport. Desktop keeps the prompt because the wider canvas
+          can afford the editorial call-out. */}
+      {playMode === "off" && !sidePanelZone && !isMobile && (
         <div
           onClick={function(){
             track("play_match_cta_tapped", {
@@ -845,7 +858,7 @@ export default function MapTab({
           }}
           style={{
             position:"absolute",
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + " + (isMobile ? 24 : 40) + "px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 40px)",
             left: 0, right: 0,
             zIndex: 540,
             pointerEvents: "none",
@@ -853,11 +866,11 @@ export default function MapTab({
           <div className="fade-up" style={{
             maxWidth: 720,
             margin:"0 auto",
-            padding: isMobile ? "0 14px" : "0 22px",
+            padding: "0 22px",
             textAlign:"center",
           }}>
             <div style={{
-              fontSize: isMobile ? 30 : 40, fontWeight: 900,
+              fontSize: 40, fontWeight: 900,
               letterSpacing: "0.02em",
               lineHeight: 1.05,
               textTransform: "uppercase",

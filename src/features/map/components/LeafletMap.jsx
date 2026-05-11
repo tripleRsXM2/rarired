@@ -298,17 +298,24 @@ export default function LeafletMap({
     // the visible map instead of floating inside extra whitespace.
     if(allZoneLayers.length){
       var group = L.featureGroup(allZoneLayers);
-      // Asymmetric padding so the bbox doesn't crash into the
-      // floating chrome. On mobile the bottom prompt + Play Match
-      // CTA stack ~150px tall; on desktop both are smaller and
-      // there's room to spare. paddingTopLeft / paddingBottomRight
-      // are [x, y] — y is what we care about for the prompt.
-      // Combined with zoomSnap:0 (set on map init) the fit can land
-      // at ANY fractional zoom that fills the available frame —
-      // no "rounded down to ugly whitespace" artefact.
+      // Symmetric padding on mobile so the zones sit centred AND
+      // have visible margin from the viewport edges. Earlier tight
+      // (12,24) padding made fitBounds compute a higher natural
+      // zoom — at which point zones near the edge of the bbox were
+      // pressed against the viewport and looked clipped. The cs-
+      // map-frame is already height-locked between the top nav and
+      // the bottom tab bar; this padding now just guarantees a
+      // comfortable breathing band around every zone polygon. User
+      // feedback: 'on mobile the zones are not all visible, some
+      // are cut off at the edge because the zoom is too big.'
+      // paddingTopLeft / paddingBottomRight are [x, y] tuples; the
+      // mobile y values match top/bottom for a centred bbox. Desktop
+      // keeps a bottom bias because the editorial 'Tap a zone to
+      // play' overlay still renders at the bottom of the wider
+      // canvas there.
       map.fitBounds(group.getBounds(), {
-        paddingTopLeft:     isMobile ? [12, 24] : [24, 24],
-        paddingBottomRight: isMobile ? [12, 96] : [24, 80],
+        paddingTopLeft:     isMobile ? [24, 56] : [24, 24],
+        paddingBottomRight: isMobile ? [24, 56] : [24, 80],
         maxZoom: 14,
       });
     }
@@ -329,8 +336,8 @@ export default function LeafletMap({
         if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
           try {
             map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), {
-              paddingTopLeft:     isMobile ? [12, 24]  : [24, 24],
-              paddingBottomRight: isMobile ? [12, 96]  : [24, 80],
+              paddingTopLeft:     isMobile ? [24, 56]  : [24, 24],
+              paddingBottomRight: isMobile ? [24, 56]  : [24, 80],
               maxZoom: 14,
               animate: false,
             });
@@ -347,8 +354,8 @@ export default function LeafletMap({
       if(!selectedRef.current && playModeRef.current === "off" && allZoneLayers.length){
         try {
           map.fitBounds(L.featureGroup(allZoneLayers).getBounds(), {
-            paddingTopLeft:     isMobile ? [12, 24] : [24, 24],
-            paddingBottomRight: isMobile ? [12, 96] : [24, 80],
+            paddingTopLeft:     isMobile ? [24, 56] : [24, 24],
+            paddingBottomRight: isMobile ? [24, 56] : [24, 80],
             maxZoom: 14,
             animate: false,
           });
@@ -768,8 +775,8 @@ export default function LeafletMap({
           // can't click a zone" — clicks during a pan didn't
           // reliably hit polygon hit-areas.
           map.fitBounds(group.getBounds(), {
-            paddingTopLeft:     isMobile ? [12, 24] : [40, 40],
-            paddingBottomRight: isMobile ? [12, 88] : [40, 80],
+            paddingTopLeft:     isMobile ? [24, 56] : [40, 40],
+            paddingBottomRight: isMobile ? [24, 56] : [40, 80],
             maxZoom: 14,
             animate: false,
           });
