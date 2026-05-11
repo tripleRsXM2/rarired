@@ -102,7 +102,12 @@ export default function LogMatchPage({
   // scoreboard preserves which set + side is being edited.
   var [activeSet, setActiveSet] = useState(0);
   var [activeSide, setActiveSide] = useState("a");
-  var [scoreMode, setScoreMode] = useState("pad");
+  // Tally is the default mode — most casual log-a-match users want
+  // to count games up with +/- buttons; the numeric pad is the
+  // power-user path. User feedback (2026-05-11): 'We also want to
+  // make sure that Tally is the default pop up, not Pad when we
+  // press the + button.'
+  var [scoreMode, setScoreMode] = useState("tally");
 
   // ── Sheet open state ──────────────────────────────────────────
   // Auto-open the score sheet on mobile so tapping the bottom "+"
@@ -1120,6 +1125,19 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
     if (!result.ok) {
       setValidationError(result.message || "That score isn't a valid tennis match.");
       return;
+    }
+    // Partial-set confirmation: when the validator passed only via
+    // the allow-partial path (any set didn't reach a real tennis
+    // pattern, e.g. 3-2 / 5-3), warn the user once before
+    // accepting. User feedback (2026-05-11): 'I think we can still
+    // have a warning like.. do you want to continue because this
+    // is not a full match 6 games to 4. Can you make that so?'
+    var hasPartial = (result.perSet || []).some(function (p) { return p && p.partial; });
+    if (hasPartial) {
+      var msg = "Heads up — this isn't a full tennis set (6+ games with a 2-game margin, or 7-6). Log it anyway?";
+      if (typeof window !== "undefined" && !window.confirm(msg)) {
+        return;
+      }
     }
     setValidationError("");
     onDone();
