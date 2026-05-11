@@ -37,8 +37,14 @@ var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
 //                   coloured polygons. Power users opt out.
 //   activity  OFF — flame badges are seasonal/editorial; loud red as a
 //                   default reads like notifications you didn't subscribe to.
-//   mapTheme  AUTO — follow app theme unless explicitly overridden.
-var DEFAULT_LAYERS = { homes: true, courts: true, zoneNames: true, activity: false, mapTheme: "auto" };
+//   mapTheme  DARK — the editorial cream UI sits nicely above a dark
+//                    basemap; courts/zones read clearer on it than on
+//                    the near-white CARTO light tiles. User feedback:
+//                    'can you also make the default option of the map
+//                    dark.' Users who explicitly picked auto/light in
+//                    the layers picker keep their saved preference
+//                    (loadLayers merges persisted values over DEFAULT).
+var DEFAULT_LAYERS = { homes: true, courts: true, zoneNames: true, activity: false, mapTheme: "dark" };
 function loadLayers(){
   try{
     var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
