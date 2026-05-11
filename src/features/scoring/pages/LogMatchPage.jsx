@@ -105,7 +105,18 @@ export default function LogMatchPage({
   var [scoreMode, setScoreMode] = useState("pad");
 
   // ── Sheet open state ──────────────────────────────────────────
-  var [sheet, setSheet] = useState(null); // 'score' | 'opp' | 'type' | 'completion' | 'details'
+  // Auto-open the score sheet on mobile so tapping the bottom "+"
+  // lands the user straight into score entry — forcing the score
+  // to be filled first before anything else. User feedback:
+  // 'on mobile when we log a match by pressing the + button. Can
+  // the score/Tally automatically pop up. This forces the user to
+  // log a match with the score first.' Desktop opens with no sheet
+  // (the page's score grid is already visible inline). 1024px
+  // matches the rest of the app's desktop breakpoint.
+  var [sheet, setSheet] = useState(function () {
+    if (typeof window === "undefined") return null;
+    return window.innerWidth < 1024 ? "score" : null;
+  }); // 'score' | 'opp' | 'type' | 'completion' | 'details'
 
   // ── Submit + celebration ──────────────────────────────────────
   var [saving, setSaving] = useState(false);
