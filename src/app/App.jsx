@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { makeTheme, normaliseThemeId, THEME_IDS } from "../lib/theme.js";
+import { makeTheme } from "../lib/theme.js";
 import { avColor } from "../lib/utils/avatar.js";
 // TABS constant retired alongside the legacy bottom nav — the new
 // EditorialTabBar owns its own 5-item layout. NAV_ICONS still used
@@ -81,20 +81,19 @@ import PostMatchFeedbackCard, { feedbackCardWasDismissed }
   from "../features/trust/components/PostMatchFeedbackCard.jsx";
 
 export default function App(){
-  // Theme bootstrap — migrate any legacy id ("wimbledon" → "grass", etc.)
-  // on load so old localStorage doesn't keep us on a renamed theme forever.
-  var [theme,setTheme]=useState(function(){
-    var s=localStorage.getItem("theme");
-    var next=normaliseThemeId(s);
-    if(s!==next) localStorage.setItem("theme",next);
-    return next;
-  });
-  var t=makeTheme(theme);
-  function applyTheme(name){
-    if(!THEME_IDS.includes(name)) return;
-    localStorage.setItem("theme",name);
-    setTheme(name);
-  }
+  // V1 single-look — the editorial cream + dark brown palette extends
+  // to every surface (sidebar, top bar, Settings, etc.) so V1 has one
+  // unified appearance. User feedback: 'i like the css of the cream
+  // and dark brown grey thats on the compete people and profile. Can
+  // we make that extend the side tabs? Essentially I dont want there
+  // to be any appearance changes in v1. I just want one appearance.'
+  //
+  // Legacy state setters left as no-ops so any old call-sites (e.g.
+  // SettingsScreen) don't crash while we clean them up.
+  var theme = "editorial";
+  var t = makeTheme(theme);
+  function setTheme(/* _name */){ /* locked */ }
+  function applyTheme(/* _name */){ /* locked */ }
 
   // Module 6: app-wide toast emitter. Replaces window.alert() everywhere.
   // toast(msg, 'error'|'success'|'info').

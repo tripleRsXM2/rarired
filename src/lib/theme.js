@@ -5,6 +5,34 @@
 // — the App-level loader migrates them to the new ids on the next save.
 
 var THEMES = {
+  // Editorial — cream paper + dark brown ink. THIS IS NOW THE ONLY
+  // V1 LOOK. The legacy multi-theme picker has been removed (user
+  // feedback: 'i like the css of the cream and dark brown grey thats
+  // on the compete people and profile. Can we make that extend the
+  // side tabs? Essentially I dont want there to be any appearance
+  // changes in v1. I just want one appearance.'). Every legacy
+  // theme id now aliases here via LEGACY_THEME_ALIASES so existing
+  // localStorage entries silently migrate on next load.
+  //
+  // Token values mirror the Editorial Tennis ED_TOK palette used in
+  // src/features/home/components/EditorialScreen.jsx so the legacy
+  // chrome (sidebar, top bar, Settings, Map, DM list, etc.) reads as
+  // one cohesive surface with the editorial screens.
+  editorial: {
+    bg:"#F0E9DA", bgCard:"#FAF4E6", bgTertiary:"#E8E0CE", surfaceSolid:"#FAF4E6",
+    border:"rgba(42,32,26,0.12)", borderStrong:"rgba(42,32,26,0.22)",
+    text:"#2A201A", textSecondary:"#4A3F36", textTertiary:"#8A7F70",
+    accent:"#FF2D55", accentText:"#FFFFFF", accentSubtle:"rgba(255,45,85,0.08)",
+    green:"#3A7D44", greenSubtle:"rgba(58,125,68,0.10)",
+    red:"#C3392B", redSubtle:"rgba(195,57,43,0.08)",
+    orange:"#D18032", orangeSubtle:"rgba(209,128,50,0.08)",
+    gold:"#B98533", goldSubtle:"rgba(185,133,51,0.10)",
+    purple:"#5C3A6E", purpleSubtle:"rgba(92,58,110,0.08)",
+    inputBg:"#FAF4E6", modalBg:"#FAF4E6",
+    navBg:"rgba(240,233,218,0.92)", tabBar:"rgba(240,233,218,0.95)",
+    qualified:"rgba(255,45,85,0.06)",
+    r:6, r2:10,
+  },
   // Grass — clean court green + cream. Default.
   grass: {
     bg:"#F0F2EA", bgCard:"#FFFFFF", bgTertiary:"#E4EAD6", surfaceSolid:"#FFFFFF",
@@ -137,55 +165,59 @@ var THEMES = {
 // Legacy id map — keeps users with older localStorage values working.
 // Default landing theme is now 'paris-indoor' (was 'grass') so any
 // retired or unrecognised id maps onto the new default.
+// V1 is locked to a single editorial look — every legacy theme id
+// (and every unknown id) silently aliases to `editorial`. The map is
+// kept so old localStorage values don't error; new code shouldn't
+// ever set anything other than `editorial`.
 var LEGACY_THEME_ALIASES = {
-  // Original retro nicknames → current ids.
-  wimbledon: "grass",
-  ao: "hard-court",
-  "french-open": "clay",
-  "us-open": "night-court",
-  // Retired Masters-1000 palettes (2026-04-27) — users on these
-  // themes silently migrate to the new default.
-  "desert-open": "paris-indoor",
-  "oceanside":   "paris-indoor",
-  "plaza-roja":  "paris-indoor",
-  "foro":        "paris-indoor",
-  "queen-city":  "paris-indoor",
-  "bund":        "paris-indoor",
+  wimbledon: "editorial",
+  ao: "editorial",
+  "french-open": "editorial",
+  "us-open": "editorial",
+  "desert-open": "editorial",
+  "oceanside":   "editorial",
+  "plaza-roja":  "editorial",
+  "foro":        "editorial",
+  "queen-city":  "editorial",
+  "bund":        "editorial",
+  // Former first-class themes — now all roll into editorial.
+  "grass":        "editorial",
+  "hard-court":   "editorial",
+  "clay":         "editorial",
+  "night-court":  "editorial",
+  "riviera":      "editorial",
+  "maple":        "editorial",
+  "paris-indoor": "editorial",
 };
 
 export function normaliseThemeId(id) {
-  if (!id) return "paris-indoor";
-  if (THEMES[id]) return id;
-  return LEGACY_THEME_ALIASES[id] || "paris-indoor";
+  // V1 single-look: anything that isn't literally "editorial" maps to
+  // editorial. Existing callers that pass legacy ids stay valid.
+  if (id === "editorial") return "editorial";
+  return "editorial";
 }
 
-export function isValidThemeId(id) {
-  return !!THEMES[id] || !!LEGACY_THEME_ALIASES[id];
+export function isValidThemeId(/* id */) {
+  // V1 single-look — any id is now treated as valid (it'll be
+  // normalised to editorial).
+  return true;
 }
 
-export function makeTheme(themeName) {
-  return THEMES[normaliseThemeId(themeName)] || THEMES["paris-indoor"];
+export function makeTheme(/* themeName */) {
+  // V1 single-look — always return the editorial tokens regardless
+  // of input. Keeping the function signature so existing callers
+  // (App.jsx, V2, tests) still work.
+  return THEMES["editorial"];
 }
 
-// Id list for the picker + App.jsx bootstrap.
-export var THEME_IDS = [
-  "grass", "hard-court", "clay", "night-court",
-  "riviera", "maple", "paris-indoor",
-];
+// Single id list — V1 is locked to one look.
+export var THEME_IDS = ["editorial"];
 
-// Ordered option list for the picker — id + label + the signature colour
-// that identifies the theme at a glance (for the colour-wheel swatch).
-// Paris Indoor leads the list because it's the new default. Retired
-// (Desert Open / Oceanside / Plaza Roja / Foro / Queen City / Bund)
-// migrate via LEGACY_THEME_ALIASES — they don't appear in the picker.
+// Picker option list retained as a single-entry array so any code
+// that iterates it (e.g. the settings picker, which has been
+// removed) keeps rendering at most one swatch and doesn't crash.
 export var THEME_OPTIONS = [
-  { id: "paris-indoor", label: "Paris Indoor", swatch: "#C9D1D9", bg: "#0F1520" },
-  { id: "grass",        label: "Grass",        swatch: "#006F4A", bg: "#F0F2EA" },
-  { id: "hard-court",   label: "Hard Court",   swatch: "#3B82F6", bg: "#0A0E1A" },
-  { id: "clay",         label: "Clay",         swatch: "#E0783B", bg: "#EEE0CA" },
-  { id: "night-court",  label: "Night Court",  swatch: "#FFC72C", bg: "#001C4E" },
-  { id: "riviera",      label: "Riviera",      swatch: "#B81F2E", bg: "#F7F0E4" },
-  { id: "maple",        label: "Maple",        swatch: "#D60A1F", bg: "#FAF7F5" },
+  { id: "editorial", label: "Editorial", swatch: "#2A201A", bg: "#F0E9DA" },
 ];
 
 export function inputStyle(t) {

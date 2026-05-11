@@ -18,7 +18,7 @@ import { ZONES } from "../../map/data/zones.js";
 import { setHomeZone } from "../../map/services/mapService.js";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { uploadAvatar, deleteAvatarByUrl } from "../../profile/services/avatarUpload.js";
-import { THEME_OPTIONS } from "../../../lib/theme.js";
+// Theme picker removed — V1 is locked to one editorial look.
 import { track } from "../../../lib/analytics.js";
 import { useEffect } from "react";
 import PushSettingsCard from "../../notifications/components/PushSettingsCard.jsx";
@@ -720,40 +720,10 @@ export default function SettingsScreen({
         </div>
 
 
-        {/* ── Appearance — compact row of colour circles ───────────────────── */}
-        {(function(){
-          var current = THEME_OPTIONS.find(function(o){return o.id===theme;}) || THEME_OPTIONS[0];
-          return (
-            <div style={{background:t.bgCard,border:"1px solid "+t.border,borderRadius:12,padding:"14px 16px",marginBottom:12,
-              display:"flex",alignItems:"center",gap:14}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:t.text}}>Appearance</div>
-                <div style={{fontSize:11,color:t.textTertiary,marginTop:2}}>{current.label}</div>
-              </div>
-              <div style={{display:"flex",gap:10,flexShrink:0}}>
-                {THEME_OPTIONS.map(function(opt){
-                  var on=theme===opt.id;
-                  return (
-                    <button key={opt.id}
-                      type="button"
-                      aria-label={opt.label}
-                      aria-pressed={on}
-                      title={opt.label}
-                      onClick={function(){setTheme(opt.id);}}
-                      style={{
-                        width:30, height:30, borderRadius:"50%",
-                        padding:0, cursor:"pointer",
-                        border:on?("2px solid "+t.text):("1px solid "+t.border),
-                        background:"conic-gradient("+opt.swatch+" 0 50%,"+opt.bg+" 50% 100%)",
-                        boxShadow: on ? ("0 0 0 2px "+t.bgCard+" inset") : "none",
-                        flexShrink:0,
-                      }}/>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
+        {/* Appearance picker removed — V1 is locked to one editorial
+            look (cream + dark brown). User feedback: 'I dont want
+            there to be any appearance changes in v1. I just want one
+            appearance.' */}
 
         {/* ── Account ────────────────────────────────────────────────────────── */}
         {authUser&&(
