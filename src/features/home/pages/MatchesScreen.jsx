@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
 import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
+import ProfileScreen from "./ProfileScreen.jsx";
 
 var FILTERS = ["All", "Ranked", "League", "Casual", "Tournament"];
 
@@ -29,7 +30,14 @@ var FILTERS = ["All", "Ranked", "League", "Casual", "Tournament"];
 // inline in the list with a Pending pill + tap-to-review.
 var PENDING_STATUSES = ["pending_confirmation", "disputed", "pending_reconfirmation"];
 
-export default function MatchesScreen({ authUser, history, leaguesIndex, openProfile, onReviewMatch, setScrolledPastHero }) {
+// `profile` is optional. When provided (always, on the Activity tab —
+// both web and mobile pass it in from App.jsx), the screen renders
+// the ProfileScreen hero block above the activity stat strip so
+// Activity = "profile at top + activity under it" as one continuous
+// scroll. User feedback (2026-05-11): 'On mobile [Activity] looks
+// great. But can we just add the profile at the top? And then all
+// the activity under it.'
+export default function MatchesScreen({ authUser, profile, history, leaguesIndex, openProfile, onReviewMatch, setScrolledPastHero }) {
   var [filter, setFilter] = useState("All");
   var heroRef = useRef(null);
 
@@ -101,9 +109,22 @@ export default function MatchesScreen({ authUser, history, leaguesIndex, openPro
       minHeight:     "calc(100dvh - 64px)",
       paddingBottom: 96,
     }}>
-      {/* Stat strip — 3 columns with hairline dividers. This is
-          the page hero; scrolling past it fades "Activity" into
-          the global top bar. */}
+      {/* Profile hero — only when `profile` is passed (Activity tab).
+          Rendered inline above the activity stat strip so the page
+          reads as one scroll: profile → stats → filters → list. We
+          deliberately omit setScrolledPastHero on the nested
+          ProfileScreen so it doesn't fight MatchesScreen's own
+          observer for the global top bar's "Activity" title. */}
+      {profile && (
+        <ProfileScreen
+          authUser={authUser}
+          profile={profile}
+          history={history}
+        />
+      )}
+      {/* Stat strip — 3 columns with hairline dividers. When `profile`
+          is shown above, this strip sits BELOW it but still acts as
+          the scroll-past sentinel for the "Activity" top-bar title. */}
       <div ref={heroRef} style={{
         display:             "grid",
         gridTemplateColumns: "repeat(3, 1fr)",

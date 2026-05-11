@@ -1165,20 +1165,24 @@ export default function App(){
             />
           )}
 
-          {/* /home — Editorial Tennis 3-tile hub (2026-05-01 redesign).
-              Tiles deep-link into existing routes:
-                · Maps tile     → /tournaments (CompeteHub)
-                · Matches tile  → /matches    (the legacy feed list below)
-                · Profile tile  → /profile
-              The "+" log-match action lives in the bottom tab bar. */}
+          {/* /home — now renders CompeteHub. User feedback (2026-05-11):
+              'First tab should be home (change web feed to home) but
+              home should be what we see on the Compete tab. Web will
+              not have a compete tab because that is now home.' The
+              legacy 3-tile HomeHub is no longer mounted at any route
+              (its tiles deep-linked into Compete / Activity / Profile
+              which are now first-class tabs). The "+" log-match
+              action still lives in the bottom tab bar. */}
           {tab==="home"&&(
-            <HomeHub
+            <CompeteHub
+              t={t}
               authUser={auth.authUser}
-              profile={currentUser.profile}
-              history={matchHistory.history}
-              myLeagues={leagues.leagues}
+              challenges={challenges}
+              leagues={leagues}
               tournaments={tournaments}
-              setScrolledPastHero={setScrolledPastHero}
+              history={matchHistory.history}
+              openChallenge={openChallenge}
+              toast={toast}
             />
           )}
           {/* /matches — Editorial Tennis match history (Phase 2).
@@ -1188,8 +1192,16 @@ export default function App(){
               kept around as a reference for Phase 3 social-feed work
               (kudos/comments live there). */}
           {tab==="matches"&&(
+            // Activity tab — now shows the profile hero at the top
+            // (same one /profile used to render) followed by the
+            // match list. User feedback (2026-05-11): 'On mobile it
+            // [Activity] looks great. But can we just add the
+            // profile at the top? And then all the activity under
+            // it'. `profile` is forwarded to MatchesScreen which
+            // mounts <ProfileScreen/> above its hero stat strip.
             <MatchesScreen
               authUser={auth.authUser}
+              profile={currentUser.profile}
               history={matchHistory.history}
               leaguesIndex={(leagues.leagues||[]).reduce(function(acc,lg){acc[lg.id]=lg.name;return acc;},{})}
               openProfile={openProfile}
