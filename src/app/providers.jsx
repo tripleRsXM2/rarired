@@ -165,8 +165,21 @@ export default function Providers({ t, theme, children }){
       // also adds paddingTop:env(safe-area-inset-top) so its content
       // (CS logo, bell, avatar) paints below the iOS status bar instead
       // of underneath it. Both collapse to 0 on desktop.
+      // --cs-tab-h must match the actual rendered height of
+      // EditorialTabBar (mobile bottom nav) so cs-map-frame /
+      // PeopleTab messagesView / NotificationsScreen etc. correctly
+      // exclude the tab bar from their height calc and inner content
+      // doesn't get hidden behind it. EditorialTabBar = 8px top pad +
+      // (22px icon + 4px gap + ~14px mono label + 8px*2 button pad =
+      // 56px row) + (14px bottom pad + safe-area-inset) ≈ 78px +
+      // safe-area. Round up to 80px. The old 48px under-counted by
+      // ~30px and was the root cause of the Maps zone-panel Message
+      // button being cut off behind the tab bar (user feedback:
+      // 'When i select a court and then choose a person … there is
+      // a message button that shows up . however its cut off at the
+      // bottom').
       ":root{--cs-nav-h:calc(52px + env(safe-area-inset-top,0px));" +
-        "--cs-tab-h:calc(48px + env(safe-area-inset-bottom,0px))}",
+        "--cs-tab-h:calc(80px + env(safe-area-inset-bottom,0px))}",
       "@media(min-width:1024px){:root{--cs-nav-h:0px;--cs-tab-h:0px}}",
       // A map-mode flag on the center col kills the outer-pad padding so the
       // map can reach the tab bar; the map itself owns its own sizing.
