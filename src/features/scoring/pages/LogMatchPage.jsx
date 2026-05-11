@@ -102,10 +102,26 @@ export default function LogMatchPage({
   // scoreboard preserves which set + side is being edited.
   var [activeSet, setActiveSet] = useState(0);
   var [activeSide, setActiveSide] = useState("a");
-  var [scoreMode, setScoreMode] = useState("pad");
+  // Tally is the default mode — most casual log-a-match users want
+  // to count games up with +/- buttons; the numeric pad is the
+  // power-user path. User feedback (2026-05-11): 'We also want to
+  // make sure that Tally is the default pop up, not Pad when we
+  // press the + button.'
+  var [scoreMode, setScoreMode] = useState("tally");
 
   // ── Sheet open state ──────────────────────────────────────────
-  var [sheet, setSheet] = useState(null); // 'score' | 'opp' | 'type' | 'completion' | 'details'
+  // Auto-open the score sheet on mobile so tapping the bottom "+"
+  // lands the user straight into score entry — forcing the score
+  // to be filled first before anything else. User feedback:
+  // 'on mobile when we log a match by pressing the + button. Can
+  // the score/Tally automatically pop up. This forces the user to
+  // log a match with the score first.' Desktop opens with no sheet
+  // (the page's score grid is already visible inline). 1024px
+  // matches the rest of the app's desktop breakpoint.
+  var [sheet, setSheet] = useState(function () {
+    if (typeof window === "undefined") return null;
+    return window.innerWidth < 1024 ? "score" : null;
+  }); // 'score' | 'opp' | 'type' | 'completion' | 'details'
 
   // ── Submit + celebration ──────────────────────────────────────
   var [saving, setSaving] = useState(false);
@@ -1087,7 +1103,15 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
     // shape errors). Time-limited / retired allows partials.
     var mt = matchType || "ranked";
     var ct = completionType || "completed";
-    var allowPartial = mt === "casual" && ct !== "completed";
+    // Casual matches always allow partial / non-tennis-standard set
+    // scores (e.g. 3-2) so players who agreed to play 3 games can
+    // log it without first marking the match time-limited. Ranked
+    // matches stay strict — they feed rating math and need to be
+    // valid tennis. User feedback (2026-05-11): 'There is a block
+    // when trying to log a match with tally … we want to unlock
+    // that feature because sometimes a user may want to only go
+    // to 3 games or something.'
+    var allowPartial = mt === "casual";
     var result = validateMatchScore(clean, {
       matchType:               mt,
       completionType:          ct,
@@ -1101,6 +1125,19 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
     if (!result.ok) {
       setValidationError(result.message || "That score isn't a valid tennis match.");
       return;
+    }
+    // Partial-set confirmation: when the validator passed only via
+    // the allow-partial path (any set didn't reach a real tennis
+    // pattern, e.g. 3-2 / 5-3), warn the user once before
+    // accepting. User feedback (2026-05-11): 'I think we can still
+    // have a warning like.. do you want to continue because this
+    // is not a full match 6 games to 4. Can you make that so?'
+    var hasPartial = (result.perSet || []).some(function (p) { return p && p.partial; });
+    if (hasPartial) {
+      var msg = "Heads up — this isn't a full tennis set (6+ games with a 2-game margin, or 7-6). Log it anyway?";
+      if (typeof window !== "undefined" && !window.confirm(msg)) {
+        return;
+      }
     }
     setValidationError("");
     onDone();

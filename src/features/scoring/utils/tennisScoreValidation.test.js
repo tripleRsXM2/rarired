@@ -271,13 +271,18 @@ describe("validateMatchScore — partial / time-limited paths", () => {
     expect(r.code).toBe(CODES.RANKED_REQUIRES_COMPLETED);
   });
 
-  it("casual + completed flag + partial sets → still passes the partial path? No — we treat partial sets as shape errors when completionType=completed", () => {
+  it("casual + completed flag + partial sets is allowed when allowPartialScores=true — users can log an agreed 3-game match without flagging time-limited", () => {
+    // Regression for: 'There is a block when trying to log a match
+    // with tally. It wont allow for an uncomplete game … we want
+    // to unlock that feature because sometimes a user may want
+    // to only go to 3 games or something.'
     var r = validateMatchScore(
       [{ you: 5, them: 3 }],
       { matchFormat: "best_of_3", matchType: "casual", completionType: "completed", allowPartialScores: true }
     );
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe(CODES.INVALID_NORMAL_SET);
+    expect(r.ok).toBe(true);
+    expect(r.completionStatus).toBe("partial");
+    expect(r.winner).toBe("submitter");
   });
 
   it("casual + time-limited + multiple partial sets passes", () => {

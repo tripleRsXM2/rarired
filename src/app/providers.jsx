@@ -172,14 +172,15 @@ export default function Providers({ t, theme, children }){
       // doesn't get hidden behind it. EditorialTabBar = 8px top pad +
       // (22px icon + 4px gap + ~14px mono label + 8px*2 button pad =
       // 56px row) + (14px bottom pad + safe-area-inset) ≈ 78px +
-      // safe-area. Round up to 80px. The old 48px under-counted by
-      // ~30px and was the root cause of the Maps zone-panel Message
-      // button being cut off behind the tab bar (user feedback:
-      // 'When i select a court and then choose a person … there is
-      // a message button that shows up . however its cut off at the
-      // bottom').
+      // safe-area. Set to 76px so the map (cs-map-frame) bottom
+      // edge sits 2-4px BEHIND the tab bar instead of leaving a
+      // visible gap (user feedback: 'on mobile the map, the OSM is
+      // not hugging the bottom bar. can you make it so'). The tiny
+      // overlap is harmless — the basemap has no controls at its
+      // bottom edge, and the ZoneSidePanel action bar still floats
+      // clear of the tab bar's top edge.
       ":root{--cs-nav-h:calc(52px + env(safe-area-inset-top,0px));" +
-        "--cs-tab-h:calc(80px + env(safe-area-inset-bottom,0px))}",
+        "--cs-tab-h:calc(76px + env(safe-area-inset-bottom,0px))}",
       "@media(min-width:1024px){:root{--cs-nav-h:0px;--cs-tab-h:0px}}",
       // A map-mode flag on the center col kills the outer-pad padding so the
       // map can reach the tab bar; the map itself owns its own sizing.

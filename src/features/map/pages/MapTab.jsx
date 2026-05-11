@@ -44,7 +44,12 @@ var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
 //                    dark.' Users who explicitly picked auto/light in
 //                    the layers picker keep their saved preference
 //                    (loadLayers merges persisted values over DEFAULT).
-var DEFAULT_LAYERS = { homes: true, courts: true, zoneNames: true, activity: false, mapTheme: "dark" };
+// zoneNames + activity dropped per user feedback (2026-05-11): the
+// flame-badge activity overlay and the zone-name labels are gone
+// from the map; the picker no longer surfaces toggles for them and
+// LeafletMap is called with both set to false. Keys removed from
+// defaults so the layers object stays clean for new users.
+var DEFAULT_LAYERS = { homes: true, courts: true, mapTheme: "dark" };
 function loadLayers(){
   try{
     var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
@@ -349,8 +354,8 @@ export default function MapTab({
         zoneActivity={zoneActivity}
         showHomes={layers.homes}
         showCourts={layers.courts}
-        showActivity={layers.activity}
-        showZoneNames={layers.zoneNames}
+        showActivity={false}
+        showZoneNames={false}
         mapThemeOverride={layers.mapTheme}
         focusedCourtName={panelCourtName}
         playMode={playMode}
@@ -460,14 +465,14 @@ export default function MapTab({
             sub="Public courts in each zone"
             checked={layers.courts}
             onChange={function(v){ setLayer("courts", v); }}/>
-          <LayerRow t={t} label="Zone names"
-            sub="Inner West, Eastern Suburbs, etc."
-            checked={layers.zoneNames}
-            onChange={function(v){ setLayer("zoneNames", v); }}/>
-          <LayerRow t={t} label="Activity"
-            sub="Flame badges on busy zones (7d)"
-            checked={layers.activity}
-            onChange={function(v){ setLayer("activity", v); }}/>
+          {/* Zone names + Activity toggles removed per user feedback
+              (2026-05-11): 'remove the activity flame badges. Also
+              remove zone names because we dont have that anymore.'
+              The map call below hard-codes both off; LeafletMap no
+              longer paints the zone-name labels or the activity
+              flame overlay regardless of any old persisted layers
+              value. ZoneSidePanel still consumes the per-zone
+              activity numbers for in-panel detail. */}
 
           <div style={{ height:1, background: t.border, margin:"4px 0" }}/>
 

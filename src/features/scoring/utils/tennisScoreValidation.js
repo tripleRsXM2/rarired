@@ -354,10 +354,16 @@ export function validateMatchScore(sets, options) {
   }
 
   // Per-set validation in completion-aware mode.
+  // subWins / oppWins count ALL wins (completed + partial) and are
+  // used for winner derivation. completedSubWins / completedOppWins
+  // count completed sets only — those drive the "did the match
+  // actually finish?" gate so two partial 5-3 wins don't mark a
+  // best_of_3 as completed.
   var perSet = [];
   var completedCount = 0;
   var partialCount   = 0;
   var subWins = 0, oppWins = 0;
+  var completedSubWins = 0, completedOppWins = 0;
 
   for (var i = 0; i < nonEmpty.length; i++) {
     var s = nonEmpty[i];
@@ -373,10 +379,18 @@ export function validateMatchScore(sets, options) {
     // Numeric / shape validity is required for every set, ranked or casual.
     var basic = validateSetScore(s, setOpts);
     if (!basic.ok) {
-      // For partial / time-limited / retired matches: a non-completed set
-      // is OK only if it's "shape valid but not a finished pattern", AND
-      // partials are allowed.
-      var canBePartial = allowPartial && (completionType !== "completed");
+      // For partial / time-limited / retired matches OR any casual
+      // submission with allowPartialScores=true: a non-completed set
+      // (e.g. 3-2 because the players agreed to play 3 games) is OK
+      // as long as it's "shape valid but not a finished pattern".
+      // Casual matches no longer need to be flagged time_limited /
+      // retired to log a non-standard score — user feedback (2026-
+      // 05-11): 'There is a block when trying to log a match with
+      // tally. It wont allow for an uncomplete game … But we want
+      // to unlock that feature because sometimes a user may want
+      // to only go to 3 games or something.' Ranked matches stay
+      // strict via the matchType==='ranked' gate further down.
+      var canBePartial = allowPartial;
       // Distinguish "garbage / negative / non-integer" from "valid integers
       // but not a completed pattern": validateSetScore returns
       // INVALID_NORMAL_SET / INVALID_MATCH_TIEBREAK for the latter.
@@ -396,14 +410,22 @@ export function validateMatchScore(sets, options) {
       // Permissive partial path — record but keep going.
       perSet.push({ ok: true, code: CODES.OK, message: "", partial: true });
       partialCount++;
-      // No winner contribution from a partial set.
+      // Partial sets DO contribute to leader-by-count winner
+      // derivation. Otherwise a casual match logged as 5-3 ends up
+      // with winner=null, which makes no sense for the user who
+      // clearly won the agreed 3-game format. The match still
+      // doesn't satisfy the strict `completed` gate below — it
+      // flows through the partial path which uses subWins/oppWins.
+      var pyn = toNum(s.you).n, ptn = toNum(s.them).n;
+      if (pyn > ptn) subWins++; else if (ptn > pyn) oppWins++;
       continue;
     }
 
     perSet.push(basic);
     completedCount++;
     var yn = toNum(s.you).n, tn = toNum(s.them).n;
-    if (yn > tn) subWins++; else if (tn > yn) oppWins++;
+    if (yn > tn) { subWins++; completedSubWins++; }
+    else if (tn > yn) { oppWins++; completedOppWins++; }
   }
 
   // Format-level checks.
@@ -432,8 +454,12 @@ export function validateMatchScore(sets, options) {
     winnerStr = subWins > oppWins ? "submitter" : "opponent";
     completed = true;
   } else if (format === "best_of_3") {
-    if (subWins >= 2 && subWins > oppWins) { winnerStr = "submitter"; completed = true; }
-    else if (oppWins >= 2 && oppWins > subWins) { winnerStr = "opponent"; completed = true; }
+    // "Finished" requires completed-set wins (so two partial 5-3
+    // wins don't tip a best_of_3 into completed status). subWins /
+    // oppWins still drive winner derivation in the partial path
+    // below.
+    if (completedSubWins >= 2 && completedSubWins > completedOppWins) { winnerStr = "submitter"; completed = true; }
+    else if (completedOppWins >= 2 && completedOppWins > completedSubWins) { winnerStr = "opponent"; completed = true; }
   } else if (format === "custom") {
     // Custom: leader by completed-set count counts as winner if any.
     if (subWins > oppWins) { winnerStr = "submitter"; completed = subWins > 0; }
@@ -441,8 +467,11 @@ export function validateMatchScore(sets, options) {
   }
 
   if (!completed) {
-    // Partial / time-limited path: accept ONLY when explicitly allowed.
-    var allowedAsPartial = allowPartial && (completionType !== "completed");
+    // Partial / time-limited path: accept whenever the caller has
+    // opted in via allowPartialScores (no longer also requires a
+    // non-'completed' completionType — casual users want to log
+    // 3-game agreements without flagging the match time-limited).
+    var allowedAsPartial = allowPartial;
     if (matchType === "ranked") {
       return {
         ok: false, code: CODES.RANKED_REQUIRES_COMPLETED,
