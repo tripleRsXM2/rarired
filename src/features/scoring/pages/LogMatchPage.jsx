@@ -1098,7 +1098,15 @@ function ScoreSheet({ sets, setSets, mode, setMode, activeSet, setActiveSet, act
     // shape errors). Time-limited / retired allows partials.
     var mt = matchType || "ranked";
     var ct = completionType || "completed";
-    var allowPartial = mt === "casual" && ct !== "completed";
+    // Casual matches always allow partial / non-tennis-standard set
+    // scores (e.g. 3-2) so players who agreed to play 3 games can
+    // log it without first marking the match time-limited. Ranked
+    // matches stay strict — they feed rating math and need to be
+    // valid tennis. User feedback (2026-05-11): 'There is a block
+    // when trying to log a match with tally … we want to unlock
+    // that feature because sometimes a user may want to only go
+    // to 3 games or something.'
+    var allowPartial = mt === "casual";
     var result = validateMatchScore(clean, {
       matchType:               mt,
       completionType:          ct,
