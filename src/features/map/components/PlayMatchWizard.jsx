@@ -126,6 +126,12 @@ export default function PlayMatchWizard({
   // text inside the modal and overshot". See backdrop onMouseDown +
   // onClick below.
   var backdropDownRef = useRef(false);
+  // Swipe-cycle tracker for the step-1 court list. MUST be declared
+  // before the `if(!open) return null` early-return below — putting
+  // useRef after it violates the rules of hooks and breaks the entire
+  // wizard once `open` flips. That's exactly what made the modal go
+  // blank on first attempt.
+  var courtSwipeRef = useRef(null);
 
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
@@ -284,10 +290,11 @@ export default function PlayMatchWizard({
     setCourtName(null);
     track("play_match_zone_switched_in_step", { from: zoneId, to: z.id });
   }
-  // Touch-swipe tracker for the court-list body. Same threshold pattern
+  // Touch-swipe handlers for the court-list body. Same threshold pattern
   // as ZoneSidePanel (48px dx, 600ms cap). Lets thumb-cycle through
-  // zones without reaching for a chip on the strip.
-  var courtSwipeRef = useRef(null);
+  // zones without reaching for a chip on the strip. The ref itself is
+  // declared ABOVE the early-return (rules of hooks); these are just
+  // plain functions.
   function onCourtListTouchStart(e){
     var x = e.touches[0] ? e.touches[0].clientX : 0;
     courtSwipeRef.current = { x: x, t: Date.now() };
