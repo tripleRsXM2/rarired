@@ -967,17 +967,7 @@ export default function App(){
             markSeen={notifications.markSeen}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openLogin={auth.openLogin}
-            onLogMatch={function(){
-              // User feedback: 'unify the web so the log match is the
-              // same log match as the mobile.' Mobile routes to the
-              // editorial /match/log page (LogMatchPage); web was
-              // opening the legacy ScoreModal via openLogMatch. Routing
-              // to the same page here gives both surfaces one canonical
-              // composer. openLogMatch stays for any callers that still
-              // depend on the modal (deep links, challenge conversion
-              // etc.).
-              navigate("/match/log");
-            }}
+            onLogMatch={openLogMatch}
           />
         </div>
 
