@@ -1384,6 +1384,7 @@ export default function App(){
                 challenges={challenges}
                 leagues={leagues}
                 friends={social.friends}
+                everyonePlayers={social.discoverPlayers}
                 openProfile={openProfile}
                 openChallenge={openChallenge}
                 openConvertToMatch={openConvertToMatch}

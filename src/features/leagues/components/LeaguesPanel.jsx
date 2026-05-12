@@ -48,6 +48,9 @@ export default function LeaguesPanel({
   cancelLeague,
   voidLeague,
   friends,
+  // Directory-wide non-friends — forwarded down to InviteMembersModal
+  // for the Friends/Everyone scope toggle.
+  everyonePlayers,
   openProfile,
   toast,
   // Per-league Log match — opens the score modal pre-filled with
@@ -146,6 +149,7 @@ export default function LeaguesPanel({
         onRespond={respondToInvite}
         onLogMatchInLeague={onLogMatchInLeague}
         friends={friends}
+        everyonePlayers={everyonePlayers}
         openProfile={openProfile}
         toast={toast}
         history={history}
@@ -432,7 +436,7 @@ function LeagueDetailView({
   t, authUser, league, detail, profileMap,
   onBack, onInvite, onRemove, onArchive, onComplete, onCancel, onVoid, onRespond,
   onLogMatchInLeague,
-  friends, openProfile, toast,
+  friends, everyonePlayers, openProfile, toast,
   // Slice 4: viewer's match history + challenge composer for the
   // new retention surfaces (next opponent / rivalry callout).
   history, openChallenge,
@@ -773,6 +777,7 @@ function LeagueDetailView({
           league={league}
           detail={detail}
           friends={friends || []}
+          everyonePlayers={everyonePlayers || []}
           onClose={function () { setInviteOpen(false); }}
           onInvite={onInvite}
           toast={toast}
@@ -1343,8 +1348,8 @@ function RecentActivityList({ detail, profileMap }) {
   );
 }
 
-// ── InviteMembersModal — friends-first picker ────────────────────────────────
-function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toast }) {
+// ── InviteMembersModal — friends-first picker, with optional Everyone scope ──
+function InviteMembersModal({ t, league, detail, friends, everyonePlayers, onClose, onInvite, toast }) {
   var existingMemberIds = useMemo(function () {
     var set = new Set();
     (detail && detail.members || []).forEach(function (m) { set.add(m.user_id); });
@@ -1353,10 +1358,19 @@ function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toa
 
   var [busy, setBusy]       = useState({});
   var [invited, setInvited] = useState({}); // local echo
+  // User feedback: 'invite member — can you add the same list of
+  // everyone as well? currently only shows friends.' Friends stays
+  // the default scope; Everyone widens to the directory-wide
+  // non-friends roster (already excludes friends, blocks, self by
+  // the upstream fetchDiscoverCandidates).
+  var [scope, setScope] = useState("friends"); // "friends" | "everyone"
 
-  var eligible = (friends || []).filter(function (f) {
-    return !existingMemberIds.has(f.id) && !invited[f.id];
-  });
+  var eligible = useMemo(function () {
+    var pool = scope === "everyone" ? (everyonePlayers || []) : (friends || []);
+    return pool.filter(function (p) {
+      return p && p.id && !existingMemberIds.has(p.id) && !invited[p.id];
+    });
+  }, [scope, friends, everyonePlayers, existingMemberIds, invited]);
 
   async function handleInvite(friend) {
     setBusy(function (b) { var n = Object.assign({}, b); n[friend.id] = true; return n; });
@@ -1443,7 +1457,39 @@ function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toa
           Invites are private. Invitees get a notification and choose whether to join.
         </p>
 
-        {/* Hairline opens the friend list section. */}
+        {/* Friends / Everyone scope toggle — underline tabs in the
+            same mono-uppercase language the rest of the editorial
+            chrome uses. */}
+        <div style={{ display: "flex", gap: 22, marginBottom: 6 }}>
+          {[
+            { id: "friends",  label: "Friends"  + ((friends || []).length        ? " (" + (friends || []).length + ")"        : "") },
+            { id: "everyone", label: "Everyone" + ((everyonePlayers || []).length ? " (" + (everyonePlayers || []).length + ")" : "") },
+          ].map(function (s) {
+            var on = scope === s.id;
+            return (
+              <button key={s.id} type="button"
+                onClick={function () { if (!on) setScope(s.id); }}
+                style={{
+                  padding:        "6px 0",
+                  background:     "transparent",
+                  border:         "none",
+                  borderBottom:   "2px solid " + (on ? ED_TOK.ink : "transparent"),
+                  color:          on ? ED_TOK.ink : ED_TOK.muted,
+                  fontFamily:     ED_TOK.mono,
+                  fontSize:       11,
+                  fontWeight:     700,
+                  letterSpacing:  "0.16em",
+                  textTransform:  "uppercase",
+                  cursor:         on ? "default" : "pointer",
+                  transition:     "color 0.15s, border-color 0.15s",
+                }}>
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Hairline opens the list section. */}
         <div style={{ height: 1, background: ED_TOK.line, marginBottom: 4 }}/>
 
         {eligible.length === 0 && (
@@ -1454,9 +1500,11 @@ function InviteMembersModal({ t, league, detail, friends, onClose, onInvite, toa
             textAlign:  "center",
             lineHeight: 1.5,
           }}>
-            {friends && friends.length === 0
-              ? "Add friends first — then you can invite them to a league."
-              : "All your friends are already in this league."}
+            {scope === "everyone"
+              ? "No other players to invite — everyone's already in the league or there are no other accounts yet."
+              : ((friends && friends.length === 0)
+                  ? "No friends yet. Switch to Everyone to invite anyone on the app."
+                  : "All your friends are already in this league.")}
           </div>
         )}
 
