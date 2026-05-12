@@ -967,6 +967,7 @@ export default function App(){
             markSeen={notifications.markSeen}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openLogin={auth.openLogin}
+            onLogMatch={openLogMatch}
           />
         </div>
 

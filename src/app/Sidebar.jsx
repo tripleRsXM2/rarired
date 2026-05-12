@@ -31,6 +31,11 @@ export default function Sidebar({
   dmUnreadCount,         // count of unread DMs + pending message-requests
   showNotifications, setShowNotifications, markSeen,
   onOpenSettings, openLogin,
+  // User feedback: 'on web can you add the + button in the menu at
+  // the left tab to log match? it doesnt exist on there.' Mobile has
+  // its own +-button on the home shell; this is the desktop sidebar
+  // equivalent, wired to the same openLogMatch handler in App.jsx.
+  onLogMatch,
 }) {
 
   function handleNav(id) {
@@ -63,6 +68,47 @@ export default function Sidebar({
           letterSpacing: "-0.4px", color: t.text,
         }}>CourtSync</span>
       </div>
+
+      {/* + Log match — primary action, sits directly under the logo
+          where the eye lands first. Filled accent so it reads as the
+          one push-button on the sidebar (everything else is nav).
+          Hidden when logged out (the action needs an auth user). */}
+      {authUser && onLogMatch && (
+        <div style={{
+          padding: "10px 10px 8px",
+          flexShrink: 0,
+        }}>
+          <button
+            type="button"
+            onClick={onLogMatch}
+            aria-label="Log a match"
+            title="Log a match"
+            className="cs-nav-item cs-nav-cta"
+            style={{
+              width: "100%",
+              background: t.accent,
+              color: t.accentText || "#fff",
+              border: "none",
+              fontWeight: 700,
+              letterSpacing: "-0.005em",
+              transition: "filter 0.12s ease, transform 0.12s ease",
+            }}
+            onMouseDown={function(e){ e.currentTarget.style.transform = "scale(0.98)"; }}
+            onMouseUp={function(e){ e.currentTarget.style.transform = "scale(1)"; }}
+            onMouseLeave={function(e){ e.currentTarget.style.transform = "scale(1)"; }}>
+            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none"
+                   stroke="currentColor" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 3v12M3 9h12"/>
+              </svg>
+            </span>
+            <span className="cs-nav-label" style={{ color: t.accentText || "#fff", fontWeight: 700 }}>
+              Log match
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Notifications — promoted to the top of the sidebar, directly
           beneath the CourtSync title. Sits in its own segmented block
