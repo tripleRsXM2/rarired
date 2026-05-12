@@ -967,7 +967,16 @@ export default function App(){
             markSeen={notifications.markSeen}
             onOpenSettings={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
             openLogin={auth.openLogin}
-            onLogMatch={openLogMatch}
+            onLogMatch={function(){
+              // User clarified after the earlier revert: 'i thought
+              // log match on web took us to a webpage before not a
+              // pop up? it was suppose to be like the mobile.'
+              // Routes to the editorial /match/log page so web and
+              // mobile share one canonical composer. The legacy
+              // openLogMatch (modal) is preserved for deep-link /
+              // challenge-conversion callers that still need it.
+              navigate("/match/log");
+            }}
           />
         </div>
 
