@@ -25,7 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { courtsInZone } from "../data/courts.js";
 import { ZONES } from "../data/zones.js";
-import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone } from "../services/mapService.js";
+import { fetchPlayersInZone, fetchPlayersAtCourt, scorePlayerForCourt, fetchPublicPlayersCountInZone, fetchAllPlayers } from "../services/mapService.js";
 import { NAV_ICONS } from "../../../lib/constants/navIcons.jsx";
 import { track } from "../../../lib/analytics.js";
 import ZoneShape from "./ZoneShape.jsx";
@@ -143,12 +143,14 @@ export default function ZoneSidePanel({
     }
     var viewer = (profile && Object.assign({ id: authUser && authUser.id }, profile)) || { id: authUser && authUser.id };
     var blocked = blockedUserIds || [];
-    // Scope = "everywhere" widens the roster to all users (not zone-
-    // filtered). Lets the viewer pitch a match at a court to someone
-    // who isn't a local. Pass null zoneId to fetchPlayersInZone — it
-    // skips the home_zone filter when zoneId is falsy.
+    // Scope = "everywhere" widens to the WHOLE directory — including
+    // users still mid-onboarding (no home_zone). User feedback:
+    // 'maps zone everywhere doesnt show every person.' fetchAllPlayers
+    // drops the 'not home_zone is null' filter that fetchPlayersInZone
+    // applies for the roster view (where zone-less profiles are
+    // ghosts). Same RLS/blocks/privacy.
     var zoneReq = scope === "everywhere"
-      ? fetchPlayersInZone(null, 80, blocked.concat(authUser && authUser.id ? [authUser.id] : []))
+      ? fetchAllPlayers(80, blocked.concat(authUser && authUser.id ? [authUser.id] : []))
       : fetchPlayersInZone(zone.id, 40, blocked);
     var courtReq = selectedCourt
       ? fetchPlayersAtCourt(selectedCourt, viewer, 40, blocked)
