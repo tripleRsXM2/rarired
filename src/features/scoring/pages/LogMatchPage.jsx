@@ -30,6 +30,14 @@ import {
   getMatchFormatWeight,
 } from "../../rating/utils/ratingSystem.js";
 import { validateMatchScore } from "../utils/tennisScoreValidation.js";
+// Canonical avatar component — same one Messages / Map / Friends use.
+// User feedback: 'log match > choose opponent > the icons of the
+// players. Why doesnt it match the icons in messages or the icons of
+// the players in the maps.' Previous OpponentRow rendered a custom
+// gold-bronze gradient + hand-rolled initials. PlayerAvatar derives
+// a deterministic per-name colour and renders the uploaded photo
+// when present — so a player's appearance is consistent everywhere.
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 // ── Page ─────────────────────────────────────────────────────────
 
@@ -237,6 +245,14 @@ export default function LogMatchPage({
   // celebration can show an estimated delta. Defensive: never include
   // the viewer themselves (would let you pick yourself as opponent →
   // match insert would fail server-side).
+  //
+  // When a friend / everyone entry collides with a recent entry, we
+  // MERGE the avatar fields onto the recent entry instead of skipping.
+  // recentOpponents is built from history rows that only carry
+  // {id, name}; without the merge, a player you've played who's also
+  // a friend with an uploaded photo would render with the fallback
+  // initial circle in the Recent section. User feedback: 'are you
+  // sure its picking up the uploaded photos too?'
   var allPlayers = useMemo(function () {
     var byId = {};
     var myId = authUser && authUser.id;
@@ -244,8 +260,15 @@ export default function LogMatchPage({
       if (!p || !p.id || p.id === myId) return;
       byId[p.id] = p;
     });
+    function enrichRecent(rec, src) {
+      if (!rec || !src) return;
+      if (rec.avatar     == null && src.avatar     != null) rec.avatar     = src.avatar;
+      if (rec.avatar_url == null && src.avatar_url != null) rec.avatar_url = src.avatar_url;
+      if (rec.ranking_points == null && src.ranking_points != null) rec.ranking_points = src.ranking_points;
+    }
     (friends || []).forEach(function (f) {
-      if (!f || !f.id || f.id === myId || byId[f.id]) return;
+      if (!f || !f.id || f.id === myId) return;
+      if (byId[f.id]) { enrichRecent(byId[f.id], f); return; }
       byId[f.id] = {
         id:             f.id,
         name:           f.name || "Player",
@@ -256,7 +279,8 @@ export default function LogMatchPage({
       };
     });
     (everyonePlayers || []).forEach(function (p) {
-      if (!p || !p.id || p.id === myId || byId[p.id]) return;
+      if (!p || !p.id || p.id === myId) return;
+      if (byId[p.id]) { enrichRecent(byId[p.id], p); return; }
       byId[p.id] = {
         id:             p.id,
         name:           p.name || "Player",
@@ -287,7 +311,32 @@ export default function LogMatchPage({
     lockedLeague.memberIds.forEach(function (id) { s[id] = true; });
     return s;
   }, [lockedLeague]);
-  var oppRecents  = memberSet ? recentOpponents.filter(function (p) { return memberSet[p.id]; }) : recentOpponents;
+  // Resolve each recent opponent against the merged allPlayers index
+  // so uploaded photos / latest skill labels reach the Recent section
+  // of the picker. Without this lookup, recentOpponents (built from
+  // history rows that only carry {id, name}) would render with the
+  // fallback color circle even when the player has an avatar_url.
+  var allPlayersById = useMemo(function () {
+    var m = {};
+    allPlayers.forEach(function (p) { if (p && p.id) m[p.id] = p; });
+    return m;
+  }, [allPlayers]);
+  var oppRecents = useMemo(function () {
+    var base = memberSet
+      ? recentOpponents.filter(function (p) { return memberSet[p.id]; })
+      : recentOpponents;
+    return base.map(function (r) {
+      var enriched = allPlayersById[r.id];
+      if (!enriched) return r;
+      // Preserve the Recent-section subtitle ("Played recently" /
+      // "Casual") rather than the enriched profile's suburb-skill
+      // string — keeps the section meaningful.
+      return Object.assign({}, enriched, r, {
+        avatar:     r.avatar     != null ? r.avatar     : enriched.avatar,
+        avatar_url: r.avatar_url != null ? r.avatar_url : enriched.avatar_url,
+      });
+    });
+  }, [recentOpponents, allPlayersById, memberSet]);
   var oppAllPlayers = memberSet ? allPlayers.filter(function (p) { return memberSet[p.id]; }) : allPlayers;
 
   // Submit gating — score + opponent + type all set.
@@ -318,6 +367,36 @@ export default function LogMatchPage({
   // ── Submit ────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!ready) return;
+
+    // Partial-set confirmation gate. User feedback: 'maybe a warning
+    // like — This is not a complete set, are you sure you want to
+    // continue.' Runs BEFORE we set saving state so the user can
+    // back out without seeing a spinner flash. Ranked matches stay
+    // strict (validator rejects partial anyway); only casual / league-
+    // casual can be partial-and-accepted.
+    var resolvedType = resolveMatchType(type, leagueId, lockedLeague, activeLeagues);
+    if (resolvedType !== "ranked") {
+      var cleanForCheck = sets
+        .filter(function (s) { return s.a !== "" || s.b !== ""; })
+        .map(function (s) { return { you: s.a, them: s.b }; });
+      var partialCheck = validateMatchScore(cleanForCheck, {
+        matchType:           resolvedType,
+        completionType:      completion,
+        matchFormat:         null,
+        finalSetFormat:      "normal_set",
+        allowPartialScores:  true,
+        leagueMode:          null,
+        leagueAllowPartial:  false,
+      });
+      var hasPartialSet = partialCheck.ok
+        && (partialCheck.perSet || []).some(function (p) { return p && p.partial; });
+      if (hasPartialSet) {
+        var ok = (typeof window !== "undefined")
+          && window.confirm("This is not a complete set — are you sure you want to continue?");
+        if (!ok) return;
+      }
+    }
+
     setSaving(true);
     setSaveError("");
 
@@ -352,6 +431,15 @@ export default function LogMatchPage({
       completionType: completion,
       leagueId:       (type === "league" && leagueId) ? leagueId : null,
       inviteOpponent: false,
+      // Submit-time validator (useMatchHistory.submitMatch) reads
+      // this flag — without it, a perfectly valid casual 1-2 / 3-2
+      // 'we just played a few games' score gets rejected as
+      // invalid_score even though the live ScoreSheet preview
+      // already allows it. Mirror the same rule here: casual
+      // matches accept partial scores; ranked stays strict. User
+      // feedback: 'fix the log match Invalid score error — we
+      // need to be able to log matches that are 1-2 for example.'
+      allowPartialScores: resolveMatchType(type, leagueId, lockedLeague, activeLeagues) !== "ranked",
     };
 
     // scoreModal envelope — submitMatch reads scoreModal.casual to
@@ -1799,12 +1887,6 @@ function SheetEmpty({ children }) {
 
 function OpponentRow({ player, onClick }) {
   var [hover, setHover] = useState(false);
-  // Track per-row image load failure so we can fall back to the
-  // gradient + initials underlay without forcing a rerender of the
-  // whole sheet.
-  var [imgFailed, setImgFailed] = useState(false);
-  var initials = player.name.split(/\s+/).map(function (s) { return s[0] || ""; }).slice(0, 2).join("").toUpperCase();
-  var showImg = !!player.avatar_url && !imgFailed;
   return (
     <button
       onClick={onClick}
@@ -1829,40 +1911,17 @@ function OpponentRow({ player, onClick }) {
         fontFamily:     "inherit",
         transition:     "background 140ms",
       }}>
-      {/* Avatar — uploaded image if present, else gradient + initials.
-          User feedback: 'the icons — can you make sure they are tied
-          to the actual users? so their images show up if they
-          uploaded it.' Initials are rendered as the underlay so a
-          broken image URL falls back gracefully without an empty
-          circle. */}
-      <span style={{
-        position:     "relative",
-        width:        38, height: 38,
-        borderRadius: "50%",
-        background:   "linear-gradient(140deg, #C9A876, #8E6C3F)",
-        display:      "grid",
-        placeItems:   "center",
-        fontFamily:   ED_TOK.mono,
-        fontWeight:   700,
-        fontSize:     12,
-        color:        "#1A1410",
-        flex:         "0 0 auto",
-        overflow:     "hidden",
-      }}>
-        <span aria-hidden={showImg ? "true" : "false"}>{initials || "?"}</span>
-        {showImg && (
-          <img
-            src={player.avatar_url}
-            alt=""
-            onError={function () { setImgFailed(true); }}
-            style={{
-              position: "absolute", inset: 0,
-              width: "100%", height: "100%", objectFit: "cover",
-              display: "block",
-            }}
-          />
-        )}
-      </span>
+      {/* Avatar — uses the shared <PlayerAvatar/> so the rendering
+          rule (uploaded image → deterministic per-name color circle)
+          matches Messages / Map / Friends. The previous custom
+          gradient broke visual continuity across the app. */}
+      <PlayerAvatar
+        name={player.name}
+        avatar={player.avatar}
+        avatarUrl={player.avatar_url}
+        profile={player}
+        size={38}
+      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontFamily:    ED_TOK.display,
