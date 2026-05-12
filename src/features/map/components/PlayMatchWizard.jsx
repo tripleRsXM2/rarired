@@ -126,6 +126,12 @@ export default function PlayMatchWizard({
   // text inside the modal and overshot". See backdrop onMouseDown +
   // onClick below.
   var backdropDownRef = useRef(false);
+  // Swipe-cycle tracker for the step-1 court list. MUST be declared
+  // before the `if(!open) return null` early-return below — putting
+  // useRef after it violates the rules of hooks and breaks the entire
+  // wizard once `open` flips. That's exactly what made the modal go
+  // blank on first attempt.
+  var courtSwipeRef = useRef(null);
 
   // Reset everything when the wizard opens. Lock body scroll while up.
   useEffect(function(){
@@ -271,6 +277,42 @@ export default function PlayMatchWizard({
     setCourtName(c.name);
     track("play_match_court_picked", { zone_id: zoneId, court_name: c.name });
     go(2);
+  }
+  // Switch zones from WITHIN the court-picker step (step 1) without
+  // advancing to step 2. Different from pickZone (which fires on the
+  // step 0 grid and advances). User feedback: 'step 2 of 4 asks
+  // which court — at the moment the zone is locked. give the option
+  // to change that.' Drops any previously-picked court since it
+  // belonged to the old zone.
+  function switchZoneInline(z){
+    if(!z || !z.id || z.id === zoneId) return;
+    setZoneId(z.id);
+    setCourtName(null);
+    track("play_match_zone_switched_in_step", { from: zoneId, to: z.id });
+  }
+  // Touch-swipe handlers for the court-list body. Same threshold pattern
+  // as ZoneSidePanel (48px dx, 600ms cap). Lets thumb-cycle through
+  // zones without reaching for a chip on the strip. The ref itself is
+  // declared ABOVE the early-return (rules of hooks); these are just
+  // plain functions.
+  function onCourtListTouchStart(e){
+    var x = e.touches[0] ? e.touches[0].clientX : 0;
+    courtSwipeRef.current = { x: x, t: Date.now() };
+  }
+  function onCourtListTouchEnd(e){
+    var s = courtSwipeRef.current;
+    courtSwipeRef.current = null;
+    if(!s) return;
+    var endX = (e.changedTouches[0] || {}).clientX || 0;
+    var dx = endX - s.x;
+    var dt = Date.now() - s.t;
+    if(Math.abs(dx) < 48) return;
+    if(dt > 600) return;
+    var i = ZONES.findIndex(function(z){ return z.id === zoneId; });
+    if(i < 0) return;
+    var nextI = dx < 0 ? (i + 1) % ZONES.length
+                       : (i - 1 + ZONES.length) % ZONES.length;
+    switchZoneInline(ZONES[nextI]);
   }
   function togglePlayer(p){
     setSelectedIds(function(prev){
@@ -525,21 +567,62 @@ export default function PlayMatchWizard({
           {/* Step 1 — pick court — soft-fill cards */}
           {step === 1 && zone && (
             <div>
+              {/* Zone-switcher strip — horizontal-scroll chips, one per
+                  zone, with the active one filled. User feedback: 'the
+                  zone is locked at the moment, can we give the option
+                  to change that?' Also wired to a touch-swipe on the
+                  court list area below (left/right cycles zones).
+                  Switching zones drops any picked court since it
+                  belonged to the old zone. */}
               <div style={{
-                fontSize: 11, color: t.textSecondary, marginBottom: 4,
-                display:"flex", alignItems:"center", gap: 6,
+                display:"flex", gap: 6, overflowX:"auto", overflowY:"hidden",
+                paddingBottom: 4, marginBottom: 10,
+                scrollbarWidth: "none",
+                WebkitOverflowScrolling: "touch",
               }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius:"50%", background: zone.color,
-                }}/>
-                <span>{zone.name}</span>
-                <span style={{ color: t.textTertiary }}>·</span>
-                <span>{courts.length} {courts.length === 1 ? "venue" : "venues"}</span>
+                {ZONES.map(function(z){
+                  var active = z.id === zoneId;
+                  return (
+                    <button key={z.id} type="button"
+                      onClick={function(){ switchZoneInline(z); }}
+                      aria-pressed={active ? "true" : "false"}
+                      style={{
+                        flexShrink: 0,
+                        display:"inline-flex", alignItems:"center", gap: 6,
+                        padding: active ? "7px 13px" : "6px 12px",
+                        borderRadius: 999,
+                        border: "1px solid " + (active ? z.color : t.border),
+                        background: active ? hexToRgba(z.color, 0.16) : "transparent",
+                        color: active ? t.text : t.textSecondary,
+                        fontSize: 12,
+                        fontWeight: active ? 800 : 600,
+                        letterSpacing: "-0.01em",
+                        cursor: active ? "default" : "pointer",
+                        transition: "background 0.15s, border-color 0.15s, padding 0.12s",
+                        whiteSpace: "nowrap",
+                      }}>
+                      <span style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: z.color, flexShrink: 0,
+                      }}/>
+                      <span>{z.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{
+                fontSize: 11, color: t.textTertiary, marginBottom: 8,
+                letterSpacing: "0.04em",
+              }}>
+                {courts.length} {courts.length === 1 ? "venue" : "venues"} · swipe to switch zone
               </div>
               {/* (Booking-link affordance moved to step 3 — by then
                   the user has chosen a venue and the "check times"
                   context is meaningful. In step 2 it was premature.) */}
-              <div style={{ display:"flex", flexDirection:"column", gap: 8 }}>
+              <div
+                onTouchStart={onCourtListTouchStart}
+                onTouchEnd={onCourtListTouchEnd}
+                style={{ display:"flex", flexDirection:"column", gap: 8, touchAction: "pan-y" }}>
                 {courts.map(function(c){
                   return (
                     <div key={c.name}
