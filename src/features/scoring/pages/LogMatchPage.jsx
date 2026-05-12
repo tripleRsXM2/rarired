@@ -352,6 +352,15 @@ export default function LogMatchPage({
       completionType: completion,
       leagueId:       (type === "league" && leagueId) ? leagueId : null,
       inviteOpponent: false,
+      // Submit-time validator (useMatchHistory.submitMatch) reads
+      // this flag — without it, a perfectly valid casual 1-2 / 3-2
+      // 'we just played a few games' score gets rejected as
+      // invalid_score even though the live ScoreSheet preview
+      // already allows it. Mirror the same rule here: casual
+      // matches accept partial scores; ranked stays strict. User
+      // feedback: 'fix the log match Invalid score error — we
+      // need to be able to log matches that are 1-2 for example.'
+      allowPartialScores: resolveMatchType(type, leagueId, lockedLeague, activeLeagues) !== "ranked",
     };
 
     // scoreModal envelope — submitMatch reads scoreModal.casual to
