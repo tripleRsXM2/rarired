@@ -38,6 +38,12 @@ export default function LogMatchPage({
   profile,
   history,
   friends,
+  // Directory-wide non-friends from useSocialGraph.discoverPlayers.
+  // User feedback: 'log match > choose opponent > can we add in the
+  // everyone tab so you can search for players that are not your
+  // friends.' Merged into allPlayers below so the search/idle view
+  // can surface them; OpponentSheet groups them under "Everyone".
+  everyonePlayers,
   myLeagues,
   submitMatch,
   toast,
@@ -226,10 +232,11 @@ export default function LogMatchPage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, authUser, friendRatingById]);
 
-  // All players list = recents + friends, deduped by id. Carries
-  // ranking_points so the celebration can show an estimated delta.
-  // Defensive: never include the viewer themselves (would let you pick
-  // yourself as opponent → match insert would fail server-side).
+  // All players list = recents + friends + everyone (non-friends from
+  // the directory), deduped by id. Carries ranking_points so the
+  // celebration can show an estimated delta. Defensive: never include
+  // the viewer themselves (would let you pick yourself as opponent →
+  // match insert would fail server-side).
   var allPlayers = useMemo(function () {
     var byId = {};
     var myId = authUser && authUser.id;
@@ -242,12 +249,33 @@ export default function LogMatchPage({
       byId[f.id] = {
         id:             f.id,
         name:           f.name || "Player",
+        avatar:         f.avatar,
+        avatar_url:     f.avatar_url,
         sub:            (f.suburb || "Friend") + (f.skill ? " · " + f.skill : ""),
         ranking_points: f.ranking_points != null ? f.ranking_points : null,
       };
     });
+    (everyonePlayers || []).forEach(function (p) {
+      if (!p || !p.id || p.id === myId || byId[p.id]) return;
+      byId[p.id] = {
+        id:             p.id,
+        name:           p.name || "Player",
+        avatar:         p.avatar,
+        avatar_url:     p.avatar_url,
+        sub:            (p.suburb || "") + (p.skill ? (p.suburb ? " · " : "") + p.skill : ""),
+        ranking_points: p.ranking_points != null ? p.ranking_points : null,
+      };
+    });
     return Object.values(byId);
-  }, [recentOpponents, friends, authUser]);
+  }, [recentOpponents, friends, everyonePlayers, authUser]);
+
+  // Set of friend ids — used by OpponentSheet to split the idle view
+  // into Friends vs Everyone sections.
+  var friendIds = useMemo(function () {
+    var s = {};
+    (friends || []).forEach(function (f) { if (f && f.id) s[f.id] = true; });
+    return s;
+  }, [friends]);
 
   // When opened from a league, filter the opponent lists to active
   // league members only. Otherwise the user could pick a non-member
@@ -604,6 +632,7 @@ export default function LogMatchPage({
         <OpponentSheet
           recents={oppRecents}
           allPlayers={oppAllPlayers}
+          friendIds={friendIds}
           onPick={function (p) { setOpp(p); setSheet(null); }}
         />
       </BottomSheet>
@@ -1607,26 +1636,34 @@ function CompletionSheet({ value, setValue, onDone }) {
 
 // ── OpponentSheet ────────────────────────────────────────────────
 
-function OpponentSheet({ recents, allPlayers, onPick }) {
+function OpponentSheet({ recents, allPlayers, friendIds, onPick }) {
   var [q, setQ] = useState("");
 
-  // Two pools when idle: "Recent" (recently played) + "Friends" (in
-  // friends list but not in recents). Friends-only-never-played
-  // showed as empty before — confusing if the user has friends in
-  // the system but hasn't logged against them yet (Mdawg case).
-  // When a query is typed, collapse to a single search-results list
-  // over allPlayers (already de-duped).
+  // Three pools when idle: "Recent" (recently played) + "Friends"
+  // (in friend graph, not yet played) + "Everyone" (directory-wide
+  // non-friends). User feedback: 'log match > choose opponent > can
+  // we add in the everyone tab so you can search for players that
+  // are not your friends.' When a query is typed, collapse to a
+  // single search-results list over allPlayers (already de-duped).
   var recentIds = useMemo(function () {
     var s = {};
     (recents || []).forEach(function (p) { if (p && p.id) s[p.id] = true; });
     return s;
   }, [recents]);
 
+  var fIds = friendIds || {};
+
   var friendsOnly = useMemo(function () {
     return (allPlayers || []).filter(function (p) {
-      return p && p.id && !recentIds[p.id];
+      return p && p.id && !recentIds[p.id] && fIds[p.id];
     });
-  }, [allPlayers, recentIds]);
+  }, [allPlayers, recentIds, fIds]);
+
+  var everyoneOnly = useMemo(function () {
+    return (allPlayers || []).filter(function (p) {
+      return p && p.id && !recentIds[p.id] && !fIds[p.id];
+    });
+  }, [allPlayers, recentIds, fIds]);
 
   var ql = q.trim().toLowerCase();
   var searchResults = ql
@@ -1705,7 +1742,20 @@ function OpponentSheet({ recents, allPlayers, onPick }) {
               })}
             </>
           )}
-          {(!recents || recents.length === 0) && friendsOnly.length === 0 && (
+          {everyoneOnly.length > 0 && (
+            <>
+              <SectionMicro
+                label="Everyone"
+                topGap={(recents && recents.length > 0) || friendsOnly.length > 0}
+              />
+              {everyoneOnly.map(function (p) {
+                return (
+                  <OpponentRow key={"e:" + p.id} player={p} onClick={function () { onPick(p); }}/>
+                );
+              })}
+            </>
+          )}
+          {(!recents || recents.length === 0) && friendsOnly.length === 0 && everyoneOnly.length === 0 && (
             <SheetEmpty>No opponents yet — search by name.</SheetEmpty>
           )}
         </>

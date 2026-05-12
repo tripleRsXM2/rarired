@@ -1168,6 +1168,7 @@ export default function App(){
               profile={currentUser.profile}
               history={matchHistory.history}
               friends={social.friends}
+              everyonePlayers={social.discoverPlayers}
               myLeagues={leagues.leagues}
               submitMatch={matchHistory.submitMatch}
               toast={toast}
