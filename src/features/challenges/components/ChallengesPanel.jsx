@@ -9,10 +9,11 @@
 // negotiate logistics they can DM. We deliberately don't add comments on
 // challenges.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
+import { fetchPlayersInZone } from "../../map/services/mapService.js";
 
 function fmtProposedAt(iso) {
   if (!iso) return null;
@@ -165,6 +166,33 @@ export default function ChallengesPanel({
     navigate(location.pathname, { replace: true, state: { highlightChallengeId: logId } });
   }, [location.state, challenges, profileMap, authUser && authUser.id]);
 
+  // Scope for the no-challenges-yet picker. User feedback: 'somewhere
+  // at the top can there be an option to show all players on the app
+  // not just friends?' Default stays on Friends (existing behaviour);
+  // Everyone widens to the platform via fetchPlayersInZone(null, …)
+  // which already handles blocks + privacy via the RPC behind it.
+  var [pickerScope, setPickerScope] = useState("friends"); // "friends" | "everyone"
+  var [everyonePlayers, setEveryonePlayers] = useState(null);
+  var [everyoneLoading, setEveryoneLoading] = useState(false);
+  useEffect(function(){
+    if(pickerScope !== "everyone") return;
+    if(everyonePlayers !== null) return; // cache once per panel mount
+    var cancelled = false;
+    setEveryoneLoading(true);
+    var exclude = [authUser.id];
+    fetchPlayersInZone(null, 50, exclude).then(function(r){
+      if(cancelled) return;
+      var rows = ((r && r.data) || []).filter(function(p){ return p && p.id && p.id !== authUser.id; });
+      setEveryonePlayers(rows);
+      setEveryoneLoading(false);
+    }).catch(function(){
+      if(cancelled) return;
+      setEveryonePlayers([]);
+      setEveryoneLoading(false);
+    });
+    return function(){ cancelled = true; };
+  }, [pickerScope, authUser && authUser.id]);
+
   var incoming = challenges.filter(function (c) { return c.status === "pending" && c.challenged_id === authUser.id; });
   var outgoing = challenges.filter(function (c) { return c.status === "pending" && c.challenger_id === authUser.id; });
   var accepted = challenges.filter(function (c) { return c.status === "accepted"; });
@@ -177,8 +205,9 @@ export default function ChallengesPanel({
 
   if (!incoming.length && !outgoing.length && !accepted.length) {
     var friendsList = Array.isArray(friends) ? friends : [];
-    // No challenges AND no friends → original empty state (nothing to act on).
-    if (!friendsList.length || !openChallenge) {
+    // No openChallenge handler? Fall back to the original copy-only
+    // empty state — there's nothing actionable to render.
+    if (!openChallenge) {
       return (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
           <div style={{ fontSize: 36, marginBottom: 14 }}>🎾</div>
@@ -201,9 +230,33 @@ export default function ChallengesPanel({
         </div>
       );
     }
-    // No challenges BUT have friends → show friends list with a one-tap
-    // Challenge button per row. Reduces the path from "want to play → played"
-    // from 3 taps (open People → open profile → tap Challenge) to 1 tap.
+    // Pick rows from scope. Friends are local. Everyone is async via
+    // fetchPlayersInZone(null, …) — the same RPC the map roster uses,
+    // so blocks + privacy are already respected.
+    var pickerRows = pickerScope === "everyone"
+      ? (everyonePlayers || [])
+      : friendsList;
+    var pickerLoading = pickerScope === "everyone" && everyoneLoading;
+    // Underline-tabs scope picker — same language as the other
+    // segmented controls in the app (Map zone panel, etc.).
+    function ScopeTab({ id, label }) {
+      var on = pickerScope === id;
+      return (
+        <button key={id} type="button"
+          onClick={function(){ if(!on) setPickerScope(id); }}
+          style={{
+            padding: "6px 0", background: "transparent", border: "none",
+            borderBottom: "2px solid " + (on ? t.text : "transparent"),
+            color: on ? t.text : t.textTertiary,
+            fontSize: 12, fontWeight: on ? 800 : 600,
+            letterSpacing: "0.04em", textTransform: "uppercase",
+            cursor: on ? "default" : "pointer",
+            transition: "color 0.15s, border-color 0.15s",
+          }}>
+          {label}
+        </button>
+      );
+    }
     return (
       <div>
         <div style={{
@@ -214,57 +267,78 @@ export default function ChallengesPanel({
           Start a challenge
         </div>
         <div style={{
-          fontSize: 13, color: t.textSecondary, marginBottom: 18,
+          fontSize: 13, color: t.textSecondary, marginBottom: 12,
           lineHeight: 1.5, letterSpacing: "-0.1px",
         }}>
-          No active challenges. Tap a friend below to set up a match.
+          {pickerScope === "everyone"
+            ? "Pick anyone on the app to challenge."
+            : "No active challenges. Tap a friend below to set up a match."}
         </div>
-        {friendsList.map(function (f) {
-          return (
-            <div key={f.id} style={{
-              borderTop: "1px solid " + t.border,
-              paddingTop: 12, paddingBottom: 12,
-              display: "flex", alignItems: "center", gap: 12,
-            }}>
-              <div
-                onClick={function () { if (openProfile) openProfile(f.id); }}
-                style={{ flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
-                <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={36} />
-              </div>
-              <div
-                onClick={function () { if (openProfile) openProfile(f.id); }}
-                style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
-                <div style={{
-                  fontSize: 14, fontWeight: 800, color: t.text,
-                  letterSpacing: "-0.2px",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {f.name || "Player"}
+        {/* Scope toggle — user feedback: 'somewhere at the top can
+            there be an option to show all players on the app not
+            just friends?' */}
+        <div style={{ display: "flex", gap: 22, marginBottom: 6 }}>
+          <ScopeTab id="friends"  label={"Friends" + (friendsList.length ? " (" + friendsList.length + ")" : "")}/>
+          <ScopeTab id="everyone" label="Everyone"/>
+        </div>
+        {pickerLoading ? (
+          <div style={{ padding: "20px 4px", fontSize: 12, color: t.textTertiary, textAlign: "center" }}>
+            Loading players…
+          </div>
+        ) : pickerRows.length === 0 ? (
+          <div style={{ padding: "24px 4px", fontSize: 13, color: t.textSecondary, textAlign: "center", lineHeight: 1.5 }}>
+            {pickerScope === "everyone"
+              ? "No other players yet — invite a friend to be the first."
+              : "No friends yet. Switch to Everyone to challenge anyone on the app."}
+          </div>
+        ) : (
+          pickerRows.map(function (f) {
+            return (
+              <div key={f.id} style={{
+                borderTop: "1px solid " + t.border,
+                paddingTop: 12, paddingBottom: 12,
+                display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <div
+                  onClick={function () { if (openProfile) openProfile(f.id); }}
+                  style={{ flexShrink: 0, cursor: openProfile ? "pointer" : "default" }}>
+                  <PlayerAvatar name={f.name} avatar={f.avatar} profile={f} size={36} />
                 </div>
-                {(f.suburb || f.skill) && (
+                <div
+                  onClick={function () { if (openProfile) openProfile(f.id); }}
+                  style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
                   <div style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
-                    textTransform: "uppercase", color: t.textTertiary,
-                    marginTop: 4,
+                    fontSize: 14, fontWeight: 800, color: t.text,
+                    letterSpacing: "-0.2px",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
-                    {[f.suburb, f.skill].filter(Boolean).join(" · ")}
+                    {f.name || "Player"}
                   </div>
-                )}
+                  {(f.suburb || f.skill) && (
+                    <div style={{
+                      fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                      textTransform: "uppercase", color: t.textTertiary,
+                      marginTop: 4,
+                    }}>
+                      {[f.suburb, f.skill].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={function () { openChallenge(f, "profile"); }}
+                  style={{
+                    flexShrink: 0, padding: "9px 14px", borderRadius: 6, border: "none",
+                    background: t.accent, color: "#fff",
+                    fontSize: 10, fontWeight: 800,
+                    letterSpacing: "0.12em", textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}>
+                  Challenge
+                </button>
               </div>
-              <button
-                onClick={function () { openChallenge(f, "profile"); }}
-                style={{
-                  flexShrink: 0, padding: "9px 14px", borderRadius: 6, border: "none",
-                  background: t.accent, color: "#fff",
-                  fontSize: 10, fontWeight: 800,
-                  letterSpacing: "0.12em", textTransform: "uppercase",
-                  cursor: "pointer",
-                }}>
-                Challenge
-              </button>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     );
   }
