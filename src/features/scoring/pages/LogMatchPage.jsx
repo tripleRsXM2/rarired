@@ -30,6 +30,14 @@ import {
   getMatchFormatWeight,
 } from "../../rating/utils/ratingSystem.js";
 import { validateMatchScore } from "../utils/tennisScoreValidation.js";
+// Canonical avatar component — same one Messages / Map / Friends use.
+// User feedback: 'log match > choose opponent > the icons of the
+// players. Why doesnt it match the icons in messages or the icons of
+// the players in the maps.' Previous OpponentRow rendered a custom
+// gold-bronze gradient + hand-rolled initials. PlayerAvatar derives
+// a deterministic per-name colour and renders the uploaded photo
+// when present — so a player's appearance is consistent everywhere.
+import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
 // ── Page ─────────────────────────────────────────────────────────
 
@@ -1838,12 +1846,6 @@ function SheetEmpty({ children }) {
 
 function OpponentRow({ player, onClick }) {
   var [hover, setHover] = useState(false);
-  // Track per-row image load failure so we can fall back to the
-  // gradient + initials underlay without forcing a rerender of the
-  // whole sheet.
-  var [imgFailed, setImgFailed] = useState(false);
-  var initials = player.name.split(/\s+/).map(function (s) { return s[0] || ""; }).slice(0, 2).join("").toUpperCase();
-  var showImg = !!player.avatar_url && !imgFailed;
   return (
     <button
       onClick={onClick}
@@ -1868,40 +1870,17 @@ function OpponentRow({ player, onClick }) {
         fontFamily:     "inherit",
         transition:     "background 140ms",
       }}>
-      {/* Avatar — uploaded image if present, else gradient + initials.
-          User feedback: 'the icons — can you make sure they are tied
-          to the actual users? so their images show up if they
-          uploaded it.' Initials are rendered as the underlay so a
-          broken image URL falls back gracefully without an empty
-          circle. */}
-      <span style={{
-        position:     "relative",
-        width:        38, height: 38,
-        borderRadius: "50%",
-        background:   "linear-gradient(140deg, #C9A876, #8E6C3F)",
-        display:      "grid",
-        placeItems:   "center",
-        fontFamily:   ED_TOK.mono,
-        fontWeight:   700,
-        fontSize:     12,
-        color:        "#1A1410",
-        flex:         "0 0 auto",
-        overflow:     "hidden",
-      }}>
-        <span aria-hidden={showImg ? "true" : "false"}>{initials || "?"}</span>
-        {showImg && (
-          <img
-            src={player.avatar_url}
-            alt=""
-            onError={function () { setImgFailed(true); }}
-            style={{
-              position: "absolute", inset: 0,
-              width: "100%", height: "100%", objectFit: "cover",
-              display: "block",
-            }}
-          />
-        )}
-      </span>
+      {/* Avatar — uses the shared <PlayerAvatar/> so the rendering
+          rule (uploaded image → deterministic per-name color circle)
+          matches Messages / Map / Friends. The previous custom
+          gradient broke visual continuity across the app. */}
+      <PlayerAvatar
+        name={player.name}
+        avatar={player.avatar}
+        avatarUrl={player.avatar_url}
+        profile={player}
+        size={38}
+      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontFamily:    ED_TOK.display,
