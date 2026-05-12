@@ -65,6 +65,15 @@ export default function ZoneSidePanel({
   // the title card can decide on touchend whether the delta crossed
   // the threshold to navigate to the next/previous zone.
   var swipeStartRef = useRef(null);
+  // Player carousel scroller ref + drag state — used by the web
+  // mouse-drag-to-scroll + wheel-to-horizontal handlers below.
+  // User feedback: 'on web in maps when you want to search players
+  // after clicking a zone.. i cant side scroll the players. how do
+  // I do that?' Mobile already gets native touch-swipe; on desktop
+  // we wire mousedown→mousemove→mouseup drag plus deltaY→scrollLeft
+  // wheel translation so a regular mouse wheel works.
+  var playersScrollRef = useRef(null);
+  var playerDragRef    = useRef(null);
   // Player list scope: "zone" (default, home_zone match in this zone)
   // or "everywhere" (whole user base, ranked the same way). Lets the
   // viewer pitch a match at a court to someone who isn't a local.
@@ -653,16 +662,73 @@ export default function ZoneSidePanel({
              a long row scrolls; flex-shrink:0 on the cards stops
              them from compressing. */
           <div
+            ref={playersScrollRef}
+            onWheel={!isNarrow ? function(e){
+              // Translate vertical wheel deltas into horizontal scroll
+              // so a regular mouse wheel scrolls the carousel. Only
+              // intercept when there's actually horizontal overflow
+              // and the user is mostly scrolling vertically (Shift +
+              // wheel / trackpad horizontal already do the right
+              // thing natively and we don't want to fight them).
+              var el = e.currentTarget;
+              var hasOverflow = el.scrollWidth > el.clientWidth + 1;
+              if(!hasOverflow) return;
+              if(Math.abs(e.deltaY) > Math.abs(e.deltaX)){
+                el.scrollLeft += e.deltaY;
+                e.preventDefault();
+              }
+            } : undefined}
+            onMouseDown={!isNarrow ? function(e){
+              // Click-and-drag scroll on desktop. Skip if the user
+              // pressed on a child <button> — we don't want to eat
+              // their card tap.
+              if(e.button !== 0) return;
+              if(e.target.closest && e.target.closest("button")) return;
+              var el = e.currentTarget;
+              playerDragRef.current = {
+                startX: e.clientX,
+                startScrollLeft: el.scrollLeft,
+                moved: false,
+              };
+              el.style.cursor = "grabbing";
+            } : undefined}
+            onMouseMove={!isNarrow ? function(e){
+              var d = playerDragRef.current;
+              if(!d) return;
+              var dx = e.clientX - d.startX;
+              if(Math.abs(dx) > 3) d.moved = true;
+              e.currentTarget.scrollLeft = d.startScrollLeft - dx;
+            } : undefined}
+            onMouseUp={!isNarrow ? function(e){
+              if(!playerDragRef.current) return;
+              playerDragRef.current = null;
+              e.currentTarget.style.cursor = "";
+            } : undefined}
+            onMouseLeave={!isNarrow ? function(e){
+              if(!playerDragRef.current) return;
+              playerDragRef.current = null;
+              e.currentTarget.style.cursor = "";
+            } : undefined}
+            onClickCapture={!isNarrow ? function(e){
+              // If the user actually dragged (not a clean click) we
+              // intercept the tap so cards don't toggle accidentally.
+              var d = playerDragRef.current;
+              if(d && d.moved){ e.stopPropagation(); e.preventDefault(); }
+            } : undefined}
             style={{
               display:"flex",
               gap: 8,
               justifyContent: displayPlayers.length <= 4 ? "center" : "flex-start",
               overflowX:"auto",
               overflowY:"hidden",
-              scrollSnapType:"x mandatory",
+              scrollSnapType: isNarrow ? "x mandatory" : "none",
               WebkitOverflowScrolling:"touch",
               padding:"4px 2px 12px",
-              scrollbarWidth: "none",
+              // Hide scrollbar on mobile (native swipe); leave a thin
+              // one on desktop so users see they can scroll.
+              scrollbarWidth: isNarrow ? "none" : "thin",
+              cursor: isNarrow ? "auto" : (displayPlayers.length > 4 ? "grab" : "auto"),
+              userSelect: "none",
               marginRight: -4, // bleed past the panel padding so the trailing card has visual room
             }}>
             {displayPlayers.map(function (p) {
