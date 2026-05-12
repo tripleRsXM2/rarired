@@ -95,8 +95,12 @@ function PlayerCard({
         </div>
         {/* Match-reason tags — only render when the Discover ranker
             provides reasons. Compact, neutral chips with a tiny
-            accent dot for sameSkill (the strongest signal). */}
-        {matchReasons && (matchReasons.sameSkill || matchReasons.sameZone || (matchReasons.sharedCourts && matchReasons.sharedCourts.length)) && (
+            accent dot for sameSkill (the strongest signal). The
+            `> 0` keeps the guard a proper boolean — otherwise the
+            sharedCourts.length=0 branch makes the && chain evaluate
+            to literal 0, which React renders as the text '0' under
+            every card. Classic JSX gotcha. */}
+        {matchReasons && (matchReasons.sameSkill || matchReasons.sameZone || (matchReasons.sharedCourts && matchReasons.sharedCourts.length > 0)) && (
           <div style={{
             marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4,
             fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
