@@ -245,6 +245,14 @@ export default function LogMatchPage({
   // celebration can show an estimated delta. Defensive: never include
   // the viewer themselves (would let you pick yourself as opponent →
   // match insert would fail server-side).
+  //
+  // When a friend / everyone entry collides with a recent entry, we
+  // MERGE the avatar fields onto the recent entry instead of skipping.
+  // recentOpponents is built from history rows that only carry
+  // {id, name}; without the merge, a player you've played who's also
+  // a friend with an uploaded photo would render with the fallback
+  // initial circle in the Recent section. User feedback: 'are you
+  // sure its picking up the uploaded photos too?'
   var allPlayers = useMemo(function () {
     var byId = {};
     var myId = authUser && authUser.id;
@@ -252,8 +260,15 @@ export default function LogMatchPage({
       if (!p || !p.id || p.id === myId) return;
       byId[p.id] = p;
     });
+    function enrichRecent(rec, src) {
+      if (!rec || !src) return;
+      if (rec.avatar     == null && src.avatar     != null) rec.avatar     = src.avatar;
+      if (rec.avatar_url == null && src.avatar_url != null) rec.avatar_url = src.avatar_url;
+      if (rec.ranking_points == null && src.ranking_points != null) rec.ranking_points = src.ranking_points;
+    }
     (friends || []).forEach(function (f) {
-      if (!f || !f.id || f.id === myId || byId[f.id]) return;
+      if (!f || !f.id || f.id === myId) return;
+      if (byId[f.id]) { enrichRecent(byId[f.id], f); return; }
       byId[f.id] = {
         id:             f.id,
         name:           f.name || "Player",
@@ -264,7 +279,8 @@ export default function LogMatchPage({
       };
     });
     (everyonePlayers || []).forEach(function (p) {
-      if (!p || !p.id || p.id === myId || byId[p.id]) return;
+      if (!p || !p.id || p.id === myId) return;
+      if (byId[p.id]) { enrichRecent(byId[p.id], p); return; }
       byId[p.id] = {
         id:             p.id,
         name:           p.name || "Player",
@@ -295,7 +311,32 @@ export default function LogMatchPage({
     lockedLeague.memberIds.forEach(function (id) { s[id] = true; });
     return s;
   }, [lockedLeague]);
-  var oppRecents  = memberSet ? recentOpponents.filter(function (p) { return memberSet[p.id]; }) : recentOpponents;
+  // Resolve each recent opponent against the merged allPlayers index
+  // so uploaded photos / latest skill labels reach the Recent section
+  // of the picker. Without this lookup, recentOpponents (built from
+  // history rows that only carry {id, name}) would render with the
+  // fallback color circle even when the player has an avatar_url.
+  var allPlayersById = useMemo(function () {
+    var m = {};
+    allPlayers.forEach(function (p) { if (p && p.id) m[p.id] = p; });
+    return m;
+  }, [allPlayers]);
+  var oppRecents = useMemo(function () {
+    var base = memberSet
+      ? recentOpponents.filter(function (p) { return memberSet[p.id]; })
+      : recentOpponents;
+    return base.map(function (r) {
+      var enriched = allPlayersById[r.id];
+      if (!enriched) return r;
+      // Preserve the Recent-section subtitle ("Played recently" /
+      // "Casual") rather than the enriched profile's suburb-skill
+      // string — keeps the section meaningful.
+      return Object.assign({}, enriched, r, {
+        avatar:     r.avatar     != null ? r.avatar     : enriched.avatar,
+        avatar_url: r.avatar_url != null ? r.avatar_url : enriched.avatar_url,
+      });
+    });
+  }, [recentOpponents, allPlayersById, memberSet]);
   var oppAllPlayers = memberSet ? allPlayers.filter(function (p) { return memberSet[p.id]; }) : allPlayers;
 
   // Submit gating — score + opponent + type all set.
