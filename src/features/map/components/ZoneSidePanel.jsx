@@ -74,6 +74,28 @@ export default function ZoneSidePanel({
   // wheel translation so a regular mouse wheel works.
   var playersScrollRef = useRef(null);
   var playerDragRef    = useRef(null);
+  // Edge-affordance state for the player carousel. Tracks whether
+  // there's content offscreen left/right so we can fade in the edge
+  // gradients and chevron buttons only when meaningful. Web only —
+  // mobile already has native touch swipe and needs no chrome.
+  var [canL, setCanL] = useState(false);
+  var [canR, setCanR] = useState(false);
+  function refreshScrollEdges(){
+    var el = playersScrollRef.current;
+    if(!el){ setCanL(false); setCanR(false); return; }
+    var sl = el.scrollLeft;
+    var max = el.scrollWidth - el.clientWidth;
+    setCanL(sl > 2);
+    setCanR(sl < max - 2);
+  }
+  function scrollByCardStep(direction){
+    var el = playersScrollRef.current;
+    if(!el) return;
+    // Card is 132px + 8px gap. Scroll one "page" of cards minus a
+    // peek so the user sees there's more after the jump.
+    var page = Math.max(140, el.clientWidth - 40);
+    el.scrollBy({ left: direction * page, behavior: "smooth" });
+  }
   // Player list scope: "zone" (default, home_zone match in this zone)
   // or "everywhere" (whole user base, ranked the same way). Lets the
   // viewer pitch a match at a court to someone who isn't a local.
@@ -109,6 +131,41 @@ export default function ZoneSidePanel({
       else mq.removeListener(onChange);
     };
   },[]);
+
+  // Inject a one-off <style> tag that hides the WebKit scrollbar on
+  // the player carousel. scrollbarWidth:'none' covers Firefox; the
+  // ::-webkit-scrollbar selector covers Chrome/Safari (inline styles
+  // can't address pseudo-elements). User feedback: 'the side scroll
+  // looks very ugly and outdated. make sure thats not on mobile.'
+  useEffect(function(){
+    if (typeof document === "undefined") return;
+    var id = "cs-zone-player-scroller-style";
+    if (document.getElementById(id)) return;
+    var s = document.createElement("style");
+    s.id = id;
+    s.textContent =
+      ".cs-zone-player-scroller::-webkit-scrollbar{display:none;width:0;height:0;}" +
+      ".cs-zone-player-scroller{-ms-overflow-style:none;}" +
+      "@keyframes csZoneArrowFade{from{opacity:0;transform:translateY(-50%) scale(.92);}to{opacity:1;transform:translateY(-50%) scale(1);}}";
+    document.head.appendChild(s);
+  },[]);
+
+  // Refresh canL/canR whenever the player list size or layout changes.
+  // requestAnimationFrame defers to after the DOM has painted so
+  // scrollWidth/clientWidth are up to date. Also subscribes to window
+  // resize so the side panel widening on rotation re-evaluates.
+  useEffect(function(){
+    if (typeof window === "undefined") return;
+    var raf = requestAnimationFrame(refreshScrollEdges);
+    window.addEventListener("resize", refreshScrollEdges);
+    return function(){
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", refreshScrollEdges);
+    };
+  // refreshScrollEdges is a stable function; depending on the player
+  // list length captures both the load and the post-filter case.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[players.length, loading, isNarrow]);
 
   // Fetch + rank the player list. Always returns the WHOLE zone roster
   // (by home_zone) so users can reach anyone in their area — even to
@@ -655,16 +712,95 @@ export default function ZoneSidePanel({
                 : ("No one has set this as their home yet." + (canSetHome && !isHome ? " Be the first." : ""))}
           </div>
         ) : (
-          /* Horizontal-scroll player carousel — same swipe-friendly
-             pattern as MapPlayerOverlay's picker. Replaces the
-             vertical row list per user feedback ('add the player
-             cards instead of the icons... slide left or right').
-             Container has overflow-x:auto + flex centring so a
-             short row of cards visually anchors to the centre and
-             a long row scrolls; flex-shrink:0 on the cards stops
-             them from compressing. */
+          /* Horizontal-scroll player carousel. Mobile: native touch
+             swipe, no chrome. Web: invisible scrollbar + edge fade
+             gradients + hover-revealed chevron buttons (Spotify /
+             Linear pattern). User feedback: 'the side scroll looks
+             very ugly and outdated. make it more modern.' */
+          <div className="cs-zone-player-wrap"
+            onMouseEnter={!isNarrow ? function(e){
+              var arrows = e.currentTarget.querySelectorAll(".cs-zone-arrow");
+              arrows.forEach(function(a){ a.dataset.hover = "1"; a.style.opacity = a.dataset.canShow === "1" ? "1" : "0"; });
+            } : undefined}
+            onMouseLeave={!isNarrow ? function(e){
+              var arrows = e.currentTarget.querySelectorAll(".cs-zone-arrow");
+              arrows.forEach(function(a){ a.dataset.hover = ""; a.style.opacity = a.dataset.canShow === "1" ? "0.7" : "0"; });
+            } : undefined}
+            style={{ position: "relative", marginRight: -4 }}>
+          {/* Left edge fade — only when there's content offscreen left */}
+          {!isNarrow && (
+            <div aria-hidden="true" style={{
+              position: "absolute", left: 0, top: 0, bottom: 12,
+              width: 28, pointerEvents: "none", zIndex: 2,
+              background: "linear-gradient(to right, " + t.bgCard + " 0%, " + t.bgCard + "80 60%, transparent 100%)",
+              opacity: canL ? 1 : 0,
+              transition: "opacity 180ms ease",
+            }}/>
+          )}
+          {/* Right edge fade */}
+          {!isNarrow && (
+            <div aria-hidden="true" style={{
+              position: "absolute", right: 0, top: 0, bottom: 12,
+              width: 28, pointerEvents: "none", zIndex: 2,
+              background: "linear-gradient(to left, " + t.bgCard + " 0%, " + t.bgCard + "80 60%, transparent 100%)",
+              opacity: canR ? 1 : 0,
+              transition: "opacity 180ms ease",
+            }}/>
+          )}
+          {/* Left chevron — only renders web; opacity ramps with canL */}
+          {!isNarrow && (
+            <button type="button"
+              className="cs-zone-arrow"
+              onClick={function(){ scrollByCardStep(-1); }}
+              aria-label="Scroll players left"
+              data-can-show={canL ? "1" : "0"}
+              style={{
+                position: "absolute", left: -2, top: "50%",
+                transform: "translateY(-50%)",
+                width: 30, height: 30, borderRadius: "50%",
+                border: "1px solid " + t.border,
+                background: t.bgCard, color: t.text,
+                display: canL ? "flex" : "none",
+                alignItems: "center", justifyContent: "center",
+                cursor: "pointer", padding: 0,
+                opacity: 0.7, zIndex: 3,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                transition: "opacity 180ms ease, transform 140ms ease",
+              }}>
+              <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4L6 9l5 5"/>
+              </svg>
+            </button>
+          )}
+          {/* Right chevron */}
+          {!isNarrow && (
+            <button type="button"
+              className="cs-zone-arrow"
+              onClick={function(){ scrollByCardStep(1); }}
+              aria-label="Scroll players right"
+              data-can-show={canR ? "1" : "0"}
+              style={{
+                position: "absolute", right: 2, top: "50%",
+                transform: "translateY(-50%)",
+                width: 30, height: 30, borderRadius: "50%",
+                border: "1px solid " + t.border,
+                background: t.bgCard, color: t.text,
+                display: canR ? "flex" : "none",
+                alignItems: "center", justifyContent: "center",
+                cursor: "pointer", padding: 0,
+                opacity: 0.7, zIndex: 3,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                transition: "opacity 180ms ease, transform 140ms ease",
+              }}>
+              <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 4l5 5-5 5"/>
+              </svg>
+            </button>
+          )}
           <div
+            className="cs-zone-player-scroller"
             ref={playersScrollRef}
+            onScroll={!isNarrow ? refreshScrollEdges : undefined}
             onWheel={!isNarrow ? function(e){
               // Translate vertical wheel deltas into horizontal scroll
               // so a regular mouse wheel scrolls the carousel. Only
@@ -726,12 +862,11 @@ export default function ZoneSidePanel({
               scrollSnapType: isNarrow ? "x mandatory" : "none",
               WebkitOverflowScrolling:"touch",
               padding:"4px 2px 12px",
-              // Hide scrollbar on mobile (native swipe); leave a thin
-              // one on desktop so users see they can scroll.
-              scrollbarWidth: isNarrow ? "none" : "thin",
+              // Scrollbar hidden on all platforms — the CSS injected
+              // above hides ::-webkit-scrollbar; this covers Firefox.
+              scrollbarWidth: "none",
               cursor: isNarrow ? "auto" : (displayPlayers.length > 4 ? "grab" : "auto"),
               userSelect: "none",
-              marginRight: -4, // bleed past the panel padding so the trailing card has visual room
             }}>
             {displayPlayers.map(function (p) {
               var isViewer = p.id === (authUser && authUser.id);
@@ -866,6 +1001,7 @@ export default function ZoneSidePanel({
                 </button>
               );
             })}
+          </div>
           </div>
         )}
       </div>
