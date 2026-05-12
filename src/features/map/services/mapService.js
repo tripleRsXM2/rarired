@@ -281,6 +281,22 @@ export function fetchPlayersInZone(zoneId, limit, excludeIds){
   return q.order("last_active", { ascending: false, nullsFirst: false }).limit(l);
 }
 
+// Directory-wide player list — does NOT filter by home_zone. Used by
+// surfaces like the Challenge picker's "Everyone" scope where the
+// intent is 'anyone with an account', including profiles still in
+// onboarding (no home_zone yet). Distinct from fetchPlayersInZone
+// which is a roster query and excludes zone-less ghosts on purpose.
+// Same RLS, blocks, and privacy gates apply.
+export function fetchAllPlayers(limit, excludeIds){
+  var l = limit || 50;
+  var q = supabase.from("profiles")
+    .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,last_active,home_zone,gender,age_bracket");
+  if (excludeIds && excludeIds.length) {
+    q = q.not("id", "in", "(" + excludeIds.join(",") + ")");
+  }
+  return q.order("last_active", { ascending: false, nullsFirst: false }).limit(l);
+}
+
 // Anonymous-friendly count of public players in a zone. RLS blocks anon
 // SELECT on profiles entirely, so for the signed-out map preview we
 // route through a SECURITY DEFINER RPC that returns just the integer.
