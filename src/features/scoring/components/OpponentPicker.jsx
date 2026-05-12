@@ -39,6 +39,11 @@ export default function OpponentPicker({
   onClear,          // () => void — clear both name + id
   friends,          // array of {id, name, avatar, avatar_url, skill, ...}
   suggestedPlayers, // array of same shape
+  // Directory-wide non-friends. User feedback: 'in log match choose
+  // opponent, can you also add the list of everyone. right now it
+  // just shows friends. make sure we have everyone added.' Merged
+  // into the search pool below alongside friends + suggested.
+  allPlayers,
   showDrop,
   setShowDrop,
 }) {
@@ -62,11 +67,14 @@ export default function OpponentPicker({
     if (!value && !selectedId) setEditing(true);
   }, [value, selectedId]);
 
-  // Resolve the friend object for chip render (state 2).
+  // Resolve the friend object for chip render (state 2). Also looks
+  // in allPlayers so a freshly-picked non-friend opponent renders
+  // with their avatar + name in the chip after selection.
   var linkedFriend = selectedId
-    ? (friends || []).concat(suggestedPlayers || []).find(function (u) {
-        return u.id === selectedId;
-      })
+    ? (friends || [])
+        .concat(suggestedPlayers || [])
+        .concat(allPlayers || [])
+        .find(function (u) { return u.id === selectedId; })
     : null;
 
   // ── State 2: friend chip ────────────────────────────────────────────
@@ -142,14 +150,29 @@ export default function OpponentPicker({
         })}/>
       {showDrop && (function () {
         var q = trimmed.toLowerCase();
-        var pool = (friends || []).concat(
-          (suggestedPlayers || []).filter(function (s) {
-            return !(friends || []).some(function (f) { return f.id === s.id; });
-          })
-        );
+        // Pool = friends + suggested + allPlayers, deduped by id.
+        // Friends keep priority so a typed query that matches both a
+        // friend and a stranger surfaces the friend first.
+        var seen = {};
+        var pool = [];
+        function push(u){
+          if(!u || !u.id || seen[u.id]) return;
+          seen[u.id] = true;
+          pool.push(u);
+        }
+        (friends || []).forEach(push);
+        (suggestedPlayers || []).forEach(push);
+        (allPlayers || []).forEach(push);
         var hits = q
           ? pool.filter(function (u) { return u.name && u.name.toLowerCase().includes(q); })
-          : (friends || []).slice(0, 6);
+          // No query → show friends first, then top 4 non-friends so
+          // the empty-query state surfaces 'everyone' too. User can
+          // refine by typing.
+          : (friends || []).slice(0, 6).concat(
+              (allPlayers || [])
+                .filter(function (u) { return !(friends || []).some(function (f) { return f.id === u.id; }); })
+                .slice(0, 4)
+            );
 
         // Show the freetext-commit row when:
         //   - user has typed at least 2 chars

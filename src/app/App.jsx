@@ -1565,6 +1565,7 @@ export default function App(){
           casualOppId={matchHistory.casualOppId} setCasualOppId={matchHistory.setCasualOppId}
           showOppDrop={matchHistory.showOppDrop} setShowOppDrop={matchHistory.setShowOppDrop}
           friends={social.friends} suggestedPlayers={social.suggestedPlayers}
+          allPlayers={social.discoverPlayers}
           submitMatch={matchHistory.submitMatch} resubmitMatch={matchHistory.resubmitMatch}
           recordResult={tournaments.recordResult}
           viewerSuburb={currentUser.profile&&currentUser.profile.suburb}
