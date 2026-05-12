@@ -589,6 +589,10 @@ export default function TournamentsTab(props) {
   var challenges = props.challenges;
   var leagues    = props.leagues;
   var friends    = props.friends || [];
+  // Directory-wide non-friends — same data the Discover tab uses.
+  // User feedback: 'home > tournament > invite member > can you add
+  // the same list of everyone? currently only shows friends.'
+  var everyonePlayers = props.everyonePlayers || [];
 
   // Module 13 Slice 2 — the legacy sub-tab bar (Tournaments /
   // Challenges / Leagues) is gone. The CompeteHub at /tournaments
@@ -715,6 +719,7 @@ export default function TournamentsTab(props) {
             cancelLeague={leagues.cancelLeague}
             voidLeague={leagues.voidLeague}
             friends={friends}
+            everyonePlayers={everyonePlayers}
             openProfile={openProfilePreview}
             toast={props.toast}
             /* Per-league Log match — opens the score modal with
