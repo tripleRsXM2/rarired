@@ -35,6 +35,11 @@ export default function ScoreModal({
   casualOppId, setCasualOppId,
   showOppDrop, setShowOppDrop,
   friends, suggestedPlayers,
+  // Directory-wide non-friends (from useSocialGraph.discoverPlayers).
+  // User feedback: 'in log match choose opponent, also add the list
+  // of everyone. right now it just shows friends.' Merged into the
+  // OpponentPicker's search pool below.
+  allPlayers,
   submitMatch, resubmitMatch, recordResult,
   // Module 6.7 — viewer's suburb drives the court-dropdown priority.
   viewerSuburb,
@@ -320,10 +325,15 @@ export default function ScoreModal({
   var lockedLeague = (scoreModal && scoreModal.lockedLeague) || null;
   var lockedFriends = friends;
   var lockedSuggested = suggestedPlayers;
+  // Default to the directory-wide non-friends roster. When the picker
+  // is locked to a league, this gets cleared (members must be linked
+  // friends, picker must not surface non-members).
+  var lockedAllPlayers = allPlayers;
   if (lockedLeague && Array.isArray(lockedLeague.memberIds) && lockedLeague.memberIds.length > 0) {
     var allowed = new Set(lockedLeague.memberIds);
     lockedFriends = (friends || []).filter(function (f) { return allowed.has(f.id); });
     lockedSuggested = [];
+    lockedAllPlayers = [];
   }
 
   // Editorial bottom-sheet — Phase 3.
@@ -413,6 +423,7 @@ export default function ScoreModal({
               setShowOppDrop={setShowOppDrop}
               friends={lockedFriends}
               suggestedPlayers={lockedSuggested}
+              allPlayers={lockedAllPlayers}
               myLeagues={myLeagues}
               opponentLeagueIds={opponentLeagueIds}
               lockedLeague={lockedLeague}

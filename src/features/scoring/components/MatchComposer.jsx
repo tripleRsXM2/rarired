@@ -99,6 +99,9 @@ export default function MatchComposer({
   showOppDrop,   setShowOppDrop,
   // Lists
   friends, suggestedPlayers,
+  // Directory-wide non-friends — merged into OpponentPicker's pool so
+  // 'pick opponent' shows everyone on the app, not just friends.
+  allPlayers,
   myLeagues, opponentLeagueIds,
   // When set, the score modal was opened locked to a specific league
   // (LeaguesPanel "+ Log match" button). Renders the league as a
@@ -205,6 +208,7 @@ export default function MatchComposer({
         }}
         friends={friends}
         suggestedPlayers={suggestedPlayers}
+        allPlayers={allPlayers}
         showDrop={showOppDrop}
         setShowDrop={setShowOppDrop}
       />
