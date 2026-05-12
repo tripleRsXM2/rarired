@@ -1799,7 +1799,12 @@ function SheetEmpty({ children }) {
 
 function OpponentRow({ player, onClick }) {
   var [hover, setHover] = useState(false);
+  // Track per-row image load failure so we can fall back to the
+  // gradient + initials underlay without forcing a rerender of the
+  // whole sheet.
+  var [imgFailed, setImgFailed] = useState(false);
   var initials = player.name.split(/\s+/).map(function (s) { return s[0] || ""; }).slice(0, 2).join("").toUpperCase();
+  var showImg = !!player.avatar_url && !imgFailed;
   return (
     <button
       onClick={onClick}
@@ -1824,7 +1829,14 @@ function OpponentRow({ player, onClick }) {
         fontFamily:     "inherit",
         transition:     "background 140ms",
       }}>
+      {/* Avatar — uploaded image if present, else gradient + initials.
+          User feedback: 'the icons — can you make sure they are tied
+          to the actual users? so their images show up if they
+          uploaded it.' Initials are rendered as the underlay so a
+          broken image URL falls back gracefully without an empty
+          circle. */}
       <span style={{
+        position:     "relative",
         width:        38, height: 38,
         borderRadius: "50%",
         background:   "linear-gradient(140deg, #C9A876, #8E6C3F)",
@@ -1835,7 +1847,22 @@ function OpponentRow({ player, onClick }) {
         fontSize:     12,
         color:        "#1A1410",
         flex:         "0 0 auto",
-      }}>{initials || "?"}</span>
+        overflow:     "hidden",
+      }}>
+        <span aria-hidden={showImg ? "true" : "false"}>{initials || "?"}</span>
+        {showImg && (
+          <img
+            src={player.avatar_url}
+            alt=""
+            onError={function () { setImgFailed(true); }}
+            style={{
+              position: "absolute", inset: 0,
+              width: "100%", height: "100%", objectFit: "cover",
+              display: "block",
+            }}
+          />
+        )}
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontFamily:    ED_TOK.display,
