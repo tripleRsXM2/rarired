@@ -318,6 +318,36 @@ export default function LogMatchPage({
   // ── Submit ────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!ready) return;
+
+    // Partial-set confirmation gate. User feedback: 'maybe a warning
+    // like — This is not a complete set, are you sure you want to
+    // continue.' Runs BEFORE we set saving state so the user can
+    // back out without seeing a spinner flash. Ranked matches stay
+    // strict (validator rejects partial anyway); only casual / league-
+    // casual can be partial-and-accepted.
+    var resolvedType = resolveMatchType(type, leagueId, lockedLeague, activeLeagues);
+    if (resolvedType !== "ranked") {
+      var cleanForCheck = sets
+        .filter(function (s) { return s.a !== "" || s.b !== ""; })
+        .map(function (s) { return { you: s.a, them: s.b }; });
+      var partialCheck = validateMatchScore(cleanForCheck, {
+        matchType:           resolvedType,
+        completionType:      completion,
+        matchFormat:         null,
+        finalSetFormat:      "normal_set",
+        allowPartialScores:  true,
+        leagueMode:          null,
+        leagueAllowPartial:  false,
+      });
+      var hasPartialSet = partialCheck.ok
+        && (partialCheck.perSet || []).some(function (p) { return p && p.partial; });
+      if (hasPartialSet) {
+        var ok = (typeof window !== "undefined")
+          && window.confirm("This is not a complete set — are you sure you want to continue?");
+        if (!ok) return;
+      }
+    }
+
     setSaving(true);
     setSaveError("");
 
