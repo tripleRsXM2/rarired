@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
-import { fetchPlayersInZone } from "../../map/services/mapService.js";
+import { fetchAllPlayers } from "../../map/services/mapService.js";
 
 function fmtProposedAt(iso) {
   if (!iso) return null;
@@ -169,8 +169,10 @@ export default function ChallengesPanel({
   // Scope for the no-challenges-yet picker. User feedback: 'somewhere
   // at the top can there be an option to show all players on the app
   // not just friends?' Default stays on Friends (existing behaviour);
-  // Everyone widens to the platform via fetchPlayersInZone(null, …)
-  // which already handles blocks + privacy via the RPC behind it.
+  // Everyone widens to the WHOLE directory via fetchAllPlayers — that
+  // helper does NOT filter by home_zone (unlike fetchPlayersInZone)
+  // so users still in onboarding are included. RLS, blocks, privacy
+  // are already enforced by the profiles policy.
   var [pickerScope, setPickerScope] = useState("friends"); // "friends" | "everyone"
   var [everyonePlayers, setEveryonePlayers] = useState(null);
   var [everyoneLoading, setEveryoneLoading] = useState(false);
@@ -180,7 +182,7 @@ export default function ChallengesPanel({
     var cancelled = false;
     setEveryoneLoading(true);
     var exclude = [authUser.id];
-    fetchPlayersInZone(null, 50, exclude).then(function(r){
+    fetchAllPlayers(50, exclude).then(function(r){
       if(cancelled) return;
       var rows = ((r && r.data) || []).filter(function(p){ return p && p.id && p.id !== authUser.id; });
       setEveryonePlayers(rows);
