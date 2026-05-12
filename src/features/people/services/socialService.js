@@ -54,6 +54,24 @@ export function fetchSameSkillPlayers(userId, skill, excludeIds, limit){
   if(excludeIds&&excludeIds.length) q=q.not('id','in','('+excludeIds.join(',')+')');
   return q.limit(limit||6);
 }
+// Module 2 v2 — Discover surface candidate set. Pulls every profile
+// except the exclude list (self, friends, pending, blocked). Includes
+// the ranking signals: skill, home_zone, played_courts so the hook
+// can score in JS without extra round-trips. User feedback:
+// 'Discover — can it just show everyone you are not a friend with?
+// Categorize them in priority by same level, same zone, same saved
+// courts.' RLS / privacy / show_online_status already enforced by
+// the profiles policy.
+export function fetchDiscoverCandidates(userId, excludeIds, limit){
+  var q = supabase.from('profiles')
+    .select('id,name,avatar,avatar_url,suburb,skill,home_zone,played_courts,ranking_points,wins,losses,matches_played,privacy,last_active,show_online_status,show_last_seen')
+    .neq('id', userId);
+  if (excludeIds && excludeIds.length) {
+    q = q.not('id', 'in', '(' + excludeIds.join(',') + ')');
+  }
+  return q.order('last_active', { ascending: false, nullsFirst: false }).limit(limit || 100);
+}
+
 export function searchProfilesByName(userId, query){
   return supabase.from('profiles').select('id,name,avatar,avatar_url,skill,suburb,ranking_points,matches_played,wins,privacy,last_active,show_online_status,show_last_seen')
     .ilike('name','%'+query+'%').neq('id',userId).limit(10);

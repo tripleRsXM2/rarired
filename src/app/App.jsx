@@ -1390,6 +1390,7 @@ export default function App(){
             sentRequests={social.sentRequests} receivedRequests={social.receivedRequests}
             blockedUsers={social.blockedUsers} suggestedPlayers={social.suggestedPlayers}
             playedOpponents={social.playedOpponents} sameSkillPlayers={social.sameSkillPlayers}
+            discoverPlayers={social.discoverPlayers} discoverLoading={social.discoverLoading}
             peopleSearch={social.peopleSearch} setPeopleSearch={social.setPeopleSearch}
             searchResults={social.searchResults} setSearchResults={social.setSearchResults} searchLoading={social.searchLoading}
             showSearchDrop={social.showSearchDrop} setShowSearchDrop={social.setShowSearchDrop}

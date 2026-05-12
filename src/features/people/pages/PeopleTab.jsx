@@ -35,6 +35,11 @@ function PlayerCard({
   u, t, socialLoading, friendRelationLabel, sentReq, recvReq,
   sendFriendRequest, cancelRequest, acceptRequest, declineRequest,
   unfriend, blockUser, onMessage, openProfile, openChallenge,
+  // Optional match-reason metadata from the Discover ranker.
+  // Shape: { sameSkill, sameZone, sharedCourts: [...] }. When set,
+  // small explanatory tags render under the name so the user knows
+  // why this player is being suggested.
+  matchReasons,
 }) {
   var rel = friendRelationLabel(u.id);
   var loading = !!socialLoading[u.id];
@@ -88,6 +93,53 @@ function PlayerCard({
         }}>
           <PresenceLabel profile={u} t={t}/>
         </div>
+        {/* Match-reason tags — only render when the Discover ranker
+            provides reasons. Compact, neutral chips with a tiny
+            accent dot for sameSkill (the strongest signal). The
+            `> 0` keeps the guard a proper boolean — otherwise the
+            sharedCourts.length=0 branch makes the && chain evaluate
+            to literal 0, which React renders as the text '0' under
+            every card. Classic JSX gotcha. */}
+        {matchReasons && (matchReasons.sameSkill || matchReasons.sameZone || (matchReasons.sharedCourts && matchReasons.sharedCourts.length > 0)) && (
+          <div style={{
+            marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4,
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+            textTransform: "uppercase", color: ED_TOK.ink2,
+          }}>
+            {matchReasons.sameSkill && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                padding: "2px 7px", borderRadius: 999,
+                background: ED_TOK.bg2, color: ED_TOK.ink,
+                border: "1px solid " + ED_TOK.line,
+              }}>
+                <span style={{
+                  width: 5, height: 5, borderRadius: "50%",
+                  background: t && t.accent ? t.accent : "#FF5A1F",
+                }}/>
+                Same level
+              </span>
+            )}
+            {matchReasons.sameZone && (
+              <span style={{
+                padding: "2px 7px", borderRadius: 999,
+                background: ED_TOK.bg2, color: ED_TOK.ink2,
+                border: "1px solid " + ED_TOK.line,
+              }}>Same zone</span>
+            )}
+            {matchReasons.sharedCourts && matchReasons.sharedCourts.length > 0 && (
+              <span style={{
+                padding: "2px 7px", borderRadius: 999,
+                background: ED_TOK.bg2, color: ED_TOK.ink2,
+                border: "1px solid " + ED_TOK.line,
+              }}>
+                {matchReasons.sharedCourts.length === 1
+                  ? "1 shared court"
+                  : matchReasons.sharedCourts.length + " shared courts"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{
@@ -281,6 +333,7 @@ export default function PeopleTab({
   t, authUser, friends, sentRequests, receivedRequests,
   blockedUsers, suggestedPlayers,
   playedOpponents, sameSkillPlayers,
+  discoverPlayers, discoverLoading,
   peopleSearch, setPeopleSearch,
   searchResults, setSearchResults, searchLoading, showSearchDrop, setShowSearchDrop,
   socialLoading, searchTimer,
@@ -861,44 +914,39 @@ export default function PeopleTab({
           )
         )}
 
-        {/* Discover */}
+        {/* Discover — single ranked list of all non-friends, prioritized
+            by same skill (100pts) → same zone (60pts) → shared courts
+            (25pts each, cap 3). User feedback: 'Discover — can it just
+            show everyone you are not a friend with? Categorize them
+            in priority by same level, same zone, same saved courts.' */}
         {peopleTab === "suggested" && (function () {
-          var playedArr = playedOpponents || [];
-          var suburbArr = suggestedPlayers || [];
-          var skillArr  = sameSkillPlayers  || [];
-          var allEmpty  = !playedArr.length && !suburbArr.length && !skillArr.length;
+          var discArr = discoverPlayers || [];
           return (
             <div>
-              {allEmpty && (
+              {discoverLoading && discArr.length === 0 && (
+                <div style={{ padding: "60px 20px", textAlign: "center", color: ED_TOK.ink2, fontSize: 13 }}>
+                  Loading players…
+                </div>
+              )}
+              {!discoverLoading && discArr.length === 0 && (
                 <EmptyState
                   title="No suggestions yet"
-                  body="Log a match or check back as more players join your area."
+                  body="Log a match or check back as more players join."
                 />
               )}
-              {playedArr.length > 0 && (
+              {discArr.length > 0 && (
                 <DiscoverSection
-                  label={"People you've played · " + playedArr.length}
-                  hint="Opponents from confirmed matches — add them to your friends.">
-                  {playedArr.map(function (u) {
-                    return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;
-                  })}
-                </DiscoverSection>
-              )}
-              {suburbArr.length > 0 && (
-                <DiscoverSection
-                  label={"Players near you · " + suburbArr.length}
-                  hint="Same suburb as your profile.">
-                  {suburbArr.map(function (u) {
-                    return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;
-                  })}
-                </DiscoverSection>
-              )}
-              {skillArr.length > 0 && (
-                <DiscoverSection
-                  label={"Similar skill level · " + skillArr.length}
-                  hint="Players with the same declared level as you.">
-                  {skillArr.map(function (u) {
-                    return <PlayerCard key={u.id} u={u} {...cardProps} onMessage={handleMessage}/>;
+                  label={"People you can play · " + discArr.length}
+                  hint="Ranked by same level, same zone, then shared courts.">
+                  {discArr.map(function (u) {
+                    return (
+                      <PlayerCard
+                        key={u.id}
+                        u={u}
+                        {...cardProps}
+                        onMessage={handleMessage}
+                        matchReasons={u._matchReasons}/>
+                    );
                   })}
                 </DiscoverSection>
               )}
