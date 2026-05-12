@@ -18,6 +18,43 @@ function badgeRank(badge) {
   return 0;
 }
 
+// Module 2 v2 — Discover ranking. Score every candidate by three
+// signals the user explicitly requested: same skill level, same home
+// zone, and shared saved courts. Higher score floats to the top.
+// Match reasons are attached to each row so the UI can render small
+// explanatory tags ('Same level' / 'Same zone' / 'Shares 2 courts').
+//
+//   sameSkill   → 100  (strongest match signal)
+//   sameZone    →  60
+//   per-court   →  25  (capped at 3 — diminishing returns)
+//
+// Tiebreak: name asc so the list is deterministic.
+function rankDiscover(players, viewer) {
+  if (!players || !players.length) return [];
+  var viewerSkill  = (viewer && viewer.skill)     || null;
+  var viewerZone   = (viewer && viewer.home_zone) || null;
+  var viewerCourts = Array.isArray(viewer && viewer.played_courts) ? viewer.played_courts : [];
+  var viewerCourtSet = new Set(viewerCourts.filter(Boolean));
+  return players
+    .map(function (p) {
+      var sameSkill = !!viewerSkill && p.skill === viewerSkill;
+      var sameZone  = !!viewerZone  && p.home_zone === viewerZone;
+      var pCourts   = Array.isArray(p.played_courts) ? p.played_courts : [];
+      var sharedCourts = pCourts.filter(function (c) { return viewerCourtSet.has(c); });
+      var courtOverlap = Math.min(sharedCourts.length, 3);
+      var score = (sameSkill ? 100 : 0) + (sameZone ? 60 : 0) + courtOverlap * 25;
+      return Object.assign({}, p, {
+        _discoverScore: score,
+        _matchReasons:  { sameSkill: sameSkill, sameZone: sameZone, sharedCourts: sharedCourts },
+      });
+    })
+    .sort(function (a, b) {
+      var d = b._discoverScore - a._discoverScore;
+      if (d !== 0) return d;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+}
+
 // Stable sort: re-orders by reliability rank but preserves the input
 // order between ties. Attaches `_trustBadge` to each player object
 // so the rendering surface (PeopleTab Discover) can pull badge copy
@@ -57,6 +94,14 @@ export function useSocialGraph(opts){
   // sameSkillPlayers: profiles with the same declared skill level.
   var [playedOpponents,setPlayedOpponents]=useState([]);
   var [sameSkillPlayers,setSameSkillPlayers]=useState([]);
+  // Module 2 v2 — unified Discover list. Every non-friend non-pending
+  // non-blocked profile, scored + sorted by skill / zone / court overlap.
+  // User feedback: 'Discover — can it just show everyone you are not
+  // a friend with?' Each row carries match-reason metadata so the UI
+  // can show small explanatory tags ('Same level' / 'Same zone' /
+  // 'Same courts').
+  var [discoverPlayers,setDiscoverPlayers]=useState([]);
+  var [discoverLoading,setDiscoverLoading]=useState(false);
   var [socialLoading,setSocialLoading]=useState({});
   var searchTimer=useRef(null);
 
@@ -120,6 +165,27 @@ export function useSocialGraph(opts){
       var badgeMap = await fetchTrustBadgesForUsers(trustIds);
       setSuggestedPlayers(sortAndAnnotate(suggested, badgeMap));
       setSameSkillPlayers(sortAndAnnotate(sameSkill, badgeMap));
+
+      // Module 2 v2 — unified Discover list. ALL non-friends, scored.
+      try {
+        setDiscoverLoading(true);
+        var disc = await S.fetchDiscoverCandidates(userId, excludeIds, 100);
+        var raw = (disc.data || []).filter(function(p){ return p && p.id; });
+        var ranked = rankDiscover(raw, userProfile || {});
+        // Trust-badge boost (Module 10 Slice 2) — preserve the existing
+        // priority order within ties.
+        var discIds = ranked.map(function(u){return u.id;});
+        var discBadges = discIds.length ? await fetchTrustBadgesForUsers(discIds) : {};
+        ranked.forEach(function(p){
+          p._trustBadge = (discBadges && discBadges[p.id] && discBadges[p.id].public_badge) || null;
+        });
+        setDiscoverPlayers(ranked);
+        setDiscoverLoading(false);
+      } catch(e2){
+        console.warn('[useSocialGraph] discover rank failed', e2);
+        setDiscoverPlayers([]);
+        setDiscoverLoading(false);
+      }
     }catch(e){console.error('loadSocial',e);}
   }
 
@@ -316,6 +382,7 @@ export function useSocialGraph(opts){
         setSuggestedPlayers(patch);
         setPlayedOpponents(patch);
         setSameSkillPlayers(patch);
+        setDiscoverPlayers(patch);
       })
       .subscribe();
     return function(){ supabase.removeChannel(channel); };
@@ -340,6 +407,7 @@ export function useSocialGraph(opts){
     showSearchDrop, setShowSearchDrop, suggestedPlayers, setSuggestedPlayers,
     playedOpponents, setPlayedOpponents,
     sameSkillPlayers, setSameSkillPlayers,
+    discoverPlayers, setDiscoverPlayers, discoverLoading,
     socialLoading, searchTimer,
     loadSocial, loadPlayedOpponents, resetSocial,
     isFriend, sentReq, recvReq, isBlocked, friendRelationLabel,
