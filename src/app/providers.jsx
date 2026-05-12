@@ -88,10 +88,16 @@ export default function Providers({ t, theme, children }){
       "@keyframes csScrimIn{from{background:rgba(20,17,14,0)}to{background:rgba(20,17,14,0.55)}}",
       ".cs-sheet-scrim{position:fixed;inset:0;background:rgba(20,17,14,0.55);z-index:200;animation:csScrimIn 240ms ease backwards;pointer-events:auto}",
       ".cs-sheet-panel{position:fixed;left:0;right:0;bottom:0;transform:translateY(0);z-index:201;max-height:88dvh;display:flex;flex-direction:column;animation:csSheetIn 320ms cubic-bezier(0.22,1,0.36,1) backwards}",
-      // Desktop ≥720px — center the sheet with a max-width so it
-      // reads as a tall narrow card rather than a stretched bar.
-      "@keyframes csSheetInCentered{from{transform:translate(-50%, 100%)}to{transform:translate(-50%, 0)}}",
-      "@media(min-width:720px){.cs-sheet-panel{left:50%;right:auto;transform:translate(-50%, 0);max-width:540px;width:100%;animation:csSheetInCentered 320ms cubic-bezier(0.22,1,0.36,1) backwards}}",
+      // Desktop ≥720px — center the sheet both horizontally AND
+      // vertically. User feedback: 'when on web and you press log
+      // match... the window that pops up isnt centered.' Old rule
+      // only centered horizontally; bottom:0 kept it hugging the
+      // bottom edge. Now top:50% + translate(-50%, -50%) sits the
+      // card in the middle of the viewport. max-height:88dvh +
+      // overflowY:auto on the inner component keep the form
+      // scrollable when content exceeds the viewport height.
+      "@keyframes csSheetInCentered{from{transform:translate(-50%, calc(-50% + 24px));opacity:0}to{transform:translate(-50%, -50%);opacity:1}}",
+      "@media(min-width:720px){.cs-sheet-panel{left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%, -50%);max-width:540px;width:100%;border-radius:24px !important;animation:csSheetInCentered 280ms cubic-bezier(0.22,1,0.36,1) backwards}}",
 
       // ── Responsive layout shell ───────────────────────────────────────────
       // Mobile default: single column, block layout. Uses 100dvh so iOS
