@@ -12,11 +12,29 @@ import QuickActionsGrid from "./QuickActionsGrid.jsx";
 
 export default function HomeScreen({
   theme, accent, court, liveMatch, history,
+  // weekStats: { matches, wins, losses, record, onCourt } — computed
+  //   in useV2History from the viewer's match_history rows. null while
+  //   the first fetch is in flight (we show a placeholder dash).
+  // viewerName: signed-in player's display name (falls back to email
+  //   handle if no profile row); used in the "Good <greeting>, X."
+  //   line so the dashboard reads personal on the first frame.
+  weekStats, viewerName,
   onGo, onNewMatch, look, onLookChange,
 }) {
   const inFlight = liveMatch && !liveMatch.endedAt;
   const h = new Date().getHours();
   const greeting = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+
+  // Stat tiles — read from the live weekStats prop with sensible
+  // placeholders while the fetch is in flight or there's no data yet.
+  const wkMatches = weekStats ? String(weekStats.matches) : "—";
+  const wkRecord  = weekStats ? weekStats.record : "—";
+  const wkCourt   = weekStats ? weekStats.onCourt : "—";
+
+  // First-name slice for the greeting line. We don't print the whole
+  // display name to keep the headline short — "Good morning, Mikey"
+  // reads better than "Good morning, Mikey T".
+  const firstName = (viewerName || "").split(/\s+/)[0] || "";
   return (
     <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: "32px 40px 60px" }}>
       <div className="t-cap" style={{ color: theme.inkSoft }}>Home</div>
@@ -25,7 +43,9 @@ export default function HomeScreen({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
         <div>
           <div className="t-cap" style={{ color: theme.inkSoft }}>Today · {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
-          <h2 className="t-serif" style={{ fontSize: 38, lineHeight: 1, margin: "6px 0 0", letterSpacing: "-0.02em" }}>Good {greeting}.</h2>
+          <h2 className="t-serif" style={{ fontSize: 38, lineHeight: 1, margin: "6px 0 0", letterSpacing: "-0.02em" }}>
+            Good {greeting}{firstName ? ", " + firstName : ""}.
+          </h2>
         </div>
         <Ball size={22} color={accent} />
       </div>
@@ -78,9 +98,9 @@ export default function HomeScreen({
 
       <div className="t-cap" style={{ color: theme.inkSoft, margin: "4px 4px 10px" }}>This week</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 22 }}>
-        <StatTile theme={theme} value="5"     label="Matches" />
-        <StatTile theme={theme} value="3-2"   label="W-L" accent={accent} />
-        <StatTile theme={theme} value="8h 24m" label="On court" />
+        <StatTile theme={theme} value={wkMatches} label="Matches" />
+        <StatTile theme={theme} value={wkRecord}  label="W-L" accent={accent} />
+        <StatTile theme={theme} value={wkCourt}   label="On court" />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 4px 10px" }}>

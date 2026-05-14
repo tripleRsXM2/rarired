@@ -40,11 +40,34 @@ import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 
 import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
+import { useV2Profile, useV2History, useV2Competitions } from "../data/index.js";
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
 
 export default function BaselineApp({ onBack }) {
   React.useEffect(() => { ensureFonts(); }, []);
+
+  // ── Supabase data layer (v2 isolated adapters) ────────────────
+  // Hooks subscribe to auth + load the viewer's profile, confirmed
+  // match history, derived weekly stats, and active leagues. While
+  // loading we fall back to SAMPLE_HISTORY so the layout doesn't
+  // jump; once the network round-trip resolves the screens re-render
+  // with real data. p1Name is sourced from the profile's display
+  // name when available so the live score card reads "Mikey vs …"
+  // instead of "You vs M. Carter".
+  const v2Profile      = useV2Profile();
+  const v2History      = useV2History(v2Profile.authUser && v2Profile.authUser.id);
+  const v2Competitions = useV2Competitions(v2Profile.authUser && v2Profile.authUser.id);
+
+  const liveHistory = v2History.loading
+    ? SAMPLE_HISTORY
+    : (v2History.history || []);
+  const liveWeekStats = v2History.weekStats || null;
+  const liveCompetitions = v2Competitions.competitions || [];
+  const viewerName = (v2Profile.profile && v2Profile.profile.name)
+    || (v2Profile.authUser && v2Profile.authUser.email
+        ? v2Profile.authUser.email.split("@")[0]
+        : DEFAULTS.p1Name);
 
   // Appearance toggle — Modern (default) or Classic. Modern flips both
   // the THEMES/COURTS tables and overlays a CSS block that handles
@@ -68,10 +91,20 @@ export default function BaselineApp({ onBack }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
 
   // Live match — single source of truth, ref so navigation doesn't reset it.
+  // The first-render p1 name is "You" so the demo match keeps loading
+  // instantly; we rename the p1 once the viewer's profile resolves so
+  // the score card reads as the signed-in player.
   const liveRef = React.useRef(null);
   if (!liveRef.current) liveRef.current = buildLiveMatch(DEFAULTS.p1Name, DEFAULTS.p2Name, DEFAULTS.format);
   const liveMatch = liveRef.current;
-  const finishedMatch = React.useMemo(() => buildFinishedMatch(DEFAULTS.p1Name, DEFAULTS.p2Name), []);
+  React.useEffect(function () {
+    if (!liveMatch || !liveMatch.p1) return;
+    if (viewerName && liveMatch.p1.name !== viewerName) {
+      liveMatch.p1.name = viewerName;
+      force();
+    }
+  }, [viewerName]);
+  const finishedMatch = React.useMemo(() => buildFinishedMatch(viewerName, DEFAULTS.p2Name), [viewerName]);
 
   const onPoint = (side) => { addPoint(liveMatch, side); force(); };
   const onUndoLive = () => { undo(liveMatch); force(); };
@@ -130,6 +163,8 @@ export default function BaselineApp({ onBack }) {
             onPoint={onPoint} onUndo={onUndoLive}
             onGo={onGo} onNewMatch={onNewMatch}
             look={look} onLookChange={setLook}
+            history={liveHistory} weekStats={liveWeekStats}
+            competitions={liveCompetitions} viewerName={viewerName}
           />
         </div>
 
@@ -188,6 +223,8 @@ export default function BaselineApp({ onBack }) {
             onPoint={onPoint} onUndo={onUndoLive}
             onGo={onGo} onNewMatch={onNewMatch}
             look={look} onLookChange={setLook}
+            history={liveHistory} weekStats={liveWeekStats}
+            competitions={liveCompetitions} viewerName={viewerName}
           />
         </div>
       </div>
@@ -203,12 +240,14 @@ function RouteView({
   liveMatch, finishedMatch,
   onPoint, onUndo, onGo, onNewMatch,
   look, onLookChange,
+  history, weekStats, competitions, viewerName,
 }) {
   switch (route) {
     case "home":
       return <HomeScreen
         theme={theme} accent={accent} court={court}
-        liveMatch={liveMatch} history={SAMPLE_HISTORY}
+        liveMatch={liveMatch} history={history}
+        weekStats={weekStats} viewerName={viewerName}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -220,7 +259,10 @@ function RouteView({
         onChangeover={() => onGo("changeover")}
       />;
     case "competitions":
-      return <CompetitionsScreen theme={theme} accent={accent} court={court} onLog={() => onGo("live")} />;
+      return <CompetitionsScreen
+        theme={theme} accent={accent} court={court}
+        onLog={() => onGo("live")} competitions={competitions}
+      />;
     case "messages":
       return <MessagesScreen theme={theme} accent={accent} isPhone={false} />;
     case "changeover":
@@ -228,7 +270,7 @@ function RouteView({
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
     case "history":
-      return <HistoryScreen theme={theme} accent={accent} matches={SAMPLE_HISTORY} />;
+      return <HistoryScreen theme={theme} accent={accent} matches={history} />;
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} />;
     case "desktop":
@@ -247,7 +289,13 @@ function RouteView({
         </div>
       );
     default:
-      return <HomeScreen theme={theme} accent={accent} court={court} liveMatch={liveMatch} history={SAMPLE_HISTORY} onGo={onGo} onNewMatch={onNewMatch} look={look} onLookChange={onLookChange} />;
+      return <HomeScreen
+        theme={theme} accent={accent} court={court}
+        liveMatch={liveMatch} history={history}
+        weekStats={weekStats} viewerName={viewerName}
+        onGo={onGo} onNewMatch={onNewMatch}
+        look={look} onLookChange={onLookChange}
+      />;
   }
 }
 
@@ -261,12 +309,14 @@ function MobileRouteView({
   liveMatch, finishedMatch,
   onPoint, onUndo, onGo, onNewMatch,
   look, onLookChange,
+  history, weekStats, competitions, viewerName,
 }) {
   switch (route) {
     case "home":
       return <HomeScreen
         theme={theme} accent={accent} court={court}
-        liveMatch={liveMatch} history={SAMPLE_HISTORY}
+        liveMatch={liveMatch} history={history}
+        weekStats={weekStats} viewerName={viewerName}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -282,7 +332,10 @@ function MobileRouteView({
         </div>
       );
     case "competitions":
-      return <CompetitionsScreen theme={theme} accent={accent} court={court} onLog={() => onGo("live")} />;
+      return <CompetitionsScreen
+        theme={theme} accent={accent} court={court}
+        onLog={() => onGo("live")} competitions={competitions}
+      />;
     case "messages":
       return <MessagesScreen theme={theme} accent={accent} isPhone={true} />;
     case "changeover":
@@ -290,16 +343,28 @@ function MobileRouteView({
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
     case "history":
-      return <HistoryScreen theme={theme} accent={accent} matches={SAMPLE_HISTORY} />;
+      return <HistoryScreen theme={theme} accent={accent} matches={history} />;
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} />;
     case "desktop":
     case "watch":
       // On mobile, fall back to home for desktop/watch routes (they
       // don't make sense on a phone). Tap home + scroll to recents.
-      return <HomeScreen theme={theme} accent={accent} court={court} liveMatch={liveMatch} history={SAMPLE_HISTORY} onGo={onGo} onNewMatch={onNewMatch} look={look} onLookChange={onLookChange} />;
+      return <HomeScreen
+        theme={theme} accent={accent} court={court}
+        liveMatch={liveMatch} history={history}
+        weekStats={weekStats} viewerName={viewerName}
+        onGo={onGo} onNewMatch={onNewMatch}
+        look={look} onLookChange={onLookChange}
+      />;
     default:
-      return <HomeScreen theme={theme} accent={accent} court={court} liveMatch={liveMatch} history={SAMPLE_HISTORY} onGo={onGo} onNewMatch={onNewMatch} look={look} onLookChange={onLookChange} />;
+      return <HomeScreen
+        theme={theme} accent={accent} court={court}
+        liveMatch={liveMatch} history={history}
+        weekStats={weekStats} viewerName={viewerName}
+        onGo={onGo} onNewMatch={onNewMatch}
+        look={look} onLookChange={onLookChange}
+      />;
   }
 }
 

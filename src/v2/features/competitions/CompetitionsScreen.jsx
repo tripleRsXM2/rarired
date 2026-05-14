@@ -48,9 +48,16 @@ const KINDS = [
 
 const KIND_LABEL = { bracket: "Bracket", ladder: "Box ladder", roundrobin: "Round robin", series: "Series", groups: "Groups + KO" };
 
-export default function CompetitionsScreen({ theme, accent, court, onLog }) {
+export default function CompetitionsScreen({ theme, accent, court, onLog, competitions }) {
   const [view, setView] = React.useState("list");      // 'list' | 'create' | 'detail'
   const [activeTournament, setActiveTournament] = React.useState(null);
+
+  // `competitions` is the live Supabase-backed list from
+  // useV2Competitions — leagues the viewer is active in, reshaped to
+  // the v2 tournament card schema. Falls back to the SAMPLE seed
+  // while the fetch is in flight (or when the viewer is anonymous)
+  // so the layout doesn't flash empty on first paint.
+  const myList = (competitions && competitions.length > 0) ? competitions : SAMPLE_TOURNAMENTS;
 
   if (view === "create") {
     return <CreateTournamentScreen theme={theme} accent={accent} court={court} onBack={() => setView("list")} onCreate={() => setView("list")} />;
@@ -59,12 +66,18 @@ export default function CompetitionsScreen({ theme, accent, court, onLog }) {
     return <TournamentDetailScreen t={activeTournament} theme={theme} accent={accent} court={court} onBack={() => setView("list")} onLog={onLog || (() => {})} />;
   }
   return <CompetitionsList theme={theme} accent={accent} court={court}
+    myList={myList}
     onOpen={(t) => { setActiveTournament(t); setView("detail"); }}
     onCreate={() => setView("create")} />;
 }
 
-function CompetitionsList({ theme, accent, court, onOpen, onCreate }) {
+function CompetitionsList({ theme, accent, court, myList, onOpen, onCreate }) {
   const [tab, setTab] = React.useState("mine");
+  // First card in the "Next up" hero — top of the list. We keep the
+  // pattern from the design even when the list is empty: render
+  // nothing for the hero in that case rather than a fake row.
+  const next = (myList && myList[0]) || null;
+  const hasNextMatch = next && next.nextMatch;
   return (
     <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: "20px 18px 100px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
@@ -84,7 +97,7 @@ function CompetitionsList({ theme, accent, court, onOpen, onCreate }) {
       </div>
 
       <div style={{ display: "flex", background: theme.chip, borderRadius: 10, padding: 3, marginBottom: 18 }}>
-        {[["mine", `Mine · ${SAMPLE_TOURNAMENTS.length}`], ["open", `Open · ${OPEN_TOURNAMENTS.length}`]].map(([id, label]) => (
+        {[["mine", `Mine · ${myList.length}`], ["open", `Open · ${OPEN_TOURNAMENTS.length}`]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} className="t-btn" style={{
             flex: 1, appearance: "none", border: 0, borderRadius: 8, padding: "8px 0",
             background: tab === id ? theme.bgRaised : "transparent",
@@ -98,39 +111,59 @@ function CompetitionsList({ theme, accent, court, onOpen, onCreate }) {
 
       {tab === "mine" && (
         <>
-          <div className="t-cap" style={{ color: theme.inkSoft, margin: "0 4px 8px" }}>Next up</div>
-          <button onClick={() => onOpen(SAMPLE_TOURNAMENTS[0])} className="t-btn" style={{
-            width: "100%", appearance: "none", border: 0, padding: 0, marginBottom: 22,
-            borderRadius: 16, overflow: "hidden", background: court.surface, color: "#fbf6e9",
-            textAlign: "left", boxShadow: "0 6px 18px rgba(0,0,0,0.12)", cursor: "pointer",
-          }}>
-            <div style={{ padding: "14px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span className="t-cap" style={{ color: "rgba(251,246,233,0.7)" }}>{SAMPLE_TOURNAMENTS[0].round}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontFamily: "Inter", color: accent, fontWeight: 600 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent }} className="t-pulse" />
-                LIVE
-              </span>
-            </div>
-            <div style={{ padding: "0 16px 14px" }}>
-              <div className="t-serif" style={{ fontSize: 22, lineHeight: 1.05, marginBottom: 10 }}>{SAMPLE_TOURNAMENTS[0].name}</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "rgba(251,246,233,0.6)", fontFamily: "Inter", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>vs</div>
-                  <div style={{ fontSize: 18, fontFamily: "Inter", fontWeight: 600, marginTop: 2 }}>{SAMPLE_TOURNAMENTS[0].nextMatch.opp}</div>
+          {/* "Next up" hero — only renders when the top league row
+              carries an upcoming-match payload. Live Supabase leagues
+              don't have one yet (the v1 next-opponent UI computes it
+              client-side per detail-view), so this section will be
+              hidden for live data until we surface a nextMatch hint
+              from useV2Competitions. The sample seed always has one. */}
+          {hasNextMatch && (
+            <>
+              <div className="t-cap" style={{ color: theme.inkSoft, margin: "0 4px 8px" }}>Next up</div>
+              <button onClick={() => onOpen(next)} className="t-btn" style={{
+                width: "100%", appearance: "none", border: 0, padding: 0, marginBottom: 22,
+                borderRadius: 16, overflow: "hidden", background: court.surface, color: "#fbf6e9",
+                textAlign: "left", boxShadow: "0 6px 18px rgba(0,0,0,0.12)", cursor: "pointer",
+              }}>
+                <div style={{ padding: "14px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="t-cap" style={{ color: "rgba(251,246,233,0.7)" }}>{next.round}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontFamily: "Inter", color: accent, fontWeight: 600 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent }} className="t-pulse" />
+                    LIVE
+                  </span>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 13, fontFamily: "Inter", fontWeight: 600 }}>{SAMPLE_TOURNAMENTS[0].nextMatch.when}</div>
-                  <div style={{ fontSize: 11, color: "rgba(251,246,233,0.6)", marginTop: 2 }}>{SAMPLE_TOURNAMENTS[0].nextMatch.court}</div>
+                <div style={{ padding: "0 16px 14px" }}>
+                  <div className="t-serif" style={{ fontSize: 22, lineHeight: 1.05, marginBottom: 10 }}>{next.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(251,246,233,0.6)", fontFamily: "Inter", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>vs</div>
+                      <div style={{ fontSize: 18, fontFamily: "Inter", fontWeight: 600, marginTop: 2 }}>{next.nextMatch.opp}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontFamily: "Inter", fontWeight: 600 }}>{next.nextMatch.when}</div>
+                      <div style={{ fontSize: 11, color: "rgba(251,246,233,0.6)", marginTop: 2 }}>{next.nextMatch.court}</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </button>
+              </button>
+            </>
+          )}
 
           <div className="t-cap" style={{ color: theme.inkSoft, margin: "0 4px 8px" }}>Active</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {SAMPLE_TOURNAMENTS.map((t) => (
-              <TournamentCard key={t.id} t={t} theme={theme} accent={accent} onClick={() => onOpen(t)} />
-            ))}
+            {myList.length === 0 ? (
+              <div style={{
+                padding: "20px 16px", borderRadius: 14,
+                background: theme.bgRaised, border: `0.5px solid ${theme.line}`,
+                color: theme.inkSoft, fontFamily: "Inter", fontSize: 13, lineHeight: 1.5,
+              }}>
+                No leagues yet. Tap <em>New</em> to start a private season with friends.
+              </div>
+            ) : (
+              myList.map((t) => (
+                <TournamentCard key={t.id} t={t} theme={theme} accent={accent} onClick={() => onOpen(t)} />
+              ))
+            )}
           </div>
 
           <div className="t-cap" style={{ color: theme.inkSoft, margin: "24px 4px 8px" }}>Your standing</div>
