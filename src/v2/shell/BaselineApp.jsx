@@ -182,6 +182,28 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   };
   const onGo = (id) => setRoute(id);
 
+  // Players-tab callbacks. `onMessagePlayer` opens a 1:1 conversation
+  // with the player (creating a draft conv if none exists) and routes
+  // to the v2 Messages screen so the user lands inside the open
+  // thread. `onInvitePlayer` is a placeholder until the auto-emit
+  // widget work (PR3) lands on this branch — the rating-match invite
+  // event will live there. For now we just send the user to v2
+  // Messages with a pre-opened thread so they can drop a manual ping.
+  const onMessagePlayer = React.useCallback(function (player) {
+    if (!player || !player.id) return;
+    if (dms && typeof dms.openConversationWith === "function") {
+      try { dms.openConversationWith(player.id); } catch (_) {}
+    }
+    setRoute("messages");
+  }, [dms]);
+  const onInvitePlayer = React.useCallback(function (player) {
+    if (!player || !player.id) return;
+    if (dms && typeof dms.openConversationWith === "function") {
+      try { dms.openConversationWith(player.id); } catch (_) {}
+    }
+    setRoute("messages");
+  }, [dms]);
+
   const isWide = useIsWide(700);
 
   // ── Mobile layout (<700px) ──────────────────────────────────
@@ -234,6 +256,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
+            onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
           />
         </div>
 
@@ -246,41 +269,28 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   }
 
   // ── Desktop / iPad layout (≥700px) ──────────────────────────
-  // No browser-chrome wrapper (no macOS dots, no URL pill) but the
-  // shell does sit inside a centered max-width card so it doesn't
-  // stretch edge-to-edge on wide monitors. User feedback: 'web: the
-  // windows stretch all the way when full screen. can we have it
-  // fit inside a window like before? but without the actual window?
-  // So that it doesnt extend all the way to the sides of the frame
-  // when full screen.'
-  //
-  // Outer = page bg + flex centering + breathing padding.
-  // Inner = the card (sidebar + main) with rounded corners + soft
-  // shadow + hairline border.
+  // Full-bleed: sidebar + main fill the entire viewport. No outer
+  // padding, no rounded card, no shadow — the v2 app *is* the page.
+  // User feedback (latest): 'I like how in this zip the web app is
+  // full screen. currently ours is inside a window inside a web
+  // browser which looks weird ... do not include the
+  // baseline.tennis/competition bar at the top like the zip. just
+  // make it clean.'
   return (
     <div className={look === "modern" ? "v2-modern-root" : ""} style={{
       position: "fixed", inset: 0, zIndex: 0,
-      // Page bg — slightly cooler than the card so the card reads
-      // as a distinct surface.
-      background: "#e8e6df",
+      background: theme.bg,
       color: theme.ink,
       fontFamily: "Inter, -apple-system, system-ui, sans-serif",
-      display: "flex", alignItems: "stretch", justifyContent: "center",
-      padding: "clamp(16px, 2.5vw, 32px)",
+      display: "flex",
       overflow: "hidden",
     }}>
       <div className="desktop-shell" style={{
         flex: 1,
-        // Caps the layout so it never stretches edge-to-edge on
-        // wide monitors. Tracks the design's prototype width.
-        maxWidth: 1280,
         height: "100%",
         background: theme.bg,
-        borderRadius: 18,
-        overflow: "hidden",
-        border: `0.5px solid ${theme.line}`,
-        boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
         display: "flex",
+        minWidth: 0,
       }}>
         <Sidebar theme={theme} accent={accent} route={route} onGo={onGo} onBack={onBack} look={look} onLookChange={setLook} />
         <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "auto" }}>
@@ -296,6 +306,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
+            onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
           />
         </div>
       </div>
@@ -324,6 +335,7 @@ function RouteView({
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
   dms, authUser, everyonePlayers,
+  onMessagePlayer, onInvitePlayer,
 }) {
   switch (route) {
     case "home":
@@ -345,6 +357,8 @@ function RouteView({
       return <CompetitionsScreen
         theme={theme} accent={accent} court={court}
         onLog={() => onGo("live")} competitions={competitions}
+        everyonePlayers={everyonePlayers} friends={friends} authUser={authUser}
+        onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
       />;
     case "messages":
       return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
@@ -395,6 +409,7 @@ function MobileRouteView({
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
   dms, authUser, everyonePlayers,
+  onMessagePlayer, onInvitePlayer,
 }) {
   switch (route) {
     case "home":
@@ -420,6 +435,8 @@ function MobileRouteView({
       return <CompetitionsScreen
         theme={theme} accent={accent} court={court}
         onLog={() => onGo("live")} competitions={competitions}
+        everyonePlayers={everyonePlayers} friends={friends} authUser={authUser}
+        onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
       />;
     case "messages":
       return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;

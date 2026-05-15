@@ -6,6 +6,14 @@
 // tabs. No backend wiring — the seed arrays match the prototype.
 
 import React from "react";
+import { avColor } from "../../../lib/utils/avatar.js";
+
+// Deterministic per-name avatar tint. Wraps the v1 avColor helper so
+// the Players directory matches the rest of v1's chrome (same shade
+// for the same player across PeopleTab, NewMessageScreen, etc.).
+function colorForName(name) {
+  return avColor(name || "Player");
+}
 
 export const SAMPLE_TOURNAMENTS = [
   {
@@ -48,7 +56,17 @@ const KINDS = [
 
 const KIND_LABEL = { bracket: "Bracket", ladder: "Box ladder", roundrobin: "Round robin", series: "Series", groups: "Groups + KO" };
 
-export default function CompetitionsScreen({ theme, accent, court, onLog, competitions }) {
+export default function CompetitionsScreen({
+  theme, accent, court, onLog, competitions,
+  // New props for the Players sub-tab. everyonePlayers + friends come
+  // from BaselineApp via App.jsx (social.discoverPlayers + dms.friends
+  // — same data the v2 NewMessageScreen uses). authUser identifies
+  // the viewer so we can exclude them. onMessagePlayer / onInvitePlayer
+  // are router callbacks: Message routes into v2 Messages with a
+  // draft conv; Invite is a placeholder until the auto-emit widget
+  // work on the widgets branch lands here.
+  everyonePlayers, friends, authUser, onMessagePlayer, onInvitePlayer,
+}) {
   const [view, setView] = React.useState("list");      // 'list' | 'create' | 'detail'
   const [activeTournament, setActiveTournament] = React.useState(null);
 
@@ -67,12 +85,80 @@ export default function CompetitionsScreen({ theme, accent, court, onLog, compet
   }
   return <CompetitionsList theme={theme} accent={accent} court={court}
     myList={myList}
+    everyonePlayers={everyonePlayers}
+    friends={friends}
+    authUser={authUser}
+    onMessagePlayer={onMessagePlayer}
+    onInvitePlayer={onInvitePlayer}
     onOpen={(t) => { setActiveTournament(t); setView("detail"); }}
     onCreate={() => setView("create")} />;
 }
 
-function CompetitionsList({ theme, accent, court, myList, onOpen, onCreate }) {
+function CompetitionsList({
+  theme, accent, court, myList,
+  everyonePlayers, friends, authUser,
+  onMessagePlayer, onInvitePlayer,
+  onOpen, onCreate,
+}) {
   const [tab, setTab] = React.useState("mine");
+  // Players-tab state.
+  const [activePlayer, setActivePlayer] = React.useState(null);
+  const [filterRange, setFilterRange] = React.useState("all");      // all | near | similar
+  const [filterSurface, setFilterSurface] = React.useState("all");  // all | hard | grass | clay
+  const [playerSearch, setPlayerSearch] = React.useState("");
+  const meId = (authUser && authUser.id) || null;
+  const myElo = 1184; // TODO: thread real rating from useV2Profile once available.
+
+  // Build the player directory from real Supabase data. Friends first
+  // (already-connected players take priority), then the rest of the
+  // directory. Dedupe by id, exclude self. Each row gets a small
+  // computed "match %" + initials/color for the card.
+  const directoryPlayers = React.useMemo(function () {
+    const seen = {};
+    const out = [];
+    function push(p, source) {
+      if (!p || !p.id || p.id === meId || seen[p.id]) return;
+      seen[p.id] = true;
+      const name = p.name || "Player";
+      const first = name.split(/\s+/)[0] || "";
+      const last = name.split(/\s+/).slice(1).join(" ");
+      const initials = (first[0] || "?") + (last[0] || "");
+      out.push({
+        id: p.id,
+        name: name,
+        handle: p.handle || (first ? "@" + first.toLowerCase().replace(/[^a-z0-9]/g, "") : ""),
+        elo: p.ranking_points != null ? p.ranking_points : (p.elo != null ? p.elo : 1100),
+        level: p.skill || "—",
+        dist: p.suburb || "—",
+        club: p.suburb || "",
+        surfaces: ["hard"],     // not yet tracked in profiles
+        activeNow: source === "friend",
+        initials: initials.toUpperCase(),
+        color: colorForName(name),
+        avatar: p.avatar,
+        avatar_url: p.avatar_url || null,
+        recent: "—",
+        mutual: [],
+        avail: [],
+        _raw: p,
+      });
+    }
+    (friends || []).forEach(function (f) { push(f, "friend"); });
+    (everyonePlayers || []).forEach(function (p) { push(p, "everyone"); });
+    return out;
+  }, [friends, everyonePlayers, meId]);
+
+  const filteredPlayers = React.useMemo(function () {
+    var ql = playerSearch.trim().toLowerCase();
+    return directoryPlayers
+      .filter(function (p) {
+        if (filterRange === "similar" && Math.abs(p.elo - myElo) > 80) return false;
+        if (filterSurface !== "all" && !p.surfaces.includes(filterSurface)) return false;
+        if (ql && !(p.name + " " + p.handle + " " + p.club).toLowerCase().includes(ql)) return false;
+        return true;
+      })
+      .sort(function (a, b) { return Math.abs(a.elo - myElo) - Math.abs(b.elo - myElo); });
+  }, [directoryPlayers, playerSearch, filterRange, filterSurface]);
   // First card in the "Next up" hero — top of the list. We keep the
   // pattern from the design even when the list is empty: render
   // nothing for the hero in that case rather than a fake row.
@@ -82,8 +168,10 @@ function CompetitionsList({ theme, accent, court, myList, onOpen, onCreate }) {
     <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: "20px 18px 100px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
         <div>
-          <div className="t-cap" style={{ color: theme.inkSoft }}>Competitions</div>
-          <h1 className="t-serif" style={{ fontSize: 36, lineHeight: 1, margin: "6px 0 0", letterSpacing: "-0.02em" }}>Tournaments<br/>&amp; ladders.</h1>
+          <div className="t-cap" style={{ color: theme.inkSoft }}>Play</div>
+          <h1 className="t-serif" style={{ fontSize: 36, lineHeight: 1, margin: "6px 0 0", letterSpacing: "-0.02em" }}>
+            {tab === "players" ? <>Find a<br/>match.</> : <>Tournaments<br/>&amp; ladders.</>}
+          </h1>
         </div>
         <button onClick={onCreate} className="t-btn" style={{
           appearance: "none", border: 0, borderRadius: 999, padding: "10px 14px",
@@ -97,7 +185,7 @@ function CompetitionsList({ theme, accent, court, myList, onOpen, onCreate }) {
       </div>
 
       <div style={{ display: "flex", background: theme.chip, borderRadius: 10, padding: 3, marginBottom: 18 }}>
-        {[["mine", `Mine · ${myList.length}`], ["open", `Open · ${OPEN_TOURNAMENTS.length}`]].map(([id, label]) => (
+        {[["mine", `Mine · ${myList.length}`], ["open", `Open · ${OPEN_TOURNAMENTS.length}`], ["players", "Players"]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} className="t-btn" style={{
             flex: 1, appearance: "none", border: 0, borderRadius: 8, padding: "8px 0",
             background: tab === id ? theme.bgRaised : "transparent",
@@ -183,6 +271,266 @@ function CompetitionsList({ theme, accent, court, myList, onOpen, onCreate }) {
           </div>
         </>
       )}
+
+      {tab === "players" && (
+        <>
+          {/* Search bar — pill shape matching the design. Filters
+              names/handles/clubs in directoryPlayers (built from
+              friends + everyonePlayers in BaselineApp). */}
+          <div style={{
+            background: theme.chip, borderRadius: 999, padding: "9px 14px", marginBottom: 12,
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={theme.inkSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input value={playerSearch} onChange={(e) => setPlayerSearch(e.target.value)} placeholder="Search players, clubs…" style={{
+              flex: 1, appearance: "none", border: 0, background: "transparent", outline: "none",
+              fontFamily: "Inter", fontSize: 13, color: theme.ink,
+            }} />
+          </div>
+
+          {/* Filter chip row. Range cycles all → similar (±80 ELO) →
+              all; Surface cycles all → hard → grass → clay. "Active
+              now" / "Available weekends" are visual placeholders for
+              now — backed data lands once we surface presence + free
+              slots in the profile shape. */}
+          <div className="t-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 14, scrollbarWidth: "none" }}>
+            <FilterChip
+              label={`Range · ${filterRange === "all" ? "Any" : "±80 ELO"}`}
+              active={filterRange !== "all"}
+              theme={theme} accent={accent}
+              onClick={() => setFilterRange(filterRange === "all" ? "similar" : "all")}
+            />
+            <FilterChip
+              label={`Surface · ${filterSurface === "all" ? "Any" : filterSurface[0].toUpperCase() + filterSurface.slice(1)}`}
+              active={filterSurface !== "all"}
+              theme={theme} accent={accent}
+              onClick={() => {
+                const order = ["all", "hard", "grass", "clay"];
+                setFilterSurface(order[(order.indexOf(filterSurface) + 1) % order.length]);
+              }}
+            />
+            <FilterChip label="Active now" active={false} theme={theme} accent={accent} />
+            <FilterChip label="Available weekends" active={false} theme={theme} accent={accent} />
+          </div>
+
+          <div className="t-cap" style={{ color: theme.inkSoft, margin: "0 4px 8px" }}>{filteredPlayers.length} players · sorted by skill match</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {filteredPlayers.map((p) => <PlayerCard key={p.id} p={p} myElo={myElo} theme={theme} accent={accent} onClick={() => setActivePlayer(p)} />)}
+            {filteredPlayers.length === 0 && (
+              <div style={{ textAlign: "center", color: theme.inkFaint, padding: "40px 20px", fontSize: 13 }}>
+                {directoryPlayers.length === 0 ? "No players in your directory yet." : "No players match these filters."}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {activePlayer && (
+        <PlayerProfileSheet
+          p={activePlayer}
+          myElo={myElo}
+          theme={theme}
+          accent={accent}
+          court={court}
+          onClose={() => setActivePlayer(null)}
+          onInvite={() => { setActivePlayer(null); onInvitePlayer && onInvitePlayer(activePlayer); }}
+          onMessage={() => { setActivePlayer(null); onMessagePlayer && onMessagePlayer(activePlayer); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function FilterChip({ label, active, theme, accent, onClick }) {
+  return (
+    <button onClick={onClick} className="t-btn" style={{
+      appearance: "none", border: `1px solid ${active ? theme.ink : theme.line}`,
+      background: active ? theme.ink : "transparent", color: active ? theme.bg : theme.ink,
+      borderRadius: 999, padding: "6px 12px", flexShrink: 0,
+      fontFamily: "Inter", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+      whiteSpace: "nowrap",
+    }}>{label}</button>
+  );
+}
+
+function PlayerCard({ p, myElo, theme, accent, onClick }) {
+  const eloGap = p.elo - myElo;
+  const matchPct = Math.max(40, Math.round(100 - Math.abs(eloGap) * 0.4));
+  return (
+    <button onClick={onClick} className="t-btn" style={{
+      width: "100%", appearance: "none", border: `0.5px solid ${theme.line}`,
+      background: theme.bgRaised, color: theme.ink,
+      borderRadius: 14, padding: "12px 14px", textAlign: "left", cursor: "pointer",
+      display: "flex", alignItems: "center", gap: 12,
+    }}>
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: "50%", background: p.color,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fbf6e9", fontFamily: "Inter", fontWeight: 600, fontSize: 16,
+          overflow: "hidden",
+        }}>
+          {p.avatar_url
+            ? <img src={p.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : p.initials}
+        </div>
+        {p.activeNow && (
+          <span style={{
+            position: "absolute", right: -1, bottom: -1, width: 13, height: 13,
+            borderRadius: "50%", background: accent, border: `2px solid ${theme.bgRaised}`,
+          }} />
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14, color: theme.ink }}>{p.name}</span>
+          {p.handle && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: theme.inkFaint, fontWeight: 500 }}>{p.handle}</span>}
+        </div>
+        <div style={{ fontSize: 11, color: theme.inkSoft, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span>{p.level}</span>
+          {p.dist && p.dist !== "—" && <><span style={{ color: theme.inkFaint }}>·</span><span>{p.dist}</span></>}
+          {p.club && <><span style={{ color: theme.inkFaint }}>·</span><span>{p.club}</span></>}
+        </div>
+        {p.mutual && p.mutual.length > 0 && (
+          <div style={{ fontSize: 10.5, color: accent, marginTop: 4, fontFamily: "Inter", fontWeight: 600 }}>{p.mutual[0]} ↗</div>
+        )}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
+        <div className="t-num" style={{ fontSize: 15, fontWeight: 700, color: theme.ink, letterSpacing: "-0.02em" }}>{p.elo}</div>
+        <div style={{ fontSize: 9, color: theme.inkFaint, fontFamily: "Inter", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{matchPct}% match</div>
+      </div>
+    </button>
+  );
+}
+
+function PlayerProfileSheet({ p, myElo, theme, accent, court, onClose, onInvite, onMessage }) {
+  const recentParts = (p.recent || "—").split(" ");
+  const recentTail = recentParts.pop();
+  const recentHead = recentParts.join(" ");
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 480, background: theme.bg, color: theme.ink,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden",
+        boxShadow: "0 -10px 30px rgba(0,0,0,0.22)",
+        maxHeight: "88%", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+          <div style={{ width: 36, height: 4, background: theme.line, borderRadius: 2 }} />
+        </div>
+
+        <div style={{ padding: "14px 22px 18px", background: court.surface, color: "#fbf6e9", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%", background: p.color,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fbf6e9", fontFamily: "Inter", fontWeight: 600, fontSize: 22,
+              border: "2px solid rgba(251,246,233,0.4)", flexShrink: 0, overflow: "hidden",
+            }}>
+              {p.avatar_url
+                ? <img src={p.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : p.initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="t-serif" style={{ fontSize: 24, lineHeight: 1.1, letterSpacing: "-0.01em" }}>{p.name}</div>
+              {p.handle && <div style={{ fontSize: 12, fontFamily: "JetBrains Mono", color: "rgba(251,246,233,0.7)", marginTop: 2 }}>{p.handle}</div>}
+              <div style={{ fontSize: 11, color: "rgba(251,246,233,0.7)", marginTop: 4, fontFamily: "Inter" }}>{p.level}{p.club ? ` · ${p.club}` : ""}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 22px 8px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          <ProfileStat theme={theme} accent={accent} label="ELO" value={String(p.elo)} sub={(p.elo - myElo >= 0 ? "+" : "") + (p.elo - myElo)} />
+          <ProfileStat theme={theme} accent={accent} label="Distance" value={p.dist || "—"} />
+          <ProfileStat theme={theme} accent={accent} label="Last result" value={recentTail} sub={recentHead} />
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 22px 18px" }}>
+          {p.surfaces && p.surfaces.length > 0 && (
+            <>
+              <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 6 }}>Plays on</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                {p.surfaces.map((s) => (
+                  <span key={s} style={{
+                    fontFamily: "Inter", fontSize: 11, fontWeight: 600,
+                    background: theme.chip, color: theme.ink,
+                    borderRadius: 6, padding: "4px 9px", textTransform: "capitalize",
+                  }}>{s}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {p.avail && p.avail.length > 0 && (
+            <>
+              <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 6 }}>Usually free</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                {p.avail.map((a) => (
+                  <span key={a} style={{
+                    fontFamily: "Inter", fontSize: 11, fontWeight: 600,
+                    background: theme.chip, color: theme.ink,
+                    borderRadius: 6, padding: "4px 9px",
+                  }}>{a}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {p.mutual && p.mutual.length > 0 && (
+            <>
+              <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 6 }}>Mutual</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+                {p.mutual.map((m) => (
+                  <div key={m} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 10px", background: theme.bgRaised, border: `0.5px solid ${theme.line}`,
+                    borderRadius: 10, fontFamily: "Inter", fontSize: 12, color: theme.ink,
+                  }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/></svg>
+                    {m}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 22px 28px", display: "flex", gap: 8, borderTop: `0.5px solid ${theme.line}` }}>
+          <button onClick={onMessage} className="t-btn" style={{
+            flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
+            background: theme.bgRaised, color: theme.ink,
+            borderRadius: 12, padding: "13px", cursor: "pointer",
+            fontFamily: "Inter", fontWeight: 600, fontSize: 13,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Message
+          </button>
+          <button onClick={onInvite} className="t-btn" style={{
+            flex: 2, appearance: "none", border: 0,
+            background: accent, color: "#0f1410",
+            borderRadius: 12, padding: "13px", cursor: "pointer",
+            fontFamily: "Inter", fontWeight: 700, fontSize: 13, letterSpacing: "0.04em",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            INVITE TO PLAY
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileStat({ theme, accent, label, value, sub }) {
+  return (
+    <div style={{ background: theme.bgRaised, border: `0.5px solid ${theme.line}`, borderRadius: 10, padding: "10px 12px" }}>
+      <div className="t-num" style={{ fontSize: 18, fontWeight: 700, color: theme.ink, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: accent, marginTop: 4, fontFamily: "Inter", fontWeight: 600 }}>{sub}</div>}
+      <div style={{ fontSize: 9, color: theme.inkSoft, marginTop: sub ? 2 : 4, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: "Inter", fontWeight: 600 }}>{label}</div>
     </div>
   );
 }

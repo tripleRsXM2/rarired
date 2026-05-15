@@ -11,7 +11,7 @@ import AppearanceToggle from "./AppearanceToggle.jsx";
 export const ROUTES = [
   { id: "home",         label: "Home",         icon: "home" },
   { id: "live",         label: "Live scoring", icon: "live" },
-  { id: "competitions", label: "Competitions", icon: "trophy" },
+  { id: "competitions", label: "Play",         icon: "trophy" },
   { id: "messages",     label: "Messages",     icon: "chat" },
   { id: "changeover",   label: "Changeover",   icon: "clock" },
   { id: "summary",      label: "Summary",      icon: "flag" },
