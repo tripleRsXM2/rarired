@@ -918,17 +918,27 @@ export default function App(){
     );
   }
   // V2 route — Claude Design "Live scoring · key states" prototype.
-  // The v2 namespace lives in `src/v2/` and is fully isolated from v1.
+  // The v2 namespace lives in `src/v2/` and is fully isolated from v1
+  // EXCEPT for shared hooks that subscribe to Supabase realtime
+  // channels — those must be instantiated once at the app root and
+  // threaded down. Calling useDMs a second time inside BaselineApp
+  // races for the same `convs:<uid>` channel and crashes with
+  // 'cannot add postgres_changes callbacks after subscribe()'.
+  // We pass the live `dms` + auth user down so V2 reuses the v1
+  // singletons.
   if (auth.authUser && v2Path) {
     return (
       <Providers t={t} theme={theme}>
-        <BaselineApp onBack={function(){
-          // "Back to picker" → wipe flag + bounce home so the picker
-          // overlay re-mounts on the next render.
-          clearAppVersion();
-          setAppVersionState(null);
-          navigate("/home", { replace: true });
-        }}/>
+        <BaselineApp
+          authUser={auth.authUser}
+          dms={dms}
+          onBack={function(){
+            // "Back to picker" → wipe flag + bounce home so the picker
+            // overlay re-mounts on the next render.
+            clearAppVersion();
+            setAppVersionState(null);
+            navigate("/home", { replace: true });
+          }}/>
       </Providers>
     );
   }

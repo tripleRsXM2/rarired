@@ -41,11 +41,11 @@ import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
 import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
-// PR1 of the v2-messages-wiring series: import V1's DM hook directly.
-// Per the PR1 brief, MessagesScreen consumes useDMs via this shell so
-// auth + blockedUserIds can be threaded in once. PR2/PR3 will add
-// widget schema + actions on top.
-import { useDMs } from "../../features/people/hooks/useDMs.js";
+// useDMs is NOT imported here — it would race v1's instance for the
+// same realtime channel name (`convs:<uid>`) and crash Supabase
+// Realtime with 'cannot add postgres_changes callbacks after
+// subscribe()'. App.jsx is the canonical owner; we receive `dms` as
+// a prop.
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
 
@@ -92,51 +92,27 @@ class V2ErrorBoundary extends React.Component {
   }
 }
 
-function BaselineAppInner({ onBack }) {
+function BaselineAppInner({ onBack, authUser, dms }) {
   React.useEffect(() => { ensureFonts(); }, []);
 
   // ── Supabase data layer (v2 isolated adapters) ────────────────
-  // Hooks subscribe to auth + load the viewer's profile, confirmed
-  // match history, derived weekly stats, and active leagues. While
-  // loading we fall back to SAMPLE_HISTORY so the layout doesn't
-  // jump; once the network round-trip resolves the screens re-render
-  // with real data. p1Name is sourced from the profile's display
-  // name when available so the live score card reads "Mikey vs …"
-  // instead of "You vs M. Carter".
+  // v2-only hooks for things v1 doesn't already load. authUser + dms
+  // come from App.jsx (the v1 root) as props so we don't double-
+  // subscribe to Supabase realtime channels. Without that share, a
+  // second useDMs() call here would race for the same `convs:<uid>`
+  // channel and Supabase Realtime would throw 'cannot add
+  // postgres_changes callbacks after subscribe()' — crashing the v2
+  // tree. The v2 hooks below (profile / history / competitions /
+  // friends) do NOT subscribe to realtime so they stay local here.
   const v2Profile      = useV2Profile();
-  const v2UserId       = v2Profile.authUser && v2Profile.authUser.id;
+  // Prefer the prop-passed authUser when available; fall back to the
+  // hook's own session lookup so the file still works standalone in
+  // tests or if mounted outside of App.jsx.
+  const resolvedAuthUser = authUser || v2Profile.authUser;
+  const v2UserId       = resolvedAuthUser && resolvedAuthUser.id;
   const v2History      = useV2History(v2UserId);
   const v2Competitions = useV2Competitions(v2UserId);
   const v2Friends      = useV2Friends(v2UserId);
-
-  // DM backend (V1 hook). The hook needs authUser + friends (for the
-  // request-gate bypass) + blockedUserIds (for asymmetric block
-  // filtering). v2 doesn't have a blocks loader yet — pass [] so the
-  // hook degrades to "show everything". PR2 may add a small v2 blocks
-  // hook if/when that becomes user-visible.
-  const v2DmFriends = React.useMemo(
-    function () { return v2Friends.friends || []; },
-    [v2Friends.friends]
-  );
-  const v2DmBlocked = React.useMemo(function () { return []; }, []);
-  const dms = useDMs({
-    authUser: v2Profile.authUser,
-    friends: v2DmFriends,
-    blockedUserIds: v2DmBlocked,
-  });
-  // Bootstrap the conversation list as soon as the user resolves.
-  // useDMs.loadConversations needs an explicit uid because its internal
-  // closure can be stale at the moment the v2 shell first calls it
-  // (same race v1's App.jsx works around — see useDMs.loadConversations
-  // doc comment).
-  React.useEffect(function () {
-    if (v2Profile.authUser && v2Profile.authUser.id) {
-      dms.loadConversations(v2Profile.authUser.id);
-    }
-    // We want this to refire if the signed-in user changes, but not on
-    // every render — depend only on the id. dms is a stable hook return.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [v2Profile.authUser && v2Profile.authUser.id]);
 
   const liveHistory = v2History.loading
     ? SAMPLE_HISTORY
@@ -145,8 +121,8 @@ function BaselineAppInner({ onBack }) {
   const liveCompetitions = v2Competitions.competitions || [];
   const liveFriends = v2Friends.friends || [];
   const viewerName = (v2Profile.profile && v2Profile.profile.name)
-    || (v2Profile.authUser && v2Profile.authUser.email
-        ? v2Profile.authUser.email.split("@")[0]
+    || (resolvedAuthUser && resolvedAuthUser.email
+        ? resolvedAuthUser.email.split("@")[0]
         : DEFAULTS.p1Name);
 
   // QuickLog save handler — inserts a casual match via logV2Match,
@@ -257,7 +233,7 @@ function BaselineAppInner({ onBack }) {
             history={liveHistory} weekStats={liveWeekStats}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
-            dms={dms} authUser={v2Profile.authUser}
+            dms={dms} authUser={resolvedAuthUser}
           />
         </div>
 
@@ -319,7 +295,7 @@ function BaselineAppInner({ onBack }) {
             history={liveHistory} weekStats={liveWeekStats}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
-            dms={dms} authUser={v2Profile.authUser}
+            dms={dms} authUser={resolvedAuthUser}
           />
         </div>
       </div>
