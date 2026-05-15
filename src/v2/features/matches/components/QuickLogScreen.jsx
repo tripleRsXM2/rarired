@@ -1,6 +1,11 @@
 // QuickLogScreen.jsx — Final-score quick-log (no live scoring) for the
 // v2 BaselineApp. Faithful port of the design's `QuickLogScreen` in
-// `screens-mobile-2.jsx`. Per-set numpad input with optional tiebreak.
+// `screens-mobile-2.jsx`. Per-set − value + stepper input with an
+// optional inline tiebreak. Replaces the older 3x4 numpad — the
+// design zip dropped the numpad in favour of the stepper after user
+// feedback: most scores are 0–7 so tap-to-increment is faster than a
+// 12-button keypad and removes the ambiguity of "is 6 the active
+// digit or do I need to backspace?".
 //
 // Hooked to Supabase: the opponent name is now a tappable field that
 // opens a friend picker (live friends list passed in via props), and
@@ -48,23 +53,18 @@ export default function QuickLogScreen({
       return { ...s, tb: side === 0 ? [v, tb[1]] : [tb[0], v] };
     });
 
-  const tap = (n) => {
-    const get = () => activeField === "tb"
-      ? (sets[activeIdx].tb || [0, 0])[activeSide]
-      : sets[activeIdx].score[activeSide];
-    const set = (v) => activeField === "tb"
-      ? setTbVal(activeIdx, activeSide, v)
-      : setScoreVal(activeIdx, activeSide, v);
-    if (n === "DEL") { set(Math.floor(get() / 10)); return; }
-    if (n === "TB") {
-      updateSet(activeIdx, (s) => ({ ...s, tb: s.tb ? null : [0, 0] }));
-      setActiveField("tb");
-      return;
-    }
-    const cur = get();
-    const nv = cur === 0 ? Number(n) : (cur >= 10 ? Number(n) : Number(`${cur}${n}`));
-    set(Math.min(nv, 99));
+  // Current value of the active cell — read by the stepper. Score
+  // cells cap at 7 (longest legal set score), tiebreaks at 25.
+  const activeValue = activeField === "tb"
+    ? ((sets[activeIdx].tb || [0, 0])[activeSide])
+    : sets[activeIdx].score[activeSide];
+  const activeMax = activeField === "tb" ? 25 : 7;
+  const setActiveValue = (v) => {
+    if (activeField === "tb") setTbVal(activeIdx, activeSide, v);
+    else setScoreVal(activeIdx, activeSide, v);
   };
+  const toggleActiveTiebreak = () =>
+    updateSet(activeIdx, (s) => ({ ...s, tb: s.tb ? null : [0, 0] }));
 
   const addSet = () => {
     setSets((prev) => [...prev, { score: [0, 0], tb: null }]);
@@ -185,16 +185,26 @@ export default function QuickLogScreen({
       </div>
 
       <div style={{ flex: 1 }} />
+      {/* Stepper — minimal − value +. Replaces the older 3x4 numpad.
+          The big number in the middle mirrors the active cell so the
+          user knows what they're editing. Tap the chip below to add
+          or remove a tiebreak on the active set; the stepper's max
+          flips to 25 while editing the tiebreak, 7 for set scores. */}
       <div style={{ padding: "0 20px 12px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "TB", "0", "DEL"].map((k) => (
-            <button key={k} onClick={() => tap(k)} className="t-btn" style={{
-              appearance: "none", padding: "20px 0", borderRadius: 14,
-              background: theme.bgRaised, color: theme.ink, border: `1px solid ${theme.line}`,
-              fontFamily: "JetBrains Mono", fontSize: k === "TB" || k === "DEL" ? 13 : 24,
-              fontWeight: 500, letterSpacing: "-0.02em",
-            }}>{k}</button>
-          ))}
+        <StepperPicker
+          value={activeValue}
+          onChange={setActiveValue}
+          max={activeMax}
+          theme={theme}
+          accent={accent}
+        />
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+          <button onClick={toggleActiveTiebreak} className="t-btn" style={{
+            appearance: "none", border: `1px solid ${theme.line}`,
+            background: sets[activeIdx] && sets[activeIdx].tb ? accent + "22" : "transparent",
+            color: theme.ink, fontFamily: "Inter", fontSize: 11, fontWeight: 600,
+            borderRadius: 999, padding: "5px 12px", cursor: "pointer",
+          }}>{sets[activeIdx] && sets[activeIdx].tb ? "Remove tiebreak" : "+ Tiebreak"}</button>
         </div>
       </div>
 
@@ -344,6 +354,44 @@ function OpponentSheet({ theme, accent, friends, onPick, onClose }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Minimal stepper — − value + buttons. Ported verbatim from the
+// design's `StepperPicker` in screens-mobile-2.jsx (the third tennis-
+// timer zip). The minus button is a hairline outline, the plus
+// button is the accent-filled primary action so the most common
+// gesture (incrementing a fresh 0-0 set) gets a thumb-magnet target.
+function StepperPicker({ value, onChange, max = 7, theme, accent }) {
+  const dec = () => onChange(Math.max(0, value - 1));
+  const inc = () => onChange(Math.min(max, value + 1));
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+      background: theme.bgRaised, border: `1px solid ${theme.line}`,
+      borderRadius: 12, padding: "8px 12px",
+    }}>
+      <button onClick={dec} className="t-btn" aria-label="Decrement" style={{
+        width: 36, height: 36, borderRadius: "50%", appearance: "none",
+        border: `1px solid ${theme.line}`,
+        background: "transparent", color: theme.ink, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
+      </button>
+      <span className="t-num" style={{
+        fontFamily: "JetBrains Mono", fontVariantNumeric: "tabular-nums",
+        fontSize: 32, fontWeight: 700, color: theme.ink, letterSpacing: "-0.03em",
+        minWidth: 48, textAlign: "center",
+      }}>{value}</span>
+      <button onClick={inc} className="t-btn" aria-label="Increment" style={{
+        width: 36, height: 36, borderRadius: "50%", appearance: "none", border: 0,
+        background: accent, color: "#0f1410", cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
+      </button>
     </div>
   );
 }
