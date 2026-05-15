@@ -410,17 +410,26 @@ function PlayerProfileSheet({ p, myElo, theme, accent, court, onClose, onInvite,
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, zIndex: 100,
-      background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-end", justifyContent: "center",
+      background: "rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px",
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         width: "100%", maxWidth: 480, background: theme.bg, color: theme.ink,
-        borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden",
-        boxShadow: "0 -10px 30px rgba(0,0,0,0.22)",
-        maxHeight: "88%", display: "flex", flexDirection: "column",
+        borderRadius: 20, overflow: "hidden",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+        maxHeight: "88vh", display: "flex", flexDirection: "column",
+        position: "relative",
       }}>
-        <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-          <div style={{ width: 36, height: 4, background: theme.line, borderRadius: 2 }} />
-        </div>
+        <button onClick={onClose} aria-label="Close" style={{
+          position: "absolute", top: 10, right: 10, zIndex: 2,
+          appearance: "none", border: 0, background: "rgba(0,0,0,0.28)",
+          color: "#fbf6e9", width: 28, height: 28, borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+        </button>
 
         <div style={{ padding: "14px 22px 18px", background: court.surface, color: "#fbf6e9", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
