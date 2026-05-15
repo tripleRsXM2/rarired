@@ -1,19 +1,43 @@
 // QuickLogScreen.jsx — Final-score quick-log (no live scoring) for the
 // v2 BaselineApp. Faithful port of the design's `QuickLogScreen` in
 // `screens-mobile-2.jsx`. Per-set numpad input with optional tiebreak.
+//
+// Hooked to Supabase: the opponent name is now a tappable field that
+// opens a friend picker (live friends list passed in via props), and
+// Save inserts a casual match into match_history via logV2Match.
 
 import React from "react";
 import { Card, Eyebrow, ServeDot } from "./atoms.jsx";
 
-export default function QuickLogScreen({ theme, accent, onSave }) {
-  const [sets, setSets] = React.useState([
-    { score: [6, 4], tb: null },
-    { score: [3, 6], tb: null },
-    { score: [7, 6], tb: [7, 4] },
-  ]);
-  const [activeIdx, setActiveIdx]   = React.useState(2);
+export default function QuickLogScreen({
+  theme, accent, onSave,
+  // viewerName  — signed-in player's display name (left "You" row).
+  // friends     — [{ id, name, avatar_url, skill, suburb }] for the
+  //               opponent picker. Empty array is fine (free-text only).
+  // onSubmit    — async ({ opponent, sets }) => { data, error }.
+  //               When provided, Save calls it instead of onSave().
+  viewerName, friends, onSubmit,
+}) {
+  // Start with a single empty set — the prototype shipped pre-filled
+  // demo scores, but a real log page must start blank so the user
+  // doesn't accidentally Save a fake 6-4 3-6 7-6 match. + Add set
+  // grows the list; logV2Match drops any 0-0 set on save.
+  const [sets, setSets] = React.useState([{ score: [0, 0], tb: null }]);
+  const [activeIdx, setActiveIdx]   = React.useState(0);
   const [activeSide, setActiveSide] = React.useState(0);
   const [activeField, setActiveField] = React.useState("score");
+
+  // Opponent — { id?: uuid, name: string }. id is set only when the
+  // user picks a linked friend; a typed name logs unlinked. Starts
+  // unset so the user has to choose before saving.
+  const [opponent, setOpponent] = React.useState(null);
+  const [oppSheetOpen, setOppSheetOpen] = React.useState(false);
+
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError]   = React.useState("");
+
+  const youLabel = viewerName || "You";
+  const oppLabel = opponent ? opponent.name : "Pick opponent";
 
   const updateSet = (idx, fn) => setSets((prev) => prev.map((s, i) => (i === idx ? fn(s) : s)));
   const setScoreVal = (idx, side, v) =>
@@ -54,8 +78,28 @@ export default function QuickLogScreen({ theme, accent, onSave }) {
     setActiveIdx(Math.max(0, Math.min(activeIdx, sets.length - 2)));
   };
 
+  async function handleSave() {
+    setError("");
+    if (!opponent || !opponent.name) {
+      setError("Pick an opponent first.");
+      setOppSheetOpen(true);
+      return;
+    }
+    // No onSubmit wired (e.g. legacy mount) — fall back to the old
+    // navigate-home behaviour so the screen never dead-ends.
+    if (!onSubmit) { if (onSave) onSave(); return; }
+    setSaving(true);
+    const res = await onSubmit({ opponent: opponent, sets: sets });
+    setSaving(false);
+    if (res && res.error) {
+      setError((res.error && res.error.message) || "Couldn't save the match.");
+      return;
+    }
+    if (onSave) onSave();
+  }
+
   return (
-    <div style={{ height: "100%", background: theme.bg, color: theme.ink, display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%", background: theme.bg, color: theme.ink, display: "flex", flexDirection: "column", position: "relative" }}>
       <div style={{ padding: "14px 20px 4px" }}>
         <Eyebrow color={theme.inkSoft}>Quick log</Eyebrow>
         <h1 className="t-serif" style={{ fontSize: 28, lineHeight: 1.05, margin: "4px 0 0", letterSpacing: "-0.015em" }}>
@@ -65,7 +109,7 @@ export default function QuickLogScreen({ theme, accent, onSave }) {
 
       <div style={{ padding: "12px 16px 4px" }}>
         <Card theme={theme} padded={false}>
-          <div style={{ display: "grid", gridTemplateColumns: "96px 1fr", alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "stretch" }}>
             <div style={{
               padding: "12px 0 12px 14px", display: "flex", flexDirection: "column",
               justifyContent: "space-around", borderRight: `1px solid ${theme.line}`,
@@ -73,13 +117,30 @@ export default function QuickLogScreen({ theme, accent, onSave }) {
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ServeDot active color={accent} />
-                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13 }}>You</span>
+                <span style={{
+                  fontFamily: "Inter", fontWeight: 600, fontSize: 13,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{youLabel}</span>
               </div>
               <div style={{ height: 8 }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Opponent — tappable. Opens the picker sheet. */}
+              <button
+                type="button"
+                onClick={() => setOppSheetOpen(true)}
+                className="t-btn"
+                style={{
+                  appearance: "none", background: "transparent", border: 0,
+                  padding: 0, cursor: "pointer", textAlign: "left",
+                  display: "flex", alignItems: "center", gap: 8,
+                }}>
                 <ServeDot active={false} color={accent} />
-                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 13 }}>M. Carter</span>
-              </div>
+                <span style={{
+                  fontFamily: "Inter", fontWeight: 600, fontSize: 13,
+                  color: opponent ? theme.ink : accent,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  borderBottom: `1px dashed ${opponent ? theme.line : accent}`,
+                }}>{oppLabel}</span>
+              </button>
             </div>
             <div className="t-noscroll" style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch" }}>
               <div style={{ display: "flex", gap: 8, padding: "10px 12px" }}>
@@ -113,7 +174,7 @@ export default function QuickLogScreen({ theme, accent, onSave }) {
         <div style={{ fontSize: 11, color: theme.inkSoft, fontFamily: "Inter", fontWeight: 500 }}>
           Editing: <strong style={{ color: theme.ink }}>Set {activeIdx + 1}</strong>
           {activeField === "tb" && <span style={{ color: accent }}> · Tiebreak</span>}
-          <span style={{ color: theme.inkFaint }}> · {activeSide === 0 ? "You" : "M. Carter"}</span>
+          <span style={{ color: theme.inkFaint }}> · {activeSide === 0 ? youLabel : oppLabel}</span>
         </div>
         {sets[activeIdx]?.tb && (
           <button onClick={() => setActiveField(activeField === "tb" ? "score" : "tb")} className="t-btn" style={{
@@ -137,12 +198,151 @@ export default function QuickLogScreen({ theme, accent, onSave }) {
         </div>
       </div>
 
+      {/* Error strip — only renders when a save attempt failed or the
+          opponent is missing. Sits just above the Save button. */}
+      {error && (
+        <div style={{
+          margin: "0 20px 6px", padding: "9px 12px", borderRadius: 10,
+          background: `${accent}1f`, color: theme.ink,
+          fontFamily: "Inter", fontSize: 12, fontWeight: 500,
+        }}>{error}</div>
+      )}
+
       <div style={{ padding: "6px 20px 20px" }}>
-        <button onClick={onSave} className="t-btn" style={{
+        <button onClick={handleSave} disabled={saving} className="t-btn" style={{
           width: "100%", appearance: "none", border: 0, padding: "16px",
           borderRadius: 14, background: theme.ink, color: theme.bg,
           fontFamily: "Inter", fontWeight: 600, fontSize: 15,
-        }}>Save match</button>
+          opacity: saving ? 0.6 : 1, cursor: saving ? "default" : "pointer",
+        }}>{saving ? "Saving…" : "Save match"}</button>
+      </div>
+
+      {/* Opponent picker sheet — bottom-anchored overlay. Friends list
+          from Supabase + a free-text fallback for non-app opponents. */}
+      {oppSheetOpen && (
+        <OpponentSheet
+          theme={theme} accent={accent}
+          friends={friends || []}
+          onPick={(o) => { setOpponent(o); setOppSheetOpen(false); setError(""); }}
+          onClose={() => setOppSheetOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Opponent picker sheet ──────────────────────────────────────────
+// Bottom-anchored overlay: friends list (tap to pick a linked player)
+// + a text field for a free-text opponent. Matches the v2 visual
+// language (Inter / mono labels, hairline borders, theme tokens).
+
+function OpponentSheet({ theme, accent, friends, onPick, onClose }) {
+  const [query, setQuery] = React.useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? friends.filter((f) => (f.name || "").toLowerCase().indexOf(q) >= 0)
+    : friends;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "absolute", inset: 0, zIndex: 40,
+        background: "rgba(15,16,18,0.5)",
+        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+      }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: theme.bg, color: theme.ink,
+          borderTopLeftRadius: 18, borderTopRightRadius: 18,
+          borderTop: `0.5px solid ${theme.line}`,
+          maxHeight: "80%", display: "flex", flexDirection: "column",
+          padding: "16px 18px calc(env(safe-area-inset-bottom, 0px) + 16px)",
+        }}>
+        {/* Grab handle */}
+        <div style={{
+          width: 36, height: 4, borderRadius: 2, background: theme.lineStrong,
+          margin: "0 auto 14px",
+        }} />
+        <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: theme.inkSoft, marginBottom: 10 }}>
+          Opponent
+        </div>
+
+        {/* Free-text — log against a name that isn't in your friends. */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search friends or type a name…"
+            style={{
+              flex: 1, appearance: "none",
+              background: theme.bgRaised, color: theme.ink,
+              border: `1px solid ${theme.line}`, borderRadius: 10,
+              padding: "11px 12px", fontFamily: "Inter", fontSize: 14,
+              outline: "none",
+            }}
+          />
+          {query.trim() && (
+            <button
+              type="button"
+              onClick={() => onPick({ id: null, name: query.trim() })}
+              className="t-btn"
+              style={{
+                appearance: "none", border: 0, borderRadius: 10,
+                padding: "0 16px", background: theme.ink, color: theme.bg,
+                fontFamily: "Inter", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}>Use name</button>
+          )}
+        </div>
+
+        {/* Friends list */}
+        <div className="t-noscroll" style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "18px 4px", color: theme.inkSoft, fontFamily: "Inter", fontSize: 13 }}>
+              {friends.length === 0
+                ? "No friends yet — type an opponent name above."
+                : "No friends match that search."}
+            </div>
+          ) : (
+            filtered.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => onPick({ id: f.id, name: f.name })}
+                className="t-btn"
+                style={{
+                  appearance: "none", border: 0, background: "transparent",
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 6px", cursor: "pointer", textAlign: "left",
+                  borderBottom: `0.5px solid ${theme.line}`,
+                }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                  background: theme.bgRaised, border: `0.5px solid ${theme.line}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: theme.inkSoft,
+                  overflow: "hidden",
+                }}>
+                  {f.avatar_url
+                    ? <img src={f.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : (f.name || "?").slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {f.name}
+                  </div>
+                  {(f.suburb || f.skill) && (
+                    <div style={{ fontSize: 11, color: theme.inkSoft, fontFamily: "Inter" }}>
+                      {[f.suburb, f.skill].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

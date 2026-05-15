@@ -41,15 +41,18 @@ function shapeRow(m, viewerIsSubmitter, profileMap) {
     ? rawResult === "win"
     : rawResult === "loss"; // opponent's view inverts
   var sets = m.sets || [];
+  // DB set shape is { you, them, tieBreak?: { you, them } }. For the
+  // opponent's view we swap you/them on both the set score and the
+  // nested tiebreak so the score string reads from their side.
   var viewerSets = viewerIsSubmitter
     ? sets
     : sets.map(function (s) {
-        return s ? Object.assign({}, s, {
-          you:     s.them,
-          them:    s.you,
-          you_tb:  s.them_tb,
-          them_tb: s.you_tb,
-        }) : s;
+        if (!s) return s;
+        var flipped = Object.assign({}, s, { you: s.them, them: s.you });
+        if (s.tieBreak && typeof s.tieBreak === "object") {
+          flipped.tieBreak = { you: s.tieBreak.them, them: s.tieBreak.you };
+        }
+        return flipped;
       });
   // Opposite-party display name. Prefer the looked-up profiles.name
   // when we can (it stays current with renames); fall back to the
@@ -75,6 +78,11 @@ export function useV2History(authUserId) {
   var [rows, setRows]       = useState([]);
   var [loading, setLoading] = useState(true);
   var [error, setError]     = useState(null);
+  // Bumping this counter re-runs the fetch effect — call reload()
+  // after logging a match so the new row appears without a full
+  // page refresh.
+  var [reloadKey, setReloadKey] = useState(0);
+  function reload() { setReloadKey(function (k) { return k + 1; }); }
 
   useEffect(function () {
     if (!authUserId) { setRows([]); setLoading(false); return; }
@@ -156,7 +164,7 @@ export function useV2History(authUserId) {
     });
 
     return function () { cancelled = true; };
-  }, [authUserId]);
+  }, [authUserId, reloadKey]);
 
   // Derived week stats — recompute when rows change.
   var weekStats = useMemo(function () {
@@ -172,5 +180,5 @@ export function useV2History(authUserId) {
     };
   }, [rows]);
 
-  return { history: rows, weekStats: weekStats, loading: loading, error: error };
+  return { history: rows, weekStats: weekStats, loading: loading, error: error, reload: reload };
 }

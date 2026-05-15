@@ -40,7 +40,7 @@ import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 
 import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
-import { useV2Profile, useV2History, useV2Competitions } from "../data/index.js";
+import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
 
@@ -56,18 +56,32 @@ export default function BaselineApp({ onBack }) {
   // name when available so the live score card reads "Mikey vs …"
   // instead of "You vs M. Carter".
   const v2Profile      = useV2Profile();
-  const v2History      = useV2History(v2Profile.authUser && v2Profile.authUser.id);
-  const v2Competitions = useV2Competitions(v2Profile.authUser && v2Profile.authUser.id);
+  const v2UserId       = v2Profile.authUser && v2Profile.authUser.id;
+  const v2History      = useV2History(v2UserId);
+  const v2Competitions = useV2Competitions(v2UserId);
+  const v2Friends      = useV2Friends(v2UserId);
 
   const liveHistory = v2History.loading
     ? SAMPLE_HISTORY
     : (v2History.history || []);
   const liveWeekStats = v2History.weekStats || null;
   const liveCompetitions = v2Competitions.competitions || [];
+  const liveFriends = v2Friends.friends || [];
   const viewerName = (v2Profile.profile && v2Profile.profile.name)
     || (v2Profile.authUser && v2Profile.authUser.email
         ? v2Profile.authUser.email.split("@")[0]
         : DEFAULTS.p1Name);
+
+  // QuickLog save handler — inserts a casual match via logV2Match,
+  // then reloads the history feed so the new row shows on Home /
+  // History the moment the user lands back. Returns { data, error }
+  // straight from logV2Match so QuickLogScreen can surface failures.
+  const onQuickLogSubmit = React.useCallback(function (payload) {
+    return logV2Match(v2UserId, payload.opponent, payload.sets, {}).then(function (res) {
+      if (res && !res.error && v2History.reload) v2History.reload();
+      return res;
+    });
+  }, [v2UserId, v2History.reload]);
 
   // Appearance toggle — Modern (default) or Classic. Modern flips both
   // the THEMES/COURTS tables and overlays a CSS block that handles
@@ -164,6 +178,7 @@ export default function BaselineApp({ onBack }) {
             onGo={onGo} onNewMatch={onNewMatch}
             look={look} onLookChange={setLook}
             history={liveHistory} weekStats={liveWeekStats}
+            friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
           />
         </div>
@@ -224,6 +239,7 @@ export default function BaselineApp({ onBack }) {
             onGo={onGo} onNewMatch={onNewMatch}
             look={look} onLookChange={setLook}
             history={liveHistory} weekStats={liveWeekStats}
+            friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
           />
         </div>
@@ -241,6 +257,7 @@ function RouteView({
   onPoint, onUndo, onGo, onNewMatch,
   look, onLookChange,
   history, weekStats, competitions, viewerName,
+  friends, onQuickLogSubmit,
 }) {
   switch (route) {
     case "home":
@@ -272,7 +289,7 @@ function RouteView({
     case "history":
       return <HistoryScreen theme={theme} accent={accent} matches={history} />;
     case "quicklog":
-      return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} />;
+      return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":
       return <DesktopLiveScreen match={liveMatch} theme={theme} accent={accent} court={court} onPoint={onPoint} onUndo={onUndo} onChangeover={() => onGo("changeover")} />;
     case "watch":
@@ -310,6 +327,7 @@ function MobileRouteView({
   onPoint, onUndo, onGo, onNewMatch,
   look, onLookChange,
   history, weekStats, competitions, viewerName,
+  friends, onQuickLogSubmit,
 }) {
   switch (route) {
     case "home":
@@ -345,7 +363,7 @@ function MobileRouteView({
     case "history":
       return <HistoryScreen theme={theme} accent={accent} matches={history} />;
     case "quicklog":
-      return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} />;
+      return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":
     case "watch":
       // On mobile, fall back to home for desktop/watch routes (they

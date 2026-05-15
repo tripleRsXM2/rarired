@@ -5,8 +5,9 @@
 // stays isolated from src/features/. Mirrors the score-formatting +
 // relative-date rules the v1 codebase uses, expressed cleanly here.
 
-// Format a sets array (DB shape: [{ you, them, you_tb, them_tb }, …])
-// into the v2 score string "6-2 7-6 (10-8)". Tiebreak parens only
+// Format a sets array into the v2 score string "6-2 7-6 (10-8)".
+// DB shape per set is { you, them, tieBreak?: { you, them } } — the
+// same shape serializeSetForDb writes in v1. Tiebreak parens only
 // render when both halves are populated. The DB always stores sets in
 // the submitter's frame, so the caller is responsible for swapping
 // you/them when the viewer is the opponent.
@@ -18,10 +19,9 @@ export function formatSetsV2(sets) {
       var b = s && s.them != null ? String(s.them) : "";
       if (a === "" || b === "") return "";
       var head = a + "-" + b;
-      var tbA = s && s.you_tb;
-      var tbB = s && s.them_tb;
-      if (tbA != null && tbB != null && tbA !== "" && tbB !== "") {
-        head += " (" + tbA + "-" + tbB + ")";
+      var tb = s && s.tieBreak;
+      if (tb && tb.you != null && tb.them != null && tb.you !== "" && tb.them !== "") {
+        head += " (" + tb.you + "-" + tb.them + ")";
       }
       return head;
     })
