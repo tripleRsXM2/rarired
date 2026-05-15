@@ -23,13 +23,15 @@
 
 import React from "react";
 import { convToV2, msgToV2, formatRelativeTime } from "./v2MessageAdapter.js";
+import NewMessageScreen from "./NewMessageScreen.jsx";
 
 // Defensive empty-state values when dms is still loading or absent.
 var EMPTY_CONVS = [];
 var EMPTY_MSGS  = [];
 
-export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser }) {
+export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser, everyonePlayers }) {
   const [activeConvoId, setActiveConvoId] = React.useState(null);
+  const [composing, setComposing] = React.useState(false);
   const meId = (authUser && authUser.id) || null;
 
   // Map V1's enriched conversation rows into the V2 shape the inbox UI
@@ -58,6 +60,49 @@ export default function MessagesScreen({ theme, accent, isPhone = false, dms, au
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConvoId, dms && dms.conversations]);
 
+  // Pencil button → opens the NewMessageScreen overlay. The overlay
+  // exposes onPickContact(convId, optionalDraftText) to route into a
+  // thread, and onPickGroup(partners) to materialise a group conv via
+  // useDMs.openConversationWith().
+  async function onPickGroup(partners) {
+    if (!dms || !partners || partners.length === 0) return { error: { message: "No partners selected" } };
+    var arg = partners.length === 1 ? partners[0] : partners;
+    var r = await dms.openConversationWith(arg);
+    if (r && r.error) return { error: r.error };
+    // openConversationWith puts the conv into dms.activeConv. Read the
+    // id from there — works for both the draft (1:1) and freshly-
+    // created group paths.
+    var convId = dms.activeConv && dms.activeConv.id;
+    return { convId: convId };
+  }
+
+  if (composing) {
+    return (
+      <NewMessageScreen
+        theme={theme} accent={accent} isPhone={isPhone}
+        conversations={dms && dms.conversations}
+        friends={dms && dms.friends}
+        everyonePlayers={everyonePlayers}
+        meId={meId}
+        onBack={function () { setComposing(false); }}
+        onPickContact={async function (convId, draftText) {
+          setComposing(false);
+          if (convId) {
+            setActiveConvoId(convId);
+            if (draftText && draftText.trim() && dms) {
+              // Defer a tick so openConversation effect fires first and
+              // dms.activeConv lines up with the new conv id.
+              setTimeout(function () {
+                if (dms.sendMessage) dms.sendMessage(draftText.trim());
+              }, 50);
+            }
+          }
+        }}
+        onPickGroup={onPickGroup}
+      />
+    );
+  }
+
   if (activeConvoId) {
     return (
       <ThreadScreen
@@ -75,11 +120,12 @@ export default function MessagesScreen({ theme, accent, isPhone = false, dms, au
       conversations={conversations}
       loaded={!!(dms && dms.conversationsLoaded)}
       onOpen={function (id) { setActiveConvoId(id); }}
+      onCompose={function () { setComposing(true); }}
     />
   );
 }
 
-function Inbox({ theme, accent, isPhone, conversations, loaded, onOpen }) {
+function Inbox({ theme, accent, isPhone, conversations, loaded, onOpen, onCompose }) {
   const [q, setQ] = React.useState("");
   const [tab, setTab] = React.useState("inbox");
   const filt = conversations.filter((c) => {
@@ -93,7 +139,7 @@ function Inbox({ theme, accent, isPhone, conversations, loaded, onOpen }) {
       <div style={{ padding: isPhone ? "54px 18px 8px" : "24px 22px 10px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h1 className="t-serif" style={{ fontSize: isPhone ? 30 : 36, lineHeight: 1, margin: 0, letterSpacing: "-0.02em" }}>Inbox</h1>
-          <button className="t-btn" aria-label="New message" style={{
+          <button onClick={onCompose} className="t-btn" aria-label="New message" style={{
             width: 36, height: 36, borderRadius: "50%", appearance: "none",
             border: 0, background: theme.chip, color: theme.ink,
             display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",

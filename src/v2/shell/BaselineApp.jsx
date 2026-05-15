@@ -92,7 +92,7 @@ class V2ErrorBoundary extends React.Component {
   }
 }
 
-function BaselineAppInner({ onBack, authUser, dms }) {
+function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   React.useEffect(() => { ensureFonts(); }, []);
 
   // ── Supabase data layer (v2 isolated adapters) ────────────────
@@ -233,7 +233,7 @@ function BaselineAppInner({ onBack, authUser, dms }) {
             history={liveHistory} weekStats={liveWeekStats}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
-            dms={dms} authUser={resolvedAuthUser}
+            dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
           />
         </div>
 
@@ -295,7 +295,7 @@ function BaselineAppInner({ onBack, authUser, dms }) {
             history={liveHistory} weekStats={liveWeekStats}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
-            dms={dms} authUser={resolvedAuthUser}
+            dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
           />
         </div>
       </div>
@@ -323,7 +323,7 @@ function RouteView({
   look, onLookChange,
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
-  dms, authUser,
+  dms, authUser, everyonePlayers,
 }) {
   switch (route) {
     case "home":
@@ -347,7 +347,7 @@ function RouteView({
         onLog={() => onGo("live")} competitions={competitions}
       />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
     case "changeover":
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":
@@ -394,7 +394,7 @@ function MobileRouteView({
   look, onLookChange,
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
-  dms, authUser,
+  dms, authUser, everyonePlayers,
 }) {
   switch (route) {
     case "home":
@@ -422,7 +422,7 @@ function MobileRouteView({
         onLog={() => onGo("live")} competitions={competitions}
       />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
     case "changeover":
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":

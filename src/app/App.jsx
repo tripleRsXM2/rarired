@@ -932,6 +932,7 @@ export default function App(){
         <BaselineApp
           authUser={auth.authUser}
           dms={dms}
+          everyonePlayers={social.discoverPlayers}
           onBack={function(){
             // "Back to picker" → wipe flag + bounce home so the picker
             // overlay re-mounts on the next render.
