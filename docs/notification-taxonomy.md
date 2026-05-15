@@ -54,8 +54,9 @@ A subset of the events above is **also** mirrored as a structured-widget DM in t
 
 | Notification | Mirrored DM `kind` | DM emitter | Inline action |
 |---|---|---|---|
-| `match_tag` (ranked log) | `confirm` | `emitMatchConfirmDM` | **Confirm** → `respond_to_match_tag(true)`; **Dispute** → `respond_to_match_tag(false)` |
-| `casual_match_logged` | `score` | `emitMatchScoreDM` | Read-only (casual auto-confirms) |
+| `match_tag` (ranked log) | `confirm` | `emitMatchConfirmDM` (v1 `useMatchHistory.submitMatch` ranked path) | **Confirm** → `respond_to_match_tag(true)`; **Dispute** → `respond_to_match_tag(false)` |
+| `match_tag` (v2 quick-log with linked opponent) | `confirm` | `emitMatchConfirmDM` (v2 `logV2Match`) | Same as above — v2 quick-log with a linked player now writes `status='pending_confirmation'` (`match_type='casual'`) and emits the same confirm-card DM, so the opponent can confirm or dispute the score inline. Free-text opponents skip both notification + DM (no recipient account to address). |
+| `casual_match_logged` | `score` | `emitMatchScoreDM` (v1 path, free-text opponents excluded) | Read-only (no dispute path — v1 casual logs against linked players still auto-confirm; the dispute path is v2-quick-log-only). |
 | `challenge_received` | `invite` | `emitChallengeInviteDM` | **Accept** → `challenges.status='accepted'`; **Reschedule** → templated DM reply |
 | *(none — no parent notification yet)* | `invite` | `emitRatingMatchInviteDM` (v2 Play → Players → Invite to play) | **Accept** → templated reply (full challenge-create on Accept ships next); **Reschedule** → templated reply |
 

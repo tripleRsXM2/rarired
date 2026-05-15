@@ -41,7 +41,7 @@ Three message kinds are emitted by client-side auto-emitters and rendered as int
 
 | `kind` | Emitter | Payload shape | Bubble | Action buttons |
 |---|---|---|---|---|
-| `confirm` | `emitMatchConfirmDM` (called by `useMatchHistory.submitMatch` for ranked matches with a linked opponent) | `{ league, p1, p2, sets: [[a,b],...] }` | `ConfirmCardBubble` | **Confirm** → `respond_to_match_tag(match_id, true)` RPC. **Dispute** → `respond_to_match_tag(match_id, false)`. |
+| `confirm` | `emitMatchConfirmDM` — fired by **(a)** `useMatchHistory.submitMatch` for ranked matches with a linked opponent and **(b)** `logV2Match` for v2 quick-log saves with a linked opponent. The v2 quick-log case writes `match_type='casual' AND status='pending_confirmation'`, opening the same Confirm / Dispute affordance v1 ranked matches get (without any rating impact). | `{ league, p1, p2, sets: [[a,b],...] }` | `ConfirmCardBubble` | **Confirm** → `respond_to_match_tag(match_id, true)` RPC. **Dispute** → `respond_to_match_tag(match_id, false)`. |
 | `score` | `emitMatchScoreDM` (called by `useMatchHistory.submitMatch` for casual matches with a linked opponent) | `{ surface, duration, p1, p2, sets }` | `ScoreCardBubble` | Read-only — casual matches auto-confirm. |
 | `invite` | `emitChallengeInviteDM` (called by `useChallenges.sendChallenge`) AND `emitRatingMatchInviteDM` (called by v2 Play → Players → Invite-to-play) | `{ round, date, court, vs }` | `InviteCardBubble` | **Accept** → `updateChallengeStatus(challenge_id, 'accepted')` when `entity_id` is set; templated reply otherwise. **Reschedule** → sends a templated plain-text DM into the same thread. |
 

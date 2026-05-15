@@ -10,6 +10,14 @@
 // Hooked to Supabase: the opponent name is now a tappable field that
 // opens a friend picker (live friends list passed in via props), and
 // Save inserts a casual match into match_history via logV2Match.
+//
+// Linked-opponent saves write status='pending_confirmation' and
+// auto-emit a `confirm` structured DM into the conversation between
+// the two players — the recipient sees a Confirm / Dispute card in
+// their thread (the same widget the ranked-submit path fires). See
+// src/v2/data/logV2Match.js for the lifecycle. Free-text opponents
+// keep auto-confirming because there's no opponent account to
+// notify or to dispute the score.
 
 import React from "react";
 import { Eyebrow, ServeDot } from "./atoms.jsx";

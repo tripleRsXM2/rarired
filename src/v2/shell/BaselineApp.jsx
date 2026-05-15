@@ -131,11 +131,17 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   // History the moment the user lands back. Returns { data, error }
   // straight from logV2Match so QuickLogScreen can surface failures.
   const onQuickLogSubmit = React.useCallback(function (payload) {
-    return logV2Match(v2UserId, payload.opponent, payload.sets, {}).then(function (res) {
+    return logV2Match(v2UserId, payload.opponent, payload.sets, {
+      // Threaded through so the auto-emit confirm-card DM in
+      // logV2Match knows how to label the submitter side of the
+      // widget. Falls back to the email-based default inside
+      // logV2Match if absent.
+      submitterName: viewerName,
+    }).then(function (res) {
       if (res && !res.error && v2History.reload) v2History.reload();
       return res;
     });
-  }, [v2UserId, v2History.reload]);
+  }, [v2UserId, v2History.reload, viewerName]);
 
   // Appearance toggle — Modern (default) or Classic. Modern flips both
   // the THEMES/COURTS tables and overlays a CSS block that handles

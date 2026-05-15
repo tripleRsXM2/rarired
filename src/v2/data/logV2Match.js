@@ -1,15 +1,32 @@
 // src/v2/data/logV2Match.js
 //
 // Insert a quick-logged match from the v2 QuickLogScreen into
-// match_history. v2 quick-log is a casual final-score log — no live
-// scoring, no ranked confirmation flow. Casual matches auto-confirm
-// (status='confirmed') so the row is final the moment it's saved.
+// match_history.
 //
-// No v1 feature imports — supabase client only. Mirrors the DB shapes
-// the v1 useMatchHistory.submitMatch path writes so v1 + v2 rows are
-// interchangeable.
+// Lifecycle:
+//   * Free-text opponent (no linked id) → status='confirmed' on
+//     write. There's no opponent account to notify or to dispute,
+//     so the row is final immediately. Mirrors v1's casual auto-
+//     confirm path.
+//   * Linked opponent (real player id) → status='pending_confirmation'
+//     with a 72h expires_at. Fires `match_tag` notification + an
+//     auto-emit `confirm` structured DM into the conversation
+//     between the two players (Slice B widget — Confirm / Dispute
+//     buttons render on the recipient's bubble). User feedback:
+//     "when i log a quick log with a player and save it. can it
+//     auto send a message? like how we had before in the messages?
+//     then the other player can dispute it in the message."
+//
+//     match_type stays 'casual' (no rating impact). The pending
+//     status is purely about giving the opponent a chance to
+//     acknowledge / dispute the score the same way v1 ranked
+//     matches do — see docs/trust-and-ranking-rules.md.
+//
+// Mirrors the DB shapes the v1 useMatchHistory.submitMatch path
+// writes so v1 + v2 rows stay interchangeable.
 
 import { supabase } from "../../lib/supabase.js";
+import { emitMatchConfirmDM } from "../../features/people/services/dmWidgets.js";
 
 // Serialize the v2 QuickLog set shape into the DB set shape.
 //   v2 in : { score: [you, them], tb: [you, them] | null }
@@ -57,11 +74,17 @@ function deriveResult(dbSets) {
 //   authUserId : viewer's id (match owner / submitter)
 //   opponent   : { id?: uuid, name: string }  — id optional (free-text
 //                opponent allowed; linked id makes it show on both
-//                players' Activity feeds)
+//                players' Activity feeds and turns on the
+//                pending_confirmation + DM confirm-card path)
 //   v2Sets     : QuickLogScreen sets state
-//   opts       : { matchDate?: 'YYYY-MM-DD' }  — defaults to today
+//   opts       : {
+//                  matchDate?: 'YYYY-MM-DD',  — defaults to today
+//                  submitterName?: string,    — viewer's display name
+//                                               for the confirm-card
+//                                               DM "p1" slot
+//                }
 //
-// Returns { data, error } — `data` carries { matchId, result }.
+// Returns { data, error } — `data` carries { matchId, result, status }.
 export async function logV2Match(authUserId, opponent, v2Sets, opts) {
   if (!authUserId) {
     return { data: null, error: { message: "Not signed in." } };
@@ -72,6 +95,11 @@ export async function logV2Match(authUserId, opponent, v2Sets, opts) {
   }
   var result = deriveResult(dbSets);
   var matchDate = (opts && opts.matchDate) || new Date().toISOString().slice(0, 10);
+  var hasLinkedOpponent = !!(opponent && opponent.id);
+  // Linked opponents open the pending_confirmation lifecycle so the
+  // recipient can confirm or dispute via the structured DM widget.
+  // Free-text opponents skip it — there's no account to notify.
+  var status = hasLinkedOpponent ? "pending_confirmation" : "confirmed";
 
   var payload = {
     user_id:      authUserId,
@@ -82,13 +110,15 @@ export async function logV2Match(authUserId, opponent, v2Sets, opts) {
     result:       result,
     notes:        "",
     match_date:   matchDate,
-    status:       "confirmed",          // casual auto-confirms
+    status:       status,
     submitted_at: new Date().toISOString(),
   };
-  // Link the opponent only when we have a real player id — a free-text
-  // name logs as an unlinked casual match (won't surface on the other
-  // player's feed, which is correct: there's no other player).
-  if (opponent && opponent.id) payload.opponent_id = opponent.id;
+  if (hasLinkedOpponent) {
+    payload.opponent_id = opponent.id;
+    // 72h confirmation window — mirrors v1 ranked submitMatch. After
+    // expiry pg_cron flips pending_confirmation → expired.
+    payload.expires_at = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  }
 
   var ins = await supabase
     .from("match_history")
@@ -102,20 +132,41 @@ export async function logV2Match(authUserId, opponent, v2Sets, opts) {
 
   var matchId = ins.data && ins.data.id;
 
-  // Linked-opponent heads-up — fire the casual_match_logged
-  // notification so the opponent knows the match was logged against
-  // them (same trust-gap close v1 does). Non-fatal: the match row
-  // already exists; a failed notification just means no heads-up.
-  if (matchId && opponent && opponent.id) {
+  if (matchId && hasLinkedOpponent) {
+    // match_tag notification — same type v1 ranked submitMatch fires.
+    // The recipient's tray shows the "X logged a match with you —
+    // confirm or dispute" row.
     try {
       await supabase.rpc("emit_notification", {
         p_user_id:   opponent.id,
-        p_type:      "casual_match_logged",
+        p_type:      "match_tag",
         p_entity_id: matchId,
         p_metadata:  null,
       });
     } catch (_) { /* non-fatal */ }
+
+    // Auto-emit the structured confirm-card DM into the conversation.
+    // The recipient sees a Confirm / Dispute card inline; tapping
+    // Confirm calls respond_to_match_tag(true) (match → confirmed),
+    // tapping Dispute calls respond_to_match_tag(false) (match →
+    // rejected). Non-fatal: the match_tag notification above stays
+    // authoritative if the DM emit fails.
+    try {
+      var widgetSets = dbSets.map(function (s) { return [s.you, s.them]; });
+      var submitterName = (opts && opts.submitterName) || "You";
+      var dmRes = await emitMatchConfirmDM(authUserId, opponent.id, {
+        matchId: matchId,
+        sets: widgetSets,
+        submitterName: submitterName,
+        opponentName: opponent.name,
+        leagueName: "Casual",
+        isRanked: false,
+      });
+      if (dmRes && dmRes.error) {
+        console.warn("[quicklog confirm-card DM failed]", dmRes.error.message || dmRes.error);
+      }
+    } catch (e) { console.warn("[quicklog confirm-card DM threw]", e); }
   }
 
-  return { data: { matchId: matchId, result: result }, error: null };
+  return { data: { matchId: matchId, result: result, status: status }, error: null };
 }
