@@ -174,8 +174,12 @@ export function convToV2(conv, meId, dmsState) {
 }
 
 // V1 direct_messages row → V2 bubble. text fallback is "Message deleted"
-// when the row is tombstoned. Widget kinds (kind/payload) are absent
-// until PR2 ships the schema migration.
+// when the row is tombstoned. PR2 adds kind/payload pass-through so the
+// V2 Bubble dispatcher can pick a widget renderer (ScoreCard / InviteCard
+// / ConfirmCard) for structured messages. The renderer itself decides
+// which widget to use based on the viewer's role + the referenced
+// entity's current status — that's the job of widgetKindForView in
+// MessagesScreen.
 export function msgToV2(row, conv, meId) {
   if (!row) return null;
   var text = row.deleted_at ? "Message deleted" : (row.content || "");
@@ -186,6 +190,68 @@ export function msgToV2(row, conv, meId) {
     t: formatTimestamp(row.created_at),
     side: row.sender_id === meId ? "me" : "them",
     avatar: senderInitial(row.sender_id, conv, meId),
-    // kind/payload deliberately omitted — PR2 territory.
+    senderId: row.sender_id,
+    // PR2: kind + payload travel through the adapter so the V2 Bubble
+    // can branch on them. Both are null for plain text DMs (legacy
+    // rows + anything sent via the unmodified V1 composer).
+    kind: row.kind || null,
+    payload: row.payload || null,
+  };
+}
+
+// PR2 (v2-messages-widgets): turn a match_history row into the shape
+// ScoreCardBubble / ConfirmCardBubble expect. The card's `sets[i]` is a
+// 2-tuple [yourScore, theirScore]; we use the viewer's perspective so
+// the "you" side is always index 0. surface + duration are best-effort
+// placeholders for cosmetic chrome — the real value is the score grid.
+export function matchToCardShape(match, viewerId) {
+  if (!match) return null;
+  // Re-orient: if the viewer is the opponent (not the submitter), flip
+  // each set so the viewer's side reads on the left. Mirrors
+  // useV2History's shapeRow logic.
+  var viewerIsSubmitter = match.user_id === viewerId;
+  var rawSets = match.sets || [];
+  var sets = rawSets.map(function (s) {
+    if (!s) return [0, 0];
+    var y = (s.you != null ? Number(s.you) : 0);
+    var t = (s.them != null ? Number(s.them) : 0);
+    return viewerIsSubmitter ? [y, t] : [t, y];
+  });
+  // Names: viewer is always p1. Other party falls back to opp_name on
+  // the row (set at log-time) when no profile lookup is available.
+  var p1 = "You";
+  var p2 = match.opp_name || "Player";
+  var surface = match.court || match.venue || "Hard";
+  // Duration is not tracked on the row — synthesize a placeholder so
+  // the card chrome doesn't read empty. We're not over-promising
+  // because the user already knows when they played the match.
+  var duration = "";
+  return {
+    surface: typeof surface === "string" ? surface.slice(0, 20) : "Hard",
+    duration: duration,
+    p1: p1,
+    p2: p2,
+    sets: sets,
+    league: match.league_id ? "League" : "Casual",
+  };
+}
+
+// PR2: turn a challenge row into the shape InviteCardBubble expects.
+// vs = challenger's display name; date/court/round are best-effort.
+export function challengeToCardShape(challenge, profileMap) {
+  if (!challenge) return null;
+  var challengerName = (profileMap && profileMap[challenge.challenger_id] && profileMap[challenge.challenger_id].name)
+    || "Player";
+  var date = challenge.proposed_at
+    ? new Date(challenge.proposed_at).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })
+    : "Time TBD";
+  var court = challenge.venue
+    ? (challenge.venue + (challenge.court ? " · " + challenge.court : ""))
+    : "Court TBD";
+  return {
+    round: "Match invite",
+    date: date,
+    court: court,
+    vs: challengerName,
   };
 }

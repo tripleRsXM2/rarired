@@ -69,6 +69,48 @@ export function deleteConversation(convId){
   return supabase.from('conversations').delete().eq('id',convId);
 }
 
+// PR2 (v2-messages-widgets): emit a structured DM to `partnerId` without
+// disturbing whatever conversation is currently open in the UI. Used by
+// auto-emit code paths (useMatchHistory.submitMatch, useChallenges.sendChallenge)
+// where the user logged a match / sent a challenge from a screen that
+// isn't /messages, and we want to drop a widget row into the 1:1 thread.
+//
+// Behaviour:
+//   1. get_or_create_conversation(partnerId) — atomic, idempotent
+//   2. insert direct_messages row with { kind, payload, content (fallback) }
+//   3. trigger updates last_message_preview to the kind-aware label
+//
+// Returns { data: messageRow, error } — same shape as the rest of dmService.
+// Best-effort: callers ignore errors so the originating action (match
+// insert / challenge insert) is never blocked by a chat-side hiccup.
+// Notable swallowed cases:
+//   - block_conflict     → no widget, fine — user can't message them
+//   - cooldown / decline → no widget, also fine
+//   - any RLS / network  → log + return error, caller swallows
+export async function autoEmitStructured(partnerId, kind, payload, fallbackText){
+  if(!partnerId) return { data: null, error: new Error("no_partner") };
+  var gc = await supabase.rpc('get_or_create_conversation', { other_id: partnerId }).single();
+  if(gc.error || !gc.data){
+    return { data: null, error: gc.error || new Error("no_conv") };
+  }
+  var row = gc.data;
+  // We deliberately don't promote a pending conv to accepted here — the
+  // first text DM still drives that transition. A widget arriving while
+  // the conv is in pending is fine; it shows up in the thread once the
+  // recipient accepts the request. Mirrors how a normal text DM behaves.
+  var auth = await supabase.auth.getUser();
+  var senderId = auth && auth.data && auth.data.user && auth.data.user.id;
+  if(!senderId) return { data: null, error: new Error("no_session") };
+  var ins = await supabase.from('direct_messages').insert({
+    conversation_id: row.id,
+    sender_id: senderId,
+    content: fallbackText || "",
+    kind: kind || null,
+    payload: payload || null,
+  }).select('*').single();
+  return ins;
+}
+
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 export function fetchThread(convId){
@@ -78,9 +120,21 @@ export function fetchThread(convId){
     .order('created_at',{ascending:true});
 }
 
-export function sendMessage(convId,senderId,content,replyToId){
+// PR2 (v2-messages-widgets): optional `extras = { kind, payload }` lets
+// callers tag a message as a structured widget (score / invite / etc).
+// kind is a free-form text column on direct_messages; payload is a jsonb
+// bag whose shape depends on kind. Both nullable — when extras is absent
+// the row goes in as a plain text DM exactly as before. The
+// `dm_update_conv_preview` trigger turns kind-tagged rows into
+// kind-aware preview strings ("Sent score for confirmation" etc) so the
+// inbox row doesn't show an awkward empty/fallback content body.
+export function sendMessage(convId,senderId,content,replyToId,extras){
   var payload={conversation_id:convId,sender_id:senderId,content};
   if(replyToId)payload.reply_to_id=replyToId;
+  if(extras&&typeof extras==='object'){
+    if(extras.kind)    payload.kind=extras.kind;
+    if(extras.payload) payload.payload=extras.payload;
+  }
   return supabase.from('direct_messages').insert(payload).select('*').single();
 }
 

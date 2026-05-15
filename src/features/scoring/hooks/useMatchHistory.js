@@ -6,6 +6,7 @@ import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
 import { validateMatchScore, serializeSetForDb } from "../utils/tennisScoreValidation.js";
 import { createMatchInvite } from "../services/inviteService.js";
+import { autoEmitStructured } from "../../people/services/dmService.js";
 import { track } from "../../../lib/analytics.js";
 
 // Translate a Supabase/Postgres error into a user-facing string. We prefer
@@ -539,6 +540,26 @@ export function useMatchHistory(opts){
     // logged via the "Log result" CTA on an accepted challenge.
     if(scoreModal.sourceChallengeId && onMatchLoggedFromChallenge){
       onMatchLoggedFromChallenge(scoreModal.sourceChallengeId, matchId);
+    }
+    // PR2 (v2-messages-widgets) — auto-emit a kind='score' DM to the
+    // linked opponent so their messages thread shows a Confirm /
+    // Score widget for the just-logged match. Fires for both the
+    // pending_confirmation (ranked or league-tagged) and confirmed
+    // (linked casual) paths so the opponent always sees the
+    // structured row. Invite-flow rows skip — there's no opponent_id
+    // yet, the widget can drop in once the invitee claims.
+    //
+    // Fire-and-forget — every error is swallowed so a transient block /
+    // RLS / network issue doesn't take down the match-insert success
+    // path the user actually came here for. The plain text fallback
+    // ("Match logged: 6-2 6-3") is what V1 message screens render.
+    if(opponentId && !inviteFlow && (status === 'pending_confirmation' || status === 'confirmed')){
+      var setLabel = clean.map(function(s){ return (s.you||0)+"-"+(s.them||0); }).join(", ");
+      var fallback = status === 'pending_confirmation'
+        ? ("Logged a match against you: " + setLabel + " — tap to confirm")
+        : ("Match logged: " + setLabel);
+      autoEmitStructured(opponentId, 'score', { matchId: matchId, status: status }, fallback)
+        .catch(function(){ /* best-effort */ });
     }
     return {error:null, matchId, status, invite: invite};
   }

@@ -144,13 +144,27 @@ describe("msgToV2", () => {
     expect(v2.text).toBe("Message deleted");
   });
 
-  it("never carries kind/payload in PR1", () => {
+  // PR1 behaviour was "kind/payload are undefined" — PR2 widget wiring
+  // promotes them to first-class fields. Legacy plain-text rows have
+  // no kind column populated so we surface null instead of undefined,
+  // matching the DB nullable shape.
+  it("surfaces null kind/payload for plain-text rows", () => {
     var v2 = msgToV2({
       id: "m-4", conversation_id: "c-1", sender_id: ALEX,
       content: "hi", created_at: new Date().toISOString(), deleted_at: null,
     }, conv, ME);
-    expect(v2.kind).toBeUndefined();
-    expect(v2.payload).toBeUndefined();
+    expect(v2.kind).toBeNull();
+    expect(v2.payload).toBeNull();
+  });
+
+  it("passes through kind + payload for structured rows", () => {
+    var v2 = msgToV2({
+      id: "m-5", conversation_id: "c-1", sender_id: ALEX,
+      content: "Match logged: 6-2, 6-3", created_at: new Date().toISOString(), deleted_at: null,
+      kind: "score", payload: { matchId: "match-abc", status: "pending_confirmation" },
+    }, conv, ME);
+    expect(v2.kind).toBe("score");
+    expect(v2.payload).toEqual({ matchId: "match-abc", status: "pending_confirmation" });
   });
 });
 

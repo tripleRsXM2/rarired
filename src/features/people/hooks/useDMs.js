@@ -600,7 +600,15 @@ export function useDMs(opts) {
 
   // ── Send ────────────────────────────────────────────────────────────────
 
-  async function sendMessage(content) {
+  // PR2 (v2-messages-widgets): `extras` is an optional second arg shaped
+  // `{ kind, payload }` for structured-message rows (score / invite
+  // widgets). The hook treats kind-tagged messages identically to text
+  // messages for transport, optimistic UI, and preview update — the
+  // server trigger handles the inbox preview rewrite based on kind.
+  // validateDraft only runs against the content field, so widget rows
+  // can ship with a short fallback content (e.g. "Match logged: 6-2,
+  // 6-3") that v1 sees as a plain message while v2 swaps in the widget.
+  async function sendMessage(content, extras) {
     if (!activeConv || !authUser || sending) return;
     var v = validateDraft(content);
     if (!v.ok) return;
@@ -658,7 +666,7 @@ export function useDMs(opts) {
       }
     }
 
-    var r = await D.sendMessage(conv.id, uid, v.value, replySnapshot ? replySnapshot.id : null);
+    var r = await D.sendMessage(conv.id, uid, v.value, replySnapshot ? replySnapshot.id : null, extras);
     if (!r.error && r.data) {
       var msg = r.data;
       setThreadMessages(function (ms) { return appendMessageIfNew(ms, msg); });

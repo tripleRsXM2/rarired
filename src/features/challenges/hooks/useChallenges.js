@@ -14,6 +14,7 @@ import { supabase } from "../../../lib/supabase.js";
 import * as C from "../services/challengeService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
+import { autoEmitStructured } from "../../people/services/dmService.js";
 import { track } from "../../../lib/analytics.js";
 
 export function useChallenges(opts) {
@@ -153,6 +154,14 @@ export function useChallenges(opts) {
       has_message: !!(draft.message || "").trim(),
       source: composer.source,
     });
+    // PR2 (v2-messages-widgets) — auto-emit a kind='invite' DM to the
+    // challenged player so their messages thread shows an InviteCard
+    // widget with Accept / Decline buttons. Fire-and-forget; if it
+    // fails (block_conflict, decline cooldown, network) the challenge
+    // itself still went through and the recipient sees it via the
+    // notification + ChallengesPanel routes.
+    autoEmitStructured(target.id, 'invite', { challengeId: r.data.id }, "Sent you a match invite")
+      .catch(function(){ /* best-effort */ });
     closeComposer();
     return { error: null, challenge: r.data };
   }

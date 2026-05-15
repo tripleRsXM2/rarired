@@ -40,12 +40,17 @@ import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 
 import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
-import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
+import { useV2Profile, useV2History, useV2Competitions, useV2Friends, useV2DiscoverPlayers, logV2Match } from "../data/index.js";
 // PR1 of the v2-messages-wiring series: import V1's DM hook directly.
 // Per the PR1 brief, MessagesScreen consumes useDMs via this shell so
-// auth + blockedUserIds can be threaded in once. PR2/PR3 will add
-// widget schema + actions on top.
+// auth + blockedUserIds can be threaded in once. PR2/PR3 add widget
+// schema + actions; PR2/PR3 also add useMatchHistory + useChallenges so
+// widget Confirm/Dispute/Accept/Decline buttons can dispatch real
+// actions and so the renderer can look up the match/challenge a
+// widget refers to.
 import { useDMs } from "../../features/people/hooks/useDMs.js";
+import { useMatchHistory } from "../../features/scoring/hooks/useMatchHistory.js";
+import { useChallenges } from "../../features/challenges/hooks/useChallenges.js";
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
 
@@ -81,6 +86,37 @@ export default function BaselineApp({ onBack }) {
     friends: v2DmFriends,
     blockedUserIds: v2DmBlocked,
   });
+
+  // PR2/PR3 (v2-messages-widgets): mount the V1 match-history +
+  // challenges hooks so the V2 widget renderer can:
+  //   • emit kind='score'  DMs from submitMatch  (PR2 auto-emit)
+  //   • emit kind='invite' DMs from sendChallenge (PR2 auto-emit)
+  //   • dispatch confirm / dispute / accept / decline from widget
+  //     buttons (PR3 actions). useMatchHistory needs profile, send
+  //     notification + refresh callbacks; we pass minimal stubs since
+  //     v2 doesn't surface a dedicated notifications tray yet.
+  const v2MatchHistory = useMatchHistory({
+    authUser: v2Profile.authUser,
+    profile: v2Profile.profile,
+  });
+  // history-side prefetch so the renderer has matches the viewer
+  // submitted; opponent's submissions get fetched on-demand by
+  // useMatchByIds inside MessagesScreen.
+  const v2Challenges = useChallenges({ authUser: v2Profile.authUser });
+  React.useEffect(function () {
+    if (v2Profile.authUser && v2Profile.authUser.id && v2Challenges.loadChallenges) {
+      v2Challenges.loadChallenges(v2Profile.authUser.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v2Profile.authUser && v2Profile.authUser.id]);
+
+  // Bug B / Bug C — discover players surface for the New Message
+  // picker. Friends come from useV2Friends already.
+  const v2FriendIds = React.useMemo(
+    function () { return (v2Friends.friends || []).map(function (f) { return f.id; }); },
+    [v2Friends.friends]
+  );
+  const v2Discover = useV2DiscoverPlayers(v2UserId, v2FriendIds);
   // Bootstrap the conversation list as soon as the user resolves.
   // useDMs.loadConversations needs an explicit uid because its internal
   // closure can be stale at the moment the v2 shell first calls it
@@ -215,6 +251,8 @@ export default function BaselineApp({ onBack }) {
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={v2Profile.authUser}
+          matchHistory={v2MatchHistory} challenges={v2Challenges}
+          everyonePlayers={v2Discover.players} viewerFriends={v2DmFriends}
           />
         </div>
 
@@ -277,6 +315,8 @@ export default function BaselineApp({ onBack }) {
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={v2Profile.authUser}
+          matchHistory={v2MatchHistory} challenges={v2Challenges}
+          everyonePlayers={v2Discover.players} viewerFriends={v2DmFriends}
           />
         </div>
       </div>
@@ -295,6 +335,7 @@ function RouteView({
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
   dms, authUser,
+  matchHistory, challenges, everyonePlayers, viewerFriends,
 }) {
   switch (route) {
     case "home":
@@ -318,7 +359,12 @@ function RouteView({
         onLog={() => onGo("live")} competitions={competitions}
       />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} />;
+      return <MessagesScreen
+        theme={theme} accent={accent} isPhone={false}
+        dms={dms} authUser={authUser}
+        matchHistory={matchHistory} challenges={challenges}
+        everyonePlayers={everyonePlayers} viewerFriends={viewerFriends}
+      />;
     case "changeover":
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":
@@ -366,6 +412,7 @@ function MobileRouteView({
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
   dms, authUser,
+  matchHistory, challenges, everyonePlayers, viewerFriends,
 }) {
   switch (route) {
     case "home":
@@ -393,7 +440,12 @@ function MobileRouteView({
         onLog={() => onGo("live")} competitions={competitions}
       />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} />;
+      return <MessagesScreen
+        theme={theme} accent={accent} isPhone={true}
+        dms={dms} authUser={authUser}
+        matchHistory={matchHistory} challenges={challenges}
+        everyonePlayers={everyonePlayers} viewerFriends={viewerFriends}
+      />;
     case "changeover":
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":
