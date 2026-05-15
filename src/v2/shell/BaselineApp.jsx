@@ -41,6 +41,11 @@ import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
 import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
+// PR1 of the v2-messages-wiring series: import V1's DM hook directly.
+// Per the PR1 brief, MessagesScreen consumes useDMs via this shell so
+// auth + blockedUserIds can be threaded in once. PR2/PR3 will add
+// widget schema + actions on top.
+import { useDMs } from "../../features/people/hooks/useDMs.js";
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
 
@@ -60,6 +65,35 @@ export default function BaselineApp({ onBack }) {
   const v2History      = useV2History(v2UserId);
   const v2Competitions = useV2Competitions(v2UserId);
   const v2Friends      = useV2Friends(v2UserId);
+
+  // DM backend (V1 hook). The hook needs authUser + friends (for the
+  // request-gate bypass) + blockedUserIds (for asymmetric block
+  // filtering). v2 doesn't have a blocks loader yet — pass [] so the
+  // hook degrades to "show everything". PR2 may add a small v2 blocks
+  // hook if/when that becomes user-visible.
+  const v2DmFriends = React.useMemo(
+    function () { return v2Friends.friends || []; },
+    [v2Friends.friends]
+  );
+  const v2DmBlocked = React.useMemo(function () { return []; }, []);
+  const dms = useDMs({
+    authUser: v2Profile.authUser,
+    friends: v2DmFriends,
+    blockedUserIds: v2DmBlocked,
+  });
+  // Bootstrap the conversation list as soon as the user resolves.
+  // useDMs.loadConversations needs an explicit uid because its internal
+  // closure can be stale at the moment the v2 shell first calls it
+  // (same race v1's App.jsx works around — see useDMs.loadConversations
+  // doc comment).
+  React.useEffect(function () {
+    if (v2Profile.authUser && v2Profile.authUser.id) {
+      dms.loadConversations(v2Profile.authUser.id);
+    }
+    // We want this to refire if the signed-in user changes, but not on
+    // every render — depend only on the id. dms is a stable hook return.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v2Profile.authUser && v2Profile.authUser.id]);
 
   const liveHistory = v2History.loading
     ? SAMPLE_HISTORY
@@ -180,6 +214,7 @@ export default function BaselineApp({ onBack }) {
             history={liveHistory} weekStats={liveWeekStats}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
+            dms={dms} authUser={v2Profile.authUser}
           />
         </div>
 
@@ -241,6 +276,7 @@ export default function BaselineApp({ onBack }) {
             history={liveHistory} weekStats={liveWeekStats}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
+            dms={dms} authUser={v2Profile.authUser}
           />
         </div>
       </div>
@@ -258,6 +294,7 @@ function RouteView({
   look, onLookChange,
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
+  dms, authUser,
 }) {
   switch (route) {
     case "home":
@@ -281,7 +318,7 @@ function RouteView({
         onLog={() => onGo("live")} competitions={competitions}
       />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={false} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} />;
     case "changeover":
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":
@@ -328,6 +365,7 @@ function MobileRouteView({
   look, onLookChange,
   history, weekStats, competitions, viewerName,
   friends, onQuickLogSubmit,
+  dms, authUser,
 }) {
   switch (route) {
     case "home":
@@ -355,7 +393,7 @@ function MobileRouteView({
         onLog={() => onGo("live")} competitions={competitions}
       />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={true} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} />;
     case "changeover":
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":

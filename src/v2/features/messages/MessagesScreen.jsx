@@ -1,106 +1,88 @@
 // MessagesScreen.jsx — Messenger-style inbox + thread for the v2 shell.
-// Faithful port of the design's `screens-messages.jsx`. Single file
-// because the inbox + thread share the seed data and avatar atom; no
-// reason to spread them across modules until a real backend lands.
+//
+// PR1 of the v2-messages-wiring series: this screen used to render off
+// a hardcoded MESSAGES_SEED. It now consumes V1's `useDMs` hook (mounted
+// up in BaselineApp.jsx so authUser + friends + blockedUserIds are
+// threaded in once). Visual structure is preserved — Inbox / ConvoRow /
+// Avatar / ThreadScreen / Bubble all keep their seed-era shape; we just
+// adapt the live data into that shape via v2MessageAdapter.js.
+//
+// What's intentionally NOT wired yet:
+//   • Score / Invite / Confirm widget bubbles — the schema doesn't carry
+//     a `kind` field yet (PR2 migration). The widget components stay in
+//     place but never fire because no real row sets msg.kind.
+//   • Reactions, reply-to, typing-indicator broadcast on send.
+//   • Read-receipt visuals — V1 has the data, V2's prototype doesn't
+//     render them.
+//   • Suggestion pills under the composer — kept as a static fallback
+//     so the visual rhythm doesn't change; not contextually wired.
 //
 // Two screens are exported:
 //   <MessagesScreen> — outer router. Owns active conversation state.
 //   (internal) Inbox + Thread — picked by `activeConvo`.
 
 import React from "react";
+import { convToV2, msgToV2, formatRelativeTime } from "./v2MessageAdapter.js";
 
-const MESSAGES_SEED = [
-  {
-    id: "tg-riverside", type: "group", name: "Riverside Spring Open", sub: "12 members",
-    initials: "RO", color: "#3a7d5c", activeNow: false, unread: 2, pinned: true,
-    lastTime: "11:42", lastSender: "Org · Maya", lastPreview: "Draw is up. R16 starts Sat 9am.",
-    activity: [
-      { from: "Maya · Org", text: "Hey all — R16 draw is live on the bracket page.", t: "11:40", side: "them", avatar: "M" },
-      { from: "Maya · Org", text: "Saturday 9am sharp at Riverside Court 3.", t: "11:42", side: "them", avatar: "M", kind: "invite", invite: { date: "Sat May 9 · 9:00 AM", court: "Riverside · Court 3", vs: "A. Volkov", round: "R16" } },
-    ],
-  },
-  {
-    id: "dm-volkov", type: "dm", name: "A. Volkov", sub: "Opponent · R16",
-    initials: "AV", color: "#c66b3d", activeNow: true, unread: 1, typing: true,
-    lastTime: "10:58", lastSender: "A. Volkov", lastPreview: "Sounds good — see you on 3.",
-    activity: [
-      { from: "A. Volkov", text: "Saw the draw — we're up first round, court 3?", t: "10:54", side: "them", avatar: "A" },
-      { from: "me", text: "Yep, 9am. Bring some sun, the forecast looks gross.", t: "10:55", side: "me", read: true },
-      { from: "A. Volkov", text: "Sounds good — see you on 3.", t: "10:58", side: "them", avatar: "A", reactions: ["TB"] },
-    ],
-  },
-  {
-    id: "dm-coach", type: "dm", name: "Coach Daniel", sub: "Coach",
-    initials: "CD", color: "#2a4f7d", activeNow: true, unread: 0,
-    lastTime: "9:20", lastSender: "me", lastPreview: "You: nice, will work on the second serve toss this week",
-    activity: [
-      { from: "Coach Daniel", text: "Watched the Park match clips. Couple of notes:", t: "9:14", side: "them", avatar: "D" },
-      { from: "Coach Daniel", text: "1) toss is drifting back on second serve\n2) nice cross-court forehand depth — keep that\n3) more first-serve %, you were 48%", t: "9:15", side: "them", avatar: "D" },
-      { from: "me", text: "nice, will work on the second serve toss this week", t: "9:20", side: "me", read: true },
-    ],
-  },
-  {
-    id: "dm-park-confirm", type: "dm", name: "J. Park", sub: "Westwood Box League",
-    initials: "JP", color: "#7d4f2a", activeNow: false, unread: 1,
-    lastTime: "Yesterday", lastSender: "J. Park", lastPreview: "Sent a score to confirm: 4-6, 3-6",
-    activity: [
-      { from: "me", text: "gg, well played out there", t: "Yesterday 5:14 PM", side: "me", read: true },
-      { from: "J. Park", text: "You too — that breaker was tight. Logging the result now.", t: "Yesterday 5:18 PM", side: "them", avatar: "J" },
-      { from: "J. Park", text: "", t: "Yesterday 5:19 PM", side: "them", avatar: "J", kind: "confirm", confirm: { p1: "You", p2: "J. Park", sets: [[4, 6], [3, 6]], status: "pending", league: "Westwood Box League · Wk 4" } },
-    ],
-  },
-  {
-    id: "tg-westwood", type: "group", name: "Westwood Box · D2", sub: "6 players",
-    initials: "WB", color: "#5a3a7d", activeNow: false, unread: 0,
-    lastTime: "Yesterday", lastSender: "L. Tanaka", lastPreview: "L. Tanaka shared a result",
-    activity: [
-      { from: "L. Tanaka", text: "Got the W vs M. Carter, finally", t: "Yesterday 8:02 PM", side: "them", avatar: "L" },
-      { from: "L. Tanaka", text: "", t: "Yesterday 8:03 PM", side: "them", avatar: "L", kind: "score", score: { p1: "L. Tanaka", p2: "M. Carter", sets: [[7, 5], [6, 4]], duration: "1h 38m", surface: "Hard" } },
-      { from: "me", text: "huge", t: "Yesterday 8:09 PM", side: "me", read: true },
-    ],
-  },
-  {
-    id: "dm-carter", type: "dm", name: "M. Carter", sub: "Hitting partner",
-    initials: "MC", color: "#7d2a4f", activeNow: false, unread: 0,
-    lastTime: "Mon", lastSender: "M. Carter", lastPreview: "tues 7am? riverside?",
-    activity: [
-      { from: "M. Carter", text: "tues 7am? riverside?", t: "Mon 9:40 PM", side: "them", avatar: "M" },
-      { from: "M. Carter", text: "", t: "Mon 9:40 PM", side: "them", avatar: "M", kind: "invite", invite: { date: "Tue · 7:00 AM", court: "Riverside · Court 1", vs: "Hit + drill", round: "Practice" } },
-    ],
-  },
-  {
-    id: "tg-saturday", type: "group", name: "Sat morning crew", sub: "8 members",
-    initials: "SC", color: "#7d6a2a", activeNow: false, unread: 0,
-    lastTime: "Sun", lastSender: "Priya", lastPreview: "Priya: anyone for doubles next sat?",
-    activity: [
-      { from: "Priya", text: "anyone for doubles next sat?", t: "Sun 6:14 PM", side: "them", avatar: "P" },
-      { from: "Sam",   text: "in", t: "Sun 6:15 PM", side: "them", avatar: "S" },
-      { from: "me",    text: "down — 8am or 9am?", t: "Sun 6:18 PM", side: "me", read: true },
-    ],
-  },
-  {
-    id: "dm-organizer", type: "dm", name: "Riverside Org", sub: "Maya · Tournament desk",
-    initials: "RM", color: "#3a7d5c", activeNow: false, unread: 0,
-    lastTime: "Apr 30", lastSender: "Maya", lastPreview: "Confirmed your registration for Spring Open.",
-    activity: [
-      { from: "Maya", text: "Confirmed your registration for Spring Open.", t: "Apr 30", side: "them", avatar: "M" },
-      { from: "Maya", text: "Entry fee receipt coming via email. GL!",       t: "Apr 30", side: "them", avatar: "M" },
-    ],
-  },
-];
+// Defensive empty-state values when dms is still loading or absent.
+var EMPTY_CONVS = [];
+var EMPTY_MSGS  = [];
 
-export default function MessagesScreen({ theme, accent, isPhone = false }) {
-  const [activeConvo, setActiveConvo] = React.useState(null);
-  if (activeConvo) {
-    return <ThreadScreen theme={theme} accent={accent} convoId={activeConvo} onBack={() => setActiveConvo(null)} isPhone={isPhone} />;
+export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser }) {
+  const [activeConvoId, setActiveConvoId] = React.useState(null);
+  const meId = (authUser && authUser.id) || null;
+
+  // Map V1's enriched conversation rows into the V2 shape the inbox UI
+  // expects. Memoized on the inputs so we don't re-derive each render.
+  const conversations = React.useMemo(function () {
+    if (!dms || !Array.isArray(dms.conversations)) return EMPTY_CONVS;
+    return dms.conversations
+      .map(function (c) { return convToV2(c, meId, dms); })
+      .filter(Boolean);
+  }, [dms && dms.conversations, dms && dms.pinnedConvIds, dms && dms.typingConvs, meId]);
+
+  // Auto-mirror activeConvoId into the V1 hook's activeConv (the hook
+  // needs it to load thread messages + subscribe to realtime). We
+  // resolve the raw v1 conv from the id and pass it to openConversation.
+  // Closing returns us to the inbox.
+  React.useEffect(function () {
+    if (!dms) return;
+    if (activeConvoId) {
+      var raw = (dms.conversations || []).find(function (c) { return c.id === activeConvoId; });
+      if (raw && (!dms.activeConv || dms.activeConv.id !== activeConvoId)) {
+        dms.openConversation(raw);
+      }
+    } else if (dms.activeConv) {
+      dms.closeConversation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvoId, dms && dms.conversations]);
+
+  if (activeConvoId) {
+    return (
+      <ThreadScreen
+        theme={theme} accent={accent} isPhone={isPhone}
+        convoId={activeConvoId}
+        conversations={conversations}
+        dms={dms} meId={meId}
+        onBack={function () { setActiveConvoId(null); }}
+      />
+    );
   }
-  return <Inbox theme={theme} accent={accent} onOpen={(id) => setActiveConvo(id)} isPhone={isPhone} />;
+  return (
+    <Inbox
+      theme={theme} accent={accent} isPhone={isPhone}
+      conversations={conversations}
+      loaded={!!(dms && dms.conversationsLoaded)}
+      onOpen={function (id) { setActiveConvoId(id); }}
+    />
+  );
 }
 
-function Inbox({ theme, accent, onOpen, isPhone }) {
+function Inbox({ theme, accent, isPhone, conversations, loaded, onOpen }) {
   const [q, setQ] = React.useState("");
   const [tab, setTab] = React.useState("inbox");
-  const filt = MESSAGES_SEED.filter((c) => {
+  const filt = conversations.filter((c) => {
     if (tab === "groups" && c.type !== "group") return false;
     if (!q) return true;
     return (c.name + " " + (c.lastPreview || "")).toLowerCase().includes(q.toLowerCase());
@@ -143,7 +125,7 @@ function Inbox({ theme, accent, onOpen, isPhone }) {
       </div>
 
       <div className="t-noscroll" style={{ flexShrink: 0, padding: "10px 14px 4px", display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none" }}>
-        {MESSAGES_SEED.filter((c) => c.activeNow).map((c) => (
+        {conversations.filter((c) => c.activeNow).map((c) => (
           <div key={c.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 56 }}>
             <div style={{ position: "relative" }}>
               <Avatar size={52} c={c} />
@@ -152,7 +134,7 @@ function Inbox({ theme, accent, onOpen, isPhone }) {
                 borderRadius: "50%", background: accent, border: `2px solid ${theme.bg}`,
               }} />
             </div>
-            <span style={{ fontSize: 11, fontFamily: "Inter", color: theme.inkSoft, maxWidth: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name.split(" ")[0]}</span>
+            <span style={{ fontSize: 11, fontFamily: "Inter", color: theme.inkSoft, maxWidth: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(c.name || "").split(" ")[0]}</span>
           </div>
         ))}
       </div>
@@ -160,7 +142,13 @@ function Inbox({ theme, accent, onOpen, isPhone }) {
       <div className="t-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 6px 100px" }}>
         {filt.map((c) => <ConvoRow key={c.id} c={c} theme={theme} accent={accent} onOpen={() => onOpen(c.id)} />)}
         {filt.length === 0 && (
-          <div style={{ textAlign: "center", color: theme.inkFaint, padding: "40px 20px", fontSize: 13 }}>No conversations match.</div>
+          <div style={{ textAlign: "center", color: theme.inkFaint, padding: "40px 20px", fontSize: 13 }}>
+            {loaded
+              ? (q || tab === "groups"
+                  ? "No conversations match."
+                  : "No conversations yet.")
+              : "Loading…"}
+          </div>
         )}
       </div>
     </div>
@@ -219,27 +207,64 @@ function ConvoRow({ c, theme, accent, onOpen }) {
   );
 }
 
-function ThreadScreen({ theme, accent, convoId, onBack, isPhone }) {
-  const c = MESSAGES_SEED.find((x) => x.id === convoId) || MESSAGES_SEED[0];
+function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack, isPhone }) {
+  // V2 conv shape (for header chrome). Fall back to a placeholder if
+  // the conv row hasn't landed yet.
+  const c = conversations.find((x) => x.id === convoId) || {
+    id: convoId, type: "dm", name: "Conversation", initials: "?",
+    color: "#777", activeNow: false, unread: 0, pinned: false,
+    typing: false, lastTime: "", lastSender: "", lastPreview: "",
+  };
+  const rawConv = (dms && Array.isArray(dms.conversations))
+    ? dms.conversations.find((x) => x.id === convoId)
+    : null;
   const [draft, setDraft] = React.useState("");
-  const [msgs, setMsgs] = React.useState(c.activity);
   const scrollRef = React.useRef(null);
+
+  // Map V1 thread rows to V2 bubbles. The hook owns realtime; we just
+  // project. If dms is null (defensive) we render an empty thread.
+  const msgs = React.useMemo(function () {
+    if (!dms || !Array.isArray(dms.threadMessages)) return EMPTY_MSGS;
+    return dms.threadMessages
+      .map(function (row) { return msgToV2(row, rawConv, meId); })
+      .filter(Boolean);
+  }, [dms && dms.threadMessages, rawConv, meId]);
 
   React.useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [msgs.length]);
 
+  const sending = !!(dms && dms.sending);
   const send = (text) => {
-    if (!text.trim()) return;
-    setMsgs((m) => [...m, { from: "me", text, t: "now", side: "me", read: false }]);
+    if (!text || !text.trim()) return;
+    if (!dms || !dms.sendMessage) return;
     setDraft("");
+    // Fire-and-forget. useDMs handles optimistic UI + error rollback;
+    // on failure it restores the draft state inside the hook (we
+    // mirror that by not erroring out here).
+    var p = dms.sendMessage(text);
+    if (p && typeof p.then === "function") {
+      p.then(function () {
+        // Scroll-to-bottom after the realtime INSERT lands.
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }).catch(function () { /* hook already restored state */ });
+    }
   };
 
+  // Suggestion pills — keep the visual placeholder per PR1 spec.
+  // Generic strings; PR2/PR3 will swap to contextual (e.g. confirm
+  // score / accept invite) once real widgets render.
   const suggestions = c.type === "group"
     ? ["Got it", "I'm in", "See you there"]
-    : c.id === "dm-volkov" ? ["Good luck!", "Court 3, 9am", "On my way"]
-    : c.id === "dm-coach"  ? ["Will do", "Got it", "Send the clip?"]
     : ["Sounds good", "On my way", "Thanks"];
+
+  // Sub-header line. Use the v2 conv's activeNow/lastSender as a
+  // shorthand; otherwise blank. The prototype showed contextual
+  // sub-text like "Opponent · R16" but we don't have a category
+  // metadata field yet — leave blank for non-active partners.
+  const subLabel = c.activeNow
+    ? "Active now"
+    : (rawConv && rawConv.last_message_at ? "Active " + formatRelativeTime(rawConv.last_message_at) : "");
 
   return (
     <div style={{ height: "100%", background: theme.bg, color: theme.ink, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -258,7 +283,7 @@ function ThreadScreen({ theme, accent, convoId, onBack, isPhone }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14, color: theme.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
-          <div style={{ fontFamily: "Inter", fontSize: 11, color: c.activeNow ? accent : theme.inkSoft }}>{c.activeNow ? "Active now" : c.sub}</div>
+          <div style={{ fontFamily: "Inter", fontSize: 11, color: c.activeNow ? accent : theme.inkSoft }}>{subLabel}</div>
         </div>
       </div>
 
@@ -266,10 +291,13 @@ function ThreadScreen({ theme, accent, convoId, onBack, isPhone }) {
         flex: 1, minHeight: 0, overflowY: "auto",
         padding: "14px 12px 8px", display: "flex", flexDirection: "column", gap: 4,
       }}>
+        {(dms && dms.threadLoading && msgs.length === 0) && (
+          <div style={{ textAlign: "center", color: theme.inkFaint, padding: "20px", fontSize: 12 }}>Loading…</div>
+        )}
         {msgs.map((m, i) => {
           const next = msgs[i + 1];
           const last = !next || next.side !== m.side;
-          return <Bubble key={i} m={m} c={c} theme={theme} accent={accent} last={last} />;
+          return <Bubble key={m.id || i} m={m} c={c} theme={theme} accent={accent} last={last} />;
         })}
       </div>
 
@@ -291,13 +319,14 @@ function ThreadScreen({ theme, accent, convoId, onBack, isPhone }) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") send(draft); }}
             placeholder="Aa"
+            disabled={sending}
             style={{ flex: 1, appearance: "none", border: 0, background: "transparent", outline: "none", fontFamily: "Inter", fontSize: 14, color: theme.ink }}
           />
         </div>
         {draft.trim() && (
-          <button onClick={() => send(draft)} className="t-btn" aria-label="Send" style={{
+          <button onClick={() => send(draft)} className="t-btn" aria-label="Send" disabled={sending} style={{
             width: 36, height: 36, borderRadius: "50%", appearance: "none", border: 0,
-            background: accent, color: "#0f1410", cursor: "pointer",
+            background: accent, color: "#0f1410", cursor: sending ? "default" : "pointer", opacity: sending ? 0.6 : 1,
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
@@ -309,6 +338,10 @@ function ThreadScreen({ theme, accent, convoId, onBack, isPhone }) {
 }
 
 function Bubble({ m, c, theme, accent, last }) {
+  // PR1: kind/payload widgets (score, invite, confirm) are deferred.
+  // The schema doesn't carry a `kind` column yet — that's PR2. We keep
+  // these branches in place but they'll never match a real DM until
+  // the migration ships.
   if (m.kind === "score")   return <ScoreCardBubble m={m} theme={theme} accent={accent} c={c} last={last} />;
   if (m.kind === "invite")  return <InviteCardBubble m={m} theme={theme} accent={accent} c={c} last={last} />;
   if (m.kind === "confirm") return <ConfirmCardBubble m={m} theme={theme} accent={accent} c={c} last={last} />;
@@ -318,7 +351,7 @@ function Bubble({ m, c, theme, accent, last }) {
       {!me && (
         <div style={{ width: 24, flexShrink: 0 }}>
           {last && (
-            <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color, color: "#fbf6e9", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter", fontWeight: 600, fontSize: 10 }}>{m.avatar || c.initials[0]}</div>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color, color: "#fbf6e9", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter", fontWeight: 600, fontSize: 10 }}>{m.avatar || (c.initials && c.initials[0]) || "?"}</div>
           )}
         </div>
       )}
