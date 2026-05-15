@@ -5,10 +5,17 @@
 // loading, error }.
 //
 // History row shape (matches sampleHistory.js):
-//   { id, date, opp, score, win, surface }
+//   { id, date, opp, score, win, surface, status, pending }
+//
+// `status` carries the raw match_history.status so the renderer can
+// show a "Pending" / "Disputed" pill instead of W/L on in-flight
+// matches. `pending` is a derived convenience flag for the same.
 //
 // weekStats shape (last 7 calendar days):
 //   { matches, wins, losses, record, onCourt }
+// weekStats counts confirmed rows only — a pending match's result
+// is still the submitter's claim and could flip on dispute, so we
+// don't bake it into the running W-L tally.
 //
 // RLS scope: match_history.match_select policy allows rows where the
 // caller is either user_id or opponent_id. Two-step fetch — own rows
@@ -61,6 +68,10 @@ function shapeRow(m, viewerIsSubmitter, profileMap) {
   var oppName = (otherId && profileMap && profileMap[otherId] && profileMap[otherId].name)
     || (viewerIsSubmitter ? (m.opp_name || "Player") : (m.opp_name || "Player"));
   var when = m.confirmed_at || m.submitted_at || m.match_date || null;
+  var status = m.status || "confirmed";
+  var pending = status === "pending_confirmation"
+             || status === "disputed"
+             || status === "pending_reconfirmation";
   return {
     id:      m.id,
     date:    formatRelDate(when),
@@ -71,8 +82,21 @@ function shapeRow(m, viewerIsSubmitter, profileMap) {
     when:    when,                  // raw ISO for sorting + week filter
     matchType: m.match_type || "casual",
     leagueId:  m.league_id || null,
+    status:   status,
+    pending:  pending,
   };
 }
+
+// Status set shown in the v2 history list. Confirmed is canonical;
+// the three pending variants are surfaced too so a freshly logged
+// match doesn't disappear until the opponent acts. Expired / voided
+// / rejected matches drop off the list — same rule v1 uses.
+var HISTORY_STATUSES = [
+  "confirmed",
+  "pending_confirmation",
+  "disputed",
+  "pending_reconfirmation",
+];
 
 export function useV2History(authUserId) {
   var [rows, setRows]       = useState([]);
@@ -91,13 +115,17 @@ export function useV2History(authUserId) {
     setError(null);
 
     // Two queries — own rows and opponent rows — then merge + sort.
-    // Doing them in parallel + only confirmed status keeps the v2
-    // history clean of disputed/pending noise on first paint.
+    // Doing them in parallel. Status set includes confirmed PLUS the
+    // three pending variants so a freshly logged match (auto-emitted
+    // confirm-card DM in flight) shows up immediately in History;
+    // expired / voided / rejected matches drop off the same way v1
+    // handles them. Pending rows render with a "Pending" pill on
+    // HistoryRow rather than W/L.
     var ownReq = supabase
       .from("match_history")
       .select(MATCH_COLS)
       .eq("user_id", authUserId)
-      .eq("status", "confirmed")
+      .in("status", HISTORY_STATUSES)
       .order("confirmed_at", { ascending: false, nullsFirst: false })
       .order("submitted_at", { ascending: false })
       .limit(60);
@@ -106,7 +134,7 @@ export function useV2History(authUserId) {
       .from("match_history")
       .select(MATCH_COLS)
       .eq("opponent_id", authUserId)
-      .eq("status", "confirmed")
+      .in("status", HISTORY_STATUSES)
       .order("confirmed_at", { ascending: false, nullsFirst: false })
       .order("submitted_at", { ascending: false })
       .limit(60);
@@ -166,9 +194,14 @@ export function useV2History(authUserId) {
     return function () { cancelled = true; };
   }, [authUserId, reloadKey]);
 
-  // Derived week stats — recompute when rows change.
+  // Derived week stats — recompute when rows change. Counts confirmed
+  // rows only so the W-L tally never includes a contested result that
+  // might flip on dispute. Pending matches still show in the list, so
+  // the per-row pending pill makes the discrepancy obvious.
   var weekStats = useMemo(function () {
-    var weekRows = rows.filter(function (r) { return isWithinLast7Days(r.when); });
+    var weekRows = rows.filter(function (r) {
+      return isWithinLast7Days(r.when) && r.status === "confirmed";
+    });
     var wins = 0, losses = 0;
     weekRows.forEach(function (r) { if (r.win) wins++; else losses++; });
     return {

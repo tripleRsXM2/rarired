@@ -117,15 +117,34 @@ export default function HomeScreen({
             borderRadius: 12, padding: "12px 14px", textAlign: "left",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             border: `0.5px solid ${theme.line}`, cursor: "pointer",
+            opacity: m.pending ? 0.92 : 1,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ width: 6, height: 32, borderRadius: 3, background: m.win ? accent : theme.inkFaint }} />
+              {/* Accent strip — solid for settled W, neutral for L
+                  or pending. Pending matches don't get the green
+                  bar yet because the result isn't final until the
+                  opponent acts. */}
+              <span style={{
+                width: 6, height: 32, borderRadius: 3,
+                background: (m.win && !m.pending) ? accent : theme.inkFaint,
+              }} />
               <div>
                 <div style={{ fontSize: 13, fontFamily: "Inter", fontWeight: 600 }}>{m.opp}</div>
-                <div style={{ fontSize: 11, color: theme.inkSoft, marginTop: 2 }}>{m.date}</div>
+                <div style={{ fontSize: 11, color: theme.inkSoft, marginTop: 2 }}>
+                  {m.date}
+                  {m.pending && (
+                    <span style={{
+                      marginLeft: 6, color: theme.inkFaint,
+                      fontFamily: "Inter", fontWeight: 700, fontSize: 9,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                    }}>
+                      · {m.status === "disputed" || m.status === "pending_reconfirmation" ? "Disputed" : "Pending"}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="t-num" style={{ fontSize: 14, fontWeight: 600, color: m.win ? theme.ink : theme.inkSoft }}>{m.score}</div>
+            <div className="t-num" style={{ fontSize: 14, fontWeight: 600, color: (m.win && !m.pending) ? theme.ink : theme.inkSoft }}>{m.score}</div>
           </button>
         ))}
       </div>

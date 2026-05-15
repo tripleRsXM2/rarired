@@ -58,12 +58,32 @@ function Chip({ children, active, theme }) {
   );
 }
 
-function HistoryRow({ date, opp, score, win, surface, theme, accent }) {
+function HistoryRow({ date, opp, score, win, surface, status, pending, theme, accent }) {
   const surfaceColor = COURTS[surface]?.surface || "#1a4d2e";
+  // Pill copy + colors. Pending matches show their real lifecycle
+  // status (Pending / Disputed) instead of a final W/L, because the
+  // result isn't settled until the opponent acts or the 72h window
+  // expires. Source of truth: match_history.status, surfaced by
+  // useV2History.shapeRow.
+  let pillText = win ? "W" : "L";
+  let pillBg   = win ? `${accent}30` : theme.chip;
+  let pillFg   = win ? theme.ink : theme.inkSoft;
+  if (pending) {
+    if (status === "disputed" || status === "pending_reconfirmation") {
+      pillText = "DISPUTED";
+      pillBg   = theme.chip;
+      pillFg   = theme.inkSoft;
+    } else {
+      pillText = "PENDING";
+      pillBg   = theme.chip;
+      pillFg   = theme.inkSoft;
+    }
+  }
   return (
     <div style={{
       display: "grid", gridTemplateColumns: "40px 1fr auto auto", gap: 12, alignItems: "center",
       padding: "12px 14px", background: theme.bgRaised, border: `1px solid ${theme.line}`, borderRadius: 14,
+      opacity: pending ? 0.92 : 1,
     }}>
       <CourtMini surface={surfaceColor} size={32} />
       <div style={{ minWidth: 0 }}>
@@ -73,10 +93,10 @@ function HistoryRow({ date, opp, score, win, surface, theme, accent }) {
       <span className="t-num" style={{ fontSize: 14, color: theme.ink, fontWeight: 500 }}>{score}</span>
       <span style={{
         padding: "3px 8px", borderRadius: 999,
-        background: win ? `${accent}30` : theme.chip,
-        color: win ? theme.ink : theme.inkSoft,
+        background: pillBg, color: pillFg,
         fontFamily: "Inter", fontWeight: 700, fontSize: 10, letterSpacing: "0.08em",
-      }}>{win ? "W" : "L"}</span>
+        whiteSpace: "nowrap",
+      }}>{pillText}</span>
     </div>
   );
 }
