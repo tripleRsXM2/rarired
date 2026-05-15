@@ -49,7 +49,50 @@ import { useDMs } from "../../features/people/hooks/useDMs.js";
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
 
-export default function BaselineApp({ onBack }) {
+// Tiny error boundary so a crash inside the V2 tree shows a readable
+// banner instead of blanking the screen. User reported a blank /v2 on
+// the Mdawg preview — without an error boundary, an uncaught throw
+// inside React's render phase unmounts the entire subtree and the
+// user sees only the root <div>. This catches it visibly.
+class V2ErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err){ return { err: err }; }
+  componentDidCatch(err, info){
+    try {
+      console.error("[V2 BaselineApp crash]", err, info);
+      window.__cs_v2_crash = { message: err && err.message, stack: err && err.stack, info: info };
+    } catch(_){}
+  }
+  render(){
+    if (this.state.err) {
+      var msg = (this.state.err && this.state.err.message) || String(this.state.err);
+      return (
+        <div style={{
+          position: "fixed", inset: 0, padding: 24, overflow: "auto",
+          background: "#1a1a1a", color: "#fff", fontFamily: "ui-monospace, monospace",
+          fontSize: 13, lineHeight: 1.5, zIndex: 99999,
+        }}>
+          <div style={{ color: "#ff7a7a", fontWeight: 700, marginBottom: 8 }}>
+            V2 crashed: {msg}
+          </div>
+          <div style={{ whiteSpace: "pre-wrap", opacity: 0.85 }}>
+            {(this.state.err && this.state.err.stack) || ""}
+          </div>
+          <div style={{ marginTop: 20, opacity: 0.6 }}>
+            Open DevTools console and share the full error. Or run
+            <code style={{ background: "#000", padding: "2px 6px", margin: "0 4px", borderRadius: 4 }}>
+              window.__cs_v2_crash
+            </code>
+            in the console.
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function BaselineAppInner({ onBack }) {
   React.useEffect(() => { ensureFonts(); }, []);
 
   // ── Supabase data layer (v2 isolated adapters) ────────────────
@@ -281,6 +324,16 @@ export default function BaselineApp({ onBack }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Public export — wraps the inner shell in an error boundary so a
+// crash surfaces a readable banner instead of blanking the screen.
+export default function BaselineApp(props) {
+  return (
+    <V2ErrorBoundary>
+      <BaselineAppInner {...props}/>
+    </V2ErrorBoundary>
   );
 }
 
