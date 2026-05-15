@@ -71,7 +71,14 @@ export default function QuickLogScreen({
   const [saving, setSaving] = React.useState(false);
   const [error, setError]   = React.useState("");
 
-  const youLabel = viewerName || "You";
+  // Always show "You" for the viewer's own row in the scoreboard —
+  // matches the design and the other v2 scoreboards (LiveScoring,
+  // Changeover). `viewerName` (the real account name) is still used
+  // for the confirm-card DM payload so the opponent sees the real
+  // submitter on their side, but it doesn't belong in the viewer's
+  // own scoreboard label. User feedback: "in quick log/log match,
+  // it says test as my user name. it should be named You."
+  const youLabel = "You";
   const oppLabel = opponent ? opponent.name : "Choose player";
 
   const updateSet = (idx, fn) => setSets((prev) => prev.map((s, i) => (i === idx ? fn(s) : s)));
@@ -206,6 +213,15 @@ export default function QuickLogScreen({
                   onSelectTb={() => { setActiveIdx(i); setActiveSide(0); setActiveField("tb"); }}
                   accent={accent} />
               ))}
+
+              {/* Inter-player divider — full-width hairline matching
+                  the Scoreboard atom used by LiveScoring + Changeover
+                  (atoms.jsx:173). User feedback: "the score board
+                  doesnt have a line inbetween [viewer] and choose
+                  player that runs horizontally, the other score
+                  boards have it in live scoring and in change over."
+                  */}
+              <div style={{ gridColumn: "1 / span " + (sets.length + 1), height: 1, background: "rgba(251,246,233,0.12)" }} />
 
               {/* Opponent row — name cell is tappable and opens the
                   picker sheet. Reads "Choose player" in accent when
