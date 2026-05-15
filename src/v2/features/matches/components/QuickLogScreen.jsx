@@ -12,7 +12,7 @@
 // Save inserts a casual match into match_history via logV2Match.
 
 import React from "react";
-import { Card, Eyebrow, ServeDot } from "./atoms.jsx";
+import { Eyebrow, ServeDot } from "./atoms.jsx";
 
 export default function QuickLogScreen({
   theme, accent, onSave,
@@ -23,14 +23,36 @@ export default function QuickLogScreen({
   //               When provided, Save calls it instead of onSave().
   viewerName, friends, onSubmit,
 }) {
-  // Start with a single empty set — the prototype shipped pre-filled
-  // demo scores, but a real log page must start blank so the user
-  // doesn't accidentally Save a fake 6-4 3-6 7-6 match. + Add set
-  // grows the list; logV2Match drops any 0-0 set on save.
-  const [sets, setSets] = React.useState([{ score: [0, 0], tb: null }]);
+  // Start with two empty sets — most matches are bo3, so seeding two
+  // 0-0 columns lets the user start tapping the stepper immediately
+  // without first hitting "+ Set". `+ Set` grows the list, the × on
+  // the last header column removes it; logV2Match drops any all-0
+  // set on save so a user who only fills in one of the two doesn't
+  // accidentally persist a fake second set.
+  const [sets, setSets] = React.useState([
+    { score: [0, 0], tb: null },
+    { score: [0, 0], tb: null },
+  ]);
   const [activeIdx, setActiveIdx]   = React.useState(0);
   const [activeSide, setActiveSide] = React.useState(0);
   const [activeField, setActiveField] = React.useState("score");
+
+  // Auto-scroll the sets row so the active column stays in view. The
+  // dark grid uses overflow-x and on a narrow phone you can fit ~4
+  // set columns before the rightmost ones go off-screen. Tapping
+  // anywhere in that row updates activeIdx, this effect re-centers.
+  const setsRowRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = setsRowRef.current;
+    if (!el) return;
+    const target = el.querySelector('[data-set-idx="' + activeIdx + '"]');
+    if (target && target.getBoundingClientRect) {
+      const elRect = el.getBoundingClientRect();
+      const tRect  = target.getBoundingClientRect();
+      const offset = tRect.left - elRect.left - (elRect.width / 2) + (tRect.width / 2);
+      if (Math.abs(offset) > 8) el.scrollBy({ left: offset, behavior: "smooth" });
+    }
+  }, [activeIdx, sets.length]);
 
   // Opponent — { id?: uuid, name: string }. id is set only when the
   // user picks a linked friend; a typed name logs unlinked. Starts
@@ -42,7 +64,7 @@ export default function QuickLogScreen({
   const [error, setError]   = React.useState("");
 
   const youLabel = viewerName || "You";
-  const oppLabel = opponent ? opponent.name : "Pick opponent";
+  const oppLabel = opponent ? opponent.name : "Choose player";
 
   const updateSet = (idx, fn) => setSets((prev) => prev.map((s, i) => (i === idx ? fn(s) : s)));
   const setScoreVal = (idx, side, v) =>
@@ -107,67 +129,127 @@ export default function QuickLogScreen({
         </h1>
       </div>
 
+      {/* Dark glass scoreboard — ported from the design's
+          QuickLogScreen in the third tennis-timer zip. Grid layout
+          (player column + N set columns) reads like a real scoreboard.
+          Header row hosts set numbers (with × on the last set for
+          removal), player rows show the names + per-set cells, and
+          the "+ Set" button lives in the footer at the bottom-right.
+          The "You" / opponent rows are the same row pattern — the
+          opponent cell stays tappable to open the picker sheet,
+          rendering "Pick opponent" in accent until one is chosen. */}
       <div style={{ padding: "12px 16px 4px" }}>
-        <Card theme={theme} padded={false}>
-          <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "stretch" }}>
+        <div style={{
+          background: "rgba(15,20,16,0.92)",
+          backdropFilter: "blur(12px)",
+          color: "#fbf6e9",
+          borderRadius: 14, overflow: "hidden",
+          border: "1px solid rgba(251,246,233,0.10)",
+          boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+        }}>
+          <div ref={setsRowRef} className="t-noscroll" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
             <div style={{
-              padding: "12px 0 12px 14px", display: "flex", flexDirection: "column",
-              justifyContent: "space-around", borderRight: `1px solid ${theme.line}`,
-              background: theme.bgRaised,
+              display: "grid",
+              gridTemplateColumns: "minmax(140px, 1fr) repeat(" + sets.length + ", 44px)",
+              minWidth: "100%",
+              padding: "8px 14px 10px",
+              alignItems: "center",
+              rowGap: 2,
+              columnGap: 6,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ServeDot active color={accent} />
+              {/* Header row — "Player" label + set numbers */}
+              <div className="t-cap" style={{ color: "rgba(251,246,233,0.45)", letterSpacing: "0.14em" }}>Player</div>
+              {sets.map((s, i) => (
+                <button key={"h" + i} data-set-idx={i} onClick={() => { setActiveIdx(i); setActiveField("score"); }} className="t-cap t-btn" style={{
+                  appearance: "none", border: 0, background: "transparent", cursor: "pointer",
+                  color: activeIdx === i ? accent : "rgba(251,246,233,0.45)",
+                  letterSpacing: "0.14em", textAlign: "center", padding: 0,
+                  fontWeight: activeIdx === i ? 700 : 600,
+                  position: "relative",
+                }}>
+                  {i + 1}
+                  {sets.length > 1 && i === sets.length - 1 && (
+                    <span onClick={(e) => { e.stopPropagation(); removeSet(i); }} role="button" aria-label="Remove set" style={{
+                      position: "absolute", top: -3, right: -8,
+                      fontSize: 10, color: "rgba(251,246,233,0.5)", cursor: "pointer",
+                    }}>×</span>
+                  )}
+                </button>
+              ))}
+
+              {/* Divider row — spans the full grid */}
+              <div style={{ gridColumn: "1 / span " + (sets.length + 1), height: 1, background: "rgba(251,246,233,0.12)", margin: "6px 0" }} />
+
+              {/* You row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", minWidth: 0 }}>
+                <ServeDot active color={accent} size={9} />
                 <span style={{
-                  fontFamily: "Inter", fontWeight: 600, fontSize: 13,
+                  fontFamily: "Inter", fontWeight: 600, fontSize: 16, color: "#fbf6e9",
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>{youLabel}</span>
               </div>
-              <div style={{ height: 8 }} />
-              {/* Opponent — tappable. Opens the picker sheet. */}
+              {sets.map((s, i) => (
+                <QLScoreCell key={"p1" + i}
+                  value={s.score[0]} tbValue={s.tb ? s.tb[0] : null}
+                  winner={s.score[0] > s.score[1]}
+                  active={activeIdx === i && activeSide === 0}
+                  activeField={activeField}
+                  onSelectScore={() => { setActiveIdx(i); setActiveSide(0); setActiveField("score"); }}
+                  onSelectTb={() => { setActiveIdx(i); setActiveSide(0); setActiveField("tb"); }}
+                  accent={accent} />
+              ))}
+
+              {/* Opponent row — name cell is tappable and opens the
+                  picker sheet. Reads "Choose player" in accent when
+                  no opponent is selected; switches to the player's
+                  name in cream once picked. */}
               <button
                 type="button"
                 onClick={() => setOppSheetOpen(true)}
                 className="t-btn"
                 style={{
                   appearance: "none", background: "transparent", border: 0,
-                  padding: 0, cursor: "pointer", textAlign: "left",
-                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "6px 0", cursor: "pointer", textAlign: "left",
+                  display: "flex", alignItems: "center", gap: 10, minWidth: 0,
                 }}>
-                <ServeDot active={false} color={accent} />
+                <ServeDot active={false} color={accent} size={9} />
                 <span style={{
-                  fontFamily: "Inter", fontWeight: 600, fontSize: 13,
-                  color: opponent ? theme.ink : accent,
+                  fontFamily: "Inter", fontWeight: 600, fontSize: 16,
+                  color: opponent ? "#fbf6e9" : accent,
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  borderBottom: `1px dashed ${opponent ? theme.line : accent}`,
-                }}>{oppLabel}</span>
+                  borderBottom: opponent
+                    ? "1px dashed rgba(251,246,233,0.25)"
+                    : ("1px dashed " + accent),
+                  paddingBottom: 1,
+                }}>{opponent ? opponent.name : "Choose player"}</span>
               </button>
-            </div>
-            <div className="t-noscroll" style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch" }}>
-              <div style={{ display: "flex", gap: 8, padding: "10px 12px" }}>
-                {sets.map((s, i) => (
-                  <SetColumn
-                    key={i}
-                    idx={i}
-                    set={s}
-                    active={activeIdx === i}
-                    activeSide={activeSide}
-                    activeField={activeField}
-                    onSelect={(side, field) => { setActiveIdx(i); setActiveSide(side); setActiveField(field); }}
-                    onRemove={sets.length > 1 ? () => removeSet(i) : null}
-                    theme={theme} accent={accent}
-                  />
-                ))}
-                <button onClick={addSet} className="t-btn" style={{
-                  appearance: "none", border: `1px dashed ${theme.lineStrong}`,
-                  background: "transparent", borderRadius: 10,
-                  width: 48, alignSelf: "stretch", flexShrink: 0,
-                  color: theme.inkSoft, fontFamily: "JetBrains Mono", fontSize: 22, fontWeight: 300,
-                  cursor: "pointer",
-                }}>+</button>
-              </div>
+              {sets.map((s, i) => (
+                <QLScoreCell key={"p2" + i}
+                  value={s.score[1]} tbValue={s.tb ? s.tb[1] : null}
+                  winner={s.score[1] > s.score[0]}
+                  active={activeIdx === i && activeSide === 1}
+                  activeField={activeField}
+                  onSelectScore={() => { setActiveIdx(i); setActiveSide(1); setActiveField("score"); }}
+                  onSelectTb={() => { setActiveIdx(i); setActiveSide(1); setActiveField("tb"); }}
+                  accent={accent} />
+              ))}
             </div>
           </div>
-        </Card>
+
+          {/* Footer: "+ Set" — pill button bottom-right */}
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 12px 10px" }}>
+            <button onClick={addSet} className="t-btn" style={{
+              appearance: "none", border: "1px solid rgba(251,246,233,0.25)",
+              background: "transparent", color: "#fbf6e9",
+              borderRadius: 999, padding: "4px 10px 4px 8px", cursor: "pointer",
+              fontFamily: "Inter", fontSize: 10.5, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 4,
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Set
+            </button>
+          </div>
+        </div>
       </div>
 
       <div style={{ padding: "6px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -396,46 +478,36 @@ function StepperPicker({ value, onChange, max = 7, theme, accent }) {
   );
 }
 
-function SetColumn({ idx, set, active, activeSide, activeField, onSelect, onRemove, theme, accent }) {
-  const cellW = 48;
-  const Cell = ({ side, field, value }) => {
-    const isActive = active && activeSide === side && activeField === field;
-    const isTb = field === "tb";
-    return (
-      <button onClick={() => onSelect(side, field)} className="t-btn" data-set-idx={idx} style={{
-        width: isTb ? 26 : cellW, height: isTb ? 22 : cellW, borderRadius: isTb ? 6 : 10,
-        border: `1.5px solid ${isActive ? accent : theme.line}`,
-        background: isActive ? `${accent}22` : (isTb ? theme.chip : "transparent"),
-        fontFamily: "JetBrains Mono",
-        fontSize: isTb ? 11 : 20, fontWeight: isTb ? 700 : 600, color: theme.ink,
-        fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
-        cursor: "pointer", appearance: "none",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        flexShrink: 0,
-      }}>{value}</button>
-    );
-  };
+// Single cell in the dark scoreboard grid. No border, no
+// background — relies on color + weight changes for the active /
+// winner states so the grid reads quickly. Tiebreak (`tbValue`)
+// floats as a tiny super-script in the top-right corner so a
+// 7-6(4) match takes one line, not two. Tapping the tiebreak
+// super-script is what switches the stepper into tiebreak-edit
+// mode for that cell.
+function QLScoreCell({ value, tbValue, winner, active, activeField, onSelectScore, onSelectTb, accent }) {
+  const isScoreActive = active && activeField === "score";
+  const isTbActive    = active && activeField === "tb";
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 12 }}>
-        <span style={{ fontSize: 9, fontFamily: "Inter", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: active ? accent : theme.inkFaint, whiteSpace: "nowrap" }}>
-          S{idx + 1}
-        </span>
-        {onRemove && (
-          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="t-btn" style={{
-            appearance: "none", border: 0, background: "transparent",
-            color: theme.inkFaint, cursor: "pointer", padding: 0, lineHeight: 1, fontSize: 12,
-          }}>×</button>
-        )}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <Cell side={0} field="score" value={set.score[0]} />
-        {set.tb && <Cell side={0} field="tb" value={set.tb[0]} />}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <Cell side={1} field="score" value={set.score[1]} />
-        {set.tb && <Cell side={1} field="tb" value={set.tb[1]} />}
-      </div>
-    </div>
+    <button onClick={onSelectScore} className="t-btn" style={{
+      appearance: "none", border: 0, background: "transparent", cursor: "pointer",
+      padding: "6px 0", position: "relative",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <span className="t-num" style={{
+        fontFamily: "JetBrains Mono", fontVariantNumeric: "tabular-nums",
+        fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em",
+        color: isScoreActive ? accent : (winner ? "#fbf6e9" : "rgba(251,246,233,0.5)"),
+        transition: "color .12s",
+      }}>{value}</span>
+      {tbValue != null && (
+        <span onClick={(e) => { e.stopPropagation(); onSelectTb(); }} role="button" style={{
+          position: "absolute", top: 2, right: 0,
+          fontSize: 9, fontFamily: "JetBrains Mono", fontWeight: 600,
+          color: isTbActive ? accent : "rgba(251,246,233,0.55)",
+          lineHeight: 1, cursor: "pointer",
+        }}>{tbValue}</span>
+      )}
+    </button>
   );
 }
