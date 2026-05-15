@@ -620,6 +620,39 @@ export function useDMs(opts) {
     return { error: null, convId: convId };
   }
 
+  // ── Set the group avatar URL ────────────────────────────────────────────
+  // Wraps the `set_conversation_avatar` RPC. Optimistic local patch
+  // for instant render swap; rollback on failure. The caller is
+  // expected to have already uploaded the file (via
+  // uploadGroupAvatar) and to be persisting the resulting URL here.
+  async function setGroupAvatar(convId, avatarUrl){
+    if (!convId) return { error: "no_conv_id" };
+    var prevConversations;
+    var prevActive = activeConvRef.current;
+    var nextUrl = avatarUrl && String(avatarUrl).trim().length ? String(avatarUrl).trim() : null;
+    setConversations(function (cs) {
+      prevConversations = cs;
+      return cs.map(function (c) {
+        return c.id === convId ? Object.assign({}, c, { avatar_url: nextUrl }) : c;
+      });
+    });
+    if (prevActive && prevActive.id === convId) {
+      var patched = Object.assign({}, prevActive, { avatar_url: nextUrl });
+      activeConvRef.current = patched;
+      setActiveConv(patched);
+    }
+    var r = await D.setConversationAvatar(convId, nextUrl || '');
+    if (r.error) {
+      if (prevConversations) setConversations(prevConversations);
+      if (prevActive && prevActive.id === convId) {
+        activeConvRef.current = prevActive;
+        setActiveConv(prevActive);
+      }
+      return { error: r.error };
+    }
+    return { error: null, data: r.data };
+  }
+
   // ── Rename a group conversation ─────────────────────────────────────────
   // Wraps the `rename_conversation` SECURITY DEFINER RPC (migration
   // 20260516_group_dedupe_and_rename.sql). Optimistically patches the
@@ -1431,6 +1464,7 @@ export function useDMs(opts) {
     openOrStartConversation: openOrStartConversation,
     openConversationWith: openConversationWith,
     renameConversation: renameGroup,
+    setConversationAvatar: setGroupAvatar,
     closeConversation: closeConversation,
     // Phase 1b — proposed-slot block surfaced in the composer. Callers
     // can read current slot + clear/update it (e.g. composer UI's

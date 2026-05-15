@@ -73,6 +73,23 @@ export function deleteConversation(convId){
 // gates by participant membership server-side and refuses 1:1 convs.
 // Empty / whitespace `name` clears the rename (NULL) — the group
 // re-enters the find-or-create dedupe pool. Returns the updated row.
+// Persist a group avatar URL on the conversation row. Wraps the
+// `set_conversation_avatar` RPC which gates by participant membership
+// + is_group and validates that the URL points at the group-avatars
+// bucket (defence-in-depth — bucket RLS already gates the upload).
+// Pass an empty string / null to clear.
+export async function setConversationAvatar(convId, avatarUrl){
+  var r = await supabase.rpc('set_conversation_avatar', {
+    p_conv_id: convId,
+    p_avatar_url: avatarUrl == null ? '' : String(avatarUrl),
+  });
+  if(r.error){
+    return { data: null, error: r.error };
+  }
+  var d = Array.isArray(r.data) ? r.data[0] : r.data;
+  return { data: d, error: null };
+}
+
 export async function renameConversation(convId, name){
   var r = await supabase.rpc('rename_conversation', {
     p_conv_id: convId,

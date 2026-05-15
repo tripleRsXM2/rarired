@@ -159,12 +159,21 @@ export function convToV2(conv, meId, dmsState) {
     }
   }
 
+  // Avatar URL — group avatars persist on conversations.avatar_url
+  // (migration 20260516_group_avatars), 1:1 avatars come from the
+  // partner profile. Either way the v2 Avatar component prefers the
+  // image when present and falls back to the initial-tile.
+  var avatarUrl = isGroup
+    ? (conv.avatar_url || null)
+    : (partnerProfile && (partnerProfile.avatar_url || partnerProfile.avatarUrl) || null);
+
   return {
     id: conv.id,
     type: isGroup ? "group" : "dm",
     name: name,
     initials: deriveInitials(name || "?"),
     color: avColor(name || "?"),
+    avatar_url: avatarUrl,
     activeNow: !!activeNow,
     unread: conv.hasUnread ? 1 : 0,
     pinned: pinned,

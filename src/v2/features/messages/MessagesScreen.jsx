@@ -28,6 +28,9 @@ import {
   confirmMatchTagAction, disputeMatchTagAction,
   acceptChallengeAction, rescheduleInviteAction,
 } from "./widgetActions.js";
+import { uploadGroupAvatar, MAX_AVATAR_BYTES } from "../../../features/people/services/groupAvatarUpload.js";
+
+var GROUP_AVATAR_MAX_MB = (MAX_AVATAR_BYTES / (1024 * 1024)).toFixed(0);
 
 // Defensive empty-state values when dms is still loading or absent.
 var EMPTY_CONVS = [];
@@ -217,13 +220,21 @@ function Inbox({ theme, accent, isPhone, conversations, loaded, onOpen, onCompos
 }
 
 function Avatar({ size = 44, c }) {
+  // Prefer the uploaded image (1:1 partner avatar OR group custom
+  // avatar from the conversations.avatar_url column). Fall back to
+  // the colored initials tile when no image is set.
+  var url = c && c.avatar_url;
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", background: c.color,
       display: "flex", alignItems: "center", justifyContent: "center",
       color: "#fbf6e9", fontFamily: "Inter", fontWeight: 600, fontSize: size * 0.36,
-      flexShrink: 0, letterSpacing: "0.02em",
-    }}>{c.initials}</div>
+      flexShrink: 0, letterSpacing: "0.02em", overflow: "hidden",
+    }}>
+      {url
+        ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        : c.initials}
+    </div>
   );
 }
 
@@ -461,8 +472,12 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
       {renameOpen && c.type === "group" && (
         <GroupRenameSheet
           theme={theme} accent={accent}
+          convId={convoId} dms={dms}
           currentName={(rawConv && rawConv.name) || ""}
           fallbackName={c.name}
+          currentAvatarUrl={(rawConv && rawConv.avatar_url) || c.avatar_url || null}
+          fallbackInitials={c.initials}
+          fallbackColor={c.color}
           draft={renameDraft} setDraft={setRenameDraft}
           busy={renameBusy}
           onClose={function () { setRenameOpen(false); }}
@@ -734,12 +749,77 @@ function ConfirmCardBubble({ m, theme, accent, c, last, actionState, onConfirm, 
   );
 }
 
-// Centered modal for renaming a group thread. Backdrop click +
-// Cancel + the (×) button all dismiss. Empty / whitespace name
-// clears the rename (group re-enters the find-or-create dedupe
-// pool — see migration 20260516_group_dedupe_and_rename.sql).
-function GroupRenameSheet({ theme, accent, currentName, fallbackName, draft, setDraft, busy, onClose, onSave }) {
+// Centered "Group settings" modal — rename + avatar picker. Backdrop
+// click + Cancel + the (×) button all dismiss.
+//
+// Avatar: tap the circle → file picker → uploadGroupAvatar to the
+// `group-avatars` bucket (RLS gates to participant). Persisted via
+// dms.setConversationAvatar (set_conversation_avatar RPC). Size/mime
+// caps enforced both client-side (instant feedback) and bucket-side
+// (defence in depth — 2 MB; jpeg/png/webp/gif).
+//
+// Rename: empty / whitespace clears the name and the group re-enters
+// the find-or-create dedupe pool (migration
+// 20260516_group_dedupe_and_rename).
+function GroupRenameSheet({
+  theme, accent, convId, dms,
+  currentName, fallbackName, currentAvatarUrl, fallbackInitials, fallbackColor,
+  draft, setDraft, busy, onClose, onSave,
+}) {
   const cleared = draft.trim().length === 0;
+  const [avatarUrl, setAvatarUrl] = React.useState(currentAvatarUrl || null);
+  const [avatarBusy, setAvatarBusy] = React.useState(false);
+  const [avatarErr, setAvatarErr] = React.useState("");
+  const fileRef = React.useRef(null);
+
+  const pickFile = function () {
+    if (avatarBusy || busy) return;
+    if (fileRef.current) fileRef.current.click();
+  };
+  const onFileChosen = async function (e) {
+    setAvatarErr("");
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      setAvatarBusy(true);
+      const up = await uploadGroupAvatar(convId, file);
+      if (up.error) {
+        setAvatarErr(up.error.message || "Couldn't upload that image.");
+        setAvatarBusy(false);
+        // Reset the input so picking the same file again re-fires.
+        e.target.value = "";
+        return;
+      }
+      // Persist the URL on the conv row. Optimistically swap the
+      // sheet preview to the new URL — useDMs.setConversationAvatar
+      // does the live conversations-list patch + rollback for us.
+      setAvatarUrl(up.url);
+      const sav = dms && dms.setConversationAvatar
+        ? await dms.setConversationAvatar(convId, up.url)
+        : { error: new Error("dms not ready") };
+      if (sav && sav.error) {
+        setAvatarErr((sav.error.message || sav.error) + "");
+        setAvatarUrl(currentAvatarUrl || null);
+      }
+      setAvatarBusy(false);
+    }
+    e.target.value = "";
+  };
+  const clearAvatar = async function () {
+    if (avatarBusy || busy || !avatarUrl) return;
+    setAvatarErr("");
+    setAvatarBusy(true);
+    const prev = avatarUrl;
+    setAvatarUrl(null);
+    const sav = dms && dms.setConversationAvatar
+      ? await dms.setConversationAvatar(convId, null)
+      : { error: new Error("dms not ready") };
+    if (sav && sav.error) {
+      setAvatarErr((sav.error.message || sav.error) + "");
+      setAvatarUrl(prev);
+    }
+    setAvatarBusy(false);
+  };
+
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, zIndex: 100,
@@ -764,18 +844,72 @@ function GroupRenameSheet({ theme, accent, currentName, fallbackName, draft, set
         </button>
         <div style={{ padding: "22px 22px 8px" }}>
           <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 4 }}>Group</div>
-          <h2 className="t-serif" style={{ fontSize: 22, lineHeight: 1.1, margin: 0, letterSpacing: "-0.01em" }}>Name this chat.</h2>
-          <p style={{ fontFamily: "Inter", fontSize: 12.5, color: theme.inkSoft, lineHeight: 1.45, marginTop: 8, marginBottom: 0 }}>
-            Renamed groups stay distinct — adding the same people again opens a fresh thread. Clear the name to merge back.
-          </p>
+          <h2 className="t-serif" style={{ fontSize: 22, lineHeight: 1.1, margin: 0, letterSpacing: "-0.01em" }}>Group settings.</h2>
         </div>
-        <div style={{ padding: "12px 22px 4px" }}>
+
+        {/* Avatar picker */}
+        <div style={{ padding: "8px 22px 0", display: "flex", alignItems: "center", gap: 14 }}>
+          <button onClick={pickFile} aria-label="Change group photo" disabled={avatarBusy || busy} className="t-btn" style={{
+            position: "relative",
+            width: 72, height: 72, borderRadius: "50%",
+            background: fallbackColor || theme.chip, color: "#fbf6e9",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "Inter", fontWeight: 700, fontSize: 28,
+            border: `1.5px solid ${theme.line}`,
+            cursor: (avatarBusy || busy) ? "default" : "pointer",
+            overflow: "hidden", padding: 0, flexShrink: 0,
+            opacity: avatarBusy ? 0.65 : 1,
+          }}>
+            {avatarUrl
+              ? <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <span>{fallbackInitials || "?"}</span>}
+            <span style={{
+              position: "absolute", right: -2, bottom: -2,
+              width: 26, height: 26, borderRadius: "50%",
+              background: accent, color: "#0f1410",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: `2px solid ${theme.bg}`,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </span>
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: theme.ink }}>Group photo</div>
+            <div style={{ fontFamily: "Inter", fontSize: 11, color: theme.inkSoft, marginTop: 2 }}>
+              JPG, PNG, WebP or GIF · up to {GROUP_AVATAR_MAX_MB} MB
+            </div>
+            {avatarUrl && (
+              <button onClick={clearAvatar} disabled={avatarBusy || busy} className="t-btn" style={{
+                marginTop: 6, appearance: "none", border: 0, background: "transparent",
+                color: theme.inkSoft, fontFamily: "Inter", fontSize: 11.5, fontWeight: 600,
+                cursor: (avatarBusy || busy) ? "default" : "pointer", padding: 0,
+                textDecoration: "underline",
+              }}>{avatarBusy ? "Saving…" : "Remove photo"}</button>
+            )}
+          </div>
+          <input
+            ref={fileRef} type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={onFileChosen}
+            style={{ display: "none" }}
+          />
+        </div>
+        {avatarErr && (
+          <div style={{ padding: "6px 22px 0", color: "#ff7a7a", fontFamily: "Inter", fontSize: 11.5 }}>
+            {avatarErr}
+          </div>
+        )}
+
+        {/* Rename */}
+        <div style={{ padding: "18px 22px 4px" }}>
+          <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 6 }}>Name</div>
           <input
             value={draft}
             onChange={function (e) { setDraft(e.target.value.slice(0, 80)); }}
             onKeyDown={function (e) { if (e.key === "Enter" && !busy) onSave(); }}
             placeholder={fallbackName || "e.g. A team"}
-            autoFocus
             maxLength={80}
             disabled={busy}
             style={{
@@ -787,24 +921,24 @@ function GroupRenameSheet({ theme, accent, currentName, fallbackName, draft, set
             }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontFamily: "Inter", fontSize: 11, color: theme.inkFaint }}>
-            <span>{cleared && currentName ? "Clearing will merge this back into the auto-group." : ""}</span>
+            <span>{cleared && currentName ? "Clearing will merge this back into the auto-group." : "Renamed groups stay distinct — clear to merge back."}</span>
             <span>{draft.length}/80</span>
           </div>
         </div>
         <div style={{ padding: "16px 22px 22px", display: "flex", gap: 8, borderTop: `0.5px solid ${theme.line}`, marginTop: 12 }}>
-          <button onClick={onClose} disabled={busy} className="t-btn" style={{
+          <button onClick={onClose} disabled={busy || avatarBusy} className="t-btn" style={{
             flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
             background: theme.bgRaised, color: theme.ink,
-            borderRadius: 10, padding: "11px", cursor: busy ? "default" : "pointer",
+            borderRadius: 10, padding: "11px", cursor: (busy || avatarBusy) ? "default" : "pointer",
             fontFamily: "Inter", fontWeight: 600, fontSize: 13,
-          }}>Cancel</button>
-          <button onClick={onSave} disabled={busy} className="t-btn" style={{
+          }}>Close</button>
+          <button onClick={onSave} disabled={busy || avatarBusy} className="t-btn" style={{
             flex: 1.4, appearance: "none", border: 0,
             background: accent, color: "#0f1410",
-            borderRadius: 10, padding: "11px", cursor: busy ? "default" : "pointer",
-            opacity: busy ? 0.6 : 1,
+            borderRadius: 10, padding: "11px", cursor: (busy || avatarBusy) ? "default" : "pointer",
+            opacity: (busy || avatarBusy) ? 0.6 : 1,
             fontFamily: "Inter", fontWeight: 700, fontSize: 13, letterSpacing: "0.04em",
-          }}>{busy ? "Saving…" : (cleared ? "Clear name" : "Save")}</button>
+          }}>{busy ? "Saving…" : (cleared ? "Save · clear name" : "Save name")}</button>
         </div>
       </div>
     </div>
