@@ -174,18 +174,44 @@ export function convToV2(conv, meId, dmsState) {
 }
 
 // V1 direct_messages row → V2 bubble. text fallback is "Message deleted"
-// when the row is tombstoned. Widget kinds (kind/payload) are absent
-// until PR2 ships the schema migration.
+// when the row is tombstoned.
+//
+// Structured-widget rows (kind = 'score' | 'invite' | 'confirm', payload
+// jsonb, entity_id uuid) are emitted by Slice B+D auto-emitters (match
+// log, challenge create, Players "Invite to play"). The 20260516
+// migration added these columns; this adapter unpacks them into the
+// shape MessagesScreen's Bubble dispatcher already reads. Deleted
+// structured rows fall back to the plain-text "Message deleted" bubble
+// so a tombstoned card doesn't render as a live actionable widget.
 export function msgToV2(row, conv, meId) {
   if (!row) return null;
-  var text = row.deleted_at ? "Message deleted" : (row.content || "");
-  return {
+  var deleted = !!row.deleted_at;
+  var text = deleted ? "Message deleted" : (row.content || "");
+  var out = {
     id: row.id,
     from: senderName(row.sender_id, conv, meId),
     text: text,
     t: formatTimestamp(row.created_at),
     side: row.sender_id === meId ? "me" : "them",
     avatar: senderInitial(row.sender_id, conv, meId),
-    // kind/payload deliberately omitted — PR2 territory.
+    entity_id: row.entity_id || null,
   };
+  // Only attach widget kind/payload when the row is alive and the
+  // payload exists. The dispatcher treats unknown/missing `kind` as
+  // plain text so a malformed structured row degrades gracefully.
+  if (!deleted && row.kind && row.payload) {
+    var k = row.kind;
+    if (k === "score" || k === "invite" || k === "confirm") {
+      out.kind = k;
+      // Mirror payload onto the bubble prop name the dispatcher reads.
+      // Each widget reads its own key:
+      //   ScoreCardBubble    → m.score
+      //   InviteCardBubble   → m.invite
+      //   ConfirmCardBubble  → m.confirm
+      if (k === "score")   out.score   = row.payload;
+      if (k === "invite")  out.invite  = row.payload;
+      if (k === "confirm") out.confirm = row.payload;
+    }
+  }
+  return out;
 }

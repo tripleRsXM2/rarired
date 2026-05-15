@@ -78,9 +78,21 @@ export function fetchThread(convId){
     .order('created_at',{ascending:true});
 }
 
-export function sendMessage(convId,senderId,content,replyToId){
+// sendMessage now accepts an optional `extras` bag with structured-
+// widget fields (kind / payload / entity_id) added by the
+// 20260516_dm_structured_payload migration. Old call sites that don't
+// pass `extras` keep working — kind stays null and the row renders as
+// plain text. `content` is required even for structured rows so that
+// fallback clients (inbox preview, notifications, SMS export) have
+// something readable to show.
+export function sendMessage(convId,senderId,content,replyToId,extras){
   var payload={conversation_id:convId,sender_id:senderId,content};
   if(replyToId)payload.reply_to_id=replyToId;
+  if(extras){
+    if(extras.kind)      payload.kind      = extras.kind;
+    if(extras.payload)   payload.payload   = extras.payload;
+    if(extras.entity_id) payload.entity_id = extras.entity_id;
+  }
   return supabase.from('direct_messages').insert(payload).select('*').single();
 }
 

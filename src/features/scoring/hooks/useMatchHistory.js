@@ -6,6 +6,7 @@ import { fetchProfilesByIds } from "../../../lib/db.js";
 import { normalizeMatch, computeMatchHash } from "../utils/matchUtils.js";
 import { validateMatchScore, serializeSetForDb } from "../utils/tennisScoreValidation.js";
 import { createMatchInvite } from "../services/inviteService.js";
+import { emitMatchConfirmDM, emitMatchScoreDM } from "../../people/services/dmWidgets.js";
 import { track } from "../../../lib/analytics.js";
 
 // Translate a Supabase/Postgres error into a user-facing string. We prefer
@@ -503,6 +504,26 @@ export function useMatchHistory(opts){
       if (tagRes && tagRes.error) {
         console.warn('[match_tag notification failed]', tagRes.error.message || tagRes.error);
       }
+      // Slice B: also drop a structured Confirm-card DM into the
+      // conversation with the opponent. Non-fatal — the match_tag
+      // notification above is still authoritative. If the DM emit
+      // fails (block, missing conv permission, etc.) we just log
+      // and move on.
+      try {
+        var submitterName = (profileGetter && profileGetter.name)
+          || (authUser.email ? authUser.email.split('@')[0] : 'Player');
+        var confirmRes = await emitMatchConfirmDM(authUser.id, opponentId, {
+          matchId: matchId,
+          sets: cleanForDb,
+          submitterName: submitterName,
+          opponentName: oppName,
+          leagueName: scoreDraft.leagueId ? tournName : (matchType === 'ranked' ? 'Ranked' : 'Casual'),
+          isRanked: matchType === 'ranked',
+        });
+        if (confirmRes && confirmRes.error) {
+          console.warn('[confirm-card DM failed]', confirmRes.error.message || confirmRes.error);
+        }
+      } catch (e) { console.warn('[confirm-card DM threw]', e); }
     }
     // Module 9.1.5 — closes the trust gap on casual matches with a
     // linked opponent. The match auto-confirms (no Elo to argue
@@ -533,6 +554,23 @@ export function useMatchHistory(opts){
           matchId:   matchId,
         });
       }
+      // Slice B: drop a structured Score-card DM into the conversation
+      // so the opponent sees the final result inline. Casual matches
+      // auto-confirm — no buttons needed, just the read-only card.
+      try {
+        var casualSubmitter = (profileGetter && profileGetter.name)
+          || (authUser.email ? authUser.email.split('@')[0] : 'Player');
+        var scoreRes = await emitMatchScoreDM(authUser.id, opponentId, {
+          matchId: matchId,
+          sets: cleanForDb,
+          submitterName: casualSubmitter,
+          opponentName: oppName,
+          surface: scoreDraft.surface || 'hard',
+        });
+        if (scoreRes && scoreRes.error) {
+          console.warn('[score-card DM failed]', scoreRes.error.message || scoreRes.error);
+        }
+      } catch (e) { console.warn('[score-card DM threw]', e); }
     }
     track("match_logged",{match_id:matchId,is_ranked:matchType==='ranked',match_type:matchType,has_opponent_linked:!!opponentId,is_invite_flow:!!inviteFlow,sets:clean.length,result:scoreDraft.result});
     // Module 4: convert accepted challenge → completed when this match was

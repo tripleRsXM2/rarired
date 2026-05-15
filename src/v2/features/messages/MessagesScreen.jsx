@@ -24,6 +24,10 @@
 import React from "react";
 import { convToV2, msgToV2, formatRelativeTime } from "./v2MessageAdapter.js";
 import NewMessageScreen from "./NewMessageScreen.jsx";
+import {
+  confirmMatchTagAction, disputeMatchTagAction,
+  acceptChallengeAction, rescheduleInviteAction,
+} from "./widgetActions.js";
 
 // Defensive empty-state values when dms is still loading or absent.
 var EMPTY_CONVS = [];
@@ -254,6 +258,16 @@ function ConvoRow({ c, theme, accent, onOpen }) {
 }
 
 function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack, isPhone }) {
+  // Slice C: per-message action state for the structured widgets.
+  // Map keys are message ids; values are 'confirmed' | 'disputed' |
+  // 'accepted' | 'rescheduled' | 'loading' | 'error'. After a button
+  // is clicked we flip to 'loading' optimistically, then to the
+  // terminal state on success or back to undefined on error.
+  // State is local to the thread for now — once we reload the thread
+  // from Supabase the canonical entity status (match_history.status /
+  // challenges.status) takes over. A future slice can pre-populate
+  // this map from the entity rows on mount.
+  const [widgetState, setWidgetState] = React.useState({});
   // V2 conv shape (for header chrome). Fall back to a placeholder if
   // the conv row hasn't landed yet.
   const c = conversations.find((x) => x.id === convoId) || {
@@ -296,6 +310,78 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
       }).catch(function () { /* hook already restored state */ });
     }
   };
+
+  // Build the per-bubble action handlers. Each one optimistically
+  // marks the widget as 'loading', calls the action, then settles on
+  // the terminal state (success → label badge, failure → undefined +
+  // surface in console).
+  const runConfirm = React.useCallback(function (msg) {
+    setWidgetState(function (s) { return Object.assign({}, s, { [msg.id]: "loading" }); });
+    return confirmMatchTagAction({
+      matchId: msg.entity_id,
+      submitterId: (rawConv && rawConv.partner && rawConv.partner.id) || null,
+      viewerId: meId,
+    }).then(function (r) {
+      setWidgetState(function (s) {
+        if (r.ok) return Object.assign({}, s, { [msg.id]: "confirmed" });
+        console.warn("[confirmMatch failed]", r.error);
+        var next = Object.assign({}, s); delete next[msg.id]; return next;
+      });
+    });
+  }, [rawConv, meId]);
+  const runDispute = React.useCallback(function (msg) {
+    setWidgetState(function (s) { return Object.assign({}, s, { [msg.id]: "loading" }); });
+    return disputeMatchTagAction({
+      matchId: msg.entity_id,
+      submitterId: (rawConv && rawConv.partner && rawConv.partner.id) || null,
+      viewerId: meId,
+    }).then(function (r) {
+      setWidgetState(function (s) {
+        if (r.ok) return Object.assign({}, s, { [msg.id]: "disputed" });
+        console.warn("[disputeMatch failed]", r.error);
+        var next = Object.assign({}, s); delete next[msg.id]; return next;
+      });
+    });
+  }, [rawConv, meId]);
+  const runAcceptInvite = React.useCallback(function (msg) {
+    if (!msg.entity_id) {
+      // Players "Invite to play" rows have no challenge yet — treat
+      // Accept as a templated "Let's lock it in" reply for now. The
+      // full challenge-create flow on Accept ships in a follow-up.
+      setWidgetState(function (s) { return Object.assign({}, s, { [msg.id]: "loading" }); });
+      return (dms && dms.sendMessage
+        ? dms.sendMessage("Yes — let's lock in a time.")
+        : Promise.resolve({ error: "no dms" })
+      ).then(function (r) {
+        setWidgetState(function (s) {
+          if (!r || !r.error) return Object.assign({}, s, { [msg.id]: "accepted" });
+          var next = Object.assign({}, s); delete next[msg.id]; return next;
+        });
+      });
+    }
+    setWidgetState(function (s) { return Object.assign({}, s, { [msg.id]: "loading" }); });
+    return acceptChallengeAction({
+      challengeId: msg.entity_id,
+      challengerId: (rawConv && rawConv.partner && rawConv.partner.id) || null,
+      viewerId: meId,
+    }).then(function (r) {
+      setWidgetState(function (s) {
+        if (r.ok) return Object.assign({}, s, { [msg.id]: "accepted" });
+        console.warn("[acceptChallenge failed]", r.error);
+        var next = Object.assign({}, s); delete next[msg.id]; return next;
+      });
+    });
+  }, [dms, rawConv, meId]);
+  const runReschedule = React.useCallback(function (msg) {
+    setWidgetState(function (s) { return Object.assign({}, s, { [msg.id]: "loading" }); });
+    return rescheduleInviteAction({ dms: dms, challengeId: msg.entity_id })
+      .then(function (r) {
+        setWidgetState(function (s) {
+          if (r.ok) return Object.assign({}, s, { [msg.id]: "rescheduled" });
+          var next = Object.assign({}, s); delete next[msg.id]; return next;
+        });
+      });
+  }, [dms]);
 
   // Suggestion pills — keep the visual placeholder per PR1 spec.
   // Generic strings; PR2/PR3 will swap to contextual (e.g. confirm
@@ -343,7 +429,17 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
         {msgs.map((m, i) => {
           const next = msgs[i + 1];
           const last = !next || next.side !== m.side;
-          return <Bubble key={m.id || i} m={m} c={c} theme={theme} accent={accent} last={last} />;
+          return (
+            <Bubble
+              key={m.id || i}
+              m={m} c={c} theme={theme} accent={accent} last={last}
+              actionState={widgetState[m.id]}
+              onConfirm={runConfirm}
+              onDispute={runDispute}
+              onAcceptInvite={runAcceptInvite}
+              onReschedule={runReschedule}
+            />
+          );
         })}
       </div>
 
@@ -383,14 +479,14 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
   );
 }
 
-function Bubble({ m, c, theme, accent, last }) {
-  // PR1: kind/payload widgets (score, invite, confirm) are deferred.
-  // The schema doesn't carry a `kind` column yet — that's PR2. We keep
-  // these branches in place but they'll never match a real DM until
-  // the migration ships.
-  if (m.kind === "score")   return <ScoreCardBubble m={m} theme={theme} accent={accent} c={c} last={last} />;
-  if (m.kind === "invite")  return <InviteCardBubble m={m} theme={theme} accent={accent} c={c} last={last} />;
-  if (m.kind === "confirm") return <ConfirmCardBubble m={m} theme={theme} accent={accent} c={c} last={last} />;
+function Bubble({ m, c, theme, accent, last, actionState, onConfirm, onDispute, onAcceptInvite, onReschedule }) {
+  // Slice A+C: widget bubbles read kind/payload from the structured-
+  // DM columns (kind/payload/entity_id, migration 20260516). Action
+  // handlers wired from ThreadScreen settle local state into the
+  // `actionState` prop so the button row swaps for a status badge.
+  if (m.kind === "score")   return <ScoreCardBubble   m={m} theme={theme} accent={accent} c={c} last={last} />;
+  if (m.kind === "invite")  return <InviteCardBubble  m={m} theme={theme} accent={accent} c={c} last={last} actionState={actionState} onAccept={onAcceptInvite} onReschedule={onReschedule} />;
+  if (m.kind === "confirm") return <ConfirmCardBubble m={m} theme={theme} accent={accent} c={c} last={last} actionState={actionState} onConfirm={onConfirm} onDispute={onDispute} />;
   const me = m.side === "me";
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flexDirection: me ? "row-reverse" : "row", marginTop: last ? 4 : 1 }}>
@@ -470,59 +566,104 @@ function ScoreLine({ name, sets, side, winner, accent }) {
   );
 }
 
-function InviteCardBubble({ m, theme, accent, c, last }) {
-  const inv = m.invite;
+function InviteCardBubble({ m, theme, accent, c, last, actionState, onAccept, onReschedule }) {
+  const inv = m.invite || {};
+  // Sender of an outgoing invite shouldn't act on it themselves — show
+  // a "Sent · waiting" status row instead of the Accept buttons.
+  const me = m.side === "me";
+  const busy = actionState === "loading";
+  const accepted = actionState === "accepted";
+  const rescheduled = actionState === "rescheduled";
+  const done = accepted || rescheduled || me;
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, marginTop: last ? 4 : 1 }}>
-      <div style={{ width: 24, flexShrink: 0 }}>
-        {last && <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color, color: "#fbf6e9", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter", fontWeight: 600, fontSize: 10 }}>{m.avatar || c.initials[0]}</div>}
-      </div>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flexDirection: me ? "row-reverse" : "row", marginTop: last ? 4 : 1 }}>
+      {!me && (
+        <div style={{ width: 24, flexShrink: 0 }}>
+          {last && <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color, color: "#fbf6e9", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter", fontWeight: 600, fontSize: 10 }}>{m.avatar || (c.initials && c.initials[0]) || "?"}</div>}
+        </div>
+      )}
       <div style={{ maxWidth: "82%" }}>
         <div style={{ background: theme.bg, border: `1.5px solid ${theme.ink}`, borderRadius: 14, padding: "12px 14px", minWidth: 240 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            <span className="t-cap" style={{ color: theme.inkSoft, fontSize: 9.5 }}>MATCH INVITE · {inv.round}</span>
+            <span className="t-cap" style={{ color: theme.inkSoft, fontSize: 9.5 }}>MATCH INVITE · {inv.round || "Friendly"}</span>
           </div>
-          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 15, color: theme.ink, marginBottom: 2 }}>{inv.date}</div>
-          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: theme.inkSoft, marginBottom: 10 }}>{inv.court}</div>
+          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 15, color: theme.ink, marginBottom: 2 }}>{inv.date || "TBC"}</div>
+          <div style={{ fontFamily: "Inter", fontSize: 12.5, color: theme.inkSoft, marginBottom: 10 }}>{inv.court || ""}</div>
           <div style={{ fontFamily: "Inter", fontSize: 12, color: theme.inkSoft, paddingTop: 8, borderTop: `0.5px solid ${theme.line}`, marginBottom: 10 }}>
-            vs <span style={{ color: theme.ink, fontWeight: 600 }}>{inv.vs}</span>
+            vs <span style={{ color: theme.ink, fontWeight: 600 }}>{inv.vs || "Opponent"}</span>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button className="t-btn" style={{ flex: 1, appearance: "none", border: 0, background: theme.ink, color: theme.bg, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "Inter", fontSize: 12, fontWeight: 600 }}>Accept</button>
-            <button className="t-btn" style={{ flex: 1, appearance: "none", border: `1px solid ${theme.line}`, background: "transparent", color: theme.ink, borderRadius: 8, padding: "7px 10px", cursor: "pointer", fontFamily: "Inter", fontSize: 12, fontWeight: 600 }}>Reschedule</button>
-          </div>
+          {!done && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => onAccept && onAccept(m)} disabled={busy} className="t-btn" style={{ flex: 1, appearance: "none", border: 0, background: theme.ink, color: theme.bg, borderRadius: 8, padding: "8px 10px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "Inter", fontSize: 12, fontWeight: 600 }}>{busy ? "…" : "Accept"}</button>
+              <button onClick={() => onReschedule && onReschedule(m)} disabled={busy} className="t-btn" style={{ flex: 1, appearance: "none", border: `1px solid ${theme.line}`, background: "transparent", color: theme.ink, borderRadius: 8, padding: "7px 10px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "Inter", fontSize: 12, fontWeight: 600 }}>Reschedule</button>
+            </div>
+          )}
+          {me && !accepted && !rescheduled && (
+            <div style={{ fontFamily: "Inter", fontSize: 11, color: theme.inkSoft, padding: "6px 0 0", textAlign: "center" }}>Invite sent · waiting on {inv.vs || "them"}</div>
+          )}
+          {accepted && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0", background: accent + "22", borderRadius: 8, color: theme.ink, fontFamily: "Inter", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 13l4 4L19 7"/></svg>
+              ACCEPTED
+            </div>
+          )}
+          {rescheduled && (
+            <div style={{ textAlign: "center", padding: "6px 0", color: theme.inkSoft, fontFamily: "Inter", fontSize: 11, fontWeight: 600 }}>Reply sent · check the thread</div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function ConfirmCardBubble({ m, theme, accent, c, last }) {
-  const cf = m.confirm;
-  const youWon = sumSets(cf.sets, 0) > sumSets(cf.sets, 1);
-  const setStr = cf.sets.map((s) => `${s[0]}-${s[1]}`).join(", ");
+function ConfirmCardBubble({ m, theme, accent, c, last, actionState, onConfirm, onDispute }) {
+  const cf = m.confirm || {};
+  const sets = Array.isArray(cf.sets) ? cf.sets : [];
+  const youWon = sumSets(sets, 0) > sumSets(sets, 1);
+  const setStr = sets.map((s) => `${s[0]}-${s[1]}`).join(", ");
+  const me = m.side === "me";
+  const busy = actionState === "loading";
+  const confirmed = actionState === "confirmed";
+  const disputed  = actionState === "disputed";
+  const done = confirmed || disputed || me;
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, marginTop: last ? 4 : 1 }}>
-      <div style={{ width: 24, flexShrink: 0 }}>
-        {last && <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color, color: "#fbf6e9", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter", fontWeight: 600, fontSize: 10 }}>{m.avatar || c.initials[0]}</div>}
-      </div>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flexDirection: me ? "row-reverse" : "row", marginTop: last ? 4 : 1 }}>
+      {!me && (
+        <div style={{ width: 24, flexShrink: 0 }}>
+          {last && <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color, color: "#fbf6e9", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter", fontWeight: 600, fontSize: 10 }}>{m.avatar || (c.initials && c.initials[0]) || "?"}</div>}
+        </div>
+      )}
       <div style={{ maxWidth: "82%" }}>
         <div style={{ background: theme.bg, border: `1px solid ${theme.line}`, borderRadius: 14, padding: "12px 14px", minWidth: 240 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            <span className="t-cap" style={{ color: theme.inkSoft, fontSize: 9.5 }}>CONFIRM SCORE · {cf.league}</span>
+            <span className="t-cap" style={{ color: theme.inkSoft, fontSize: 9.5 }}>CONFIRM SCORE · {cf.league || "Match"}</span>
           </div>
           <div style={{ fontFamily: "Inter", fontSize: 13, color: theme.ink, marginBottom: 2 }}>
-            <span style={{ fontWeight: youWon ? 700 : 500 }}>{cf.p1}</span>
+            <span style={{ fontWeight: youWon ? 700 : 500 }}>{cf.p1 || "Player 1"}</span>
             <span style={{ color: theme.inkFaint, margin: "0 6px" }}>vs</span>
-            <span style={{ fontWeight: !youWon ? 700 : 500 }}>{cf.p2}</span>
+            <span style={{ fontWeight: !youWon ? 700 : 500 }}>{cf.p2 || "Player 2"}</span>
           </div>
-          <div className="t-num" style={{ fontFamily: "JetBrains Mono", fontSize: 18, fontWeight: 600, color: theme.ink, letterSpacing: "-0.01em", marginBottom: 12 }}>{setStr}</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button className="t-btn" style={{ flex: 1, appearance: "none", border: 0, background: accent, color: "#0f1410", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "Inter", fontSize: 12, fontWeight: 700 }}>Confirm</button>
-            <button className="t-btn" style={{ flex: 1, appearance: "none", border: `1px solid ${theme.line}`, background: "transparent", color: theme.ink, borderRadius: 8, padding: "7px 10px", cursor: "pointer", fontFamily: "Inter", fontSize: 12, fontWeight: 600 }}>Dispute</button>
-          </div>
+          <div className="t-num" style={{ fontFamily: "JetBrains Mono", fontSize: 18, fontWeight: 600, color: theme.ink, letterSpacing: "-0.01em", marginBottom: 12 }}>{setStr || "—"}</div>
+          {!done && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => onConfirm && onConfirm(m)} disabled={busy} className="t-btn" style={{ flex: 1, appearance: "none", border: 0, background: accent, color: "#0f1410", borderRadius: 8, padding: "8px 10px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "Inter", fontSize: 12, fontWeight: 700 }}>{busy ? "…" : "Confirm"}</button>
+              <button onClick={() => onDispute && onDispute(m)} disabled={busy} className="t-btn" style={{ flex: 1, appearance: "none", border: `1px solid ${theme.line}`, background: "transparent", color: theme.ink, borderRadius: 8, padding: "7px 10px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "Inter", fontSize: 12, fontWeight: 600 }}>Dispute</button>
+            </div>
+          )}
+          {me && !confirmed && !disputed && (
+            <div style={{ fontFamily: "Inter", fontSize: 11, color: theme.inkSoft, padding: "6px 0 0", textAlign: "center" }}>Waiting for {cf.p2 || "opponent"} to confirm</div>
+          )}
+          {confirmed && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0", background: accent + "22", borderRadius: 8, color: theme.ink, fontFamily: "Inter", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 13l4 4L19 7"/></svg>
+              CONFIRMED
+            </div>
+          )}
+          {disputed && (
+            <div style={{ textAlign: "center", padding: "8px 0", color: theme.inkSoft, fontFamily: "Inter", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", background: theme.chip, borderRadius: 8 }}>DISPUTED</div>
+          )}
         </div>
       </div>
     </div>

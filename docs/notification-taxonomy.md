@@ -48,6 +48,19 @@ A fourth soft state — **demoted** — exists: when a dispute is later confirme
 | `league_cancelled` | important | Owner runs `cancel_league` — season ended without a final table | Active members (excl. owner) | `View league →` (in-app only — no push in V1) |
 | `league_voided` | important | Owner runs `void_league` — wrong setup / test data; league disappears from members' lists | Active members (excl. owner) | (no CTA — league is gone; in-app only — no push in V1) |
 
+### Inline DM mirror (v2 structured widgets)
+
+A subset of the events above is **also** mirrored as a structured-widget DM in the conversation between the two parties so the action can be taken inline in the v2 `MessagesScreen` (Slice B–D of the v2 widget wiring, May 2026):
+
+| Notification | Mirrored DM `kind` | DM emitter | Inline action |
+|---|---|---|---|
+| `match_tag` (ranked log) | `confirm` | `emitMatchConfirmDM` | **Confirm** → `respond_to_match_tag(true)`; **Dispute** → `respond_to_match_tag(false)` |
+| `casual_match_logged` | `score` | `emitMatchScoreDM` | Read-only (casual auto-confirms) |
+| `challenge_received` | `invite` | `emitChallengeInviteDM` | **Accept** → `challenges.status='accepted'`; **Reschedule** → templated DM reply |
+| *(none — no parent notification yet)* | `invite` | `emitRatingMatchInviteDM` (v2 Play → Players → Invite to play) | **Accept** → templated reply (full challenge-create on Accept ships next); **Reschedule** → templated reply |
+
+DM rows are mirrors, not the authority — the original `notifications` row is still inserted and the underlying entity (`match_history.status`, `challenges.status`) still drives final state. See `docs/messaging.md` "Structured DMs" for the schema + helper module locations.
+
 ### Priority scoring
 
 Live in `notifUtils.computePriorityScore(n)`. Final score drives sort order within the tray:

@@ -144,13 +144,90 @@ describe("msgToV2", () => {
     expect(v2.text).toBe("Message deleted");
   });
 
-  it("never carries kind/payload in PR1", () => {
+  it("leaves kind/score/invite/confirm undefined for plain text rows", () => {
     var v2 = msgToV2({
       id: "m-4", conversation_id: "c-1", sender_id: ALEX,
       content: "hi", created_at: new Date().toISOString(), deleted_at: null,
     }, conv, ME);
     expect(v2.kind).toBeUndefined();
-    expect(v2.payload).toBeUndefined();
+    expect(v2.score).toBeUndefined();
+    expect(v2.invite).toBeUndefined();
+    expect(v2.confirm).toBeUndefined();
+  });
+
+  // Slice A of the structured-widgets work — the schema gained
+  // kind/payload/entity_id columns (migration 20260516). The adapter
+  // now unpacks each known kind onto the bubble prop the v2
+  // MessagesScreen.Bubble dispatcher reads.
+  it("unpacks a 'score' row onto m.score", () => {
+    var row = {
+      id: "m-s", conversation_id: "c-1", sender_id: ALEX,
+      content: "Final score 6-4 6-3",
+      created_at: new Date().toISOString(), deleted_at: null,
+      kind: "score", entity_id: "match-xyz",
+      payload: { surface: "hard", duration: "1h12", p1: "Alex", p2: "You", sets: [[4,6],[3,6]] },
+    };
+    var v2 = msgToV2(row, conv, ME);
+    expect(v2.kind).toBe("score");
+    expect(v2.score.surface).toBe("hard");
+    expect(v2.score.sets).toEqual([[4,6],[3,6]]);
+    expect(v2.entity_id).toBe("match-xyz");
+  });
+
+  it("unpacks an 'invite' row onto m.invite", () => {
+    var row = {
+      id: "m-i", conversation_id: "c-1", sender_id: ALEX,
+      content: "Want to play Sat 9am?", created_at: new Date().toISOString(),
+      deleted_at: null,
+      kind: "invite", entity_id: "challenge-1",
+      payload: { round: "Casual", date: "Sat 9am", court: "Local park", vs: "Alex" },
+    };
+    var v2 = msgToV2(row, conv, ME);
+    expect(v2.kind).toBe("invite");
+    expect(v2.invite.date).toBe("Sat 9am");
+    expect(v2.invite.vs).toBe("Alex");
+    expect(v2.entity_id).toBe("challenge-1");
+  });
+
+  it("unpacks a 'confirm' row onto m.confirm", () => {
+    var row = {
+      id: "m-c", conversation_id: "c-1", sender_id: ALEX,
+      content: "Logged 6-4 6-3", created_at: new Date().toISOString(),
+      deleted_at: null,
+      kind: "confirm", entity_id: "match-xyz",
+      payload: { league: "Casual", p1: "Alex", p2: "You", sets: [[6,4],[6,3]] },
+    };
+    var v2 = msgToV2(row, conv, ME);
+    expect(v2.kind).toBe("confirm");
+    expect(v2.confirm.league).toBe("Casual");
+    expect(v2.confirm.sets).toEqual([[6,4],[6,3]]);
+    expect(v2.entity_id).toBe("match-xyz");
+  });
+
+  it("falls back to plain text when a structured row is deleted", () => {
+    var row = {
+      id: "m-d", conversation_id: "c-1", sender_id: ALEX,
+      content: "Logged 6-4 6-3", created_at: new Date().toISOString(),
+      deleted_at: new Date().toISOString(),
+      kind: "confirm", entity_id: "match-xyz",
+      payload: { league: "Casual", p1: "Alex", p2: "You", sets: [[6,4],[6,3]] },
+    };
+    var v2 = msgToV2(row, conv, ME);
+    expect(v2.text).toBe("Message deleted");
+    expect(v2.kind).toBeUndefined();
+    expect(v2.confirm).toBeUndefined();
+  });
+
+  it("ignores unknown kinds (forward compatibility)", () => {
+    var row = {
+      id: "m-u", conversation_id: "c-1", sender_id: ALEX,
+      content: "new widget", created_at: new Date().toISOString(),
+      deleted_at: null,
+      kind: "future_widget", payload: { foo: "bar" },
+    };
+    var v2 = msgToV2(row, conv, ME);
+    expect(v2.kind).toBeUndefined();
+    expect(v2.text).toBe("new widget");
   });
 });
 

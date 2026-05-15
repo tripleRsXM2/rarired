@@ -14,6 +14,7 @@ import { supabase } from "../../../lib/supabase.js";
 import * as C from "../services/challengeService.js";
 import { fetchProfilesByIds } from "../../../lib/db.js";
 import { insertNotification } from "../../notifications/services/notificationService.js";
+import { emitChallengeInviteDM } from "../../people/services/dmWidgets.js";
 import { track } from "../../../lib/analytics.js";
 
 export function useChallenges(opts) {
@@ -146,6 +147,25 @@ export function useChallenges(opts) {
       from_user_id: authUser.id,
       entity_id: r.data.id,
     });
+    // Slice B: also drop an Invite-card DM into the recipient's
+    // thread so the challenge surfaces inline in v2 Messages with
+    // Accept / Reschedule buttons. Non-fatal; the challenge_received
+    // notification stays authoritative.
+    try {
+      var dateLabel = draft.proposed_at
+        ? new Date(draft.proposed_at).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        : 'Anytime';
+      var inviteRes = await emitChallengeInviteDM(authUser.id, target.id, {
+        challengeId: r.data.id,
+        round: 'Friendly',
+        date: dateLabel,
+        court: (draft.venue || draft.court || 'TBC'),
+        opponentName: target.name || 'Opponent',
+      });
+      if (inviteRes && inviteRes.error) {
+        console.warn('[invite-card DM failed]', inviteRes.error.message || inviteRes.error);
+      }
+    } catch (e) { console.warn('[invite-card DM threw]', e); }
     track("challenge_sent", {
       target_user_id: target.id,
       has_proposed_time: !!draft.proposed_at,

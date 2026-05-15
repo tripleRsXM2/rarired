@@ -41,6 +41,7 @@ import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
 import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
+import { emitRatingMatchInviteDM } from "../../features/people/services/dmWidgets.js";
 // useDMs is NOT imported here — it would race v1's instance for the
 // same realtime channel name (`convs:<uid>`) and crash Supabase
 // Realtime with 'cannot add postgres_changes callbacks after
@@ -198,11 +199,23 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   }, [dms]);
   const onInvitePlayer = React.useCallback(function (player) {
     if (!player || !player.id) return;
+    // Slice D: emit a rating-match invite-card DM into the 1:1 conv
+    // before navigating. The card renders with Accept / Reschedule
+    // buttons in the recipient's thread; sender sees a "waiting" hint.
+    // No challenge entity yet — Accept currently fires a templated
+    // "Yes, let's lock in a time" reply (see widgetActions.js).
+    if (resolvedAuthUser && resolvedAuthUser.id) {
+      emitRatingMatchInviteDM(resolvedAuthUser.id, player.id, {
+        opponentName: (player.name || "").split(" ")[0] || "you",
+      }).then(function (r) {
+        if (r && r.error) console.warn("[rating-match invite DM failed]", r.error.message || r.error);
+      }).catch(function (e) { console.warn("[rating-match invite DM threw]", e); });
+    }
     if (dms && typeof dms.openConversationWith === "function") {
       try { dms.openConversationWith(player.id); } catch (_) {}
     }
     setRoute("messages");
-  }, [dms]);
+  }, [dms, resolvedAuthUser]);
 
   const isWide = useIsWide(700);
 

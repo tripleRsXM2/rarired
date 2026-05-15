@@ -18,7 +18,7 @@ the Groups section below for scope, schema, and v1 limitations.
 | Table | Purpose | Ownership |
 |---|---|---|
 | `conversations` | One row per canonical pair. `pair_key` is the uuid-sorted `userA:userB` string, unique-indexed. Columns: `id, user1_id, user2_id, pair_key, requester_id, status ('pending'|'accepted'|'declined'), declined_at, request_cooldown_until, last_message_at, last_message_preview, last_message_sender_id, created_at` | Created via `get_or_create_conversation` RPC only. |
-| `direct_messages` | Every message. Columns: `id, conversation_id, sender_id, content, reply_to_id (nullable), edited_at, deleted_at, created_at` | Inserted by client (RLS-scoped to `sender_id = auth.uid()`). |
+| `direct_messages` | Every message. Columns: `id, conversation_id, sender_id, content, reply_to_id (nullable), edited_at, deleted_at, created_at, kind, payload, entity_id`. The last three are nullable and only set for **structured-widget DMs** (score / invite / confirm cards). See "Structured DMs" below. | Inserted by client (RLS-scoped to `sender_id = auth.uid()`). |
 | `message_reads` | Per-user-per-conv `last_read_at`. Written via `mark_conversation_read` RPC. | Security-definer RPC; client cannot write directly. |
 | `message_reactions` | `{id, message_id, user_id, emoji}`. Unique (message_id, user_id, emoji). | Client inserts/deletes with RLS. |
 | `conversation_pins` | `{user_id, conversation_id, pinned_at}` (compound PK). Per-user pin. | Client inserts/deletes with RLS (`user_id = auth.uid()`). |
@@ -33,6 +33,21 @@ the Groups section below for scope, schema, and v1 limitations.
 - `message_reads_participant_select.sql` — RLS: partner can `SELECT` read rows for "Seen" receipts.
 - `notification_upsert_rpc.sql` — `upsert_message_notification` RPC + partial unique index on `notifications (user_id, entity_id) where type='message'`. Collapses N new messages in a conv to one tray row.
 - `20260423_conversation_pins.sql` — `conversation_pins` table (per-user pins), RLS (owner-only), realtime publication, `REPLICA IDENTITY FULL` so DELETE events carry the conversation_id back to the client.
+- `20260516_dm_structured_payload.sql` — adds `kind text`, `payload jsonb`, `entity_id uuid` to `direct_messages`. Nullable; old rows render as plain text. Enables the v2 widget bubbles (score / invite / confirm) to ride the same conversation timeline as text DMs. Partial index on `entity_id`.
+
+## Structured DMs (v2 widget bubbles)
+
+Three message kinds are emitted by client-side auto-emitters and rendered as interactive bubbles in the v2 `MessagesScreen`:
+
+| `kind` | Emitter | Payload shape | Bubble | Action buttons |
+|---|---|---|---|---|
+| `confirm` | `emitMatchConfirmDM` (called by `useMatchHistory.submitMatch` for ranked matches with a linked opponent) | `{ league, p1, p2, sets: [[a,b],...] }` | `ConfirmCardBubble` | **Confirm** → `respond_to_match_tag(match_id, true)` RPC. **Dispute** → `respond_to_match_tag(match_id, false)`. |
+| `score` | `emitMatchScoreDM` (called by `useMatchHistory.submitMatch` for casual matches with a linked opponent) | `{ surface, duration, p1, p2, sets }` | `ScoreCardBubble` | Read-only — casual matches auto-confirm. |
+| `invite` | `emitChallengeInviteDM` (called by `useChallenges.sendChallenge`) AND `emitRatingMatchInviteDM` (called by v2 Play → Players → Invite-to-play) | `{ round, date, court, vs }` | `InviteCardBubble` | **Accept** → `updateChallengeStatus(challenge_id, 'accepted')` when `entity_id` is set; templated reply otherwise. **Reschedule** → sends a templated plain-text DM into the same thread. |
+
+Authority: structured DMs are **mirror** rows, not the source of truth. The authoritative entity (`match_history` for confirm/score, `challenges` for invite) carries the canonical status; the widget reads `entity_id` and looks the entity up to determine final state. Notifications via `notifications` table still fire as before; the DM row is a UX layer that surfaces the same action inline in the conversation.
+
+Helper module: `src/features/people/services/dmWidgets.js`. Bubble action handlers: `src/v2/features/messages/widgetActions.js`.
 
 ### RPCs called by the client
 
