@@ -69,6 +69,24 @@ export function deleteConversation(convId){
   return supabase.from('conversations').delete().eq('id',convId);
 }
 
+// Rename a group thread. Wraps the `rename_conversation` RPC which
+// gates by participant membership server-side and refuses 1:1 convs.
+// Empty / whitespace `name` clears the rename (NULL) — the group
+// re-enters the find-or-create dedupe pool. Returns the updated row.
+export async function renameConversation(convId, name){
+  var r = await supabase.rpc('rename_conversation', {
+    p_conv_id: convId,
+    p_name: name == null ? '' : String(name),
+  });
+  if(r.error){
+    return { data: null, error: r.error };
+  }
+  // RPC returns the conversations row (SETOF / RECORD); normalise to a
+  // single object for parity with the rest of dmService.
+  var d = Array.isArray(r.data) ? r.data[0] : r.data;
+  return { data: d, error: null };
+}
+
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 export function fetchThread(convId){

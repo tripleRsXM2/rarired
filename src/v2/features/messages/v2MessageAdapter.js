@@ -32,6 +32,10 @@ import { getPresence } from "../../../features/people/services/presenceService.j
 // 1:1 → partner name; group → up to 2 names + "& N others".
 export function convTitle(conv, me) {
   if (!conv) return "";
+  // Group custom-name wins when present (set via rename_conversation
+  // RPC, migration 20260516_group_dedupe_and_rename). Falls back to
+  // the participant-list label so un-renamed groups still read well.
+  if (conv.isGroup && conv.name) return conv.name;
   if (!conv.isGroup) return (conv.partner && conv.partner.name) || "Conversation";
   var others = (conv.participants || []).filter(function (p) { return p && p.id !== me; });
   if (others.length === 0) return "Group";

@@ -546,7 +546,12 @@ export function useDMs(opts) {
       if (r && r.error) return r;
       if (o.slot) setProposedSlot(o.slot);
       if (o.draft != null) setMsgDraft(o.draft);
-      return { error: null };
+      // Surface the conv id so callers can route into the thread + send
+      // a queued draft without race-reading stale `dms.activeConv` from
+      // a captured closure. Draft 1:1s use a "draft:<partnerId>" id —
+      // sendMessage materialises the real row on first send.
+      var ac = activeConvRef.current;
+      return { error: null, convId: ac && ac.id };
     }
 
     // Group path — materialise immediately. Groups have no draft mode:
@@ -572,6 +577,10 @@ export function useDMs(opts) {
       id: convId,
       isGroup: true,
       status: "accepted",
+      // `name` mirrors public.conversations.name. NULL = un-renamed
+      // (the find-or-create dedupe pool); set via rename_conversation
+      // RPC + renameConversation service helper.
+      name: null,
       participants: participants,
       partner: null,
       requester_id: uid,
@@ -590,12 +599,61 @@ export function useDMs(opts) {
     // realtime participants channel will dedupe if the row arrives via
     // postgres_changes too.
     setConversations(function (cs) {
+      // Dedupe — the RPC may have returned the id of an existing
+      // group (find-or-create by exact member set). When the conv is
+      // already in our list, leave it alone instead of prepending a
+      // skeleton that overwrites the enriched copy (participants,
+      // last_message_at, etc.).
       if (cs.some(function (c) { return c.id === convId; })) return cs;
       return [groupConv].concat(cs);
     });
+    // Defensive: pull a fresh `fetch_my_conversations` so the inbox
+    // picks up the new row with full participant + name data even
+    // when the optimistic prepend skipped (existing group reused).
+    if (typeof loadConversations === "function") {
+      try { loadConversations(); } catch (_) {}
+    }
     if (o.slot) setProposedSlot(o.slot);
     if (o.draft != null) setMsgDraft(o.draft);
-    return { error: null };
+    // Return the real conv id so callers can route into the thread +
+    // send the draft message without race-reading `dms.activeConv`.
+    return { error: null, convId: convId };
+  }
+
+  // ── Rename a group conversation ─────────────────────────────────────────
+  // Wraps the `rename_conversation` SECURITY DEFINER RPC (migration
+  // 20260516_group_dedupe_and_rename.sql). Optimistically patches the
+  // local conversations list + activeConv so the new name renders
+  // immediately; rolls back on RPC failure. Empty string clears the
+  // rename and the group re-enters the find-or-create dedupe pool.
+  async function renameGroup(convId, name){
+    if (!convId) return { error: "no_conv_id" };
+    var prevConversations;
+    var prevActive = activeConvRef.current;
+    var trimmed = name == null ? "" : String(name).trim();
+    var nextName = trimmed.length ? trimmed.slice(0, 80) : null;
+    setConversations(function (cs) {
+      prevConversations = cs;
+      return cs.map(function (c) {
+        return c.id === convId ? Object.assign({}, c, { name: nextName }) : c;
+      });
+    });
+    if (prevActive && prevActive.id === convId) {
+      var patched = Object.assign({}, prevActive, { name: nextName });
+      activeConvRef.current = patched;
+      setActiveConv(patched);
+    }
+    var r = await D.renameConversation(convId, trimmed);
+    if (r.error) {
+      // Roll back.
+      if (prevConversations) setConversations(prevConversations);
+      if (prevActive && prevActive.id === convId) {
+        activeConvRef.current = prevActive;
+        setActiveConv(prevActive);
+      }
+      return { error: r.error };
+    }
+    return { error: null, data: r.data };
   }
 
   // ── Send ────────────────────────────────────────────────────────────────
@@ -1372,6 +1430,7 @@ export function useDMs(opts) {
     loadConversations: loadConversations, openConversation: openConversation,
     openOrStartConversation: openOrStartConversation,
     openConversationWith: openConversationWith,
+    renameConversation: renameGroup,
     closeConversation: closeConversation,
     // Phase 1b — proposed-slot block surfaced in the composer. Callers
     // can read current slot + clear/update it (e.g. composer UI's

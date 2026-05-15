@@ -210,7 +210,12 @@ describe("useDMs — openConversationWith group invite", function () {
     await act(async function () {
       result = await hook.result.current.openConversationWith([p1, p2, p3], { draft: "hi all" });
     });
-    expect(result).toEqual({ error: null });
+    // Bug-fix 2026-05-16: openConversationWith now surfaces convId so
+    // callers can route into the new thread + send a queued draft
+    // without race-reading stale `dms.activeConv` from a captured
+    // closure. See src/features/people/hooks/useDMs.js + the v2
+    // NewMessageScreen submit flow.
+    expect(result).toEqual({ error: null, convId: "conv-grp-1" });
 
     // Group RPC called once with the three other ids — caller is added by the RPC.
     expect(mockCreateGroup).toHaveBeenCalledTimes(1);

@@ -191,38 +191,37 @@ export default function NewMessageScreen({
     setErr("");
     try {
       var convId;
+      var partners;
       if (selected.length === 1) {
         // 1:1 — open or start a draft conv with this partner.
         var single = selected[0];
-        var r1 = onPickGroup
-          ? await onPickGroup([{ id: single.id, name: single.name, avatar_url: single.avatar_url }])
-          : null;
-        if (r1 && r1.error) {
-          setErr(r1.error.message || "Couldn't start that conversation.");
-          setBusy(false);
-          return;
-        }
-        convId = r1 && r1.convId;
+        partners = [{ id: single.id, name: single.name, avatar_url: single.avatar_url }];
       } else {
-        // 2+ — create a group conversation via the existing RPC.
-        var partners = selected.map(function (s) {
+        // 2+ — find-or-create a group conversation via the
+        // create_group_conversation RPC. The RPC dedupes by exact
+        // participant set on un-named groups, so picking the same
+        // members again reuses the existing thread.
+        partners = selected.map(function (s) {
           return { id: s.id, name: s.name, avatar_url: s.avatar_url };
         });
-        var rg = onPickGroup ? await onPickGroup(partners) : null;
-        if (rg && rg.error) {
-          if (rg.error.code === "block_conflict") {
-            setErr("That group can't be created right now. Try messaging them individually instead.");
-          } else {
-            setErr(rg.error.message || "Couldn't create that group.");
-          }
-          setBusy(false);
-          return;
-        }
-        convId = rg && rg.convId;
       }
-      // Route into the thread (the caller is responsible for sending
-      // the draft text once the conv id is known — passing it through).
-      if (convId && onPickContact) onPickContact(convId, draft.trim());
+      var rg = onPickGroup ? await onPickGroup(partners) : null;
+      if (rg && rg.error) {
+        if (rg.error.code === "block_conflict") {
+          setErr("That group can't be created right now. Try messaging them individually instead.");
+        } else {
+          setErr(rg.error.message || "Couldn't start that conversation.");
+        }
+        setBusy(false);
+        return;
+      }
+      convId = rg && rg.convId;
+      // Route into the thread + send the draft text in one go. The
+      // parent handler awaits both, so by the time we close the
+      // composer the message has landed (no flash of empty thread).
+      if (convId && onPickContact) {
+        await onPickContact(convId, draft.trim());
+      }
     } catch (e) {
       setErr((e && e.message) || "Couldn't start that conversation.");
     } finally {

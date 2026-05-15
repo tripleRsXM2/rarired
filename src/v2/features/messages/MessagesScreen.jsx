@@ -73,11 +73,10 @@ export default function MessagesScreen({ theme, accent, isPhone = false, dms, au
     var arg = partners.length === 1 ? partners[0] : partners;
     var r = await dms.openConversationWith(arg);
     if (r && r.error) return { error: r.error };
-    // openConversationWith puts the conv into dms.activeConv. Read the
-    // id from there — works for both the draft (1:1) and freshly-
-    // created group paths.
-    var convId = dms.activeConv && dms.activeConv.id;
-    return { convId: convId };
+    // openConversationWith now returns the canonical convId directly,
+    // so we don't race-read `dms.activeConv` (which is a stale
+    // render-time snapshot inside this captured closure).
+    return { convId: r && r.convId };
   }
 
   if (composing) {
@@ -90,15 +89,27 @@ export default function MessagesScreen({ theme, accent, isPhone = false, dms, au
         meId={meId}
         onBack={function () { setComposing(false); }}
         onPickContact={async function (convId, draftText) {
+          if (!convId) { setComposing(false); return; }
+          // Open the conv synchronously here (not via the effect) so
+          // sendMessage finds it in activeConvRef.current immediately.
+          // The effect at the top will then no-op because activeConv
+          // already matches activeConvoId.
+          if (dms && dms.conversations && dms.openConversation) {
+            var raw = dms.conversations.find(function (c) { return c.id === convId; });
+            if (raw) {
+              try { dms.openConversation(raw); } catch (_) {}
+            }
+          }
+          setActiveConvoId(convId);
           setComposing(false);
-          if (convId) {
-            setActiveConvoId(convId);
-            if (draftText && draftText.trim() && dms) {
-              // Defer a tick so openConversation effect fires first and
-              // dms.activeConv lines up with the new conv id.
-              setTimeout(function () {
-                if (dms.sendMessage) dms.sendMessage(draftText.trim());
-              }, 50);
+          // Send the draft if present. We call sendMessage AFTER
+          // openConversation so the ref-backed activeConv is set —
+          // useDMs.sendMessage reads activeConvRef.current, not
+          // captured state, so this is race-safe.
+          var text = (draftText || "").trim();
+          if (text && dms && dms.sendMessage) {
+            try { await dms.sendMessage(text); } catch (e) {
+              console.warn("[draft-send failed]", e);
             }
           }
         }}
@@ -258,6 +269,13 @@ function ConvoRow({ c, theme, accent, onOpen }) {
 }
 
 function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack, isPhone }) {
+  // Group rename sheet — open/close state + draft + saving state.
+  // Only relevant when the thread is a group; the header makes itself
+  // tappable to open the sheet, the sheet calls dms.renameConversation
+  // (which wraps the rename_conversation RPC, migration 20260516).
+  const [renameOpen, setRenameOpen] = React.useState(false);
+  const [renameDraft, setRenameDraft] = React.useState("");
+  const [renameBusy, setRenameBusy] = React.useState(false);
   // Slice C: per-message action state for the structured widgets.
   // Map keys are message ids; values are 'confirmed' | 'disputed' |
   // 'accepted' | 'rescheduled' | 'loading' | 'error'. After a button
@@ -413,11 +431,57 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
             <span style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: "50%", background: accent, border: `2px solid ${theme.bg}` }} />
           )}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14, color: theme.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+        <button
+          onClick={c.type === "group" ? function () {
+            setRenameDraft((rawConv && rawConv.name) || "");
+            setRenameOpen(true);
+          } : undefined}
+          disabled={c.type !== "group"}
+          className="t-btn"
+          style={{
+            flex: 1, minWidth: 0, appearance: "none", border: 0,
+            background: "transparent", padding: 0, textAlign: "left",
+            cursor: c.type === "group" ? "pointer" : "default",
+            color: "inherit", display: "flex", flexDirection: "column",
+          }}
+          aria-label={c.type === "group" ? "Group settings" : undefined}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14, color: theme.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+            {c.type === "group" && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={theme.inkFaint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+            )}
+          </div>
           <div style={{ fontFamily: "Inter", fontSize: 11, color: c.activeNow ? accent : theme.inkSoft }}>{subLabel}</div>
-        </div>
+        </button>
       </div>
+
+      {renameOpen && c.type === "group" && (
+        <GroupRenameSheet
+          theme={theme} accent={accent}
+          currentName={(rawConv && rawConv.name) || ""}
+          fallbackName={c.name}
+          draft={renameDraft} setDraft={setRenameDraft}
+          busy={renameBusy}
+          onClose={function () { setRenameOpen(false); }}
+          onSave={async function () {
+            if (!dms || !dms.renameConversation) {
+              setRenameOpen(false);
+              return;
+            }
+            setRenameBusy(true);
+            var r = await dms.renameConversation(convoId, renameDraft);
+            setRenameBusy(false);
+            if (r && r.error) {
+              console.warn("[renameConversation failed]", r.error.message || r.error);
+              return;
+            }
+            setRenameOpen(false);
+          }}
+        />
+      )}
 
       <div ref={scrollRef} className="t-noscroll" style={{
         flex: 1, minHeight: 0, overflowY: "auto",
@@ -664,6 +728,83 @@ function ConfirmCardBubble({ m, theme, accent, c, last, actionState, onConfirm, 
           {disputed && (
             <div style={{ textAlign: "center", padding: "8px 0", color: theme.inkSoft, fontFamily: "Inter", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", background: theme.chip, borderRadius: 8 }}>DISPUTED</div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Centered modal for renaming a group thread. Backdrop click +
+// Cancel + the (×) button all dismiss. Empty / whitespace name
+// clears the rename (group re-enters the find-or-create dedupe
+// pool — see migration 20260516_group_dedupe_and_rename.sql).
+function GroupRenameSheet({ theme, accent, currentName, fallbackName, draft, setDraft, busy, onClose, onSave }) {
+  const cleared = draft.trim().length === 0;
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 420, background: theme.bg, color: theme.ink,
+        borderRadius: 20, overflow: "hidden",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+        display: "flex", flexDirection: "column", position: "relative",
+      }}>
+        <button onClick={onClose} aria-label="Close" style={{
+          position: "absolute", top: 10, right: 10, zIndex: 2,
+          appearance: "none", border: 0, background: "rgba(0,0,0,0.10)",
+          color: theme.ink, width: 28, height: 28, borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+        </button>
+        <div style={{ padding: "22px 22px 8px" }}>
+          <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 4 }}>Group</div>
+          <h2 className="t-serif" style={{ fontSize: 22, lineHeight: 1.1, margin: 0, letterSpacing: "-0.01em" }}>Name this chat.</h2>
+          <p style={{ fontFamily: "Inter", fontSize: 12.5, color: theme.inkSoft, lineHeight: 1.45, marginTop: 8, marginBottom: 0 }}>
+            Renamed groups stay distinct — adding the same people again opens a fresh thread. Clear the name to merge back.
+          </p>
+        </div>
+        <div style={{ padding: "12px 22px 4px" }}>
+          <input
+            value={draft}
+            onChange={function (e) { setDraft(e.target.value.slice(0, 80)); }}
+            onKeyDown={function (e) { if (e.key === "Enter" && !busy) onSave(); }}
+            placeholder={fallbackName || "e.g. A team"}
+            autoFocus
+            maxLength={80}
+            disabled={busy}
+            style={{
+              width: "100%", appearance: "none",
+              border: `1.5px solid ${theme.line}`,
+              background: theme.bgRaised, color: theme.ink,
+              borderRadius: 10, padding: "10px 12px",
+              fontFamily: "Inter", fontSize: 14, outline: "none",
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontFamily: "Inter", fontSize: 11, color: theme.inkFaint }}>
+            <span>{cleared && currentName ? "Clearing will merge this back into the auto-group." : ""}</span>
+            <span>{draft.length}/80</span>
+          </div>
+        </div>
+        <div style={{ padding: "16px 22px 22px", display: "flex", gap: 8, borderTop: `0.5px solid ${theme.line}`, marginTop: 12 }}>
+          <button onClick={onClose} disabled={busy} className="t-btn" style={{
+            flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
+            background: theme.bgRaised, color: theme.ink,
+            borderRadius: 10, padding: "11px", cursor: busy ? "default" : "pointer",
+            fontFamily: "Inter", fontWeight: 600, fontSize: 13,
+          }}>Cancel</button>
+          <button onClick={onSave} disabled={busy} className="t-btn" style={{
+            flex: 1.4, appearance: "none", border: 0,
+            background: accent, color: "#0f1410",
+            borderRadius: 10, padding: "11px", cursor: busy ? "default" : "pointer",
+            opacity: busy ? 0.6 : 1,
+            fontFamily: "Inter", fontWeight: 700, fontSize: 13, letterSpacing: "0.04em",
+          }}>{busy ? "Saving…" : (cleared ? "Clear name" : "Save")}</button>
         </div>
       </div>
     </div>
