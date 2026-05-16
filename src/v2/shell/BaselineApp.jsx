@@ -591,7 +591,7 @@ function RouteView({
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
   onCreateLiveMatch, onSaveLiveMatch,
-  onEndSet, onTagPoint,
+  onEndSet, onTagPoint, onCancel,
 }) {
   switch (route) {
     case "home":
@@ -620,7 +620,7 @@ function RouteView({
         onChangeover={() => onGo("changeover")}
         onSave={onSaveLiveMatch}
         onEndSet={onEndSet} onTagPoint={onTagPoint}
-        onCancel={onCancelLiveMatch}
+        onCancel={onCancel}
       />;
     case "competitions":
       return <CompetitionsScreen
@@ -688,7 +688,7 @@ function MobileRouteView({
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
   onCreateLiveMatch, onSaveLiveMatch,
-  onEndSet, onTagPoint,
+  onEndSet, onTagPoint, onCancel,
 }) {
   switch (route) {
     case "home":
@@ -719,7 +719,7 @@ function MobileRouteView({
             onChangeover={() => onGo("changeover")}
             onSave={onSaveLiveMatch}
             onEndSet={onEndSet} onTagPoint={onTagPoint}
-            onCancel={onCancelLiveMatch}
+            onCancel={onCancel}
           />
         </div>
       );
