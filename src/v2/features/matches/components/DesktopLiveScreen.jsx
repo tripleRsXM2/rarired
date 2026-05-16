@@ -24,6 +24,13 @@ export default function DesktopLiveScreen({
   // match_history + fires match_tag notification + emits the
   // confirm-card DM into the opponent's thread).
   onSave,
+  // End the current set early with whatever games are on the board.
+  // Discoverable affordance for "we only played 4 games, let's call
+  // it" flows — undo is the safety net for accidental taps.
+  onEndSet,
+  // Re-label the most recent point. Accepts engine keys:
+  // 'ace' / 'df' / 'winner' / 'error' / 'net'. Null clears.
+  onTagPoint,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [saving, setSaving] = React.useState(false);
@@ -40,6 +47,28 @@ export default function DesktopLiveScreen({
   // gate the button on that.
   const canSave = !!(match && engineToLogPayload(match).length > 0);
   const matchDone = !!(match && match.endedAt);
+
+  // End-set gating: only meaningful when at least one game has
+  // landed in the current set (or an in-progress tiebreak). Avoids
+  // letting the user "end" a 0-0 set into setHistory.
+  const canEndSet = !!(match && !match.endedAt && (
+    (Array.isArray(match.games)   && (match.games[0]   > 0 || match.games[1]   > 0)) ||
+    (match.inTiebreak && Array.isArray(match.tbPoints) && (match.tbPoints[0] > 0 || match.tbPoints[1] > 0))
+  ));
+
+  // Tag chips: human labels in the UI, engine keys in the action.
+  // Net cord is log-only (no stat impact) but still useful for the
+  // point timeline.
+  const TAGS = [
+    { key: "ace",    label: "Ace" },
+    { key: "winner", label: "Winner" },
+    { key: "df",     label: "Double fault" },
+    { key: "error",  label: "Unforced error" },
+    { key: "net",    label: "Net cord" },
+  ];
+  const lastLog = match && match.log && match.log.length ? match.log[match.log.length - 1] : null;
+  const lastTag = (lastLog && lastLog.tag) || null;
+  const hasLastPoint = !!lastLog;
   const handleSave = React.useCallback(async function () {
     if (!onSave || saving) return;
     setSaveErr("");
@@ -115,17 +144,36 @@ export default function DesktopLiveScreen({
           <DesktopTapZone player={match.p2} server={match.serverIndex === 1} onTap={() => onPoint(1)} onMinus={onUndo} theme={theme} accent={accent} />
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          {["Ace", "Winner", "Double fault", "Unforced error", "Net cord"].map((t) => (
-            <span key={t} className="t-btn" style={{
-              padding: "6px 12px", borderRadius: 999,
-              background: theme.chip, color: theme.ink,
-              fontFamily: "Inter", fontSize: 11, fontWeight: 500, letterSpacing: "0.02em",
-              border: `1px solid ${theme.line}`,
-            }}>{t}</span>
-          ))}
+        {/* Tag chips — apply / re-apply a label to the most recent
+            point. The active tag highlights so the user can tell
+            which one's on. Disabled until at least one point has
+            been scored. */}
+        <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+          {TAGS.map(function (t) {
+            var on = lastTag === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={function () { if (onTagPoint && hasLastPoint) onTagPoint(on ? null : t.key); }}
+                disabled={!hasLastPoint}
+                className="t-btn"
+                style={{
+                  appearance: "none",
+                  padding: "6px 12px", borderRadius: 999,
+                  background: on ? theme.ink : theme.chip,
+                  color: on ? theme.bg : theme.ink,
+                  fontFamily: "Inter", fontSize: 11, fontWeight: on ? 700 : 500, letterSpacing: "0.02em",
+                  border: `1px solid ${on ? theme.ink : theme.line}`,
+                  cursor: hasLastPoint ? "pointer" : "default",
+                  opacity: hasLastPoint ? 1 : 0.5,
+                }}>{t.label}</button>
+            );
+          })}
           <div style={{ flex: 1 }} />
-          <span className="t-cap" style={{ color: theme.inkFaint, alignSelf: "center" }}>Tag last point ↑</span>
+          <span className="t-cap" style={{ color: theme.inkFaint, alignSelf: "center" }}>
+            {hasLastPoint ? "Tag last point ↑" : "Score a point to tag it"}
+          </span>
         </div>
       </div>
 
@@ -203,6 +251,25 @@ export default function DesktopLiveScreen({
             Changeover · 90s
           </button>
           <div style={{ display: "flex", gap: 8 }}>
+            {/* End set early — closes the current set with whatever
+                games are on the board and rolls into the next set.
+                Undo unwinds it. Disabled when there's nothing to
+                end (0-0 with no in-progress TB). */}
+            {onEndSet && (
+              <button onClick={onEndSet} disabled={!canEndSet} className="t-btn" style={{
+                flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
+                background: "transparent", color: theme.ink, padding: "11px",
+                fontFamily: "Inter", fontWeight: 600, fontSize: 12,
+                cursor: canEndSet ? "pointer" : "default",
+                opacity: canEndSet ? 1 : 0.5,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="5" y="5" width="14" height="14" rx="1"/>
+                </svg>
+                End set
+              </button>
+            )}
             <button onClick={onUndo} className="t-btn" style={{
               flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
               background: "transparent", color: theme.ink, padding: "11px",

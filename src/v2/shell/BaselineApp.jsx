@@ -33,7 +33,7 @@ import HistoryScreen from "../features/matches/components/HistoryScreen.jsx";
 import QuickLogScreen from "../features/matches/components/QuickLogScreen.jsx";
 import WatchGlance from "../features/matches/components/WatchGlance.jsx";
 
-import { addPoint, undo, newMatch, engineToLogPayload } from "../features/matches/utils/tennisEngine.js";
+import { addPoint, undo, newMatch, engineToLogPayload, endSetEarly, tagLastPoint } from "../features/matches/utils/tennisEngine.js";
 import { THEMES, COURTS } from "../features/matches/utils/tokens.js";
 import { MODERN_THEMES, MODERN_COURTS, ensureModernCss } from "../features/matches/utils/modernTokens.js";
 import { ensureFonts } from "../features/matches/utils/fonts.js";
@@ -256,6 +256,23 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
     saveLiveMatch(liveRef.current);
     force();
   };
+  // Close the current set early with whatever games are on the board.
+  // No-op when there's nothing to close (engine handles the guard).
+  const onEndSet = () => {
+    if (!liveRef.current) return;
+    endSetEarly(liveRef.current);
+    saveLiveMatch(liveRef.current);
+    force();
+  };
+  // Re-label the most recent point. Passes an engine-key tag
+  // ('ace'/'df'/'winner'/'error'/'net') — UI chips map their human
+  // labels to these keys before calling.
+  const onTagPoint = (tag) => {
+    if (!liveRef.current) return;
+    tagLastPoint(liveRef.current, tag);
+    saveLiveMatch(liveRef.current);
+    force();
+  };
 
   // Build + persist a brand-new live match. Called from the
   // LiveSetupCard once an opponent + format are chosen. Stores
@@ -417,6 +434,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
             onCreateLiveMatch={onCreateLiveMatch}
             onSaveLiveMatch={onSaveLiveMatch}
+            onEndSet={onEndSet} onTagPoint={onTagPoint}
           />
         </div>
 
@@ -469,6 +487,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
             onCreateLiveMatch={onCreateLiveMatch}
             onSaveLiveMatch={onSaveLiveMatch}
+            onEndSet={onEndSet} onTagPoint={onTagPoint}
           />
         </div>
       </div>
@@ -499,6 +518,7 @@ function RouteView({
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
   onCreateLiveMatch, onSaveLiveMatch,
+  onEndSet, onTagPoint,
 }) {
   switch (route) {
     case "home":
@@ -526,6 +546,7 @@ function RouteView({
         onPoint={onPoint} onUndo={onUndo}
         onChangeover={() => onGo("changeover")}
         onSave={onSaveLiveMatch}
+        onEndSet={onEndSet} onTagPoint={onTagPoint}
       />;
     case "competitions":
       return <CompetitionsScreen
@@ -593,6 +614,7 @@ function MobileRouteView({
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
   onCreateLiveMatch, onSaveLiveMatch,
+  onEndSet, onTagPoint,
 }) {
   switch (route) {
     case "home":
@@ -622,6 +644,7 @@ function MobileRouteView({
             onPoint={onPoint} onUndo={onUndo}
             onChangeover={() => onGo("changeover")}
             onSave={onSaveLiveMatch}
+            onEndSet={onEndSet} onTagPoint={onTagPoint}
           />
         </div>
       );

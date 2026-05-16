@@ -130,6 +130,92 @@ function finishSet(m, winner, fromTb) {
   }
 }
 
+// ── End set early ────────────────────────────────────────────────────────────
+// Close out the current set with whatever games are on the board.
+// User-driven: lets the user say "we played four games, let's call
+// it" without playing all the way to 6. The winner of the closed
+// set is whoever has more games; ties cap the set at "no winner"
+// (we leave setsWon unchanged but advance the set index so the
+// next set begins fresh). If the match would be over per the
+// best-of-N rule after this set, endedAt is set.
+//
+// No-op when there's nothing to close (games still 0-0 and no
+// tiebreak underway). Returns the mutated match.
+export function endSetEarly(m) {
+  if (!m || m.endedAt) return m;
+  var games = Array.isArray(m.games) ? m.games : [0, 0];
+  var hasTb = m.inTiebreak && Array.isArray(m.tbPoints) && (m.tbPoints[0] > 0 || m.tbPoints[1] > 0);
+  if (games[0] === 0 && games[1] === 0 && !hasTb) return m;
+
+  m.history.push(snapshot(m));
+
+  m.setHistory.push({
+    score: [games[0] || 0, games[1] || 0],
+    tb: hasTb ? [m.tbPoints[0] || 0, m.tbPoints[1] || 0] : null,
+  });
+  if (games[0] > games[1])      m.setsWon[0]++;
+  else if (games[1] > games[0]) m.setsWon[1]++;
+  // Ties: no setsWon bump — the set is recorded for reference but
+  // doesn't count toward the best-of-N goal.
+
+  m.games   = [0, 0];
+  m.points  = [0, 0];
+  m.inTiebreak = false;
+  m.tbPoints = [0, 0];
+
+  var needed = Math.ceil(m.cfg.sets / 2);
+  if (m.setsWon[0] >= needed || m.setsWon[1] >= needed) {
+    m.endedAt = Date.now();
+  } else if (
+    m.cfg.finalTb === "super" &&
+    m.setsWon[0] + m.setsWon[1] === m.cfg.sets - 1
+  ) {
+    m.inTiebreak = true;
+    m.tbPoints = [0, 0];
+    m.tbServerStart = m.serverIndex;
+  }
+  return m;
+}
+
+// ── Tag last point ───────────────────────────────────────────────────────────
+// Re-label the most recent point in m.log AND reconcile its stat
+// impact (rolls the old tag's stat back, then applies the new
+// tag's). User flow: tap a tap-zone → point lands untagged → tap
+// a chip ("Ace" / "Winner" / "Double fault" / "Unforced error" /
+// "Net cord") → log entry updated.
+//
+// Tags accepted (matching addPoint's internal keys):
+//   'ace'    — winner.aces++
+//   'df'     — opponent.dfs++ (double fault is charged to the server,
+//              i.e. the side that LOST the point)
+//   'winner' — winner.winners++
+//   'error'  — opponent.errors++ (unforced error charged to the loser)
+//   'net'    — no stat impact, just a log label
+//   null     — clears the tag + stat impact
+export function tagLastPoint(m, tag) {
+  if (!m || !Array.isArray(m.log) || m.log.length === 0) return m;
+  var last = m.log[m.log.length - 1];
+  if (!last) return m;
+  var winner = last.winner;
+
+  function applyDelta(t, sign) {
+    if (!t || !m.stats) return;
+    if (t === "ace"    && m.stats.aces)    m.stats.aces[winner]    = Math.max(0, (m.stats.aces[winner]    || 0) + sign);
+    if (t === "df"     && m.stats.dfs)     m.stats.dfs[1 - winner] = Math.max(0, (m.stats.dfs[1 - winner] || 0) + sign);
+    if (t === "winner" && m.stats.winners) m.stats.winners[winner] = Math.max(0, (m.stats.winners[winner] || 0) + sign);
+    if (t === "error"  && m.stats.errors)  m.stats.errors[1 - winner] = Math.max(0, (m.stats.errors[1 - winner] || 0) + sign);
+    // 'net' has no stat impact.
+  }
+
+  // Roll back old tag, apply new. No engine-state snapshot needed
+  // because we don't want Undo to walk back through tag edits —
+  // Undo is reserved for taking back the point itself.
+  applyDelta(last.tag, -1);
+  last.tag = tag || null;
+  applyDelta(last.tag, +1);
+  return m;
+}
+
 export function undo(m) {
   if (m.history.length === 0) return m;
   const s = m.history.pop();

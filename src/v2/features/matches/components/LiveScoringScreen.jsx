@@ -27,6 +27,12 @@ export default function LiveScoringScreen({
   // Reshapes engine state and hands off to logV2Match — see
   // BaselineApp.onSaveLiveMatch.
   onSave,
+  // End the current set early (mobile twin of the desktop End set
+  // button). Closes the current set with whatever's on the board.
+  onEndSet,
+  // Re-label the most recent point ('ace' / 'df' / 'winner' /
+  // 'error' / 'net'; null clears). Mirror of the desktop chip row.
+  onTagPoint,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [serveSec, setServeSec] = React.useState(25);
@@ -39,6 +45,21 @@ export default function LiveScoringScreen({
   // points. See engineToLogPayload for the shape rules.
   const canSave = !!(match && engineToLogPayload(match).length > 0);
   const matchDone = !!(match && match.endedAt);
+  const canEndSet = !!(match && !match.endedAt && (
+    (Array.isArray(match.games)   && (match.games[0]   > 0 || match.games[1]   > 0)) ||
+    (match.inTiebreak && Array.isArray(match.tbPoints) && (match.tbPoints[0] > 0 || match.tbPoints[1] > 0))
+  ));
+  // Tag chips — human UI labels, engine keys for the action.
+  const TAGS = [
+    { key: "ace",    label: "Ace" },
+    { key: "winner", label: "Winner" },
+    { key: "df",     label: "Double fault" },
+    { key: "error",  label: "Unforced error" },
+    { key: "net",    label: "Net cord" },
+  ];
+  const lastLog = match && match.log && match.log.length ? match.log[match.log.length - 1] : null;
+  const lastTag = (lastLog && lastLog.tag) || null;
+  const hasLastPoint = !!lastLog;
   const handleSave = React.useCallback(async function () {
     if (!onSave || saving) return;
     setSaveErr("");
@@ -137,6 +158,39 @@ export default function LiveScoringScreen({
           </div>
         )}
 
+        {/* Tag-chip row — scrolls horizontally on tight screens.
+            Buttons fire onTagPoint with the engine key. Active tag
+            highlights so you know what's stuck on the last point. */}
+        {onTagPoint && (
+          <div className="t-noscroll" style={{
+            display: "flex", gap: 6, overflowX: "auto", marginBottom: 8,
+            paddingBottom: 4, scrollbarWidth: "none",
+          }}>
+            {TAGS.map(function (t) {
+              var on = lastTag === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={function () { if (hasLastPoint) onTagPoint(on ? null : t.key); }}
+                  disabled={!hasLastPoint}
+                  className="t-btn"
+                  style={{
+                    appearance: "none",
+                    padding: "6px 12px", borderRadius: 999, flexShrink: 0,
+                    background: on ? theme.ink : theme.chip,
+                    color: on ? theme.bg : theme.ink,
+                    fontFamily: "Inter", fontSize: 11.5, fontWeight: on ? 700 : 500, letterSpacing: "0.02em",
+                    border: `1px solid ${on ? theme.ink : theme.line}`,
+                    cursor: hasLastPoint ? "pointer" : "default",
+                    opacity: hasLastPoint ? 1 : 0.5,
+                    whiteSpace: "nowrap",
+                  }}>{t.label}</button>
+              );
+            })}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={onChangeover} className="t-btn" style={{
             flex: 2, appearance: "none", border: `1px solid ${theme.line}`,
@@ -147,6 +201,21 @@ export default function LiveScoringScreen({
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.2 1.5"/></svg>
             Changeover · 90s
           </button>
+          {onEndSet && (
+            <button onClick={onEndSet} disabled={!canEndSet} className="t-btn" style={{
+              flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
+              background: theme.bgRaised, color: theme.ink, padding: "13px 14px",
+              fontFamily: "Inter", fontWeight: 600, fontSize: 13,
+              cursor: canEndSet ? "pointer" : "default",
+              opacity: canEndSet ? 1 : 0.5,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="5" y="5" width="14" height="14" rx="1"/>
+              </svg>
+              End set
+            </button>
+          )}
           <button onClick={onUndo} className="t-btn" style={{
             flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
             background: theme.bgRaised, color: theme.ink, padding: "13px 14px",
