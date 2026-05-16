@@ -20,12 +20,17 @@ import React from "react";
 import { Eyebrow, ServeDot } from "./atoms.jsx";
 import { OpponentSheet } from "./QuickLogScreen.jsx";
 
+// Format chip options shown in the setup card. "Free play" is the
+// no-format mode — games still work normally but sets never
+// auto-close and the match never auto-ends; the user owns set
+// boundaries via the End-set button and ends the match via Save.
 var FORMAT_LABELS = [
   { id: "bo3",       label: "Bo3" },
   { id: "bo3_super", label: "Bo3 · super TB" },
   { id: "bo5",       label: "Bo5" },
   { id: "pro8",      label: "Pro 8" },
   { id: "tb10",      label: "10-pt TB" },
+  { id: "freeplay",  label: "Free play" },
 ];
 
 export default function LiveSetupCard({

@@ -10,10 +10,29 @@ import {
   Scoreboard, Pill, ServeDot, CourtMini, LiveDot,
 } from "./atoms.jsx";
 import CourtPicker from "./CourtPicker.jsx";
+import DesktopLiveScreen from "./DesktopLiveScreen.jsx";
 import {
   isDeuce, isMatchPoint, fmtDuration, elapsedMs,
   engineToLogPayload,
 } from "../utils/tennisEngine.js";
+
+// Persistence for the "Advanced view" preference. Per-device — each
+// browser remembers its own choice. localStorage is fail-silent so
+// SSR / private mode / quota-exceeded all degrade to standard view.
+var ADVANCED_KEY = "cs.v2.liveAdvanced";
+function readAdvanced() {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return false;
+    return window.localStorage.getItem(ADVANCED_KEY) === "1";
+  } catch (_) { return false; }
+}
+function writeAdvanced(v) {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    if (v) window.localStorage.setItem(ADVANCED_KEY, "1");
+    else   window.localStorage.removeItem(ADVANCED_KEY);
+  } catch (_) {}
+}
 
 export default function LiveScoringScreen({
   match, theme, accent, court,
@@ -33,6 +52,10 @@ export default function LiveScoringScreen({
   // Re-label the most recent point ('ace' / 'df' / 'winner' /
   // 'error' / 'net'; null clears). Mirror of the desktop chip row.
   onTagPoint,
+  // Discard the in-progress match without saving (confirms in
+  // BaselineApp before firing). Surfaced as a small text link below
+  // the action row.
+  onCancel,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [serveSec, setServeSec] = React.useState(25);
@@ -89,6 +112,54 @@ export default function LiveScoringScreen({
   const mp = isMatchPoint(match);
   const deuce = isDeuce(match);
 
+  // Advanced (landscape) view — opt-in toggle persisted per device.
+  // When ON + the device is in landscape, we render the DesktopLive
+  // layout (sidebar stats, point log, big tap zones) instead of the
+  // mobile chrome. When ON + portrait, we show the RotatePrompt
+  // coach card with a Standard-view escape hatch. Browsers don't
+  // allow JS to force orientation outside of fullscreen / PWA so the
+  // coach card is the honest answer.
+  const [advanced, setAdvanced] = React.useState(readAdvanced);
+  const [isLandscape, setIsLandscape] = React.useState(function () {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(orientation: landscape)").matches;
+  });
+  React.useEffect(function () {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    var mql = window.matchMedia("(orientation: landscape)");
+    function on(e) { setIsLandscape(e.matches); }
+    if (mql.addEventListener) mql.addEventListener("change", on);
+    else mql.addListener(on);                   // Safari < 14 fallback
+    return function () {
+      if (mql.removeEventListener) mql.removeEventListener("change", on);
+      else mql.removeListener(on);
+    };
+  }, []);
+  function toggleAdvanced(v) {
+    setAdvanced(v);
+    writeAdvanced(v);
+  }
+
+  if (advanced && isLandscape && match) {
+    // Landscape + opted-in — hand off to the desktop layout. All
+    // mobile props pass straight through; DesktopLiveScreen
+    // shows a "Standard view" chip in its top bar so the user
+    // can come back without rotating.
+    return (
+      <DesktopLiveScreen
+        match={match} theme={theme} accent={accent} court={court}
+        courts={courts} currentCourtId={currentCourtId} onCourtChange={onCourtChange}
+        onPoint={onPoint} onUndo={onUndo} onChangeover={onChangeover}
+        onSave={onSave} onEndSet={onEndSet} onTagPoint={onTagPoint}
+        onCancel={onCancel}
+        onExitAdvanced={function () { toggleAdvanced(false); }}
+      />
+    );
+  }
+  if (advanced && !isLandscape) {
+    return <RotatePrompt theme={theme} accent={accent} onExit={function () { toggleAdvanced(false); }} />;
+  }
+
   return (
     <div style={{
       height: "100%", background: theme.bg, color: theme.ink,
@@ -104,21 +175,41 @@ export default function LiveScoringScreen({
             {fmtDuration(elapsedMs(match))}
           </span>
         </div>
-        {courts && onCourtChange ? (
-          <CourtPicker
-            courts={courts}
-            currentId={currentCourtId || "grass"}
-            onChange={onCourtChange}
-            theme={theme}
-            accent={accent}
-            size={20}
-          />
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <CourtMini surface={court.surface} size={20} />
-            <span className="t-cap" style={{ color: theme.inkSoft }}>{court.label}</span>
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Advanced view toggle. Tap → if you're already in
+              landscape we swap to the desktop layout instantly;
+              if you're portrait we show the rotate coach card. */}
+          <button onClick={function () { toggleAdvanced(true); }} className="t-btn" style={{
+            appearance: "none", border: `1px solid ${theme.line}`,
+            background: theme.bgRaised, color: theme.inkSoft,
+            borderRadius: 999, padding: "4px 10px 4px 8px",
+            fontFamily: "Inter", fontSize: 10.5, fontWeight: 600, letterSpacing: "0.06em",
+            display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
+            textTransform: "uppercase",
+          }} aria-label="Open advanced view">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="6" width="20" height="12" rx="2"/>
+              <line x1="12" y1="2" x2="12" y2="6"/>
+              <line x1="12" y1="18" x2="12" y2="22"/>
+            </svg>
+            Advanced
+          </button>
+          {courts && onCourtChange ? (
+            <CourtPicker
+              courts={courts}
+              currentId={currentCourtId || "grass"}
+              onChange={onCourtChange}
+              theme={theme}
+              accent={accent}
+              size={20}
+            />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <CourtMini surface={court.surface} size={20} />
+              <span className="t-cap" style={{ color: theme.inkSoft }}>{court.label}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* scoreboard */}
@@ -259,6 +350,19 @@ export default function LiveScoringScreen({
             fontFamily: "Inter", fontSize: 12, fontWeight: 500, textAlign: "center",
           }}>{saveErr}</div>
         )}
+        {/* Cancel match — destructive, sits at the bottom of the
+            action area as a subtle text link. Confirm dialog lives
+            in BaselineApp.onCancelLiveMatch. */}
+        {onCancel && (
+          <div style={{ marginTop: 6, textAlign: "center" }}>
+            <button onClick={onCancel} className="t-btn" style={{
+              appearance: "none", border: 0, background: "transparent",
+              color: theme.inkFaint, padding: "6px 10px",
+              fontFamily: "Inter", fontWeight: 500, fontSize: 11.5,
+              cursor: "pointer", textDecoration: "underline",
+            }}>Cancel match</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -316,3 +420,54 @@ function BigPointTap({ player, server, onTap, onMinus, flash, theme, accent }) {
     </div>
   );
 }
+
+// Portrait coach card shown when the user has opted into Advanced
+// view but their phone is still in portrait orientation. Browsers
+// don't let JS force-rotate from a regular web page (lock requires
+// fullscreen / installed PWA) so we ask politely. "Use standard
+// view" lets them back out without rotating.
+function RotatePrompt({ theme, accent, onExit }) {
+  return (
+    <div style={{
+      height: "100%", background: theme.bg, color: theme.ink,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      padding: "32px 28px", textAlign: "center", gap: 18,
+    }}>
+      <div style={{
+        width: 84, height: 84, borderRadius: 18,
+        background: theme.bgRaised, border: `1px solid ${theme.line}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: accent, marginBottom: 4,
+      }}>
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ animation: "rotateHint 2.4s ease-in-out infinite" }}>
+          <rect x="6" y="2" width="12" height="20" rx="2"/>
+          <line x1="11" y1="18" x2="13" y2="18"/>
+          <path d="M2 16a8 8 0 0 1 4-7" />
+          <polyline points="2 12 2 16 6 16"/>
+        </svg>
+      </div>
+      <div>
+        <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 6 }}>Advanced view</div>
+        <h2 className="t-serif" style={{
+          margin: 0, fontSize: 26, lineHeight: 1.15, letterSpacing: "-0.01em",
+        }}>Rotate your phone.</h2>
+        <p style={{
+          marginTop: 10, marginBottom: 0,
+          fontFamily: "Inter", fontSize: 13, color: theme.inkSoft, lineHeight: 1.5, maxWidth: 280,
+        }}>
+          Advanced view lays out the live scoreboard like the desktop — stats, point log, and the
+          full tag row. Turn the phone landscape and it'll switch automatically.
+        </p>
+      </div>
+      <button onClick={onExit} className="t-btn" style={{
+        appearance: "none", border: `1px solid ${theme.line}`,
+        background: "transparent", color: theme.ink,
+        borderRadius: 999, padding: "9px 18px",
+        fontFamily: "Inter", fontSize: 12, fontWeight: 600, cursor: "pointer",
+      }}>Use standard view instead</button>
+
+      <style>{`@keyframes rotateHint{0%,40%,100%{transform:rotate(0)}60%,90%{transform:rotate(-90deg)}}`}</style>
+    </div>
+  );
+}
+

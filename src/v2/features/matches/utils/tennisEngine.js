@@ -5,13 +5,22 @@
 
 const POINT_LABELS = ["0", "15", "30", "40", "Ad"];
 
+// `label` is the human-readable badge each format renders as in the
+// scoreboard ("Bo3" / "Pro 8" / "Free play"). `freeplay` is the
+// no-format option: huge setLen + sets count means games still
+// auto-close at 4-with-2 inside a game, but sets never auto-close
+// at 6 games and the match never auto-ends — the user owns set
+// boundaries via the End-set button and ends the match via Save.
+// User feedback: "in live scoring there is a format, can you add
+// a no format too?"
 export const FORMATS = {
-  bo3:        { sets: 3, setLen: 6, finalTb: "reg" },
-  bo5:        { sets: 5, setLen: 6, finalTb: "reg" },
-  bo3_super:  { sets: 3, setLen: 6, finalTb: "super" },
-  pro8:       { sets: 1, setLen: 8, finalTb: "reg" },
-  tb7:        { sets: 1, setLen: 0, finalTb: "reg",   tbOnly: true },
-  tb10:       { sets: 1, setLen: 0, finalTb: "super", tbOnly: true },
+  bo3:        { sets: 3,  setLen: 6,  finalTb: "reg",   label: "Bo3" },
+  bo5:        { sets: 5,  setLen: 6,  finalTb: "reg",   label: "Bo5" },
+  bo3_super:  { sets: 3,  setLen: 6,  finalTb: "super", label: "Bo3 · super TB" },
+  pro8:       { sets: 1,  setLen: 8,  finalTb: "reg",   label: "Pro 8" },
+  tb7:        { sets: 1,  setLen: 0,  finalTb: "reg",   tbOnly: true, label: "7-pt TB" },
+  tb10:       { sets: 1,  setLen: 0,  finalTb: "super", tbOnly: true, label: "10-pt TB" },
+  freeplay:   { sets: 99, setLen: 99, finalTb: "reg",   label: "Free play" },
 };
 
 export function newMatch({

@@ -227,17 +227,14 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   }
   const liveMatch = liveRef.current;
 
-  // Rename p1 in the running match once the viewer's profile resolves
-  // (in case it was created before the profile fetch landed).
-  React.useEffect(function () {
-    if (!liveMatch || !liveMatch.p1) return;
-    if (viewerName && liveMatch.p1.name !== viewerName) {
-      liveMatch.p1.name = viewerName;
-      saveLiveMatch(liveMatch);
-      force();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewerName]);
+  // (No rename effect: p1.name is hardcoded "You" in the live
+  // scoreboard. The viewer's real name still flows into the
+  // confirm-card DM via onSaveLiveMatch's submitterName, so the
+  // opponent sees the real name on their side — but on the
+  // viewer's own scoreboard "You" is the right read. Matches the
+  // Quick-log convention. User feedback: "in live scoring there is
+  // still says Test as my name. Is this because my username was
+  // Test? Shouldn't it just be you?")
 
   // SummaryScreen still renders a demo finished match — it's the
   // visual prototype for the post-match recap and isn't wired to a
@@ -255,6 +252,27 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
     undo(liveRef.current);
     saveLiveMatch(liveRef.current);
     force();
+  };
+  // Wipe the in-progress match without saving. Wraps in a confirm
+  // because it's destructive — any unsaved score is gone (no undo
+  // past localStorage). Routes back to the live setup card so the
+  // user can start fresh. User feedback: "there's no button to
+  // cancel match. I think we need to add that in."
+  const onCancelLiveMatch = () => {
+    if (!liveRef.current) return;
+    if (typeof window === "undefined" || !window.confirm) {
+      liveRef.current = null;
+      clearLiveMatch();
+      force();
+      setRoute("live");
+      return;
+    }
+    if (window.confirm("Discard this match? Any unsaved progress will be lost.")) {
+      liveRef.current = null;
+      clearLiveMatch();
+      force();
+      setRoute("live");
+    }
   };
   // Close the current set early with whatever games are on the board.
   // No-op when there's nothing to close (engine handles the guard).
@@ -282,9 +300,12 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   const onCreateLiveMatch = (args) => {
     var opp = (args && args.opponent) || null;
     var fmt = (args && args.format) || DEFAULTS.format;
-    var p1Name = viewerName || DEFAULTS.p1Name;
     var p2Name = (opp && opp.name) || "Opponent";
-    var m = newMatch({ format: fmt, p1: { name: p1Name }, p2: { name: p2Name } });
+    // p1 is always "You" in the scoreboard (matches Quick-log).
+    // The viewer's real name is threaded into onSaveLiveMatch's
+    // submitterName for the confirm-card DM payload — that's the
+    // only surface where the opponent needs to see who logged it.
+    var m = newMatch({ format: fmt, p1: { name: "You" }, p2: { name: p2Name } });
     // Stash the opponent id (and free-text flag) on the match object
     // so when we eventually log it we know whether to write
     // opponent_id or to use opp_name only.
@@ -464,6 +485,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onCreateLiveMatch={onCreateLiveMatch}
             onSaveLiveMatch={onSaveLiveMatch}
             onEndSet={onEndSet} onTagPoint={onTagPoint}
+            onCancel={onCancelLiveMatch}
           />
         </div>
 
@@ -522,6 +544,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onCreateLiveMatch={onCreateLiveMatch}
             onSaveLiveMatch={onSaveLiveMatch}
             onEndSet={onEndSet} onTagPoint={onTagPoint}
+            onCancel={onCancelLiveMatch}
           />
         </div>
       </div>
@@ -581,6 +604,7 @@ function RouteView({
         onChangeover={() => onGo("changeover")}
         onSave={onSaveLiveMatch}
         onEndSet={onEndSet} onTagPoint={onTagPoint}
+        onCancel={onCancelLiveMatch}
       />;
     case "competitions":
       return <CompetitionsScreen
@@ -679,6 +703,7 @@ function MobileRouteView({
             onChangeover={() => onGo("changeover")}
             onSave={onSaveLiveMatch}
             onEndSet={onEndSet} onTagPoint={onTagPoint}
+            onCancel={onCancelLiveMatch}
           />
         </div>
       );

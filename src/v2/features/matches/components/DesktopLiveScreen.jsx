@@ -31,6 +31,17 @@ export default function DesktopLiveScreen({
   // Re-label the most recent point. Accepts engine keys:
   // 'ace' / 'df' / 'winner' / 'error' / 'net'. Null clears.
   onTagPoint,
+  // Optional — when present, shows a small "Exit advanced view"
+  // chip in the top bar. Wired from LiveScoringScreen's mobile
+  // Advanced toggle so the user can come back to the standard
+  // mobile view without rotating their phone.
+  onExitAdvanced,
+  // Destructive: wipes the in-progress match without saving.
+  // BaselineApp wraps in window.confirm — handler arrives
+  // already-confirmed from there. Surfaced as a small text link at
+  // the bottom of the sidebar action column so accidental taps are
+  // rare.
+  onCancel,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [saving, setSaving] = React.useState(false);
@@ -94,6 +105,20 @@ export default function DesktopLiveScreen({
             <Eyebrow color={theme.inkSoft}>Live match</Eyebrow>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {onExitAdvanced && (
+              <button onClick={onExitAdvanced} className="t-btn" style={{
+                appearance: "none", border: `1px solid ${theme.line}`,
+                background: theme.bg, color: theme.inkSoft,
+                borderRadius: 999, padding: "5px 11px",
+                fontFamily: "Inter", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em",
+                display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+              }} aria-label="Exit advanced view">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Standard view
+              </button>
+            )}
             <LiveDot accent={accent} />
             <span style={{ color: theme.inkSoft, fontSize: 13 }} className="t-num">{fmtDuration(elapsedMs(match))}</span>
             {courts && onCourtChange ? (
@@ -127,7 +152,7 @@ export default function DesktopLiveScreen({
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
             <span className="t-cap" style={{ color: "rgba(232,230,223,0.5)" }}>{match.inTiebreak ? "Tiebreak" : (isDeuce(match) ? "Deuce" : "Game")}</span>
             <div className="t-num" style={{ fontSize: 14, color: "rgba(232,230,223,0.6)", letterSpacing: "0.04em" }}>
-              SET {match.setHistory.length + 1} · {match.cfg.sets > 1 ? `Bo${match.cfg.sets}` : "Pro 8"}
+              SET {match.setHistory.length + 1} · {match.cfg.label || (match.cfg.sets > 1 ? `Bo${match.cfg.sets}` : "Pro 8")}
             </div>
             {isMatchPoint(match) >= 0 && (
               <span className="t-cap t-pulse" style={{
@@ -276,6 +301,18 @@ export default function DesktopLiveScreen({
               fontFamily: "Inter", fontWeight: 600, fontSize: 12, cursor: "pointer",
             }}>Undo</button>
           </div>
+          {/* Cancel match — destructive, sits subtly under Undo so
+              accidental taps are rare. Confirm dialog lives in
+              BaselineApp.onCancelLiveMatch. */}
+          {onCancel && (
+            <button onClick={onCancel} className="t-btn" style={{
+              appearance: "none", border: 0, background: "transparent",
+              color: theme.inkFaint, padding: "6px",
+              fontFamily: "Inter", fontWeight: 500, fontSize: 11.5,
+              cursor: "pointer", textDecoration: "underline",
+              alignSelf: "center",
+            }}>Cancel match</button>
+          )}
         </div>
       </div>
     </div>
