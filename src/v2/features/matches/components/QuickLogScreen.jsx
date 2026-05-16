@@ -352,7 +352,10 @@ export default function QuickLogScreen({
 // + a text field for a free-text opponent. Matches the v2 visual
 // language (Inter / mono labels, hairline borders, theme tokens).
 
-function OpponentSheet({ theme, accent, friends, onPick, onClose }) {
+// Exported so other v2 match-entry surfaces (LiveSetupCard) can reuse
+// the same friend picker + free-text fallback without re-implementing
+// the visual layout.
+export function OpponentSheet({ theme, accent, friends, onPick, onClose }) {
   const [query, setQuery] = React.useState("");
   const q = query.trim().toLowerCase();
   const filtered = q

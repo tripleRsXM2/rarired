@@ -26,6 +26,7 @@ import MessagesScreen from "../features/messages/MessagesScreen.jsx";
 
 import LiveScoringScreen from "../features/matches/components/LiveScoringScreen.jsx";
 import DesktopLiveScreen from "../features/matches/components/DesktopLiveScreen.jsx";
+import LiveSetupCard from "../features/matches/components/LiveSetupCard.jsx";
 import ChangeoverScreen from "../features/matches/components/ChangeoverScreen.jsx";
 import SummaryScreen from "../features/matches/components/SummaryScreen.jsx";
 import HistoryScreen from "../features/matches/components/HistoryScreen.jsx";
@@ -38,7 +39,8 @@ import { MODERN_THEMES, MODERN_COURTS, ensureModernCss } from "../features/match
 import { ensureFonts } from "../features/matches/utils/fonts.js";
 import { useIsWide } from "../features/matches/hooks/useIsWide.js";
 
-import { buildLiveMatch, buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
+import { buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
+import { FORMATS } from "../features/matches/utils/tennisEngine.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
 import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
 import { emitRatingMatchInviteDM } from "../../features/people/services/dmWidgets.js";
@@ -49,6 +51,34 @@ import { emitRatingMatchInviteDM } from "../../features/people/services/dmWidget
 // a prop.
 
 const DEFAULTS = { theme: "paper", court: "grass", p1Name: "You", p2Name: "M. Carter", format: "bo3" };
+
+// localStorage key for the in-progress live match. Per-device only —
+// each browser remembers its own running match. Cleared on finish /
+// reset / when the saved match is older than 24h on next mount.
+var LIVE_MATCH_KEY = "cs.v2.liveMatch";
+
+// Strip the (heavy) `cfg` reference and any non-serializable fields
+// before persisting; `cfg` is rehydrated from `FORMATS[format]` on
+// restore so we don't burn space caching it.
+function serializeLiveMatch(m) {
+  if (!m) return null;
+  var clone = Object.assign({}, m);
+  delete clone.cfg;
+  return clone;
+}
+function saveLiveMatch(m) {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    if (!m) { window.localStorage.removeItem(LIVE_MATCH_KEY); return; }
+    window.localStorage.setItem(LIVE_MATCH_KEY, JSON.stringify(serializeLiveMatch(m)));
+  } catch (_) { /* storage full or disabled — fail silent */ }
+}
+function clearLiveMatch() {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    window.localStorage.removeItem(LIVE_MATCH_KEY);
+  } catch (_) {}
+}
 
 // Tiny error boundary so a crash inside the V2 tree shows a readable
 // banner instead of blanking the screen. User reported a blank /v2 on
@@ -164,26 +194,97 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   const [route, setRoute] = React.useState("home");
   const [, force] = React.useReducer((x) => x + 1, 0);
 
-  // Live match — single source of truth, ref so navigation doesn't reset it.
-  // The first-render p1 name is "You" so the demo match keeps loading
-  // instantly; we rename the p1 once the viewer's profile resolves so
-  // the score card reads as the signed-in player.
+  // Live match — single source of truth. Held in a ref so navigation
+  // doesn't reset it; persisted to localStorage so a page refresh /
+  // close-and-reopen restores the in-progress match. User feedback:
+  // "if you have an existing match that you haven't logged in live
+  // scoring, keep it at that. Make it remember."
+  //
+  // null = no match in progress. Live tab + Home both branch on that
+  // and show a Start-match CTA / setup card instead of demo data.
   const liveRef = React.useRef(null);
-  if (!liveRef.current) liveRef.current = buildLiveMatch(DEFAULTS.p1Name, DEFAULTS.p2Name, DEFAULTS.format);
+  const liveRestoredRef = React.useRef(false);
+  if (!liveRestoredRef.current) {
+    liveRestoredRef.current = true;
+    try {
+      var raw = (typeof window !== "undefined" && window.localStorage)
+        ? window.localStorage.getItem(LIVE_MATCH_KEY) : null;
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        // Drop the restore if the match is finished or older than 24h
+        // — stale ones are noise, finished ones belong in History.
+        var stale = parsed && parsed.startedAt && (Date.now() - parsed.startedAt > 24 * 3600 * 1000);
+        if (parsed && !parsed.endedAt && !stale && parsed.format && FORMATS[parsed.format]) {
+          // cfg is a reference to FORMATS — rehydrate from the format id.
+          parsed.cfg = FORMATS[parsed.format];
+          liveRef.current = parsed;
+        } else if (parsed) {
+          // Stale / finished — clear the slot.
+          try { window.localStorage.removeItem(LIVE_MATCH_KEY); } catch (_) {}
+        }
+      }
+    } catch (_) { /* localStorage disabled or JSON malformed — fail silent */ }
+  }
   const liveMatch = liveRef.current;
+
+  // Rename p1 in the running match once the viewer's profile resolves
+  // (in case it was created before the profile fetch landed).
   React.useEffect(function () {
     if (!liveMatch || !liveMatch.p1) return;
     if (viewerName && liveMatch.p1.name !== viewerName) {
       liveMatch.p1.name = viewerName;
+      saveLiveMatch(liveMatch);
       force();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerName]);
-  const finishedMatch = React.useMemo(() => buildFinishedMatch(viewerName, DEFAULTS.p2Name), [viewerName]);
 
-  const onPoint = (side) => { addPoint(liveMatch, side); force(); };
-  const onUndoLive = () => { undo(liveMatch); force(); };
+  // SummaryScreen still renders a demo finished match — it's the
+  // visual prototype for the post-match recap and isn't wired to a
+  // real match yet. Kept here so the existing route doesn't break.
+  const finishedMatch = React.useMemo(() => buildFinishedMatch(viewerName || DEFAULTS.p1Name, DEFAULTS.p2Name), [viewerName]);
+
+  const onPoint = (side) => {
+    if (!liveRef.current) return;
+    addPoint(liveRef.current, side);
+    saveLiveMatch(liveRef.current);
+    force();
+  };
+  const onUndoLive = () => {
+    if (!liveRef.current) return;
+    undo(liveRef.current);
+    saveLiveMatch(liveRef.current);
+    force();
+  };
+
+  // Build + persist a brand-new live match. Called from the
+  // LiveSetupCard once an opponent + format are chosen. Stores
+  // opponent_id alongside the engine state so a future
+  // "Log this match" hand-off can populate match_history without
+  // re-asking who the opponent was.
+  const onCreateLiveMatch = (args) => {
+    var opp = (args && args.opponent) || null;
+    var fmt = (args && args.format) || DEFAULTS.format;
+    var p1Name = viewerName || DEFAULTS.p1Name;
+    var p2Name = (opp && opp.name) || "Opponent";
+    var m = newMatch({ format: fmt, p1: { name: p1Name }, p2: { name: p2Name } });
+    // Stash the opponent id (and free-text flag) on the match object
+    // so when we eventually log it we know whether to write
+    // opponent_id or to use opp_name only.
+    m.opponentMeta = { id: (opp && opp.id) || null, name: p2Name };
+    liveRef.current = m;
+    saveLiveMatch(m);
+    force();
+    setRoute("live");
+  };
+
+  // Home + Summary "Start new match" tile. Drops the current live
+  // match (if any) and routes to live; the setup card takes over
+  // from there. Calling code that wants to *keep* an in-progress
+  // match should route directly with onGo("live").
   const onNewMatch = () => {
-    liveRef.current = newMatch({ format: DEFAULTS.format, p1: { name: DEFAULTS.p1Name }, p2: { name: DEFAULTS.p2Name } });
+    liveRef.current = null;
+    clearLiveMatch();
     force();
     setRoute("live");
   };
@@ -276,6 +377,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
             onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
+            onCreateLiveMatch={onCreateLiveMatch}
           />
         </div>
 
@@ -326,6 +428,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
             onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
+            onCreateLiveMatch={onCreateLiveMatch}
           />
         </div>
       </div>
@@ -355,6 +458,7 @@ function RouteView({
   friends, onQuickLogSubmit,
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
+  onCreateLiveMatch,
 }) {
   switch (route) {
     case "home":
@@ -366,6 +470,16 @@ function RouteView({
         look={look} onLookChange={onLookChange}
       />;
     case "live":
+      // Empty-state — no match started yet. Render the setup card
+      // (opponent picker + format chips + Start button) instead of
+      // crashing the scoring UI on a null match.
+      if (!liveMatch) {
+        return <LiveSetupCard
+          theme={theme} accent={accent} court={court}
+          viewerName={viewerName} friends={friends}
+          onStart={onCreateLiveMatch} isPhone={false}
+        />;
+      }
       return <DesktopLiveScreen
         match={liveMatch} theme={theme} accent={accent} court={court}
         courts={courts} currentCourtId={currentCourtId} onCourtChange={onCourtChange}
@@ -382,6 +496,9 @@ function RouteView({
     case "messages":
       return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
     case "changeover":
+      // Changeover only makes sense mid-match — bounce to the live
+      // tab (which renders the setup card when there's no match).
+      if (!liveMatch) return <LiveSetupCard theme={theme} accent={accent} court={court} viewerName={viewerName} friends={friends} onStart={onCreateLiveMatch} isPhone={false} />;
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
@@ -390,8 +507,13 @@ function RouteView({
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":
+      // Desktop variant of Live — same null-match handling as "live".
+      if (!liveMatch) return <LiveSetupCard theme={theme} accent={accent} court={court} viewerName={viewerName} friends={friends} onStart={onCreateLiveMatch} isPhone={false} />;
       return <DesktopLiveScreen match={liveMatch} theme={theme} accent={accent} court={court} onPoint={onPoint} onUndo={onUndo} onChangeover={() => onGo("changeover")} />;
     case "watch":
+      // Watch glance is a mid-match shortcut — when no match exists,
+      // fall back to the setup card so the user sees the same path.
+      if (!liveMatch) return <LiveSetupCard theme={theme} accent={accent} court={court} viewerName={viewerName} friends={friends} onStart={onCreateLiveMatch} isPhone={false} />;
       return (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: theme.bg, gap: 36 }}>
           <WatchGlance match={liveMatch} accent={accent} onPoint={onPoint} onUndo={onUndo} />
@@ -429,6 +551,7 @@ function MobileRouteView({
   friends, onQuickLogSubmit,
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
+  onCreateLiveMatch,
 }) {
   switch (route) {
     case "home":
@@ -440,6 +563,16 @@ function MobileRouteView({
         look={look} onLookChange={onLookChange}
       />;
     case "live":
+      // Empty-state — render the setup card instead of crashing
+      // the mobile scoring UI on a null match. Same component
+      // desktop uses, with isPhone=true so the spacing tightens.
+      if (!liveMatch) {
+        return <LiveSetupCard
+          theme={theme} accent={accent} court={court}
+          viewerName={viewerName} friends={friends}
+          onStart={onCreateLiveMatch} isPhone={true}
+        />;
+      }
       return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <LiveScoringScreen
@@ -460,6 +593,7 @@ function MobileRouteView({
     case "messages":
       return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
     case "changeover":
+      if (!liveMatch) return <LiveSetupCard theme={theme} accent={accent} court={court} viewerName={viewerName} friends={friends} onStart={onCreateLiveMatch} isPhone={true} />;
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
