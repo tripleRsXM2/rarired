@@ -29,6 +29,7 @@ import {
   acceptChallengeAction, rescheduleInviteAction,
 } from "./widgetActions.js";
 import { uploadGroupAvatar, MAX_AVATAR_BYTES } from "../../../features/people/services/groupAvatarUpload.js";
+import { supabase } from "../../../lib/supabase.js";
 
 var GROUP_AVATAR_MAX_MB = (MAX_AVATAR_BYTES / (1024 * 1024)).toFixed(0);
 
@@ -322,6 +323,70 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
   React.useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [msgs.length]);
+
+  // Seed widgetState from the authoritative entity status whenever
+  // the thread (re-)opens. Previously the local widgetState reset
+  // to {} on every remount, so a Confirm or Accept that already
+  // landed in the DB looked unacted on after the user left and came
+  // back. User feedback: "once I accepted a match and go back out
+  // of messages and then go back into messages, it doesn't actually
+  // say that I've accepted it. It keeps pushing it again and again."
+  //
+  // For `confirm` widgets we read match_history.status:
+  //   'confirmed'                  → "confirmed" badge
+  //   'rejected'|'voided'|'expired'→ "disputed" badge
+  // For `invite` widgets we read challenges.status:
+  //   'accepted'                   → "accepted" badge
+  //   'declined'|'expired'         → "rescheduled" (closed) badge
+  //
+  // Skips any message id where widgetState already has a value so
+  // an in-flight optimistic state (e.g. "loading" right after a
+  // click) isn't clobbered by the fetch.
+  React.useEffect(function () {
+    if (!convoId || !msgs || !msgs.length) return;
+    var matchIds = msgs
+      .filter(function (m) { return m.kind === "confirm" && m.entity_id && !widgetState[m.id]; })
+      .map(function (m) { return m.entity_id; });
+    var challengeIds = msgs
+      .filter(function (m) { return m.kind === "invite" && m.entity_id && !widgetState[m.id]; })
+      .map(function (m) { return m.entity_id; });
+    if (matchIds.length === 0 && challengeIds.length === 0) return;
+
+    var cancelled = false;
+    Promise.all([
+      matchIds.length
+        ? supabase.from("match_history").select("id,status").in("id", matchIds)
+        : Promise.resolve({ data: [] }),
+      challengeIds.length
+        ? supabase.from("challenges").select("id,status").in("id", challengeIds)
+        : Promise.resolve({ data: [] }),
+    ]).then(function (results) {
+      if (cancelled) return;
+      var matchMap = {};
+      (results[0].data || []).forEach(function (r) { matchMap[r.id] = r.status; });
+      var chalMap = {};
+      (results[1].data || []).forEach(function (r) { chalMap[r.id] = r.status; });
+
+      var patch = {};
+      msgs.forEach(function (m) {
+        if (!m.entity_id || widgetState[m.id]) return;
+        if (m.kind === "confirm") {
+          var st = matchMap[m.entity_id];
+          if (st === "confirmed") patch[m.id] = "confirmed";
+          else if (st === "rejected" || st === "voided" || st === "expired") patch[m.id] = "disputed";
+        } else if (m.kind === "invite") {
+          var cst = chalMap[m.entity_id];
+          if (cst === "accepted") patch[m.id] = "accepted";
+          else if (cst === "declined" || cst === "expired") patch[m.id] = "rescheduled";
+        }
+      });
+      if (Object.keys(patch).length) {
+        setWidgetState(function (prev) { return Object.assign({}, prev, patch); });
+      }
+    });
+    return function () { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convoId, msgs.length]);
 
   const sending = !!(dms && dms.sending);
   const send = (text) => {

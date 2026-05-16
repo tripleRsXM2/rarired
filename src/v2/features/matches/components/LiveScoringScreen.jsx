@@ -248,9 +248,15 @@ export default function LiveScoringScreen({
             match going, can you remove the buttons, ace, winner...
             This should only show up in the advanced mode." */}
 
+        {/* Mobile action row — Changeover + End set, equally
+            spaced. Undo lives on the tap-zone (the small "–"
+            circle) so we don't need a separate Undo button here.
+            User feedback: "can you remove the undo button on
+            mobile? And then the remaining buttons, and set, and
+            change over. Can you make them evenly spaced." */}
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={onChangeover} className="t-btn" style={{
-            flex: 2, appearance: "none", border: `1px solid ${theme.line}`,
+            flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
             background: theme.bgRaised, color: theme.ink,
             padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             fontFamily: "Inter", fontWeight: 600, fontSize: 13, cursor: "pointer",
@@ -273,15 +279,6 @@ export default function LiveScoringScreen({
               End set
             </button>
           )}
-          <button onClick={onUndo} className="t-btn" style={{
-            flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
-            background: theme.bgRaised, color: theme.ink, padding: "13px 14px",
-            fontFamily: "Inter", fontWeight: 600, fontSize: 13, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}>
-            <svg width="14" height="14" viewBox="0 0 16 16"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6m0 0V3m0 3h-3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            Undo
-          </button>
         </div>
 
         {/* Cancel + Save on one row, equal width. Cancel left

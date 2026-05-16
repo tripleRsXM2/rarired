@@ -115,6 +115,14 @@ export async function logV2Match(authUserId, opponent, v2Sets, opts) {
   };
   if (hasLinkedOpponent) {
     payload.opponent_id = opponent.id;
+    // `tagged_user_id` ALSO points at the opponent — the
+    // respond_to_match_tag RPC's auth gate is `caller =
+    // tagged_user_id`, so without this the Confirm / Dispute
+    // widgets in v2 Messages fail silently with "not the tagged
+    // user". Same value as opponent_id for v2 quick-log because
+    // the "tag" IS the opponent. User feedback: "when I try to
+    // confirm a score, it does nothing."
+    payload.tagged_user_id = opponent.id;
     // 72h confirmation window — mirrors v1 ranked submitMatch. After
     // expiry pg_cron flips pending_confirmation → expired.
     payload.expires_at = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
