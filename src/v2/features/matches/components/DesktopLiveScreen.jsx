@@ -11,6 +11,7 @@ import {
 import CourtPicker from "./CourtPicker.jsx";
 import {
   isDeuce, isMatchPoint, pointLabel, fmtDuration, elapsedMs,
+  engineToLogPayload,
 } from "../utils/tennisEngine.js";
 
 export default function DesktopLiveScreen({
@@ -33,7 +34,11 @@ export default function DesktopLiveScreen({
     return () => clearInterval(id);
   }, []);
 
-  const canSave = !!(match && Array.isArray(match.setHistory) && match.setHistory.length > 0);
+  // Save is available the moment any score lands — completed set OR
+  // a partial in-progress set (3-2 etc.) OR an in-progress tiebreak.
+  // engineToLogPayload returns [] for a truly empty 0-0 match; we
+  // gate the button on that.
+  const canSave = !!(match && engineToLogPayload(match).length > 0);
   const matchDone = !!(match && match.endedAt);
   const handleSave = React.useCallback(async function () {
     if (!onSave || saving) return;

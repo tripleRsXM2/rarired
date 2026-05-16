@@ -190,23 +190,45 @@ export function fmtDuration(ms) {
 // expects:
 //   v2Sets : [{ score: [you, them], tb: [you, them] | null }, ...]
 //
-// We surface COMPLETED sets only (engine.setHistory). Partial in-progress
-// sets are deliberately skipped — a set with no winner isn't a legal
-// scoreline to persist, and logV2Match's "Add at least one set score"
-// guard would reject it anyway. Users who want to log an early
-// retirement need to play out the current set or use Quick-log.
+// Includes COMPLETED sets (engine.setHistory) AND — when the match
+// is still in progress — the current-set games as a partial set so
+// the user can Save at any point ("3-2 in the second" persists as
+// 6-4, 3-2 etc.). User feedback: "I want it to be able to save and
+// log at any point in the game." Tiebreak-only formats (TB7 / TB10
+// / Pro 8) surface the running tiebreak points as a partial set too.
 //
-// Returns an empty array when nothing is loggable yet (engine fresh
-// or only the first set is in progress). Callers should treat that
-// as "not ready to save" and disable the button.
+// Returns an empty array only when the match has literally no
+// score on the board — fresh 0-0 with no games and no tiebreak
+// points. Callers can treat that as "not ready to save".
 export function engineToLogPayload(m) {
-  if (!m || !Array.isArray(m.setHistory)) return [];
-  return m.setHistory.map(function (sh) {
-    if (!sh || !Array.isArray(sh.score)) return null;
-    var out = { score: [sh.score[0] || 0, sh.score[1] || 0], tb: null };
-    if (sh.tb && Array.isArray(sh.tb)) {
-      out.tb = [sh.tb[0] || 0, sh.tb[1] || 0];
-    }
-    return out;
-  }).filter(Boolean);
+  if (!m) return [];
+  var out = (Array.isArray(m.setHistory) ? m.setHistory : [])
+    .map(function (sh) {
+      if (!sh || !Array.isArray(sh.score)) return null;
+      var s = { score: [sh.score[0] || 0, sh.score[1] || 0], tb: null };
+      if (sh.tb && Array.isArray(sh.tb)) {
+        s.tb = [sh.tb[0] || 0, sh.tb[1] || 0];
+      }
+      return s;
+    })
+    .filter(Boolean);
+
+  // If the match has finalised (endedAt set), the engine has rolled
+  // the final set into setHistory — nothing more to append.
+  if (m.endedAt) return out;
+
+  var hasGames = Array.isArray(m.games) && (m.games[0] > 0 || m.games[1] > 0);
+  var hasTb    = m.inTiebreak && Array.isArray(m.tbPoints) && (m.tbPoints[0] > 0 || m.tbPoints[1] > 0);
+  if (hasGames || hasTb) {
+    var cur = {
+      score: [
+        (m.games && m.games[0]) || 0,
+        (m.games && m.games[1]) || 0,
+      ],
+      tb: null,
+    };
+    if (hasTb) cur.tb = [m.tbPoints[0] || 0, m.tbPoints[1] || 0];
+    out.push(cur);
+  }
+  return out;
 }

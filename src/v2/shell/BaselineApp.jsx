@@ -307,7 +307,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
 
     var v2Sets = engineToLogPayload(m);
     if (!v2Sets.length) {
-      return { error: "Play at least one full set before saving." };
+      return { error: "Play at least one point before saving." };
     }
 
     var opp = m.opponentMeta || { id: null, name: (m.p2 && m.p2.name) || "Opponent" };

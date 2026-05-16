@@ -12,6 +12,7 @@ import {
 import CourtPicker from "./CourtPicker.jsx";
 import {
   isDeuce, isMatchPoint, fmtDuration, elapsedMs,
+  engineToLogPayload,
 } from "../utils/tennisEngine.js";
 
 export default function LiveScoringScreen({
@@ -33,7 +34,10 @@ export default function LiveScoringScreen({
   const [saving, setSaving] = React.useState(false);
   const [saveErr, setSaveErr] = React.useState("");
 
-  const canSave = !!(match && Array.isArray(match.setHistory) && match.setHistory.length > 0);
+  // Save is available any time there's any score on the board —
+  // completed set OR partial in-progress games OR running tiebreak
+  // points. See engineToLogPayload for the shape rules.
+  const canSave = !!(match && engineToLogPayload(match).length > 0);
   const matchDone = !!(match && match.endedAt);
   const handleSave = React.useCallback(async function () {
     if (!onSave || saving) return;
