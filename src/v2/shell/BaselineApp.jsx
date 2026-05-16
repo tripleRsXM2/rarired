@@ -227,14 +227,24 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   }
   const liveMatch = liveRef.current;
 
-  // (No rename effect: p1.name is hardcoded "You" in the live
-  // scoreboard. The viewer's real name still flows into the
-  // confirm-card DM via onSaveLiveMatch's submitterName, so the
-  // opponent sees the real name on their side — but on the
-  // viewer's own scoreboard "You" is the right read. Matches the
-  // Quick-log convention. User feedback: "in live scoring there is
-  // still says Test as my name. Is this because my username was
-  // Test? Shouldn't it just be you?")
+  // Rename p1 in the running match once the profile resolves —
+  // covers the race where a match was created before useV2Profile
+  // landed (p1 came in as "You", flips to "Mdawg" once the profile
+  // arrives). Skips the rename if p1 is already in sync OR if the
+  // user has manually edited it to something non-default.
+  React.useEffect(function () {
+    var m = liveRef.current;
+    if (!m || !m.p1) return;
+    if (m.p1.name === viewerDisplayName) return;
+    // Only auto-rename from the "You" placeholder — never overwrite
+    // a real profile name with a different one (avoids surprising
+    // the user mid-match if they re-auth as someone else).
+    if (m.p1.name !== "You") return;
+    m.p1.name = viewerDisplayName;
+    saveLiveMatch(m);
+    force();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerDisplayName]);
 
   // SummaryScreen still renders a demo finished match — it's the
   // visual prototype for the post-match recap and isn't wired to a
@@ -297,15 +307,21 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   // opponent_id alongside the engine state so a future
   // "Log this match" hand-off can populate match_history without
   // re-asking who the opponent was.
+  // Scoreboard display name for the viewer. Prefers the loaded
+  // profile name (e.g. "Mdawg") so the scoreboard reads with the
+  // user's actual identity. Falls back to "You" — NOT the email
+  // handle (`test@test.com` → "test"), which is an internal
+  // identifier that shouldn't leak into the UI. The profile name
+  // can lag the first render by a few hundred ms while the
+  // useV2Profile fetch resolves, so the rename effect below
+  // patches in-progress matches once the name lands.
+  const viewerDisplayName = (v2Profile.profile && v2Profile.profile.name) || "You";
+
   const onCreateLiveMatch = (args) => {
     var opp = (args && args.opponent) || null;
     var fmt = (args && args.format) || DEFAULTS.format;
     var p2Name = (opp && opp.name) || "Opponent";
-    // p1 is always "You" in the scoreboard (matches Quick-log).
-    // The viewer's real name is threaded into onSaveLiveMatch's
-    // submitterName for the confirm-card DM payload — that's the
-    // only surface where the opponent needs to see who logged it.
-    var m = newMatch({ format: fmt, p1: { name: "You" }, p2: { name: p2Name } });
+    var m = newMatch({ format: fmt, p1: { name: viewerDisplayName }, p2: { name: p2Name } });
     // Stash the opponent id (and free-text flag) on the match object
     // so when we eventually log it we know whether to write
     // opponent_id or to use opp_name only.
