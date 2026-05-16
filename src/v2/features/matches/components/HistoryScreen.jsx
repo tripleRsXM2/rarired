@@ -7,6 +7,20 @@ import { CourtMini, Eyebrow } from "./atoms.jsx";
 import { COURTS } from "../utils/tokens.js";
 
 export default function HistoryScreen({ theme, accent, matches }) {
+  // Filter chip — All / Wins / Losses. Singles + Doubles dropped for
+  // now (no singles/doubles flag on match_history yet). Wins/Losses
+  // count only SETTLED matches: a pending / disputed row has no final
+  // result, so it's excluded from both filtered views.
+  const [filter, setFilter] = React.useState("All");
+  const FILTERS = ["All", "Wins", "Losses"];
+
+  const all = matches || [];
+  const visible = all.filter(function (m) {
+    if (filter === "Wins")   return m.win  && !m.pending;
+    if (filter === "Losses") return !m.win && !m.pending;
+    return true; // "All"
+  });
+
   return (
     <div style={{ height: "100%", background: theme.bg, color: theme.ink, display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "22px 20px 8px" }}>
@@ -22,15 +36,31 @@ export default function HistoryScreen({ theme, accent, matches }) {
       </div>
 
       <div style={{ padding: "14px 20px 6px", display: "flex", gap: 6, overflowX: "auto" }} className="t-noscroll">
-        {["All", "Wins", "Losses", "Singles", "Doubles"].map((f, i) => (
-          <Chip key={f} active={i === 0} theme={theme}>{f}</Chip>
+        {FILTERS.map((f) => (
+          <Chip
+            key={f}
+            active={filter === f}
+            onClick={() => setFilter(f)}
+            theme={theme}
+          >{f}</Chip>
         ))}
       </div>
 
       <div className="t-noscroll" style={{ flex: 1, overflowY: "auto", padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-        {matches.map((m, i) => (
-          <HistoryRow key={i} {...m} theme={theme} accent={accent} />
-        ))}
+        {visible.length === 0 ? (
+          <div style={{
+            padding: "28px 14px", textAlign: "center",
+            color: theme.inkSoft, fontFamily: "Inter", fontSize: 13,
+          }}>
+            {filter === "Wins"   ? "No wins logged yet."
+              : filter === "Losses" ? "No losses logged yet."
+              : "No matches yet."}
+          </div>
+        ) : (
+          visible.map((m, i) => (
+            <HistoryRow key={m.id || i} {...m} theme={theme} accent={accent} />
+          ))
+        )}
       </div>
     </div>
   );
@@ -45,15 +75,15 @@ function Stat({ label, v, theme }) {
   );
 }
 
-function Chip({ children, active, theme }) {
+function Chip({ children, active, onClick, theme }) {
   return (
-    <button className="t-btn" style={{
+    <button onClick={onClick} className="t-btn" style={{
       appearance: "none", border: `1px solid ${active ? theme.ink : theme.line}`,
       borderRadius: 999, padding: "6px 12px",
       background: active ? theme.ink : "transparent",
       color: active ? theme.bg : theme.ink,
       fontFamily: "Inter", fontWeight: 500, fontSize: 12,
-      whiteSpace: "nowrap",
+      whiteSpace: "nowrap", cursor: "pointer",
     }}>{children}</button>
   );
 }
