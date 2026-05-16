@@ -381,6 +381,35 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
 
   const isWide = useIsWide(700);
 
+  // Keyboard-open detection (mobile only). When the on-screen
+  // keyboard slides up, `visualViewport.height` shrinks by the
+  // keyboard's height while `window.innerHeight` stays put — so
+  // the difference is a reliable signal across iOS Safari + Chrome
+  // on Android. We treat anything > 100px as "keyboard up" to ride
+  // past small chrome differences (URL bar appearing/disappearing).
+  // The mobile tab bar (Home / Score / Comps / Inbox / History /
+  // Log) gets hidden while the keyboard is up to give input flows
+  // back the ~80px of vertical real estate. User feedback: "on
+  // mobile, when you do click the writing bar, the icons are still
+  // visible ... to save screen space when the keyboard shows up on
+  // your mobile phone, it should hide the icons on the bottom."
+  const [keyboardOpen, setKeyboardOpen] = React.useState(false);
+  React.useEffect(function () {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    var vv = window.visualViewport;
+    function check() {
+      var diff = window.innerHeight - vv.height;
+      setKeyboardOpen(diff > 100);
+    }
+    vv.addEventListener("resize", check);
+    vv.addEventListener("scroll", check);
+    check();
+    return function () {
+      vv.removeEventListener("resize", check);
+      vv.removeEventListener("scroll", check);
+    };
+  }, []);
+
   // ── Mobile layout (<700px) ──────────────────────────────────
   // Renders the design's phone-frame screens directly into the
   // viewport (no fake phone bezel — we ARE the phone). Bottom tab
@@ -438,10 +467,15 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
           />
         </div>
 
-        {/* Bottom tab bar — primary mobile nav. 5 tabs that match the
+        {/* Bottom tab bar — primary mobile nav. 6 tabs that match the
             most-used sidebar items. Secondary routes (messages, watch,
-            desktop) reachable via Home tiles. */}
-        <MobileTabBar route={route} onGo={onGo} theme={theme} accent={accent} />
+            desktop) reachable via Home tiles. Hidden while the
+            on-screen keyboard is open (see keyboardOpen state) so
+            input-heavy flows (compose, rename, free-text opponent)
+            get the screen real estate back. */}
+        {!keyboardOpen && (
+          <MobileTabBar route={route} onGo={onGo} theme={theme} accent={accent} />
+        )}
       </div>
     );
   }

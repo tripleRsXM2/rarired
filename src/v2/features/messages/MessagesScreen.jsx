@@ -533,7 +533,23 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
         ))}
       </div>
 
-      <div style={{ flexShrink: 0, padding: isPhone ? "8px 10px 92px" : "8px 14px 14px", display: "flex", alignItems: "flex-end", gap: 8, borderTop: `0.5px solid ${theme.line}` }}>
+      {/* Composer row — flush to the viewport bottom on desktop
+          (no chrome below it) and respects the iOS home indicator on
+          mobile via safe-area-inset. The legacy 92px mobile padding
+          was a hangover from when the bottom tab bar was modelled as
+          an overlay; it's a flex sibling now (and gets hidden when
+          the keyboard opens — see BaselineApp's keyboardOpen state)
+          so the extra space is dead weight. User feedback: "Can you
+          just make the writing bar flush to the bottom where the
+          icons are. That way you have more room in the messages." */}
+      <div style={{
+        flexShrink: 0,
+        padding: isPhone
+          ? "8px 10px calc(env(safe-area-inset-bottom, 0px) + 8px)"
+          : "8px 14px 0",
+        display: "flex", alignItems: "flex-end", gap: 8,
+        borderTop: `0.5px solid ${theme.line}`,
+      }}>
         <div style={{ flex: 1, background: theme.chip, borderRadius: 22, padding: "8px 14px", display: "flex", alignItems: "center", gap: 8, minHeight: 36 }}>
           <input
             value={draft}
