@@ -22,10 +22,27 @@ export default function LiveScoringScreen({
   // provided, the court chip in the top-right becomes a pressable
   // dropdown that lets the user change surfaces on the fly.
   courts, currentCourtId, onCourtChange,
+  // Persist-the-match callback (mobile twin of the desktop Save).
+  // Reshapes engine state and hands off to logV2Match — see
+  // BaselineApp.onSaveLiveMatch.
+  onSave,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [serveSec, setServeSec] = React.useState(25);
   const [tapFlash, setTapFlash] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+  const [saveErr, setSaveErr] = React.useState("");
+
+  const canSave = !!(match && Array.isArray(match.setHistory) && match.setHistory.length > 0);
+  const matchDone = !!(match && match.endedAt);
+  const handleSave = React.useCallback(async function () {
+    if (!onSave || saving) return;
+    setSaveErr("");
+    setSaving(true);
+    var r = await onSave();
+    setSaving(false);
+    if (r && r.error) setSaveErr((r.error && r.error.message) || String(r.error));
+  }, [onSave, saving]);
 
   React.useEffect(() => {
     if (!showServeClock) return;
@@ -136,6 +153,39 @@ export default function LiveScoringScreen({
             Undo
           </button>
         </div>
+
+        {/* Save match — same backend as Quick-log (logV2Match →
+            match_history INSERT + match_tag notification +
+            confirm-card DM to the opponent). Promoted to the
+            primary accent treatment once endedAt lands so the
+            "now log it" call to action is obvious. */}
+        {onSave && (
+          <button onClick={handleSave} disabled={!canSave || saving} className="t-btn" style={{
+            marginTop: 8, width: "100%",
+            appearance: "none", border: matchDone ? 0 : `1px solid ${theme.line}`,
+            background: matchDone ? accent : theme.bgRaised,
+            color: matchDone ? "#0f1410" : theme.ink,
+            padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            fontFamily: "Inter", fontWeight: matchDone ? 700 : 600, fontSize: 13,
+            letterSpacing: matchDone ? "0.04em" : "0",
+            cursor: (canSave && !saving) ? "pointer" : "default",
+            opacity: (canSave && !saving) ? 1 : 0.55,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            {saving ? "Saving…" : (matchDone ? "Save match" : "Save & log")}
+          </button>
+        )}
+        {saveErr && (
+          <div style={{
+            marginTop: 6, padding: "8px 10px", borderRadius: 8,
+            background: `${accent}1f`, color: theme.ink,
+            fontFamily: "Inter", fontSize: 12, fontWeight: 500, textAlign: "center",
+          }}>{saveErr}</div>
+        )}
       </div>
     </div>
   );

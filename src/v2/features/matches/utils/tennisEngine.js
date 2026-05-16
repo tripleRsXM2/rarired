@@ -184,3 +184,29 @@ export function fmtDuration(ms) {
   if (h > 0) return `${h}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   return `${mm}:${String(ss).padStart(2, "0")}`;
 }
+
+// ── Live → logV2Match handoff ─────────────────────────────────────────────────
+// Reshape an in-flight engine match into the v2Sets payload `logV2Match`
+// expects:
+//   v2Sets : [{ score: [you, them], tb: [you, them] | null }, ...]
+//
+// We surface COMPLETED sets only (engine.setHistory). Partial in-progress
+// sets are deliberately skipped — a set with no winner isn't a legal
+// scoreline to persist, and logV2Match's "Add at least one set score"
+// guard would reject it anyway. Users who want to log an early
+// retirement need to play out the current set or use Quick-log.
+//
+// Returns an empty array when nothing is loggable yet (engine fresh
+// or only the first set is in progress). Callers should treat that
+// as "not ready to save" and disable the button.
+export function engineToLogPayload(m) {
+  if (!m || !Array.isArray(m.setHistory)) return [];
+  return m.setHistory.map(function (sh) {
+    if (!sh || !Array.isArray(sh.score)) return null;
+    var out = { score: [sh.score[0] || 0, sh.score[1] || 0], tb: null };
+    if (sh.tb && Array.isArray(sh.tb)) {
+      out.tb = [sh.tb[0] || 0, sh.tb[1] || 0];
+    }
+    return out;
+  }).filter(Boolean);
+}

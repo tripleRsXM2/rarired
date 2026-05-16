@@ -33,7 +33,7 @@ import HistoryScreen from "../features/matches/components/HistoryScreen.jsx";
 import QuickLogScreen from "../features/matches/components/QuickLogScreen.jsx";
 import WatchGlance from "../features/matches/components/WatchGlance.jsx";
 
-import { addPoint, undo, newMatch } from "../features/matches/utils/tennisEngine.js";
+import { addPoint, undo, newMatch, engineToLogPayload } from "../features/matches/utils/tennisEngine.js";
 import { THEMES, COURTS } from "../features/matches/utils/tokens.js";
 import { MODERN_THEMES, MODERN_COURTS, ensureModernCss } from "../features/matches/utils/modernTokens.js";
 import { ensureFonts } from "../features/matches/utils/fonts.js";
@@ -290,6 +290,44 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   };
   const onGo = (id) => setRoute(id);
 
+  // Save / commit the in-progress live match via the same backend
+  // Quick-log uses (logV2Match). Reshapes engine.setHistory into the
+  // v2Sets payload, pulls the opponent (id + name) from the
+  // opponentMeta we stashed when the match was created via
+  // onCreateLiveMatch, then routes the user to History on success.
+  //
+  // Returns { error: null } on success or { error: <message> } on
+  // failure so the live-screen Save button can render an inline
+  // banner. Doesn't clear the local match on error — the user keeps
+  // their state and can retry.
+  const onSaveLiveMatch = React.useCallback(async function () {
+    var m = liveRef.current;
+    if (!m) return { error: "No match in progress." };
+    if (!v2UserId) return { error: "Sign in to save matches." };
+
+    var v2Sets = engineToLogPayload(m);
+    if (!v2Sets.length) {
+      return { error: "Play at least one full set before saving." };
+    }
+
+    var opp = m.opponentMeta || { id: null, name: (m.p2 && m.p2.name) || "Opponent" };
+    var res = await logV2Match(v2UserId, opp, v2Sets, {
+      submitterName: viewerName,
+    });
+    if (res && res.error) {
+      return { error: (res.error && res.error.message) || "Couldn't save the match." };
+    }
+
+    // Success — wipe the local match (it now lives in match_history)
+    // and reload the history feed so the saved row appears immediately.
+    liveRef.current = null;
+    clearLiveMatch();
+    if (v2History.reload) v2History.reload();
+    force();
+    setRoute("history");
+    return { error: null };
+  }, [v2UserId, viewerName, v2History.reload]);
+
   // Players-tab callbacks. `onMessagePlayer` opens a 1:1 conversation
   // with the player (creating a draft conv if none exists) and routes
   // to the v2 Messages screen so the user lands inside the open
@@ -378,6 +416,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
             onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
             onCreateLiveMatch={onCreateLiveMatch}
+            onSaveLiveMatch={onSaveLiveMatch}
           />
         </div>
 
@@ -429,6 +468,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
             onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
             onCreateLiveMatch={onCreateLiveMatch}
+            onSaveLiveMatch={onSaveLiveMatch}
           />
         </div>
       </div>
@@ -458,7 +498,7 @@ function RouteView({
   friends, onQuickLogSubmit,
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
-  onCreateLiveMatch,
+  onCreateLiveMatch, onSaveLiveMatch,
 }) {
   switch (route) {
     case "home":
@@ -485,6 +525,7 @@ function RouteView({
         courts={courts} currentCourtId={currentCourtId} onCourtChange={onCourtChange}
         onPoint={onPoint} onUndo={onUndo}
         onChangeover={() => onGo("changeover")}
+        onSave={onSaveLiveMatch}
       />;
     case "competitions":
       return <CompetitionsScreen
@@ -551,7 +592,7 @@ function MobileRouteView({
   friends, onQuickLogSubmit,
   dms, authUser, everyonePlayers,
   onMessagePlayer, onInvitePlayer,
-  onCreateLiveMatch,
+  onCreateLiveMatch, onSaveLiveMatch,
 }) {
   switch (route) {
     case "home":
@@ -580,6 +621,7 @@ function MobileRouteView({
             courts={courts} currentCourtId={currentCourtId} onCourtChange={onCourtChange}
             onPoint={onPoint} onUndo={onUndo}
             onChangeover={() => onGo("changeover")}
+            onSave={onSaveLiveMatch}
           />
         </div>
       );

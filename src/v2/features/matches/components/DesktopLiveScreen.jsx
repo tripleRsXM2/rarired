@@ -17,13 +17,32 @@ export default function DesktopLiveScreen({
   match, theme, accent, court, onPoint, onUndo, onChangeover,
   // Court picker (optional, see LiveScoringScreen).
   courts, currentCourtId, onCourtChange,
+  // Persist-the-match callback. Returns { error: null } / { error: msg }.
+  // Wired in BaselineApp.onSaveLiveMatch — reshapes the engine state
+  // and hands off to logV2Match (same backend as Quick-log: writes
+  // match_history + fires match_tag notification + emits the
+  // confirm-card DM into the opponent's thread).
+  onSave,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
+  const [saving, setSaving] = React.useState(false);
+  const [saveErr, setSaveErr] = React.useState("");
 
   React.useEffect(() => {
     const id = setInterval(force, 1000);
     return () => clearInterval(id);
   }, []);
+
+  const canSave = !!(match && Array.isArray(match.setHistory) && match.setHistory.length > 0);
+  const matchDone = !!(match && match.endedAt);
+  const handleSave = React.useCallback(async function () {
+    if (!onSave || saving) return;
+    setSaveErr("");
+    setSaving(true);
+    var r = await onSave();
+    setSaving(false);
+    if (r && r.error) setSaveErr((r.error && r.error.message) || String(r.error));
+  }, [onSave, saving]);
 
   return (
     <div style={{
@@ -137,6 +156,38 @@ export default function DesktopLiveScreen({
           </div>
         </div>
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* Save match — uses the same backend as Quick-log
+              (logV2Match → match_history + match_tag notification +
+              confirm-card DM to the opponent). Disabled until at
+              least one set has been completed; promoted to the
+              primary accent treatment once the engine flips
+              endedAt so the user can tell "the match is over,
+              go log it". */}
+          {onSave && (
+            <button onClick={handleSave} disabled={!canSave || saving} className="t-btn" style={{
+              appearance: "none", border: matchDone ? 0 : `1px solid ${theme.line}`,
+              background: matchDone ? accent : theme.bg,
+              color: matchDone ? "#0f1410" : theme.ink,
+              padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              fontFamily: "Inter", fontWeight: matchDone ? 700 : 600, fontSize: 13,
+              letterSpacing: matchDone ? "0.04em" : "0",
+              cursor: (canSave && !saving) ? "pointer" : "default",
+              opacity: (canSave && !saving) ? 1 : 0.55,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+              {saving ? "Saving…" : (matchDone ? "Save match" : "Save & log")}
+            </button>
+          )}
+          {saveErr && (
+            <div style={{
+              padding: "8px 10px", borderRadius: 8, background: `${accent}1f`, color: theme.ink,
+              fontFamily: "Inter", fontSize: 12, fontWeight: 500,
+            }}>{saveErr}</div>
+          )}
           <button onClick={onChangeover} className="t-btn" style={{
             appearance: "none", border: `1px solid ${theme.line}`,
             background: theme.bg, color: theme.ink,
