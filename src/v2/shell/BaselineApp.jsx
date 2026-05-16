@@ -227,6 +227,14 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   }
   const liveMatch = liveRef.current;
 
+  // Scoreboard display name for the viewer. Prefers the loaded
+  // profile name (e.g. "Mdawg") so the scoreboard reads with the
+  // user's actual identity. Falls back to "You" — NOT the email
+  // handle (`test@test.com` → "test"), which is an internal
+  // identifier that shouldn't leak into the UI. Declared up here
+  // before the rename effect that depends on it (TDZ-safety).
+  const viewerDisplayName = (v2Profile.profile && v2Profile.profile.name) || "You";
+
   // Rename p1 in the running match once the profile resolves —
   // covers the race where a match was created before useV2Profile
   // landed (p1 came in as "You", flips to "Mdawg" once the profile
@@ -307,15 +315,8 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   // opponent_id alongside the engine state so a future
   // "Log this match" hand-off can populate match_history without
   // re-asking who the opponent was.
-  // Scoreboard display name for the viewer. Prefers the loaded
-  // profile name (e.g. "Mdawg") so the scoreboard reads with the
-  // user's actual identity. Falls back to "You" — NOT the email
-  // handle (`test@test.com` → "test"), which is an internal
-  // identifier that shouldn't leak into the UI. The profile name
-  // can lag the first render by a few hundred ms while the
-  // useV2Profile fetch resolves, so the rename effect below
-  // patches in-progress matches once the name lands.
-  const viewerDisplayName = (v2Profile.profile && v2Profile.profile.name) || "You";
+  // (viewerDisplayName is declared earlier — see the block above
+  // the rename effect that depends on it.)
 
   const onCreateLiveMatch = (args) => {
     var opp = (args && args.opponent) || null;
