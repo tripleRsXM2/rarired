@@ -72,17 +72,9 @@ export default function LiveScoringScreen({
     (Array.isArray(match.games)   && (match.games[0]   > 0 || match.games[1]   > 0)) ||
     (match.inTiebreak && Array.isArray(match.tbPoints) && (match.tbPoints[0] > 0 || match.tbPoints[1] > 0))
   ));
-  // Tag chips — human UI labels, engine keys for the action.
-  const TAGS = [
-    { key: "ace",    label: "Ace" },
-    { key: "winner", label: "Winner" },
-    { key: "df",     label: "Double fault" },
-    { key: "error",  label: "Unforced error" },
-    { key: "net",    label: "Net cord" },
-  ];
-  const lastLog = match && match.log && match.log.length ? match.log[match.log.length - 1] : null;
-  const lastTag = (lastLog && lastLog.tag) || null;
-  const hasLastPoint = !!lastLog;
+  // (Tag chips live in DesktopLiveScreen — the mobile portrait
+  // layout no longer surfaces them. Advanced/landscape mode falls
+  // through to the desktop component which still renders them.)
   const handleSave = React.useCallback(async function () {
     if (!onSave || saving) return;
     setSaveErr("");
@@ -153,6 +145,7 @@ export default function LiveScoringScreen({
         onSave={onSave} onEndSet={onEndSet} onTagPoint={onTagPoint}
         onCancel={onCancel}
         onExitAdvanced={function () { toggleAdvanced(false); }}
+        compact
       />
     );
   }
@@ -249,38 +242,11 @@ export default function LiveScoringScreen({
           </div>
         )}
 
-        {/* Tag-chip row — scrolls horizontally on tight screens.
-            Buttons fire onTagPoint with the engine key. Active tag
-            highlights so you know what's stuck on the last point. */}
-        {onTagPoint && (
-          <div className="t-noscroll" style={{
-            display: "flex", gap: 6, overflowX: "auto", marginBottom: 8,
-            paddingBottom: 4, scrollbarWidth: "none",
-          }}>
-            {TAGS.map(function (t) {
-              var on = lastTag === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={function () { if (hasLastPoint) onTagPoint(on ? null : t.key); }}
-                  disabled={!hasLastPoint}
-                  className="t-btn"
-                  style={{
-                    appearance: "none",
-                    padding: "6px 12px", borderRadius: 999, flexShrink: 0,
-                    background: on ? theme.ink : theme.chip,
-                    color: on ? theme.bg : theme.ink,
-                    fontFamily: "Inter", fontSize: 11.5, fontWeight: on ? 700 : 500, letterSpacing: "0.02em",
-                    border: `1px solid ${on ? theme.ink : theme.line}`,
-                    cursor: hasLastPoint ? "pointer" : "default",
-                    opacity: hasLastPoint ? 1 : 0.5,
-                    whiteSpace: "nowrap",
-                  }}>{t.label}</button>
-              );
-            })}
-          </div>
-        )}
+        {/* Tag chips intentionally NOT rendered on mobile portrait —
+            they live in the Advanced (landscape) view instead. User
+            feedback: "When you are on the score tab and you have a
+            match going, can you remove the buttons, ace, winner...
+            This should only show up in the advanced mode." */}
 
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={onChangeover} className="t-btn" style={{
@@ -318,30 +284,50 @@ export default function LiveScoringScreen({
           </button>
         </div>
 
-        {/* Save match — same backend as Quick-log (logV2Match →
-            match_history INSERT + match_tag notification +
-            confirm-card DM to the opponent). Promoted to the
-            primary accent treatment once endedAt lands so the
-            "now log it" call to action is obvious. */}
-        {onSave && (
-          <button onClick={handleSave} disabled={!canSave || saving} className="t-btn" style={{
-            marginTop: 8, width: "100%",
-            appearance: "none", border: matchDone ? 0 : `1px solid ${theme.line}`,
-            background: matchDone ? accent : theme.bgRaised,
-            color: matchDone ? "#0f1410" : theme.ink,
-            padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            fontFamily: "Inter", fontWeight: matchDone ? 700 : 600, fontSize: 13,
-            letterSpacing: matchDone ? "0.04em" : "0",
-            cursor: (canSave && !saving) ? "pointer" : "default",
-            opacity: (canSave && !saving) ? 1 : 0.55,
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-              <polyline points="17 21 17 13 7 13 7 21"/>
-              <polyline points="7 3 7 8 15 8"/>
-            </svg>
-            {saving ? "Saving…" : (matchDone ? "Save match" : "Save & log")}
-          </button>
+        {/* Cancel + Save on one row, equal width. Cancel left
+            (outlined / muted — destructive but rare), Save right
+            (the primary action — accent-filled when the match has
+            actually ended, outlined otherwise so it doesn't
+            over-claim attention mid-set). User feedback: "have the
+            save and log match and cancel match on the same
+            horizontal plane make them the same sized buttons side
+            by side." */}
+        {(onSave || onCancel) && (
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            {onCancel && (
+              <button onClick={onCancel} className="t-btn" style={{
+                flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
+                background: "transparent", color: theme.inkSoft,
+                padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontFamily: "Inter", fontWeight: 600, fontSize: 13, cursor: "pointer",
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/>
+                </svg>
+                Cancel match
+              </button>
+            )}
+            {onSave && (
+              <button onClick={handleSave} disabled={!canSave || saving} className="t-btn" style={{
+                flex: 1, appearance: "none",
+                border: matchDone ? 0 : `1px solid ${theme.line}`,
+                background: matchDone ? accent : theme.bgRaised,
+                color: matchDone ? "#0f1410" : theme.ink,
+                padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontFamily: "Inter", fontWeight: matchDone ? 700 : 600, fontSize: 13,
+                letterSpacing: matchDone ? "0.04em" : "0",
+                cursor: (canSave && !saving) ? "pointer" : "default",
+                opacity: (canSave && !saving) ? 1 : 0.55,
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                {saving ? "Saving…" : (matchDone ? "Save match" : "Save & log")}
+              </button>
+            )}
+          </div>
         )}
         {saveErr && (
           <div style={{
@@ -350,19 +336,8 @@ export default function LiveScoringScreen({
             fontFamily: "Inter", fontSize: 12, fontWeight: 500, textAlign: "center",
           }}>{saveErr}</div>
         )}
-        {/* Cancel match — destructive, sits at the bottom of the
-            action area as a subtle text link. Confirm dialog lives
-            in BaselineApp.onCancelLiveMatch. */}
-        {onCancel && (
-          <div style={{ marginTop: 6, textAlign: "center" }}>
-            <button onClick={onCancel} className="t-btn" style={{
-              appearance: "none", border: 0, background: "transparent",
-              color: theme.inkFaint, padding: "6px 10px",
-              fontFamily: "Inter", fontWeight: 500, fontSize: 11.5,
-              cursor: "pointer", textDecoration: "underline",
-            }}>Cancel match</button>
-          </div>
-        )}
+        {/* (Old underline-link Cancel removed — Cancel now lives in
+            the side-by-side row above.) */}
       </div>
     </div>
   );

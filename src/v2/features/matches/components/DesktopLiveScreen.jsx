@@ -42,6 +42,13 @@ export default function DesktopLiveScreen({
   // the bottom of the sidebar action column so accidental taps are
   // rare.
   onCancel,
+  // Tightens padding / font sizes / sidebar width so the desktop
+  // layout fits a 7" phone in landscape. Set by LiveScoringScreen
+  // when it hands off to advanced mode. Standard desktop calls
+  // omit this prop and keep the full spacing. User feedback: "For
+  // the advanced mode, Can you just make everything a little bit
+  // smaller so it fits on the phone better?"
+  compact = false,
 }) {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [saving, setSaving] = React.useState(false);
@@ -80,6 +87,33 @@ export default function DesktopLiveScreen({
   const lastLog = match && match.log && match.log.length ? match.log[match.log.length - 1] : null;
   const lastTag = (lastLog && lastLog.tag) || null;
   const hasLastPoint = !!lastLog;
+
+  // Sizing tokens — standard desktop vs. compact (mobile advanced
+  // landscape). Tightens everything that touches vertical space
+  // most aggressively since landscape on a phone is ~400px tall.
+  const Z = compact ? {
+    sidebarW: 240,
+    mainPad: "12px 18px",
+    sidebarPad: "12px 14px",
+    scorePadV: 18, scorePadH: 22,
+    nameFs: 22, sumFs: 18, sumFsBig: 28,
+    tapPad: "14px 16px", tapNameFs: 16,
+    tapMinH: 0,
+    chipFs: 10.5, chipPad: "5px 10px",
+    actionPad: "10px 12px", actionFs: 12,
+    pointLogFs: 11,
+  } : {
+    sidebarW: 320,
+    mainPad: "20px 28px",
+    sidebarPad: "20px 22px",
+    scorePadV: 32, scorePadH: 36,
+    nameFs: 28, sumFs: 22, sumFsBig: 36,
+    tapPad: "20px 22px", tapNameFs: 18,
+    tapMinH: 0,
+    chipFs: 11, chipPad: "6px 12px",
+    actionPad: "12px 14px", actionFs: 13,
+    pointLogFs: 12,
+  };
   const handleSave = React.useCallback(async function () {
     if (!onSave || saving) return;
     setSaveErr("");
@@ -92,10 +126,10 @@ export default function DesktopLiveScreen({
   return (
     <div style={{
       width: "100%", height: "100%", background: theme.bg, color: theme.ink,
-      display: "grid", gridTemplateColumns: "1fr 320px", overflow: "hidden",
+      display: "grid", gridTemplateColumns: `1fr ${Z.sidebarW}px`, overflow: "hidden",
     }}>
       {/* main */}
-      <div style={{ display: "flex", flexDirection: "column", padding: "20px 28px", minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", padding: Z.mainPad, minWidth: 0 }}>
         {/* top bar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -141,13 +175,14 @@ export default function DesktopLiveScreen({
 
         {/* big scoreboard */}
         <div style={{
-          background: theme.scoreBg, color: theme.scoreInk, borderRadius: 18, padding: "32px 36px",
-          display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 24,
+          background: theme.scoreBg, color: theme.scoreInk, borderRadius: 18,
+          padding: `${Z.scorePadV}px ${Z.scorePadH}px`,
+          display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: compact ? 16 : 24,
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-            <BigPlayerLine match={match} side={0} accent={accent} theme={theme} />
+            <BigPlayerLine match={match} side={0} accent={accent} theme={theme} compact={compact} />
             <div style={{ height: 1, background: "rgba(255,255,255,0.08)" }} />
-            <BigPlayerLine match={match} side={1} accent={accent} theme={theme} />
+            <BigPlayerLine match={match} side={1} accent={accent} theme={theme} compact={compact} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
             <span className="t-cap" style={{ color: "rgba(232,230,223,0.5)" }}>{match.inTiebreak ? "Tiebreak" : (isDeuce(match) ? "Deuce" : "Game")}</span>
@@ -165,15 +200,15 @@ export default function DesktopLiveScreen({
 
         {/* point area */}
         <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
-          <DesktopTapZone player={match.p1} server={match.serverIndex === 0} onTap={() => onPoint(0)} onMinus={onUndo} theme={theme} accent={accent} />
-          <DesktopTapZone player={match.p2} server={match.serverIndex === 1} onTap={() => onPoint(1)} onMinus={onUndo} theme={theme} accent={accent} />
+          <DesktopTapZone player={match.p1} server={match.serverIndex === 0} onTap={() => onPoint(0)} onMinus={onUndo} theme={theme} accent={accent} compact={compact} />
+          <DesktopTapZone player={match.p2} server={match.serverIndex === 1} onTap={() => onPoint(1)} onMinus={onUndo} theme={theme} accent={accent} compact={compact} />
         </div>
 
         {/* Tag chips — apply / re-apply a label to the most recent
             point. The active tag highlights so the user can tell
             which one's on. Disabled until at least one point has
             been scored. */}
-        <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: compact ? 6 : 8, marginTop: compact ? 8 : 14, flexWrap: "wrap" }}>
           {TAGS.map(function (t) {
             var on = lastTag === t.key;
             return (
@@ -185,31 +220,35 @@ export default function DesktopLiveScreen({
                 className="t-btn"
                 style={{
                   appearance: "none",
-                  padding: "6px 12px", borderRadius: 999,
+                  padding: Z.chipPad, borderRadius: 999,
                   background: on ? theme.ink : theme.chip,
                   color: on ? theme.bg : theme.ink,
-                  fontFamily: "Inter", fontSize: 11, fontWeight: on ? 700 : 500, letterSpacing: "0.02em",
+                  fontFamily: "Inter", fontSize: Z.chipFs, fontWeight: on ? 700 : 500, letterSpacing: "0.02em",
                   border: `1px solid ${on ? theme.ink : theme.line}`,
                   cursor: hasLastPoint ? "pointer" : "default",
                   opacity: hasLastPoint ? 1 : 0.5,
                 }}>{t.label}</button>
             );
           })}
-          <div style={{ flex: 1 }} />
-          <span className="t-cap" style={{ color: theme.inkFaint, alignSelf: "center" }}>
-            {hasLastPoint ? "Tag last point ↑" : "Score a point to tag it"}
-          </span>
+          {!compact && (
+            <>
+              <div style={{ flex: 1 }} />
+              <span className="t-cap" style={{ color: theme.inkFaint, alignSelf: "center" }}>
+                {hasLastPoint ? "Tag last point ↑" : "Score a point to tag it"}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
       {/* sidebar */}
       <div style={{
         background: theme.bgRaised, borderLeft: `1px solid ${theme.line}`,
-        padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, overflow: "hidden",
+        padding: Z.sidebarPad, display: "flex", flexDirection: "column", gap: compact ? 12 : 18, overflow: "hidden",
       }}>
         <div>
           <Eyebrow color={theme.inkSoft}>Live stats</Eyebrow>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: compact ? 10 : 14, marginTop: compact ? 10 : 14 }}>
             <StatBar label="Points"  a={match.stats.pointsWon[0]} b={match.stats.pointsWon[1]} theme={theme} accent={accent} />
             <StatBar label="Aces"    a={match.stats.aces[0]}      b={match.stats.aces[1]}      theme={theme} accent={accent} />
             <StatBar label="Winners" a={match.stats.winners[0]}   b={match.stats.winners[1]}   theme={theme} accent={accent} />
@@ -217,16 +256,20 @@ export default function DesktopLiveScreen({
           </div>
         </div>
         <div style={{ height: 1, background: theme.line }} />
-        <div>
+        <div style={{ minHeight: 0, flex: compact ? "1 1 auto" : "0 0 auto", display: "flex", flexDirection: "column" }}>
           <Eyebrow color={theme.inkSoft}>Point log</Eyebrow>
-          <div className="t-noscroll" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+          <div className="t-noscroll" style={{
+            marginTop: compact ? 6 : 10, display: "flex", flexDirection: "column", gap: compact ? 2 : 4,
+            maxHeight: compact ? 140 : 220, overflowY: "auto",
+          }}>
             {match.log.slice(-12).reverse().map((p, i) => (
               <div key={i} style={{
                 display: "grid", gridTemplateColumns: "32px 1fr auto", gap: 10, alignItems: "center",
-                padding: "6px 4px", fontFamily: "Inter", fontSize: 12, color: theme.ink,
+                padding: compact ? "4px 4px" : "6px 4px",
+                fontFamily: "Inter", fontSize: Z.pointLogFs, color: theme.ink,
               }}>
-                <span className="t-num" style={{ color: theme.inkFaint, fontSize: 11 }}>S{p.set + 1}.{p.game + 1}</span>
-                <span style={{ color: p.winner === 0 ? accent : theme.inkSoft }}>{p.winner === 0 ? match.p1.name : match.p2.name}</span>
+                <span className="t-num" style={{ color: theme.inkFaint, fontSize: Z.pointLogFs - 1 }}>S{p.set + 1}.{p.game + 1}</span>
+                <span style={{ color: p.winner === 0 ? accent : theme.inkSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.winner === 0 ? match.p1.name : match.p2.name}</span>
                 <span className="t-cap" style={{ color: theme.inkFaint }}>{p.tag || "pt"}</span>
               </div>
             ))}
@@ -246,8 +289,8 @@ export default function DesktopLiveScreen({
               appearance: "none", border: matchDone ? 0 : `1px solid ${theme.line}`,
               background: matchDone ? accent : theme.bg,
               color: matchDone ? "#0f1410" : theme.ink,
-              padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontFamily: "Inter", fontWeight: matchDone ? 700 : 600, fontSize: 13,
+              padding: Z.actionPad, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              fontFamily: "Inter", fontWeight: matchDone ? 700 : 600, fontSize: Z.actionFs,
               letterSpacing: matchDone ? "0.04em" : "0",
               cursor: (canSave && !saving) ? "pointer" : "default",
               opacity: (canSave && !saving) ? 1 : 0.55,
@@ -283,8 +326,9 @@ export default function DesktopLiveScreen({
             {onEndSet && (
               <button onClick={onEndSet} disabled={!canEndSet} className="t-btn" style={{
                 flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
-                background: "transparent", color: theme.ink, padding: "11px",
-                fontFamily: "Inter", fontWeight: 600, fontSize: 12,
+                background: "transparent", color: theme.ink,
+                padding: compact ? "9px" : "11px",
+                fontFamily: "Inter", fontWeight: 600, fontSize: compact ? 11.5 : 12,
                 cursor: canEndSet ? "pointer" : "default",
                 opacity: canEndSet ? 1 : 0.5,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -297,8 +341,9 @@ export default function DesktopLiveScreen({
             )}
             <button onClick={onUndo} className="t-btn" style={{
               flex: 1, appearance: "none", border: `1px solid ${theme.line}`,
-              background: "transparent", color: theme.ink, padding: "11px",
-              fontFamily: "Inter", fontWeight: 600, fontSize: 12, cursor: "pointer",
+              background: "transparent", color: theme.ink,
+              padding: compact ? "9px" : "11px",
+              fontFamily: "Inter", fontWeight: 600, fontSize: compact ? 11.5 : 12, cursor: "pointer",
             }}>Undo</button>
           </div>
           {/* Cancel match — destructive, sits subtly under Undo so
@@ -319,19 +364,28 @@ export default function DesktopLiveScreen({
   );
 }
 
-function BigPlayerLine({ match, side, accent, theme }) {
+function BigPlayerLine({ match, side, accent, theme, compact = false }) {
   const player = side === 0 ? match.p1 : match.p2;
   const won = match.endedAt && match.setsWon[side] > match.setsWon[1 - side];
+  // Compact sizing for landscape-on-phone advanced mode.
+  const nameFs   = compact ? 18 : 26;
+  const setFs    = compact ? 26 : 38;
+  const setMin   = compact ? 28 : 36;
+  const tbFs     = compact ? 11 : 14;
+  const ptFs     = compact ? 36 : 56;
+  const ptMin    = compact ? 56 : 80;
+  const colGap   = compact ? 10 : 14;
+  const outerGap = compact ? 18 : 28;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 28, alignItems: "center", minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-        <ServeDot active={match.serverIndex === side} color={accent} size={11} />
-        <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 26, color: theme.scoreInk, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: outerGap, alignItems: "center", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 12, minWidth: 0 }}>
+        <ServeDot active={match.serverIndex === side} color={accent} size={compact ? 9 : 11} />
+        <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: nameFs, color: theme.scoreInk, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {player.name}
         </span>
         {won && <span style={{ color: accent, fontWeight: 700 }}>•</span>}
       </div>
-      <div style={{ display: "flex", gap: 14 }}>
+      <div style={{ display: "flex", gap: colGap }}>
         {Array.from({ length: match.cfg.sets }, (_, i) => {
           const sh = match.setHistory[i];
           const cur = i === match.setHistory.length && !match.endedAt;
@@ -340,64 +394,64 @@ function BigPlayerLine({ match, side, accent, theme }) {
           const isWin = sh && sh.score[side] > sh.score[1 - side];
           return (
             <div key={i} className="t-num" style={{
-              fontSize: 38, fontWeight: 600, letterSpacing: "-0.03em",
+              fontSize: setFs, fontWeight: 600, letterSpacing: "-0.03em",
               color: isWin ? theme.scoreInk : (sh ? "rgba(232,230,223,0.5)" : (cur ? theme.scoreInk : "rgba(232,230,223,0.25)")),
-              minWidth: 36, textAlign: "center", position: "relative",
+              minWidth: setMin, textAlign: "center", position: "relative",
             }}>
-              {v}{tb != null && <sup style={{ fontSize: 14, marginLeft: 1, opacity: 0.7 }}>{tb}</sup>}
+              {v}{tb != null && <sup style={{ fontSize: tbFs, marginLeft: 1, opacity: 0.7 }}>{tb}</sup>}
             </div>
           );
         })}
       </div>
       <div className="t-num" style={{
-        fontSize: 56, fontWeight: 600, letterSpacing: "-0.04em",
-        color: pointLabel(match, side) === "Ad" ? accent : theme.scoreInk, minWidth: 80, textAlign: "right",
+        fontSize: ptFs, fontWeight: 600, letterSpacing: "-0.04em",
+        color: pointLabel(match, side) === "Ad" ? accent : theme.scoreInk, minWidth: ptMin, textAlign: "right",
       }}>{pointLabel(match, side)}</div>
     </div>
   );
 }
 
-function DesktopTapZone({ player, server, onTap, onMinus, theme, accent }) {
+function DesktopTapZone({ player, server, onTap, onMinus, theme, accent, compact = false }) {
   // Card-as-div (not <button>) so the inner +/- circles can be real
   // buttons. The whole card is still tap-to-score on click except when
-  // the click originates inside one of the +/- circles. User feedback:
-  // 'on the web version in live scoring. Can you add the - and +
-  // buttons for scoring in the names?'
+  // the click originates inside one of the +/- circles.
+  const pad = compact ? "14px 16px" : "24px";
+  const minH = compact ? 0 : 160;
+  const nameFs = compact ? 16 : 22;
+  const btnSize = compact ? 40 : 56;
   return (
     <div onClick={onTap} className="t-btn" role="button" tabIndex={0} style={{
       border: `1px solid ${theme.line}`,
-      background: theme.bgRaised, borderRadius: 18, padding: "24px",
+      background: theme.bgRaised, borderRadius: 18, padding: pad,
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      color: theme.ink, textAlign: "left", cursor: "pointer", minHeight: 160,
+      color: theme.ink, textAlign: "left", cursor: "pointer", minHeight: minH,
     }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <ServeDot active={server} color={accent} size={9} />
+          <ServeDot active={server} color={accent} size={compact ? 7 : 9} />
           <span className="t-cap" style={{ color: theme.inkSoft }}>Point for</span>
         </div>
-        <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 22, marginTop: 12 }}>{player.name}</div>
-        <div style={{ marginTop: 6, color: theme.inkFaint, fontSize: 12 }}>tap to score</div>
+        <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: nameFs, marginTop: compact ? 6 : 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{player.name}</div>
+        {!compact && <div style={{ marginTop: 6, color: theme.inkFaint, fontSize: 12 }}>tap to score</div>}
       </div>
-      {/* +/- buttons — identical size + style (only icon differs), to
-          mirror the mobile Live screen. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 10, flexShrink: 0 }}>
         <button onClick={(e) => { e.stopPropagation(); onMinus && onMinus(); }} className="t-btn" aria-label="Remove point" style={{
-          width: 56, height: 56, borderRadius: "50%",
+          width: btnSize, height: btnSize, borderRadius: "50%",
           appearance: "none", border: 0, cursor: "pointer",
           background: theme.chip, color: theme.ink,
           display: "flex", alignItems: "center", justifyContent: "center",
           transition: "background .2s",
         }}>
-          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          <svg width={compact ? 16 : 20} height={compact ? 16 : 20} viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
         </button>
         <button onClick={(e) => { e.stopPropagation(); onTap && onTap(); }} className="t-btn" aria-label="Add point" style={{
-          width: 56, height: 56, borderRadius: "50%",
+          width: btnSize, height: btnSize, borderRadius: "50%",
           appearance: "none", border: 0, cursor: "pointer",
           background: theme.chip, color: theme.ink,
           display: "flex", alignItems: "center", justifyContent: "center",
           transition: "background .2s",
         }}>
-          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          <svg width={compact ? 16 : 20} height={compact ? 16 : 20} viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
         </button>
       </div>
     </div>
