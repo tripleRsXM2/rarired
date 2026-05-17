@@ -59,7 +59,7 @@ import ComposeMessageModal from "../features/people/components/ComposeMessageMod
 import OnboardingModal from "../features/auth/components/OnboardingModal.jsx";
 import OnboardingFlow, { didCompleteOnboarding } from "../features/auth/components/onboarding/OnboardingFlow.jsx";
 import FindPlayersWelcome from "../features/home/components/FindPlayersWelcome.jsx";
-import VersionPicker, { V2Placeholder, getAppVersion, setAppVersion, clearAppVersion } from "../features/version-picker/VersionPicker.jsx";
+import { clearAppVersion } from "../features/version-picker/VersionPicker.jsx";
 // V2 namespace — kept under `src/v2/` and gated behind the `/v2` route.
 // `V2Placeholder` is left exported above so v1 callers (and any in-flight
 // branches) keep importing without breakage even though we no longer
@@ -355,11 +355,10 @@ export default function App(){
         setProfileTab("overview");
         setShowSettings(false);
         setReviewDrawer(null);
-        // Mdawg-only: clear the V1/V2 picker flag on signout so the
-        // picker re-shows on the next signin. User feedback (testing
-        // mode): 'we want to see this everytime we sign in'.
+        // Clear any stale V1/V2 picker flag on signout. The picker
+        // itself is retired — version is URL-driven now — but old
+        // localStorage values are wiped for cleanliness.
         clearAppVersion();
-        setAppVersionState(null);
       },
       // Module 4: bridges the useMatchHistory→useChallenges call from inside a
       // coordRef so we don't have to re-order the hook declarations.
@@ -765,13 +764,13 @@ export default function App(){
   // moment the OnboardingFlow gate flipped between renders. User
   // feedback: 'when i signed out on mdawg and try to login I get a
   // blank page'.
-  var [appVersion, setAppVersionState] = useState(function () { return getAppVersion(); });
   var v2Path           = pathParts[0] === "v2";
   var resetVersionPath = pathParts[0] === "version-reset";
+  // Legacy /version-reset deep link — clears any stale picker flag
+  // and bounces home. Kept so old bookmarks don't 404.
   useEffect(function () {
     if (resetVersionPath) {
       clearAppVersion();
-      setAppVersionState(null);
       navigate("/home", { replace: true });
     }
   }, [resetVersionPath]);
@@ -899,24 +898,12 @@ export default function App(){
     );
   }
 
-  // V1 / V2 splash gate render (state + effect declared above with
-  // the rest of the hooks, BEFORE any early returns).
-  var showPickerOverlay = !!auth.authUser && auth.authInitialized
-    && !appVersion && !invitePath && !resetVersionPath;
-  if (showPickerOverlay) {
-    return (
-      <Providers t={t} theme={theme}>
-        <VersionPicker onPick={function (v) {
-          setAppVersion(v);
-          setAppVersionState(v);
-          // V1 → URL stays where they are; the next render falls
-          // through to the main shell. V2 → push /v2 so the V2
-          // placeholder renders.
-          if (v === "v2") navigate("/v2");
-        }}/>
-      </Providers>
-    );
-  }
+  // V1 / V2 splash picker removed (2026-05-17) — the app opens
+  // straight to V1. Version is now purely URL-driven: /v2* renders
+  // V2, everything else V1. A V1/V2 toggle in each shell's top-left
+  // switches between them. appVersion localStorage is no longer a
+  // gate; the helpers stay only to clear any stale flag.
+
   // V2 route — Claude Design "Live scoring · key states" prototype.
   // The v2 namespace lives in `src/v2/` and is fully isolated from v1
   // EXCEPT for shared hooks that subscribe to Supabase realtime
@@ -934,10 +921,9 @@ export default function App(){
           dms={dms}
           everyonePlayers={social.discoverPlayers}
           onBack={function(){
-            // "Back to picker" → wipe flag + bounce home so the picker
-            // overlay re-mounts on the next render.
-            clearAppVersion();
-            setAppVersionState(null);
+            // V2 → V1 switch (driven by the V1/V2 toggle in V2's
+            // top-left). Just route to /home; the v2Path check above
+            // flips the render to the V1 shell.
             navigate("/home", { replace: true });
           }}/>
       </Providers>
@@ -1063,8 +1049,40 @@ export default function App(){
               gridTemplateColumns: "1fr auto 1fr",
               alignItems:          "center",
             }}>
-              {/* Left slot — empty per the editorial design. */}
-              <div/>
+              {/* Left slot — V1/V2 version toggle. V1 is the active
+                  half here; tapping V2 routes to /v2 (the v2Path
+                  check flips the whole render to the V2 shell). */}
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <div style={{
+                  display:      "inline-flex",
+                  border:       "1px solid rgba(42, 32, 26, 0.16)",
+                  borderRadius: 999,
+                  overflow:     "hidden",
+                }}>
+                  <span style={{
+                    padding:       "5px 10px",
+                    background:    "#2A201A",
+                    color:         "#F0E9DA",
+                    fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+                    fontSize:      10,
+                    fontWeight:    700,
+                    letterSpacing: "0.08em",
+                  }}>V1</span>
+                  <button
+                    onClick={function(){ navigate("/v2"); }}
+                    style={{
+                      padding:       "5px 10px",
+                      background:    "transparent",
+                      color:         "#8A7F70",
+                      border:        "none",
+                      fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize:      10,
+                      fontWeight:    700,
+                      letterSpacing: "0.08em",
+                      cursor:        "pointer",
+                    }}>V2</button>
+                </div>
+              </div>
 
               {/* Center — scroll-reveal page title. */}
               <span style={{

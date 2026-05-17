@@ -25,6 +25,10 @@ export default function HomeScreen({
   //   builds + persists the live match and routes to live scoring
   //   (same handler the full-page LiveSetupCard uses).
   friends, onCreateLiveMatch,
+  // isPhone: narrow-viewport flag. Drives the horizontal page
+  // padding — 40px reads fine on desktop but eats a third of a
+  // 375px iPhone, so phone gets a tighter inset.
+  isPhone = false,
   onGo, onNewMatch, look, onLookChange,
 }) {
   const inFlight = liveMatch && !liveMatch.endedAt;
@@ -50,7 +54,7 @@ export default function HomeScreen({
   // reads better than "Good morning, Mikey T".
   const firstName = (viewerName || "").split(/\s+/)[0] || "";
   return (
-    <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: "32px 40px 60px" }}>
+    <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: isPhone ? "24px 16px 60px" : "32px 40px 60px" }}>
       <div className="t-cap" style={{ color: theme.inkSoft }}>Home</div>
       <h1 className="t-serif" style={{ fontSize: 56, lineHeight: 1, margin: "6px 0 22px", letterSpacing: "-0.025em" }}>Home</h1>
 

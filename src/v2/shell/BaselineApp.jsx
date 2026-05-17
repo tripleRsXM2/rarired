@@ -21,6 +21,7 @@ import React from "react";
 import Sidebar from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import AppearanceToggle from "./AppearanceToggle.jsx";
+import VersionSwitch from "./VersionSwitch.jsx";
 import CompetitionsScreen from "../features/competitions/CompetitionsScreen.jsx";
 import MessagesScreen from "../features/messages/MessagesScreen.jsx";
 
@@ -474,25 +475,16 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
         display: "flex", flexDirection: "column",
         overflow: "hidden",
       }}>
-        {/* Top bar — back-to-picker on the left, theme name on the right. */}
+        {/* Top bar — V1/V2 toggle on the left, appearance toggle on
+            the right. The old back-to-picker button is retired; the
+            V1/V2 toggle is the switcher now. */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px",
           borderBottom: `0.5px solid ${theme.line}`, flexShrink: 0,
           background: theme.bg,
         }}>
-          <button onClick={onBack} style={{
-            appearance: "none", background: "transparent", border: 0, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-            color: theme.inkSoft, fontFamily: "JetBrains Mono, ui-monospace, monospace",
-            fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase",
-            padding: 4,
-          }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10 4 L 6 8 L 10 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Back
-          </button>
+          <VersionSwitch theme={theme} onSwitchToV1={onBack} />
           <AppearanceToggle value={look} onChange={setLook} theme={theme} compact />
         </div>
 
@@ -611,13 +603,14 @@ function RouteView({
   onEndSet, onTagPoint, onCancel,
   profileUserId, viewerId, onOpenProfile,
 }) {
+  var isPhone = false;   // RouteView is the desktop/iPad layout
   switch (route) {
     case "home":
       return <HomeScreen
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
-        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch} isPhone={isPhone}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -688,7 +681,7 @@ function RouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
-        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch} isPhone={isPhone}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -713,13 +706,14 @@ function MobileRouteView({
   onEndSet, onTagPoint, onCancel,
   profileUserId, viewerId, onOpenProfile,
 }) {
+  var isPhone = true;    // MobileRouteView is the narrow-viewport layout
   switch (route) {
     case "home":
       return <HomeScreen
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
-        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch} isPhone={isPhone}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -775,7 +769,7 @@ function MobileRouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
-        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch} isPhone={isPhone}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -784,7 +778,7 @@ function MobileRouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
-        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch} isPhone={isPhone}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
