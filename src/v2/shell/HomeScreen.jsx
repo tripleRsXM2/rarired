@@ -49,17 +49,15 @@ export default function HomeScreen({
   const wkRecord  = weekStats ? weekStats.record : "—";
   const wkCourt   = weekStats ? weekStats.onCourt : "—";
 
-  // First-name slice for the greeting line. We don't print the whole
-  // display name to keep the headline short — "Good morning, Mikey"
-  // reads better than "Good morning, Mikey T".
-  const firstName = (viewerName || "").split(/\s+/)[0] || "";
+  // Greeting line uses the player's full display name.
+  const fullName = (viewerName || "").trim();
   return (
     <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: isPhone ? "24px 16px 60px" : "32px 40px 60px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
         <div>
           <div className="t-cap" style={{ color: theme.inkSoft }}>Today · {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
           <h2 className="t-serif" style={{ fontSize: 38, lineHeight: 1, margin: "6px 0 0", letterSpacing: "-0.02em" }}>
-            Good {greeting}{firstName ? ", " + firstName : ""}.
+            Good {greeting}{fullName ? ", " + fullName : ""}.
           </h2>
         </div>
         <Ball size={22} color={accent} />
