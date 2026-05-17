@@ -998,7 +998,9 @@ export default function App(){
               // mobile share one canonical composer. The legacy
               // openLogMatch (modal) is preserved for deep-link /
               // challenge-conversion callers that still need it.
-              navigate("/match/log");
+              // openSheet stamp re-opens the score sheet even when
+              // the page is already mounted with the sheet closed.
+              navigate("/match/log", { state: { openSheet: Date.now() } });
             }}
           />
         </div>
@@ -1610,7 +1612,11 @@ export default function App(){
             setTab(id);
             if (id !== "tournaments") tournaments.setSelectedTournId(null);
           }}
-          onLogMatch={function () { navigate("/match/log"); }}
+          onLogMatch={function () {
+            // Stamp a fresh openSheet value so tapping "+" re-opens
+            // the score sheet even when already on /match/log.
+            navigate("/match/log", { state: { openSheet: Date.now() } });
+          }}
         />
       )}
 

@@ -192,6 +192,20 @@ export default function LogMatchPage({
   }, [sets, opp, type, leagueId, completion, details, activeSet, activeSide,
       scoreMode, sheet, lockedLeague, authUser, celebration]);
 
+  // Re-open the score sheet whenever the user taps "+" — even when
+  // they're already on this page with the sheet dismissed. App.jsx
+  // stamps a fresh `openSheet` value into router state on every "+"
+  // tap, so this effect fires on each tap (the value changes) and
+  // not on unrelated re-renders. Mobile only — desktop shows the
+  // score grid inline, so there's no sheet to re-open there.
+  var openSheetSignal = location && location.state && location.state.openSheet;
+  useEffect(function () {
+    if (!openSheetSignal) return;
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setSheet("score");
+    }
+  }, [openSheetSignal]);
+
   // ── Derived ───────────────────────────────────────────────────
   var completedSets = useMemo(function () {
     return sets.filter(function (s) { return s.a !== "" && s.b !== ""; });
