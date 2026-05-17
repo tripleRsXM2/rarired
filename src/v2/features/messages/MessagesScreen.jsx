@@ -37,10 +37,19 @@ var GROUP_AVATAR_MAX_MB = (MAX_AVATAR_BYTES / (1024 * 1024)).toFixed(0);
 var EMPTY_CONVS = [];
 var EMPTY_MSGS  = [];
 
-export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser, everyonePlayers, onOpenProfile }) {
+export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser, everyonePlayers, onOpenProfile, onThreadOpenChange }) {
   const [activeConvoId, setActiveConvoId] = React.useState(null);
   const [composing, setComposing] = React.useState(false);
   const meId = (authUser && authUser.id) || null;
+
+  // Tell the shell when a thread is open so it can hide the bottom
+  // tab bar — the thread is a full-screen view with its own Back
+  // button, and on mobile the tab bar otherwise rides up above the
+  // keyboard when the composer is focused.
+  React.useEffect(function () {
+    if (onThreadOpenChange) onThreadOpenChange(!!activeConvoId);
+    return function () { if (onThreadOpenChange) onThreadOpenChange(false); };
+  }, [activeConvoId]);
 
   // Map V1's enriched conversation rows into the V2 shape the inbox UI
   // expects. Memoized on the inputs so we don't re-derive each render.

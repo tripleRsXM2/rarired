@@ -463,6 +463,11 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   // visible ... to save screen space when the keyboard shows up on
   // your mobile phone, it should hide the icons on the bottom."
   const [keyboardOpen, setKeyboardOpen] = React.useState(false);
+  // True while a Messages thread is open — the thread is a full-screen
+  // conversation view with its own Back button, so the bottom tab bar
+  // is hidden (otherwise on iOS it rides up above the keyboard when
+  // the composer is focused).
+  const [msgThreadOpen, setMsgThreadOpen] = React.useState(false);
   React.useEffect(function () {
     if (typeof window === "undefined" || !window.visualViewport) return;
     var vv = window.visualViewport;
@@ -548,6 +553,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             profileUserId={profileUserId} viewerId={v2UserId}
             onOpenProfile={onOpenProfile}
             onCancel={onCancelLiveMatch}
+            onThreadOpenChange={setMsgThreadOpen}
           />
         </div>
 
@@ -557,7 +563,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             on-screen keyboard is open (see keyboardOpen state) so
             input-heavy flows (compose, rename, free-text opponent)
             get the screen real estate back. */}
-        {!keyboardOpen && (
+        {!keyboardOpen && !msgThreadOpen && (
           <MobileTabBar route={route} onGo={onGo} theme={theme} accent={accent} />
         )}
       </div>
@@ -744,6 +750,7 @@ function MobileRouteView({
   onCreateLiveMatch, onSaveLiveMatch,
   onEndSet, onTagPoint, onCancel,
   profileUserId, viewerId, onOpenProfile,
+  onThreadOpenChange,
 }) {
   var isPhone = true;    // MobileRouteView is the narrow-viewport layout
   switch (route) {
@@ -790,7 +797,7 @@ function MobileRouteView({
     case "profile":
       return <PlayerProfileScreen theme={theme} accent={accent} userId={profileUserId} viewerId={viewerId} onBack={() => onGo("home")} isPhone={true} />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} onOpenProfile={onOpenProfile} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} onOpenProfile={onOpenProfile} onThreadOpenChange={onThreadOpenChange} />;
     case "changeover":
       if (!liveMatch) return <LiveSetupCard theme={theme} accent={accent} court={court} viewerName={viewerName} friends={friends} onStart={onCreateLiveMatch} isPhone={true} />;
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;
