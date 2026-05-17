@@ -391,7 +391,7 @@ function StatTile({ label, value, accent, small, onClick }) {
         fontWeight:     600,
         letterSpacing:  "-0.02em",
         lineHeight:     1.05,
-        color:          clickable ? ED_TOK.accent : (accent ? ED_TOK.accent : ED_TOK.ink),
+        color:          accent ? ED_TOK.accent : ED_TOK.ink,
         textDecoration: clickable ? "underline" : "none",
         textUnderlineOffset: 3,
         whiteSpace:     "nowrap",
