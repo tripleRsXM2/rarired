@@ -560,15 +560,17 @@ export default function PeopleTab({
       background:    ED_TOK.bg,
       color:         ED_TOK.ink,
       fontFamily:    ED_TOK.sans,
-      // Two layout modes:
-      //   - Messages view (conv list or thread): height-LOCKED flex
-      //     column, overflow:hidden. Internal scroll lives inside
-      //     the Messages component (list pane / thread). Document
-      //     never scrolls.
-      //   - Other tabs (Friends, Requests, Discover, Blocked):
-      //     content-sized with a minHeight floor matching the
-      //     available viewport so short lists don't force scroll
-      //     but long lists still scroll the document naturally.
+      // Two layout modes — both height-bounded to the band between the
+      // top nav and the bottom tab bar, with scroll OWNED by this
+      // container:
+      //   - Messages view: overflow:hidden + flex column; the inner
+      //     Messages component owns the list/thread scroll.
+      //   - Other tabs (Discover, Requests): overflow-y:auto so the
+      //     list scrolls inside this container. Relying on the
+      //     document to scroll was fragile on iOS — a stray
+      //     html/body overflow:hidden (e.g. left by the Messages
+      //     view's scroll lock) would silently kill it. Owning the
+      //     scroll here makes it immune to document-level state.
       ...(messagesView
         ? {
             // --cs-kb-offset is set by the visualViewport effect above
@@ -581,8 +583,10 @@ export default function PeopleTab({
             flexDirection: "column",
           }
         : {
-            minHeight:     "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
-            paddingBottom: 96,
+            height:        "calc(100dvh - var(--cs-nav-h, 0px) - var(--cs-tab-h, 0px))",
+            overflowY:     "auto",
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: 24,
           }),
     }}>
       {/* Hero block removed — the global top mob nav already labels
