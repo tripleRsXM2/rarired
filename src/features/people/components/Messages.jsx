@@ -90,6 +90,21 @@ import {
 var QUICK_REACTIONS = ["👍", "❤️", "😂", "😢", "🔥", "🎾"];
 var EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 min
 
+// Instagram-style "Active …" line for the conversation list — used in
+// place of the last-message preview. Returns "" when the partner's
+// presence is hidden by their privacy settings or unknown.
+function activeAgo(profile) {
+  var pres = getPresence(profile);
+  if (pres.hidden || !profile || !profile.last_active) return "";
+  if (pres.online) return "Active now";
+  var secs = Math.floor((Date.now() - new Date(profile.last_active).getTime()) / 1000);
+  if (secs < 3600)        return "Active " + Math.max(1, Math.floor(secs / 60)) + "m ago";
+  if (secs < 86400)       return "Active " + Math.floor(secs / 3600) + "h ago";
+  if (secs < 7 * 86400)   return "Active " + Math.floor(secs / 86400) + "d ago";
+  if (secs < 30 * 86400)  return "Active " + Math.floor(secs / (7 * 86400)) + "w ago";
+  return "Active " + Math.floor(secs / (30 * 86400)) + "mo ago";
+}
+
 // ── Group conversation helpers ───────────────────────────────────────────
 // convTitle: stringify a conversation title for both inbox rows + thread
 // header. Groups list non-self participants, capped at 2 names + "& N
@@ -602,9 +617,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
   function renderConvRow(conv, isPinnedFlag) {
     var hasUnread = conv.hasUnread;
     var isPending = conv.status === "pending";
-    var isMeLast = conv.last_message_sender_id === myId;
     var isActive = dms.activeConv && dms.activeConv.id === conv.id;
-    var seenByPartner = conv.lastMsgSeenByPartner;
     var isMuted = (dms.mutedConvIds || []).indexOf(conv.id) >= 0;
     var isGroup = !!conv.isGroup;
     var rowTitle = convTitle(conv, myId);
@@ -613,11 +626,16 @@ export default function Messages({ t, authUser, dms, openProfile }) {
       : [];
     // Live typing indicator (broadcast via dm-typing inbox channel).
     var isTyping = !!(dms.typingConvs && dms.typingConvs[conv.id]);
-    var preview = isTyping
+    // Instagram-style: the second line shows the partner's "Active …"
+    // status instead of the last-message preview. Typing / pending
+    // states still take precedence; groups show a member count.
+    var subtitle = isTyping
       ? "typing…"
       : isPending
         ? "Request pending…"
-        : (isMeLast ? "You: " : "") + previewify(conv.last_message_preview, 80);
+        : isGroup
+          ? ((conv.participants || []).length + " members")
+          : activeAgo(conv.partner);
     return (
       <button key={conv.id} onClick={function () { dms.openConversation(conv); }}
         onContextMenu={function (e) {
@@ -653,7 +671,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{
-              fontSize: 14, fontWeight: hasUnread ? 700 : 600,
+              fontSize: 14, fontWeight: hasUnread ? 700 : 400,
               color: ED_TOK.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{rowTitle}</span>
             {isPinnedFlag && <span style={{ color: ED_TOK.muted, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
@@ -670,24 +688,10 @@ export default function Messages({ t, authUser, dms, openProfile }) {
               flex: 1, minWidth: 0,
               fontSize: 13,
               color: isTyping ? ED_TOK.accent : (hasUnread ? ED_TOK.ink : ED_TOK.ink2),
-              fontWeight: hasUnread || isTyping ? 500 : 400,
+              fontWeight: hasUnread ? 600 : 400,
               fontStyle: isTyping ? "italic" : "normal",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{preview}</span>
-            {/* Seen / sent indicator — only on rows where MY last message is
-                newest. Single tick = sent, double tick = seen. Matches
-                WhatsApp's convention so users read it instantly. */}
-            {!isGroup && isMeLast && !hasUnread && !isPending && (
-              <span
-                title={seenByPartner ? "Seen" : "Sent"}
-                style={{
-                  flexShrink: 0, display: "inline-flex", alignItems: "center",
-                  color: seenByPartner ? ED_TOK.accent : ED_TOK.muted,
-                  fontSize: 11, lineHeight: 1,
-                }}>
-                {seenByPartner ? "✓✓" : "✓"}
-              </span>
-            )}
+            }}>{subtitle}</span>
             {hasUnread && (
               <span style={{
                 background: ED_TOK.accent, color: "#fff",

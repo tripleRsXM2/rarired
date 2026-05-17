@@ -72,7 +72,7 @@ function PlayerCard({
         {/* Name — single line with ellipsis truncation. */}
         <div style={{
           fontSize:      14.5,
-          fontWeight:    600,
+          fontWeight:    400,
           color:         ED_TOK.ink,
           letterSpacing: "-0.005em",
           overflow:      "hidden",
