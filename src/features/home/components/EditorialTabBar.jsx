@@ -85,16 +85,32 @@ var ICONS = {
       </svg>
     );
   },
+  // Comps — trophy. Tournaments / leagues / challenges hub.
+  comps: function () {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.6"
+        strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 4h10v4a5 5 0 0 1-10 0z"/>
+        <path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/>
+        <path d="M9 21h6M12 13v8"/>
+      </svg>
+    );
+  },
 };
 
 // Tab definitions — id is the route's first path segment, used by
 // the parent's setTab(id) handler.
+// HOME · MAPS · + · COMPS · ACTIVITY. The Friends slot was retired
+// (2026-05-17) — Friends moved to a top-right icon in the global
+// nav; the old "Home" (Compete hub) became its own COMPS tab here,
+// and slot 1 now hosts the new Home stats dashboard.
 var TABS = [
-  { id: "home",    label: "Home",     Icon: ICONS.home     },
-  { id: "map",     label: "Maps",     Icon: ICONS.maps     },
-  { id: "log",     label: "Log",      primary: true        },
-  { id: "people",  label: "Friends",  Icon: ICONS.friends  },
-  { id: "matches", label: "Activity", Icon: ICONS.activity },
+  { id: "home",        label: "Home",     Icon: ICONS.home     },
+  { id: "map",         label: "Maps",     Icon: ICONS.maps     },
+  { id: "log",         label: "Log",      primary: true        },
+  { id: "tournaments", label: "Comps",    Icon: ICONS.comps    },
+  { id: "matches",     label: "Activity", Icon: ICONS.activity },
 ];
 
 export default function EditorialTabBar({ activeTab, onTab, onLogMatch }) {

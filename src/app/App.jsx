@@ -32,6 +32,7 @@ import { useLeagues } from "../features/leagues/hooks/useLeagues.js";
 
 import HomeTab from "../features/home/pages/HomeTab.jsx";
 import HomeHub from "../features/home/pages/HomeHub.jsx";
+import HomeDashboard from "../features/home/pages/HomeDashboard.jsx";
 import MatchesScreen from "../features/home/pages/MatchesScreen.jsx";
 import ProfileScreen from "../features/home/pages/ProfileScreen.jsx";
 import EditorialScreen from "../features/home/components/EditorialScreen.jsx";
@@ -214,7 +215,7 @@ export default function App(){
     tab==="home"          ? "Home" :
     tab==="matches"       ? "Activity" :
     tab==="map"           ? "Maps" :
-    tab==="tournaments"   ? "Compete" :
+    tab==="tournaments"   ? "Comps" :
     tab==="people"        ? "Friends" :
     tab==="profile"       ? "Profile" :
     tab==="match"         ? "Log a match" :
@@ -1049,15 +1050,26 @@ export default function App(){
               gridTemplateColumns: "1fr auto 1fr",
               alignItems:          "center",
             }}>
-              {/* Left slot — V1/V2 version toggle. V1 is the active
-                  half here; tapping V2 routes to /v2 (the v2Path
-                  check flips the whole render to the V2 shell). */}
-              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              {/* Left slot — profile avatar + V1/V2 toggle. The avatar
+                  (moved here from the top-right) opens Settings; the
+                  toggle's V2 half routes to /v2. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-start" }}>
+                {auth.authUser && (
+                  <button
+                    onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
+                    title="Settings"
+                    style={{width:32,height:32,borderRadius:"50%",border:"none",padding:0,background:"transparent",overflow:"hidden",flexShrink:0,cursor:"pointer"}}>
+                    {currentUser.profile.avatar_url
+                      ? <img src={currentUser.profile.avatar_url} alt="" style={{width:32,height:32,objectFit:"cover",display:"block",borderRadius:"50%"}}/>
+                      : <div style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>{currentUser.profile.avatar}</div>}
+                  </button>
+                )}
                 <div style={{
                   display:      "inline-flex",
                   border:       "1px solid rgba(42, 32, 26, 0.16)",
                   borderRadius: 999,
                   overflow:     "hidden",
+                  flexShrink:   0,
                 }}>
                   <span style={{
                     padding:       "5px 10px",
@@ -1102,7 +1114,9 @@ export default function App(){
                 {topBarTitle}
               </span>
 
-              {/* Right — bell + avatar (or Log in when signed out). */}
+              {/* Right — bell + Friends (or Log in when signed out).
+                  The profile avatar moved to the left slot; the
+                  Friends icon takes its place here. */}
               <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
                 {auth.authUser&&(
                   <button
@@ -1131,12 +1145,21 @@ export default function App(){
                 )}
                 {auth.authUser
                   ?<button
-                      onClick={function(){currentUser.setProfileDraft(currentUser.profile);setShowSettings(true);}}
-                      title="Settings"
-                      style={{width:32,height:32,borderRadius:"50%",border:"none",padding:0,background:"transparent",overflow:"hidden"}}>
-                      {currentUser.profile.avatar_url
-                        ? <img src={currentUser.profile.avatar_url} alt="" style={{width:32,height:32,objectFit:"cover",display:"block",borderRadius:"50%"}}/>
-                        : <div style={{width:32,height:32,borderRadius:"50%",background:avColor(currentUser.profile.name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:"-0.3px"}}>{currentUser.profile.avatar}</div>}
+                      onClick={function(){ navigate("/people/friends"); }}
+                      title="Friends"
+                      style={{
+                        position:"relative",width:34,height:34,
+                        background:"transparent",
+                        border:"1px solid rgba(42, 32, 26, 0.12)",
+                        borderRadius:"50%",
+                        padding:0,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        color:"#2A201A",cursor:"pointer",
+                      }}>
+                      {NAV_ICONS.people(16)}
+                      {dms.totalUnread()>0&&(
+                        <div style={{position:"absolute",top:-1,right:-1,width:9,height:9,borderRadius:"50%",background:"#FF2D55",border:"2px solid #F0E9DA"}}/>
+                      )}
                     </button>
                   :<button
                       onClick={auth.openLogin}
@@ -1205,24 +1228,16 @@ export default function App(){
             />
           )}
 
-          {/* /home — now renders CompeteHub. User feedback (2026-05-11):
-              'First tab should be home (change web feed to home) but
-              home should be what we see on the Compete tab. Web will
-              not have a compete tab because that is now home.' The
-              legacy 3-tile HomeHub is no longer mounted at any route
-              (its tiles deep-linked into Compete / Activity / Profile
-              which are now first-class tabs). The "+" log-match
-              action still lives in the bottom tab bar. */}
+          {/* /home — tennis stats dashboard (2026-05-17). The Compete
+              hub that used to live here moved to its own "Comps" tab
+              (still routed at /tournaments). Home is now an All/30d/7d
+              stat grid + play heatmap, all computed from the viewer's
+              confirmed match history. */}
           {tab==="home"&&(
-            <CompeteHub
-              t={t}
-              authUser={auth.authUser}
-              challenges={challenges}
-              leagues={leagues}
-              tournaments={tournaments}
+            <HomeDashboard
               history={matchHistory.history}
-              openChallenge={openChallenge}
-              toast={toast}
+              profile={currentUser.profile}
+              setScrolledPastHero={setScrolledPastHero}
             />
           )}
           {/* /matches — Editorial Tennis match history (Phase 2).
