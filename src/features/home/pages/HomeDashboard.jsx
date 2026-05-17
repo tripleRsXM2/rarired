@@ -387,12 +387,16 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
           </div>
         ) : heatmap.mode === "month" ? (
           /* 30D — a 4-week calendar grid: 7 weekday columns, 4 week
-             rows, filling the card width. */
+             rows. Width-capped + vertically padded so it reads as a
+             refined block rather than filling the card edge-to-edge. */
           <div style={{
             display:             "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
             gridAutoRows:        "1fr",
             gap:                 5,
+            maxWidth:            252,
+            margin:              "0 auto",
+            padding:             "10px 0",
           }}>
             {heatmap.cells.map(function (c, i) { return heatSquare(c, i); })}
           </div>
