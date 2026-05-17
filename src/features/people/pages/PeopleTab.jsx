@@ -610,21 +610,21 @@ export default function PeopleTab({
         background: ED_TOK.bg,
       }}>
 
-      {/* Search — editorial pill input, replaces the boxed legacy
-          search bar. The dropdown floats below it as a flat panel. */}
-      <div style={{ padding: "20px 22px 14px", position: "relative" }}>
+      {/* Search — compact editorial input. The dropdown floats below
+          it as a flat panel. */}
+      <div style={{ padding: "12px 22px 10px", position: "relative" }}>
         <div style={{
           display:      "flex",
           alignItems:   "center",
-          gap:          10,
+          gap:          8,
           background:   ED_TOK.bg2,
           border:       "1px solid " + ED_TOK.line,
-          borderRadius: 14,
-          padding:      "12px 14px",
+          borderRadius: 10,
+          padding:      "7px 11px",
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth="2"
-            style={{ color: ED_TOK.muted }}>
+            style={{ color: ED_TOK.muted, flexShrink: 0 }}>
             <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
           </svg>
           <input
@@ -642,11 +642,12 @@ export default function PeopleTab({
             onBlur={function () { setTimeout(function () { setShowSearchDrop(false); }, 180); }}
             style={{
               flex:       1,
+              minWidth:   0,
               background: "transparent",
               border:     "none",
               outline:    "none",
               fontFamily: ED_TOK.sans,
-              fontSize:   14.5,
+              fontSize:   13,
               color:      ED_TOK.ink,
             }}/>
           {searchLoading && (
@@ -757,67 +758,49 @@ export default function PeopleTab({
         )}
       </div>
 
-      {/* Sub-tabs — mono uppercase chip row. Each chip sizes to its
-          full label (no auto-shrink), and the row scrolls horizontally
-          when the total exceeds the viewport. The legacy flex:1 1 0 +
-          min-width:0 layout fit all five into one line by truncating
-          each label to "MESSAG…" / "REQUES…" — readable on a 320px
-          phone but unreadable as labels. Single-line + horizontal
-          scroll is the standard mobile pattern (iOS Mail, Slack,
-          Twitter) and was already in use earlier in this page's
-          legacy version (overflowX:auto on the chip container). */}
+      {/* Sub-tabs — plain mono uppercase text (no pill chrome). Active
+          tab reads in ink, the rest in muted. Order: Messages,
+          Discover, Requests. */}
       <div style={{ padding: "0 22px 6px" }}>
         <div style={{
           display:        "flex",
-          gap:            6,
+          gap:            22,
           paddingBottom:  10,
           borderBottom:   "1px solid " + ED_TOK.line,
-          overflowX:      "auto",
-          overflowY:      "hidden",
-          // Hide the scrollbar on Firefox / old Safari while keeping
-          // the row scrollable. WebKit scrollbar styling is global
-          // (see providers.jsx ::-webkit-scrollbar { width:0 }).
-          scrollbarWidth: "none",
-          // Inertial scroll on iOS so the chip row swipes smoothly.
-          WebkitOverflowScrolling: "touch",
         }}>
           {[
             { id: "messages",  label: "Messages",  count: dmBadge || null },
-            { id: "friends",   label: "Friends",   count: friends.length },
-            { id: "requests",  label: "Requests",  count: receivedRequests.length + sentRequests.length },
             { id: "suggested", label: "Discover",  count: null },
-            { id: "blocked",   label: "Blocked",   count: blockedUsers.length || null },
+            { id: "requests",  label: "Requests",  count: receivedRequests.length + sentRequests.length },
           ].map(function (tb) {
             var on = peopleTab === tb.id;
             return (
               <button key={tb.id}
                 onClick={function () { setPeopleTab(tb.id); if (tb.id !== "messages" && dms) dms.closeConversation(); }}
                 style={{
-                  flex:          "0 0 auto",   // size to label, no shrink
-                  padding:       "8px 14px",
-                  borderRadius:  999,
-                  border:        "1px solid " + (on ? ED_TOK.ink : ED_TOK.line),
-                  background:    on ? ED_TOK.ink : "transparent",
-                  color:         on ? ED_TOK.bg : ED_TOK.ink,
+                  flex:          "0 0 auto",
+                  padding:       0,
+                  border:        "none",
+                  background:    "transparent",
+                  color:         on ? ED_TOK.ink : ED_TOK.muted,
                   fontFamily:    ED_TOK.mono,
-                  fontSize:      10,
+                  fontSize:      11,
                   fontWeight:    700,
-                  letterSpacing: "0.14em",
+                  letterSpacing: "0.12em",
                   textTransform: "uppercase",
                   cursor:        "pointer",
                   display:       "inline-flex",
                   alignItems:    "center",
-                  justifyContent:"center",
-                  gap:           6,
+                  gap:           5,
                   whiteSpace:    "nowrap",
-                  transition:    "background 140ms ease, color 140ms ease, border-color 140ms ease",
+                  transition:    "color 140ms ease",
                 }}>
                 <span>{tb.label}</span>
                 {tb.count > 0 && (
                   <span style={{
                     fontSize:          9,
                     fontWeight:        700,
-                    color:             on ? ED_TOK.bg : ED_TOK.muted,
+                    color:             ED_TOK.muted,
                     letterSpacing:     "0.04em",
                     fontVariantNumeric:"tabular-nums",
                   }}>·{tb.count}</span>

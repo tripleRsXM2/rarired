@@ -1172,7 +1172,7 @@ export default function App(){
                 )}
                 {auth.authUser
                   ?<button
-                      onClick={function(){ navigate("/people/friends"); }}
+                      onClick={function(){ navigate("/people/messages"); }}
                       title="Friends"
                       style={{
                         position:"relative",width:34,height:34,
