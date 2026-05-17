@@ -39,6 +39,18 @@ import { validateMatchScore } from "../utils/tennisScoreValidation.js";
 // when present — so a player's appearance is consistent everywhere.
 import PlayerAvatar from "../../../components/ui/PlayerAvatar.jsx";
 
+// ── Draft cache ────────────────────────────────────────────────────
+// The log-match page is a route — closing it (navigating away)
+// unmounts the component and drops all its form state. This
+// module-scoped cache survives the unmount so re-opening the "+" flow
+// resumes the in-progress draft exactly where the user left it
+// (including which score cell was being edited), instead of resetting
+// to a blank card. Keyed by user id so a different signed-in user
+// never inherits a stale draft. Cleared on a successful submit, and
+// only used for free-form opens — a league-locked open (router state)
+// always starts fresh so the lock isn't bypassed.
+var DRAFT_CACHE = null;
+
 // ── Page ─────────────────────────────────────────────────────────
 
 export default function LogMatchPage({
@@ -93,18 +105,32 @@ export default function LogMatchPage({
     };
   }, []);
 
+  // ── Resume cache ──────────────────────────────────────────────
+  // A free-form open (no lockedLeague) restores any in-progress
+  // draft left by a previous open in this session. A league-locked
+  // open always starts fresh.
+  var resumeDraft = (!lockedLeague && DRAFT_CACHE && authUser && DRAFT_CACHE.userId === authUser.id)
+    ? DRAFT_CACHE
+    : null;
+
   // ── Form state ────────────────────────────────────────────────
   // Default to ONE set so the page fits a typical mobile viewport
   // without needing to scroll. Users can + Add set up to 5.
-  var [sets, setSets] = useState([{ a: "", b: "" }]);
-  var [opp, setOpp] = useState(null);            // { id, name, sub }
+  var [sets, setSets] = useState(resumeDraft ? resumeDraft.sets : [{ a: "", b: "" }]);
+  var [opp, setOpp] = useState(resumeDraft ? resumeDraft.opp : null);  // { id, name, sub }
   // When opened from a league, type + leagueId are pre-set from
   // the router state and the Type row is rendered in a locked,
   // non-tappable form.
-  var [type, setType] = useState(lockedLeague ? "league" : null);
-  var [leagueId, setLeagueId] = useState(lockedLeague ? lockedLeague.id : null);
-  var [completion, setCompletion] = useState("completed"); // 'completed' | 'time_limited' | 'retired'
-  var [details, setDetails] = useState({
+  var [type, setType] = useState(
+    resumeDraft ? resumeDraft.type : (lockedLeague ? "league" : null)
+  );
+  var [leagueId, setLeagueId] = useState(
+    resumeDraft ? resumeDraft.leagueId : (lockedLeague ? lockedLeague.id : null)
+  );
+  var [completion, setCompletion] = useState(
+    resumeDraft ? resumeDraft.completion : "completed"
+  ); // 'completed' | 'time_limited' | 'retired'
+  var [details, setDetails] = useState(resumeDraft ? resumeDraft.details : {
     court: "",
     date: new Date().toISOString().slice(0, 10),
     time: new Date().toTimeString().slice(0, 5),
@@ -114,14 +140,14 @@ export default function LogMatchPage({
   // ── Score-sheet state ─────────────────────────────────────────
   // Lifted to the page so opening a specific cell from the
   // scoreboard preserves which set + side is being edited.
-  var [activeSet, setActiveSet] = useState(0);
-  var [activeSide, setActiveSide] = useState("a");
+  var [activeSet, setActiveSet] = useState(resumeDraft ? resumeDraft.activeSet : 0);
+  var [activeSide, setActiveSide] = useState(resumeDraft ? resumeDraft.activeSide : "a");
   // Tally is the default mode — most casual log-a-match users want
   // to count games up with +/- buttons; the numeric pad is the
   // power-user path. User feedback (2026-05-11): 'We also want to
   // make sure that Tally is the default pop up, not Pad when we
   // press the + button.'
-  var [scoreMode, setScoreMode] = useState("tally");
+  var [scoreMode, setScoreMode] = useState(resumeDraft ? resumeDraft.scoreMode : "tally");
 
   // ── Sheet open state ──────────────────────────────────────────
   // Auto-open the score sheet on mobile so tapping the bottom "+"
@@ -133,6 +159,7 @@ export default function LogMatchPage({
   // (the page's score grid is already visible inline). 1024px
   // matches the rest of the app's desktop breakpoint.
   var [sheet, setSheet] = useState(function () {
+    if (resumeDraft) return resumeDraft.sheet;  // reopen the sheet we left
     if (typeof window === "undefined") return null;
     return window.innerWidth < 1024 ? "score" : null;
   }); // 'score' | 'opp' | 'type' | 'completion' | 'details'
@@ -141,6 +168,29 @@ export default function LogMatchPage({
   var [saving, setSaving] = useState(false);
   var [saveError, setSaveError] = useState("");
   var [celebration, setCelebration] = useState(null); // { won, score, opp, status }
+
+  // Persist the draft to the module cache on every change so closing
+  // the page (navigating away) and re-opening "+" resumes it. Skipped
+  // for league-locked opens — they always start fresh. Cleared on a
+  // successful submit (see the submit handler below).
+  useEffect(function () {
+    if (lockedLeague || !authUser) return;
+    if (celebration) return;  // post-submit — leave the cleared cache alone
+    DRAFT_CACHE = {
+      userId:     authUser.id,
+      sets:       sets,
+      opp:        opp,
+      type:       type,
+      leagueId:   leagueId,
+      completion: completion,
+      details:    details,
+      activeSet:  activeSet,
+      activeSide: activeSide,
+      scoreMode:  scoreMode,
+      sheet:      sheet,
+    };
+  }, [sets, opp, type, leagueId, completion, details, activeSet, activeSide,
+      scoreMode, sheet, lockedLeague, authUser, celebration]);
 
   // ── Derived ───────────────────────────────────────────────────
   var completedSets = useMemo(function () {
@@ -495,6 +545,10 @@ export default function LogMatchPage({
       won:        won,
       isRanked:   draft.matchType === "ranked",
     });
+
+    // Match saved — drop the resume cache so the next "+" open starts
+    // from a blank card instead of resuming this (now submitted) draft.
+    DRAFT_CACHE = null;
 
     setCelebration({
       won:     won,
