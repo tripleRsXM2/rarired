@@ -343,12 +343,12 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
         <StatTile label="Matches"        value={stats.matches} />
         <StatTile label="Wins"           value={stats.wins} accent />
         <StatTile label="Active days"    value={stats.activeDays} />
-        <StatTile label="Current streak" value={stats.currentStreak + "d"} />
-        <StatTile label="Longest streak" value={stats.longestStreak + "d"} />
         <StatTile label="Top opponent"   value={stats.topOpp} small
           onClick={(stats.topOppId && onOpenProfile)
             ? function () { onOpenProfile(stats.topOppId); }
             : null} />
+        <StatTile label="Longest streak" value={stats.longestStreak + "d"} />
+        <StatTile label="Current streak" value={stats.currentStreak + "d"} />
       </div>
 
       {/* ── Play heatmap ───────────────────────────────────────── */}
