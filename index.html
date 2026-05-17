@@ -152,6 +152,11 @@
     <div id="root"></div>
 
     <script>
+      // Minimum time the splash holds before it's allowed to fade —
+      // so the brand moment doesn't flash by when auth resolves fast.
+      var CS_SPLASH_MIN_MS = 1500;
+      var CS_SPLASH_START  = Date.now();
+
       // Failsafe: hide splash after 2s even if React never marks
       // ready. Stops a stuck network request from locking the screen.
       window.__CS_SPLASH_FALLBACK = setTimeout(function () {
@@ -159,18 +164,24 @@
       }, 2000);
 
       // Public hook React calls when boot is complete (auth has
-      // resolved one way or the other). Triggers the CSS fade-out,
-      // then drops the wrapper from the rendering tree.
+      // resolved one way or the other). Holds the splash until the
+      // minimum display time has elapsed, then triggers the CSS
+      // fade-out and drops the wrapper from the rendering tree.
       window.__csReady = function () {
         try { clearTimeout(window.__CS_SPLASH_FALLBACK); } catch (_) {}
         if (!document.body) return;
         if (document.body.dataset.csReady === "hidden") return;
-        document.body.dataset.csReady = "true";
+        var wait = Math.max(0, CS_SPLASH_MIN_MS - (Date.now() - CS_SPLASH_START));
         setTimeout(function () {
-          if (document.body && document.body.dataset.csReady === "true") {
-            document.body.dataset.csReady = "hidden";
-          }
-        }, 400);
+          if (!document.body) return;
+          if (document.body.dataset.csReady === "hidden") return;
+          document.body.dataset.csReady = "true";
+          setTimeout(function () {
+            if (document.body && document.body.dataset.csReady === "true") {
+              document.body.dataset.csReady = "hidden";
+            }
+          }, 400);
+        }, wait);
       };
     </script>
 
