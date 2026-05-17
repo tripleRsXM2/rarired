@@ -154,7 +154,7 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
   // ── Heatmap cells ───────────────────────────────────────────────
   // The heatmap zooms with the range filter:
   //   • All  → 7-row × 24-week contribution grid (mode "grid")
-  //   • 30D  → 7-row × 5-week grid              (mode "grid")
+  //   • 30D  → 7-column × 4-week calendar grid    (mode "month")
   //   • 7D   → a single labelled row of 7 day squares (mode "row")
   // Each cell is a calendar day; intensity = match count that day.
   var heatmap = useMemo(function () {
@@ -178,10 +178,32 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
       return { mode: "row", cells: rowCells };
     }
 
-    // All / 30D → a 7-row contribution grid. End on the Saturday of
-    // this week so the last column is full. Days before the active
-    // window render empty so the grid stays in sync with the tiles.
-    var weeks = range === "30d" ? 5 : HEATMAP_WEEKS;
+    // 30-day window → a 4-week calendar grid: 7 weekday columns × 4
+    // week rows, ending on the Saturday of this week so the last row
+    // is a full week.
+    if (range === "30d") {
+      var endM = new Date(today);
+      endM.setDate(endM.getDate() + (6 - endM.getDay()));
+      var startM = new Date(endM);
+      startM.setDate(startM.getDate() - 27);
+      var mCells = [];
+      var curM = new Date(startM);
+      for (var m = 0; m < 28; m++) {
+        var kM = dayKey(curM);
+        var futureM = curM.getTime() > today.getTime();
+        mCells.push({
+          key:   kM,
+          count: futureM ? 0 : (stats.dayCounts[kM] || 0),
+          muted: futureM,
+        });
+        curM.setDate(curM.getDate() + 1);
+      }
+      return { mode: "month", cells: mCells };
+    }
+
+    // All → a 7-row contribution grid. End on the Saturday of this
+    // week so the last column is full.
+    var weeks = HEATMAP_WEEKS;
     var end = new Date(today);
     end.setDate(end.getDate() + (6 - end.getDay()));
     var totalDays = weeks * 7;
@@ -201,7 +223,7 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
       });
       cur.setDate(cur.getDate() + 1);
     }
-    return { mode: "grid", weeks: weeks, cells: cells };
+    return { mode: "grid", cells: cells };
   }, [stats.dayCounts, rangeStart, range]);
 
   // Footer context line — a light, human read on the windowed data.
@@ -363,17 +385,25 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
               );
             })}
           </div>
+        ) : heatmap.mode === "month" ? (
+          /* 30D — a 4-week calendar grid: 7 weekday columns, 4 week
+             rows, filling the card width. */
+          <div style={{
+            display:             "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gridAutoRows:        "1fr",
+            gap:                 5,
+          }}>
+            {heatmap.cells.map(function (c, i) { return heatSquare(c, i); })}
+          </div>
         ) : (
-          /* All / 30D — a 7-row contribution grid. Capped + centred
-             when zoomed in so the 30D squares don't balloon. */
+          /* All — a 7-row contribution grid (weeks as columns). */
           <div style={{
             display:             "grid",
             gridTemplateRows:    "repeat(7, 1fr)",
             gridAutoFlow:        "column",
             gridAutoColumns:     "1fr",
             gap:                 4,
-            maxWidth:            heatmap.weeks <= 8 ? heatmap.weeks * 46 : "none",
-            margin:              "0 auto",
           }}>
             {heatmap.cells.map(function (c, i) { return heatSquare(c, i); })}
           </div>
