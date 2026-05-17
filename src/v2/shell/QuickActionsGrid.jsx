@@ -7,7 +7,7 @@ import { NavIcon } from "./Sidebar.jsx";
 
 export default function QuickActionsGrid({ theme, accent, onGo, historyCount = 0 }) {
   const tiles = [
-    { route: "competitions", icon: "trophy", label: "Competitions", sub: "Tournaments" },
+    { route: "competitions", icon: "trophy", label: "Play",         sub: "Tournaments" },
     { route: "quicklog",     icon: "edit",   label: "Quick-log",    sub: "Final score" },
     { route: "changeover",   icon: "clock",  label: "Changeover",   sub: "90s timer" },
     { route: "history",      icon: "list",   label: "History",      sub: `${historyCount} matches` },

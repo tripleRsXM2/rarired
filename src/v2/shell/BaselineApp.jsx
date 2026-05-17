@@ -832,7 +832,7 @@ function MobileRouteView({
 function routeTitle(route) {
   switch (route) {
     case "home":         return "Home";
-    case "competitions": return "Comps";
+    case "competitions": return "Play";
     case "live":
     case "changeover":
     case "summary":      return "Score";
@@ -847,10 +847,10 @@ function routeTitle(route) {
 function MobileTabBar({ route, onGo, theme, accent }) {
   // 6 primary tabs. Order (user feedback 2026-05-17): Inbox sits in
   // the middle between Score and Log; History moves to the end.
-  //   Home · Comps · Score · Inbox · Log · History
+  //   Home · Play · Score · Inbox · Log · History
   const TABS = [
     { id: "home",         label: "Home",    Icon: HomeIcon },
-    { id: "competitions", label: "Comps",   Icon: TrophyIcon },
+    { id: "competitions", label: "Play",    Icon: TrophyIcon },
     { id: "live",         label: "Score",   Icon: LiveIcon },
     { id: "messages",     label: "Inbox",   Icon: ChatIcon },
     { id: "quicklog",     label: "Log",     Icon: PenIcon },
