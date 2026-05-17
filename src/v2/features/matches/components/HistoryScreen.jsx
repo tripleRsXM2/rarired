@@ -5,8 +5,9 @@
 import React from "react";
 import { CourtMini, Eyebrow } from "./atoms.jsx";
 import { COURTS } from "../utils/tokens.js";
+import PullToRefresh from "../../../../components/ui/PullToRefresh.jsx";
 
-export default function HistoryScreen({ theme, accent, matches, onOpenProfile }) {
+export default function HistoryScreen({ theme, accent, matches, onOpenProfile, onRefresh }) {
   // Filter chip — All / Wins / Losses. Singles + Doubles dropped for
   // now (no singles/doubles flag on match_history yet). Wins/Losses
   // count only SETTLED matches: a pending / disputed row has no final
@@ -46,22 +47,28 @@ export default function HistoryScreen({ theme, accent, matches, onOpenProfile })
         ))}
       </div>
 
-      <div className="t-noscroll" style={{ flex: 1, overflowY: "auto", padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-        {visible.length === 0 ? (
-          <div style={{
-            padding: "28px 14px", textAlign: "center",
-            color: theme.inkSoft, fontFamily: "Inter", fontSize: 13,
-          }}>
-            {filter === "Wins"   ? "No wins logged yet."
-              : filter === "Losses" ? "No losses logged yet."
-              : "No matches yet."}
-          </div>
-        ) : (
-          visible.map((m, i) => (
-            <HistoryRow key={m.id || i} {...m} theme={theme} accent={accent} onOpenProfile={onOpenProfile} />
-          ))
-        )}
-      </div>
+      <PullToRefresh
+        className="t-noscroll"
+        tint={theme.inkSoft}
+        onRefresh={onRefresh}
+        style={{ flex: 1, padding: "6px 20px 24px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {visible.length === 0 ? (
+            <div style={{
+              padding: "28px 14px", textAlign: "center",
+              color: theme.inkSoft, fontFamily: "Inter", fontSize: 13,
+            }}>
+              {filter === "Wins"   ? "No wins logged yet."
+                : filter === "Losses" ? "No losses logged yet."
+                : "No matches yet."}
+            </div>
+          ) : (
+            visible.map((m, i) => (
+              <HistoryRow key={m.id || i} {...m} theme={theme} accent={accent} onOpenProfile={onOpenProfile} />
+            ))
+          )}
+        </div>
+      </PullToRefresh>
     </div>
   );
 }

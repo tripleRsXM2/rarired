@@ -1292,6 +1292,7 @@ export default function App(){
               openProfile={openProfile}
               onReviewMatch={openReviewForMatch}
               setScrolledPastHero={setScrolledPastHero}
+              onRefresh={matchHistory.refreshFeed}
             />
           )}
           {/* /notifications — Editorial Tennis dedicated inbox page.

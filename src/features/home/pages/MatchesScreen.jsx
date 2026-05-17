@@ -23,6 +23,7 @@ import { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
 import { formatMatchScore } from "../../scoring/utils/tennisScoreValidation.js";
 import { useDeepLinkHighlight } from "../../../lib/utils/deepLink.js";
 import ProfileScreen from "./ProfileScreen.jsx";
+import PullToRefresh from "../../../components/ui/PullToRefresh.jsx";
 
 var FILTERS = ["All", "Ranked", "League", "Casual", "Tournament"];
 
@@ -37,7 +38,7 @@ var PENDING_STATUSES = ["pending_confirmation", "disputed", "pending_reconfirmat
 // scroll. User feedback (2026-05-11): 'On mobile [Activity] looks
 // great. But can we just add the profile at the top? And then all
 // the activity under it.'
-export default function MatchesScreen({ authUser, profile, history, leaguesIndex, openProfile, onReviewMatch, setScrolledPastHero }) {
+export default function MatchesScreen({ authUser, profile, history, leaguesIndex, openProfile, onReviewMatch, setScrolledPastHero, onRefresh }) {
   var [filter, setFilter] = useState("All");
   var heroRef = useRef(null);
 
@@ -102,13 +103,20 @@ export default function MatchesScreen({ authUser, profile, history, leaguesIndex
   }, [listStream, filter]);
 
   return (
-    <div className="cs-ed-push" style={{
-      background:    ED_TOK.bg,
-      color:         ED_TOK.ink,
-      fontFamily:    ED_TOK.sans,
-      minHeight:     "calc(100dvh - 64px)",
-      paddingBottom: 96,
-    }}>
+    <PullToRefresh
+      className="cs-ed-push"
+      onRefresh={onRefresh}
+      tint={ED_TOK.muted}
+      style={{
+        background:    ED_TOK.bg,
+        color:         ED_TOK.ink,
+        fontFamily:    ED_TOK.sans,
+        // Internal scroll container (so pull-to-refresh can own the
+        // gesture). Height-bounded to the band below the 64px top nav;
+        // the bottom padding clears the fixed tab bar.
+        height:        "calc(100dvh - 64px)",
+        paddingBottom: 96,
+      }}>
       {/* Profile hero — only when `profile` is passed (Activity tab).
           Rendered inline above the activity stat strip so the page
           reads as one scroll: profile → stats → filters → list. We
@@ -218,7 +226,7 @@ export default function MatchesScreen({ authUser, profile, history, leaguesIndex
           })}
         </ul>
       )}
-    </div>
+    </PullToRefresh>
   );
 }
 

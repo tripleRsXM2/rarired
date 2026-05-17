@@ -543,6 +543,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onGo={onGo} onNewMatch={onNewMatch}
             look={look} onLookChange={setLook}
             history={liveHistory} weekStats={liveWeekStats}
+            onRefreshHistory={v2History.reload}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
@@ -605,6 +606,7 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onGo={onGo} onNewMatch={onNewMatch}
             look={look} onLookChange={setLook}
             history={liveHistory} weekStats={liveWeekStats}
+            onRefreshHistory={v2History.reload}
             friends={liveFriends} onQuickLogSubmit={onQuickLogSubmit}
             competitions={liveCompetitions} viewerName={viewerName}
             dms={dms} authUser={resolvedAuthUser} everyonePlayers={everyonePlayers}
@@ -647,6 +649,7 @@ function RouteView({
   onCreateLiveMatch, onSaveLiveMatch,
   onEndSet, onTagPoint, onCancel,
   profileUserId, viewerId, onOpenProfile,
+  onRefreshHistory,
 }) {
   var isPhone = false;   // RouteView is the desktop/iPad layout
   switch (route) {
@@ -698,7 +701,7 @@ function RouteView({
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
     case "history":
-      return <HistoryScreen theme={theme} accent={accent} matches={history} onOpenProfile={onOpenProfile} />;
+      return <HistoryScreen theme={theme} accent={accent} matches={history} onOpenProfile={onOpenProfile} onRefresh={onRefreshHistory} />;
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":
@@ -750,7 +753,7 @@ function MobileRouteView({
   onCreateLiveMatch, onSaveLiveMatch,
   onEndSet, onTagPoint, onCancel,
   profileUserId, viewerId, onOpenProfile,
-  onThreadOpenChange,
+  onThreadOpenChange, onRefreshHistory,
 }) {
   var isPhone = true;    // MobileRouteView is the narrow-viewport layout
   switch (route) {
@@ -804,7 +807,7 @@ function MobileRouteView({
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
     case "history":
-      return <HistoryScreen theme={theme} accent={accent} matches={history} onOpenProfile={onOpenProfile} />;
+      return <HistoryScreen theme={theme} accent={accent} matches={history} onOpenProfile={onOpenProfile} onRefresh={onRefreshHistory} />;
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":
