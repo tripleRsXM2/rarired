@@ -1263,6 +1263,9 @@ export default function App(){
               history={matchHistory.history}
               profile={currentUser.profile}
               setScrolledPastHero={setScrolledPastHero}
+              onOpenProfile={function(uid){
+                if(uid && (!auth.authUser || uid !== auth.authUser.id)) navigate("/profile/" + uid);
+              }}
             />
           )}
           {/* /matches — Editorial Tennis match history (Phase 2).

@@ -38,10 +38,14 @@ function parseDayKey(key) {
 }
 var HEATMAP_WEEKS = 24;          // ~6 months of squares, matches the screenshot density
 
-export default function HomeDashboard({ history, profile, setScrolledPastHero }) {
+export default function HomeDashboard({ history, profile, setScrolledPastHero, onOpenProfile }) {
   // Range filter — All / 30d / 7d. Drives both the tiles and which
   // heatmap squares light up.
   var [range, setRange] = useState("all");
+
+  // Heatmap hover tooltip — { x, y, text } in viewport coords, or
+  // null when nothing is hovered.
+  var [tip, setTip] = useState(null);
 
   // The dashboard owns its own header, so keep the global top-bar
   // title hidden while Home is mounted (other pages reveal it on
@@ -82,14 +86,27 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
     var wins = 0;
     var dayCounts = {};          // dayKey → match count
     var oppCounts = {};          // opponent name → count
+    var oppIds = {};             // opponent name → profile id (when known)
 
     windowed.forEach(function (m) {
       if (m.result === "win") wins++;
 
       if (m.rawDate) dayCounts[m.rawDate] = (dayCounts[m.rawDate] || 0) + 1;
 
-      var opp = m.friendName || m.oppName || m.opponentName || null;
-      if (opp) oppCounts[opp] = (oppCounts[opp] || 0) + 1;
+      // Opponent name + id must come from the SAME row flavour so a
+      // tap on the name lands on the right profile (mirrors the
+      // MatchesScreen identity rule): tagged / third-party rows show
+      // the submitter (friendName / submitterId); own rows show the
+      // logged opponent (oppName / opponent_id).
+      var taggedRow = m.isTagged || m.isThirdParty;
+      var opp = taggedRow
+        ? (m.friendName || null)
+        : (m.oppName || m.opponentName || null);
+      var oppId = taggedRow ? m.submitterId : m.opponent_id;
+      if (opp) {
+        oppCounts[opp] = (oppCounts[opp] || 0) + 1;
+        if (oppId && !oppIds[opp]) oppIds[opp] = oppId;
+      }
     });
 
     // Active days + streaks operate on the distinct sorted play days.
@@ -129,6 +146,7 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
       currentStreak: current,
       longestStreak: longest,
       topOpp: topOpp,
+      topOppId: (topOpp !== "—" && oppIds[topOpp]) || null,
       dayCounts: dayCounts,
     };
   }, [windowed]);
@@ -179,6 +197,18 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
     if (count === 1) return "rgba(255,45,85,0.34)";
     if (count === 2) return "rgba(255,45,85,0.62)";
     return ED_TOK.accent;
+  }
+
+  // Hover label for a heatmap square — the calendar day it covers
+  // plus that day's match count.
+  function cellLabel(c) {
+    var d = parseDayKey(c.key);
+    var dateStr = d
+      ? d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
+      : c.key;
+    if (c.muted) return dateStr;
+    if (!c.count)  return dateStr + " · no matches";
+    return dateStr + " · " + c.count + " match" + (c.count === 1 ? "" : "es");
   }
 
   var firstName = profile && profile.name ? profile.name.split(/\s+/)[0] : null;
@@ -248,7 +278,10 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
         <StatTile label="Active days"    value={stats.activeDays} />
         <StatTile label="Current streak" value={stats.currentStreak + "d"} />
         <StatTile label="Longest streak" value={stats.longestStreak + "d"} />
-        <StatTile label="Top opponent"   value={stats.topOpp} small />
+        <StatTile label="Top opponent"   value={stats.topOpp} small
+          onClick={(stats.topOppId && onOpenProfile)
+            ? function () { onOpenProfile(stats.topOppId); }
+            : null} />
       </div>
 
       {/* ── Play heatmap ───────────────────────────────────────── */}
@@ -266,12 +299,22 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
           gap:                 4,
         }}>
           {heatCells.map(function (c, i) {
+            function show(e) {
+              var pt = (e.touches && e.touches[0]) || e;
+              setTip({ x: pt.clientX, y: pt.clientY, text: cellLabel(c) });
+            }
             return (
-              <div key={i} title={c.key + (c.count ? " · " + c.count + " match" + (c.count === 1 ? "" : "es") : "")}
+              <div key={i}
+                onMouseEnter={show}
+                onMouseMove={show}
+                onMouseLeave={function () { setTip(null); }}
+                onTouchStart={show}
+                onTouchEnd={function () { setTip(null); }}
                 style={{
                   aspectRatio:  "1 / 1",
                   borderRadius: 3,
                   background:   cellColor(c.count, c.muted),
+                  cursor:       "pointer",
                 }}/>
             );
           })}
@@ -286,19 +329,55 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
           {footer}
         </div>
       </div>
+
+      {/* Heatmap hover tooltip — fixed to the viewport, follows the
+          cursor / touch point, never intercepts pointer events. */}
+      {tip && (
+        <div style={{
+          position:      "fixed",
+          left:          tip.x,
+          top:           tip.y - 40,
+          transform:     "translateX(-50%)",
+          background:    ED_TOK.ink,
+          color:         ED_TOK.bg,
+          fontFamily:    ED_TOK.mono,
+          fontSize:      10.5,
+          fontWeight:    600,
+          letterSpacing: "0.03em",
+          padding:       "6px 9px",
+          borderRadius:  6,
+          whiteSpace:    "nowrap",
+          pointerEvents: "none",
+          zIndex:        80,
+          boxShadow:     "0 4px 14px rgba(42,32,26,0.22)",
+        }}>
+          {tip.text}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Stat tile ─────────────────────────────────────────────────────
-function StatTile({ label, value, accent, small }) {
+// When `onClick` is supplied the whole tile becomes a button (used by
+// the Top-opponent tile so the name links through to that profile).
+function StatTile({ label, value, accent, small, onClick }) {
+  var clickable = typeof onClick === "function";
   return (
-    <div style={{
-      background:   ED_TOK.bg2,
-      border:       "1px solid " + ED_TOK.line,
-      borderRadius: 12,
-      padding:      "12px 13px",
-    }}>
+    <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={clickable ? function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
+      } : undefined}
+      style={{
+        background:   ED_TOK.bg2,
+        border:       "1px solid " + ED_TOK.line,
+        borderRadius: 12,
+        padding:      "12px 13px",
+        cursor:       clickable ? "pointer" : "default",
+      }}>
       <div style={{
         fontFamily:    ED_TOK.mono,
         fontSize:      10,
@@ -308,16 +387,18 @@ function StatTile({ label, value, accent, small }) {
         color:         ED_TOK.muted,
       }}>{label}</div>
       <div style={{
-        marginTop:     6,
-        fontFamily:    ED_TOK.display,
-        fontSize:      small ? 18 : 26,
-        fontWeight:    600,
-        letterSpacing: "-0.02em",
-        lineHeight:    1.05,
-        color:         accent ? ED_TOK.accent : ED_TOK.ink,
-        whiteSpace:    "nowrap",
-        overflow:      "hidden",
-        textOverflow:  "ellipsis",
+        marginTop:      6,
+        fontFamily:     ED_TOK.display,
+        fontSize:       small ? 18 : 26,
+        fontWeight:     600,
+        letterSpacing:  "-0.02em",
+        lineHeight:     1.05,
+        color:          clickable ? ED_TOK.accent : (accent ? ED_TOK.accent : ED_TOK.ink),
+        textDecoration: clickable ? "underline" : "none",
+        textUnderlineOffset: 3,
+        whiteSpace:     "nowrap",
+        overflow:       "hidden",
+        textOverflow:   "ellipsis",
       }}>{value}</div>
     </div>
   );
