@@ -671,14 +671,14 @@ export default function Messages({ t, authUser, dms, openProfile }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{
-              fontSize: 14, fontWeight: hasUnread ? 700 : 400,
+              fontSize: 13, fontWeight: hasUnread ? 700 : 400,
               color: ED_TOK.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{rowTitle}</span>
             {isPinnedFlag && <span style={{ color: ED_TOK.muted, display: "inline-flex", flexShrink: 0 }}><IconPin/></span>}
             {isMuted && <span title="Muted" style={{ color: ED_TOK.muted, fontSize: 12, flexShrink: 0, lineHeight: 1 }}>🔕</span>}
             <span style={{ flex: 1 }}/>
             <span style={{
-              fontSize: 11, flexShrink: 0,
+              fontSize: 10, flexShrink: 0,
               color: hasUnread ? ED_TOK.accent : ED_TOK.muted,
               fontWeight: hasUnread ? 600 : 400,
             }}>{formatMessageTime(conv.last_message_at)}</span>
@@ -686,7 +686,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
             <span style={{
               flex: 1, minWidth: 0,
-              fontSize: 13,
+              fontSize: 12,
               color: isTyping ? ED_TOK.accent : (hasUnread ? ED_TOK.ink : ED_TOK.ink2),
               fontWeight: hasUnread ? 600 : 400,
               fontStyle: isTyping ? "italic" : "normal",

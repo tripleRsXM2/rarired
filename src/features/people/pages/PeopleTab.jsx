@@ -71,7 +71,7 @@ function PlayerCard({
         style={{ flex: 1, minWidth: 0, cursor: clickable ? "pointer" : "default" }}>
         {/* Name — single line with ellipsis truncation. */}
         <div style={{
-          fontSize:      14.5,
+          fontSize:      13,
           fontWeight:    400,
           color:         ED_TOK.ink,
           letterSpacing: "-0.005em",
@@ -1206,14 +1206,14 @@ function RequestRow({ u, loading, openProfile, onMessage, meta, primary, seconda
         onClick={openProfile ? function () { openProfile(u.id); } : undefined}
         style={{ flex: 1, minWidth: 0, cursor: openProfile ? "pointer" : "default" }}>
         <div style={{
-          fontSize:      14.5,
+          fontSize:      13,
           fontWeight:    600,
           color:         ED_TOK.ink,
           letterSpacing: "-0.005em",
         }}>{u.name}</div>
         <div style={{
           fontFamily:    ED_TOK.mono,
-          fontSize:      11,
+          fontSize:      10.5,
           color:         ED_TOK.muted,
           marginTop:     4,
           letterSpacing: "0.04em",
