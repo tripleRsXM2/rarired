@@ -15,7 +15,7 @@
 // not its colours, so Home stays in the v1 realm.
 
 import { useMemo, useState, useEffect } from "react";
-import { ED_TOK, MicroLabel } from "../components/EditorialScreen.jsx";
+import { ED_TOK } from "../components/EditorialScreen.jsx";
 
 // ── Date helpers ──────────────────────────────────────────────────
 function startOfDay(d) {
@@ -227,7 +227,6 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
         gap: 12, marginBottom: 18,
       }}>
         <div>
-          <MicroLabel>Home</MicroLabel>
           <div style={{
             fontFamily:    ED_TOK.display,
             fontSize:      "clamp(26px, 7vw, 34px)",
@@ -235,7 +234,6 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
             letterSpacing: "-0.025em",
             lineHeight:    1.0,
             color:         ED_TOK.ink,
-            marginTop:     5,
           }}>
             {firstName ? firstName + "'s court" : "Your court"}
           </div>

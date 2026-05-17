@@ -494,15 +494,36 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
         overflow: "hidden",
       }}>
         {/* Top bar — V1/V2 toggle on the left, appearance toggle on
-            the right. The old back-to-picker button is retired; the
-            V1/V2 toggle is the switcher now. */}
+            the right, current-route title centred between them. The
+            old back-to-picker button is retired; the V1/V2 toggle is
+            the switcher now. The title is absolutely positioned so it
+            sits at the bar's true centre regardless of the differing
+            widths of the two side controls. */}
         <div style={{
+          position: "relative",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px",
           borderBottom: `0.5px solid ${theme.line}`, flexShrink: 0,
           background: theme.bg,
         }}>
           <VersionSwitch theme={theme} onSwitchToV1={onBack} />
+          {routeTitle(route) && (
+            <div style={{
+              position: "absolute",
+              left: 0, right: 0,
+              top: "env(safe-area-inset-top, 0px)", bottom: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "JetBrains Mono, ui-monospace, monospace",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: theme.ink,
+              pointerEvents: "none",
+            }}>
+              {routeTitle(route)}
+            </div>
+          )}
           <AppearanceToggle value={look} onChange={setLook} theme={theme} compact />
         </div>
 
@@ -804,6 +825,24 @@ function MobileRouteView({
 }
 
 // ─── Mobile tab bar ────────────────────────────────────────────────
+
+// Title shown centred in the mobile top bar — mirrors the tab labels
+// so the bar always names the screen you're on. Returns "" for routes
+// that shouldn't surface a title (none today; defence-in-depth).
+function routeTitle(route) {
+  switch (route) {
+    case "home":         return "Home";
+    case "competitions": return "Comps";
+    case "live":
+    case "changeover":
+    case "summary":      return "Score";
+    case "messages":     return "Inbox";
+    case "quicklog":     return "Log";
+    case "history":      return "History";
+    case "profile":      return "Profile";
+    default:             return "";
+  }
+}
 
 function MobileTabBar({ route, onGo, theme, accent }) {
   // 6 primary tabs. Order (user feedback 2026-05-17): Inbox sits in

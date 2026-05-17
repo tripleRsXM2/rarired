@@ -55,9 +55,6 @@ export default function HomeScreen({
   const firstName = (viewerName || "").split(/\s+/)[0] || "";
   return (
     <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink, padding: isPhone ? "24px 16px 60px" : "32px 40px 60px" }}>
-      <div className="t-cap" style={{ color: theme.inkSoft }}>Home</div>
-      <h1 className="t-serif" style={{ fontSize: 56, lineHeight: 1, margin: "6px 0 22px", letterSpacing: "-0.025em" }}>Home</h1>
-
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
         <div>
           <div className="t-cap" style={{ color: theme.inkSoft }}>Today · {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
