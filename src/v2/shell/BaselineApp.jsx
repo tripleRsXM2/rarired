@@ -794,18 +794,16 @@ function MobileRouteView({
 // ─── Mobile tab bar ────────────────────────────────────────────────
 
 function MobileTabBar({ route, onGo, theme, accent }) {
-  // 6 primary tabs — labels and order match the design zip
-  // (`/tmp/v2-design/main-app.jsx` lines 231-236) verbatim:
-  // Home / Score / Comps / Inbox / History / Log. User feedback:
-  // 'on mobile v2: We should see the tabs at the bottom: Home Score
-  // Comps Inbox History Log. Please match the zip.'
+  // 6 primary tabs. Order (user feedback 2026-05-17): Inbox sits in
+  // the middle between Score and Log; History moves to the end.
+  //   Home · Comps · Score · Inbox · Log · History
   const TABS = [
     { id: "home",         label: "Home",    Icon: HomeIcon },
-    { id: "live",         label: "Score",   Icon: LiveIcon },
     { id: "competitions", label: "Comps",   Icon: TrophyIcon },
+    { id: "live",         label: "Score",   Icon: LiveIcon },
     { id: "messages",     label: "Inbox",   Icon: ChatIcon },
-    { id: "history",      label: "History", Icon: HistoryIcon },
     { id: "quicklog",     label: "Log",     Icon: PenIcon },
+    { id: "history",      label: "History", Icon: HistoryIcon },
   ];
   return (
     <div style={{
