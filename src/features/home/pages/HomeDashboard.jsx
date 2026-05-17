@@ -36,13 +36,6 @@ function parseDayKey(key) {
   var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
   return Number.isNaN(d.getTime()) ? null : d;
 }
-function hourLabel(h) {
-  if (h == null) return "—";
-  var am = h < 12;
-  var h12 = h % 12; if (h12 === 0) h12 = 12;
-  return h12 + " " + (am ? "AM" : "PM");
-}
-
 var HEATMAP_WEEKS = 24;          // ~6 months of squares, matches the screenshot density
 
 export default function HomeDashboard({ history, profile, setScrolledPastHero }) {
@@ -86,33 +79,18 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
   // ── The 8 tile stats ────────────────────────────────────────────
   var stats = useMemo(function () {
     var matches = windowed.length;
-    var wins = 0, losses = 0;
+    var wins = 0;
     var dayCounts = {};          // dayKey → match count
-    var hourCounts = {};         // hour → count
     var oppCounts = {};          // opponent name → count
 
     windowed.forEach(function (m) {
       if (m.result === "win") wins++;
-      else if (m.result === "loss") losses++;
 
       if (m.rawDate) dayCounts[m.rawDate] = (dayCounts[m.rawDate] || 0) + 1;
-
-      // Peak hour — no play-time column on match_history, so we use
-      // the log timestamp's hour as the closest available proxy.
-      var ts = m.submittedAt || m.confirmedAt || m.createdAt || null;
-      if (ts) {
-        var hd = new Date(ts);
-        if (!Number.isNaN(hd.getTime())) {
-          var hr = hd.getHours();
-          hourCounts[hr] = (hourCounts[hr] || 0) + 1;
-        }
-      }
 
       var opp = m.friendName || m.oppName || m.opponentName || null;
       if (opp) oppCounts[opp] = (oppCounts[opp] || 0) + 1;
     });
-
-    var winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
 
     // Active days + streaks operate on the distinct sorted play days.
     var dayKeys = Object.keys(dayCounts).sort();
@@ -138,12 +116,6 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
       cursor.setDate(cursor.getDate() - 1);
     }
 
-    // Peak hour — modal log hour.
-    var peakHour = null, peakHourN = -1;
-    Object.keys(hourCounts).forEach(function (h) {
-      if (hourCounts[h] > peakHourN) { peakHourN = hourCounts[h]; peakHour = Number(h); }
-    });
-
     // Top opponent — most-faced.
     var topOpp = "—", topOppN = -1;
     Object.keys(oppCounts).forEach(function (o) {
@@ -153,11 +125,9 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
     return {
       matches: matches,
       wins: wins,
-      winPct: winPct,
       activeDays: activeDays,
       currentStreak: current,
       longestStreak: longest,
-      peakHour: peakHour,
       topOpp: topOpp,
       dayCounts: dayCounts,
     };
@@ -275,11 +245,9 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero })
       }}>
         <StatTile label="Matches"        value={stats.matches} />
         <StatTile label="Wins"           value={stats.wins} accent />
-        <StatTile label="Win rate"       value={stats.winPct + "%"} />
         <StatTile label="Active days"    value={stats.activeDays} />
         <StatTile label="Current streak" value={stats.currentStreak + "d"} />
         <StatTile label="Longest streak" value={stats.longestStreak + "d"} />
-        <StatTile label="Peak hour"      value={hourLabel(stats.peakHour)} />
         <StatTile label="Top opponent"   value={stats.topOpp} small />
       </div>
 
