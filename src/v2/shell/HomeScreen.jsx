@@ -9,6 +9,7 @@ import { Ball, ServeDot } from "../features/matches/components/atoms.jsx";
 import { elapsedMs, fmtDuration, pointLabel } from "../features/matches/utils/tennisEngine.js";
 import AppearanceToggle from "./AppearanceToggle.jsx";
 import QuickActionsGrid from "./QuickActionsGrid.jsx";
+import LiveSetupCard from "../features/matches/components/LiveSetupCard.jsx";
 
 export default function HomeScreen({
   theme, accent, court, liveMatch, history,
@@ -19,11 +20,24 @@ export default function HomeScreen({
   //   handle if no profile row); used in the "Good <greeting>, X."
   //   line so the dashboard reads personal on the first frame.
   weekStats, viewerName,
+  // friends: linked players for the inline match-setup opponent
+  //   picker. onCreateLiveMatch: ({ opponent, format }) => void —
+  //   builds + persists the live match and routes to live scoring
+  //   (same handler the full-page LiveSetupCard uses).
+  friends, onCreateLiveMatch,
   onGo, onNewMatch, look, onLookChange,
 }) {
   const inFlight = liveMatch && !liveMatch.endedAt;
   const h = new Date().getHours();
   const greeting = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+
+  // Inline match-setup expand. Tapping "Start new match" no longer
+  // jumps to the live tab — it splits the page open beneath the card
+  // and reveals the same setup the score page shows (opponent +
+  // format), pushing Quick Actions / This week / Recent down. Tapping
+  // Start inside the panel builds the match and routes to live
+  // scoring, same as the full-page setup card.
+  const [setupOpen, setSetupOpen] = React.useState(false);
 
   // Stat tiles — read from the live weekStats prop with sensible
   // placeholders while the fetch is in flight or there's no data yet.
@@ -73,20 +87,69 @@ export default function HomeScreen({
           </div>
         </button>
       ) : (
-        <button onClick={onNewMatch} className="t-btn" style={{
-          width: "100%", appearance: "none", border: 0, padding: "16px 18px", marginBottom: 18,
-          borderRadius: 16, background: court.surface, color: "#fbf6e9",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          textAlign: "left", boxShadow: "0 6px 18px rgba(0,0,0,0.12)", cursor: "pointer",
-        }}>
-          <div>
-            <div className="t-cap" style={{ color: "rgba(251,246,233,0.7)" }}>Ready to play</div>
-            <div className="t-serif" style={{ fontSize: 26, marginTop: 4, lineHeight: 1 }}>Start new match</div>
+        <div style={{ marginBottom: 18 }}>
+          {/* "Start new match" card — now a toggle. Tapping it splits
+              the inline setup panel open below instead of routing
+              away. The + icon rotates 45° to an × when open. */}
+          <button
+            onClick={() => setSetupOpen((v) => !v)}
+            className="t-btn"
+            style={{
+              width: "100%", appearance: "none", border: 0, padding: "16px 18px",
+              borderRadius: setupOpen ? "16px 16px 0 0" : 16,
+              background: court.surface, color: "#fbf6e9",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              textAlign: "left", boxShadow: "0 6px 18px rgba(0,0,0,0.12)", cursor: "pointer",
+              transition: "border-radius 200ms ease",
+            }}>
+            <div>
+              <div className="t-cap" style={{ color: "rgba(251,246,233,0.7)" }}>
+                {setupOpen ? "New match" : "Ready to play"}
+              </div>
+              <div className="t-serif" style={{ fontSize: 26, marginTop: 4, lineHeight: 1 }}>
+                {setupOpen ? "Set up the match" : "Start new match"}
+              </div>
+            </div>
+            <div style={{
+              width: 38, height: 38, borderRadius: "50%", background: accent, color: "#0f1410",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transform: setupOpen ? "rotate(45deg)" : "rotate(0deg)",
+              transition: "transform 240ms cubic-bezier(.4,0,.2,1)",
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </div>
+          </button>
+
+          {/* Inline setup panel — the split. grid-template-rows 0fr→1fr
+              animates the panel's content height smoothly (no JS
+              measuring), pushing everything below it down the page.
+              The inner overflow:hidden div is what the rows track. */}
+          <div style={{
+            display: "grid",
+            gridTemplateRows: setupOpen ? "1fr" : "0fr",
+            transition: "grid-template-rows 320ms cubic-bezier(.4,0,.2,1)",
+          }}>
+            <div style={{ overflow: "hidden" }}>
+              <div style={{
+                background: theme.bgRaised,
+                border: `0.5px solid ${theme.line}`,
+                borderTop: "none",
+                borderRadius: "0 0 16px 16px",
+                padding: "4px 18px 16px",
+                opacity: setupOpen ? 1 : 0,
+                transition: "opacity 240ms ease 80ms",
+              }}>
+                <LiveSetupCard
+                  embedded
+                  theme={theme} accent={accent} court={court}
+                  viewerName={viewerName}
+                  friends={friends || []}
+                  onStart={onCreateLiveMatch}
+                />
+              </div>
+            </div>
           </div>
-          <div style={{ width: 38, height: 38, borderRadius: "50%", background: accent, color: "#0f1410", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          </div>
-        </button>
+        </div>
       )}
 
       {/* Appearance toggle moved to global header (mobile top bar +

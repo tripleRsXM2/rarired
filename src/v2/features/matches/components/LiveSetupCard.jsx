@@ -38,6 +38,12 @@ export default function LiveSetupCard({
   viewerName, friends,
   onStart,             // ({ opponent, format }) => void
   isPhone = false,
+  // embedded: render as an inline panel inside another page (the Home
+  // "Start new match" expand). Drops the "Live scoring / Set up the
+  // match." intro block and the forced full-height layout — the host
+  // sizes the panel. The OpponentSheet switches to position:fixed so
+  // the picker still covers the viewport, not just the small panel.
+  embedded = false,
 }) {
   var [opponent, setOpponent] = React.useState(null);
   var [format, setFormat]     = React.useState("bo3");
@@ -53,30 +59,40 @@ export default function LiveSetupCard({
 
   return (
     <div style={{
-      width: "100%", height: "100%", background: theme.bg, color: theme.ink,
-      display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
+      width: "100%",
+      // Full-page mode fills its route; embedded mode flows to its
+      // content height so the host (Home) can animate it open.
+      height: embedded ? "auto" : "100%",
+      background: theme.bg, color: theme.ink,
+      display: "flex", flexDirection: "column",
+      overflow: embedded ? "visible" : "hidden",
+      position: "relative",
     }}>
-      <div style={{ padding: isPhone ? "22px 18px 8px" : "26px 32px 8px" }}>
-        <Eyebrow color={theme.inkSoft}>Live scoring</Eyebrow>
-        <h1 className="t-serif" style={{
-          fontSize: isPhone ? 30 : 38, lineHeight: 1.05,
-          margin: "6px 0 0", letterSpacing: "-0.02em",
-        }}>
-          Set up the <em>match</em>.
-        </h1>
-        <p style={{
-          marginTop: 8, marginBottom: 0,
-          fontFamily: "Inter", fontSize: 13, color: theme.inkSoft,
-          maxWidth: 480, lineHeight: 1.5,
-        }}>
-          Pick an opponent and a format, then tap Start to begin live scoring. Your in-progress match is saved on this device until you finish or reset.
-        </p>
-      </div>
+      {/* Intro block — skipped in embedded mode (the Home card already
+          carries the "Ready to play / Start new match" framing). */}
+      {!embedded && (
+        <div style={{ padding: isPhone ? "22px 18px 8px" : "26px 32px 8px" }}>
+          <Eyebrow color={theme.inkSoft}>Live scoring</Eyebrow>
+          <h1 className="t-serif" style={{
+            fontSize: isPhone ? 30 : 38, lineHeight: 1.05,
+            margin: "6px 0 0", letterSpacing: "-0.02em",
+          }}>
+            Set up the <em>match</em>.
+          </h1>
+          <p style={{
+            marginTop: 8, marginBottom: 0,
+            fontFamily: "Inter", fontSize: 13, color: theme.inkSoft,
+            maxWidth: 480, lineHeight: 1.5,
+          }}>
+            Pick an opponent and a format, then tap Start to begin live scoring. Your in-progress match is saved on this device until you finish or reset.
+          </p>
+        </div>
+      )}
 
       {/* Mock scoreboard — same dark-glass language as Quick-log's
           scoreboard so the user sees the same visual language across
           both match-entry paths. */}
-      <div style={{ padding: isPhone ? "16px 16px 4px" : "20px 32px 4px" }}>
+      <div style={{ padding: embedded ? "4px 0 4px" : (isPhone ? "16px 16px 4px" : "20px 32px 4px") }}>
         <div style={{
           background: "rgba(15,20,16,0.92)",
           backdropFilter: "blur(12px)",
@@ -143,7 +159,7 @@ export default function LiveSetupCard({
       </div>
 
       {/* Format chip row */}
-      <div style={{ padding: isPhone ? "16px 16px 4px" : "20px 32px 4px" }}>
+      <div style={{ padding: embedded ? "14px 0 4px" : (isPhone ? "16px 16px 4px" : "20px 32px 4px") }}>
         <div className="t-cap" style={{ color: theme.inkSoft, marginBottom: 8 }}>Format</div>
         <div className="t-noscroll" style={{
           display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4,
@@ -165,12 +181,15 @@ export default function LiveSetupCard({
         </div>
       </div>
 
-      <div style={{ flex: 1 }} />
+      {/* Full-height spacer pushes the Start button to the bottom of
+          the route — skipped when embedded (the panel flows to
+          content height inside Home). */}
+      {!embedded && <div style={{ flex: 1 }} />}
 
       {/* Primary action */}
-      <div style={{ padding: isPhone ? "12px 16px 20px" : "20px 32px 28px" }}>
+      <div style={{ padding: embedded ? "16px 0 4px" : (isPhone ? "12px 16px 20px" : "20px 32px 28px") }}>
         <button onClick={handleStart} className="t-btn" style={{
-          width: "100%", maxWidth: 520,
+          width: "100%", maxWidth: embedded ? "none" : 520,
           appearance: "none", border: 0, padding: "16px",
           borderRadius: 14,
           background: opponent ? accent : theme.chip,
@@ -190,6 +209,7 @@ export default function LiveSetupCard({
         <OpponentSheet
           theme={theme} accent={accent}
           friends={friends || []}
+          fixed={embedded}
           onPick={function (o) { setOpponent(o); setSheetOpen(false); }}
           onClose={function () { setSheetOpen(false); }}
         />

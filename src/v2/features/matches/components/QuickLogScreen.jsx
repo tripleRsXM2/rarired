@@ -355,7 +355,7 @@ export default function QuickLogScreen({
 // Exported so other v2 match-entry surfaces (LiveSetupCard) can reuse
 // the same friend picker + free-text fallback without re-implementing
 // the visual layout.
-export function OpponentSheet({ theme, accent, friends, onPick, onClose }) {
+export function OpponentSheet({ theme, accent, friends, onPick, onClose, fixed }) {
   const [query, setQuery] = React.useState("");
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -366,7 +366,12 @@ export function OpponentSheet({ theme, accent, friends, onPick, onClose }) {
     <div
       onClick={onClose}
       style={{
-        position: "absolute", inset: 0, zIndex: 40,
+        // `fixed` covers the whole viewport — used when the sheet is
+        // opened from a small embedded host (e.g. the inline match
+        // setup on Home) where `absolute; inset:0` would only cover
+        // the host card. Default `absolute` keeps the full-screen
+        // LiveSetupCard / QuickLogScreen behaviour unchanged.
+        position: fixed ? "fixed" : "absolute", inset: 0, zIndex: 60,
         background: "rgba(15,16,18,0.5)",
         display: "flex", flexDirection: "column", justifyContent: "flex-end",
       }}>

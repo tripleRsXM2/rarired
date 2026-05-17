@@ -600,6 +600,7 @@ function RouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -668,6 +669,7 @@ function RouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -697,6 +699,7 @@ function MobileRouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -750,6 +753,7 @@ function MobileRouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
@@ -758,6 +762,7 @@ function MobileRouteView({
         theme={theme} accent={accent} court={court}
         liveMatch={liveMatch} history={history}
         weekStats={weekStats} viewerName={viewerName}
+        friends={friends} onCreateLiveMatch={onCreateLiveMatch}
         onGo={onGo} onNewMatch={onNewMatch}
         look={look} onLookChange={onLookChange}
       />;
