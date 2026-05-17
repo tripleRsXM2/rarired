@@ -261,6 +261,31 @@ export default function App(){
   }, [auth.authUser, auth.authInitialized]);
 
   var currentUser=useCurrentUser();
+
+  // Settings is a state overlay, not a route — so the iOS swipe-back
+  // gesture (and the browser Back button) had nothing to act on and
+  // either did nothing or navigated the route *behind* Settings.
+  // While Settings is open we push a synthetic history entry and
+  // close Settings on `popstate`, so back/swipe dismisses Settings as
+  // users expect. If Settings is closed another way (the X button),
+  // the cleanup pops our synthetic entry so the next real Back press
+  // isn't swallowed.
+  useEffect(function(){
+    if(!showSettings) return;
+    window.history.pushState({ csSettings: true }, "");
+    function onPop(){
+      setShowSettings(false);
+      currentUser.setEditingAvail(false);
+    }
+    window.addEventListener("popstate", onPop);
+    return function(){
+      window.removeEventListener("popstate", onPop);
+      if(window.history.state && window.history.state.csSettings){
+        window.history.back();
+      }
+    };
+  }, [showSettings]);
+
   var matchHistory=useMatchHistory({
     authUser:auth.authUser,
     profile:currentUser.profile,

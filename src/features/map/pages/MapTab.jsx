@@ -37,19 +37,19 @@ var LAYERS_STORAGE_KEY = "cs.map.layers.v1";
 //                   coloured polygons. Power users opt out.
 //   activity  OFF — flame badges are seasonal/editorial; loud red as a
 //                   default reads like notifications you didn't subscribe to.
-//   mapTheme  DARK — the editorial cream UI sits nicely above a dark
-//                    basemap; courts/zones read clearer on it than on
-//                    the near-white CARTO light tiles. User feedback:
-//                    'can you also make the default option of the map
-//                    dark.' Users who explicitly picked auto/light in
-//                    the layers picker keep their saved preference
-//                    (loadLayers merges persisted values over DEFAULT).
+//   mapTheme  LIGHT — the CARTO positron basemap reads cleaner and
+//                    less heavy than dark-matter. User feedback
+//                    (2026-05-17): 'in maps, the map theme should be
+//                    light by default.' Users who explicitly picked
+//                    auto/dark in the layers picker keep their saved
+//                    preference (loadLayers merges persisted values
+//                    over DEFAULT).
 // zoneNames + activity dropped per user feedback (2026-05-11): the
 // flame-badge activity overlay and the zone-name labels are gone
 // from the map; the picker no longer surfaces toggles for them and
 // LeafletMap is called with both set to false. Keys removed from
 // defaults so the layers object stays clean for new users.
-var DEFAULT_LAYERS = { homes: true, courts: true, mapTheme: "dark" };
+var DEFAULT_LAYERS = { homes: true, courts: true, mapTheme: "light" };
 function loadLayers(){
   try{
     var raw = localStorage.getItem(LAYERS_STORAGE_KEY);
