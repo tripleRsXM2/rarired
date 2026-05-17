@@ -50,7 +50,7 @@ export function useV2Profile() {
     setError(null);
     supabase
       .from("profiles")
-      .select("id,name,avatar,avatar_url,suburb,skill,ranking_points,onboarded")
+      .select("id,name,avatar,avatar_url,suburb,skill,ranking_points")
       .eq("id", authUser.id)
       .maybeSingle()
       .then(function (r) {
