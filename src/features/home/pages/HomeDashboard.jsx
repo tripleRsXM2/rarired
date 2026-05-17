@@ -151,17 +151,40 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
     };
   }, [windowed]);
 
-  // ── Heatmap squares ─────────────────────────────────────────────
-  // A 7-row × HEATMAP_WEEKS-column contribution grid. Each cell is a
-  // calendar day; intensity = match count that day. Squares outside
-  // the active range render empty so the heatmap visually matches
-  // whatever window the tiles are showing.
-  var heatCells = useMemo(function () {
+  // ── Heatmap cells ───────────────────────────────────────────────
+  // The heatmap zooms with the range filter:
+  //   • All  → 7-row × 24-week contribution grid (mode "grid")
+  //   • 30D  → 7-row × 5-week grid              (mode "grid")
+  //   • 7D   → a single labelled row of 7 day squares (mode "row")
+  // Each cell is a calendar day; intensity = match count that day.
+  var heatmap = useMemo(function () {
     var today = startOfDay(new Date());
-    // End on the Saturday of this week so the last column is full.
+
+    // 7-day window → one labelled row, one square per day ending today.
+    if (range === "7d") {
+      var rowCells = [];
+      var c7 = new Date(today);
+      c7.setDate(c7.getDate() - 6);
+      for (var r = 0; r < 7; r++) {
+        var k7 = dayKey(c7);
+        rowCells.push({
+          key:   k7,
+          count: stats.dayCounts[k7] || 0,
+          muted: false,
+          label: "SMTWTFS".charAt(c7.getDay()),  // weekday initial
+        });
+        c7.setDate(c7.getDate() + 1);
+      }
+      return { mode: "row", cells: rowCells };
+    }
+
+    // All / 30D → a 7-row contribution grid. End on the Saturday of
+    // this week so the last column is full. Days before the active
+    // window render empty so the grid stays in sync with the tiles.
+    var weeks = range === "30d" ? 5 : HEATMAP_WEEKS;
     var end = new Date(today);
     end.setDate(end.getDate() + (6 - end.getDay()));
-    var totalDays = HEATMAP_WEEKS * 7;
+    var totalDays = weeks * 7;
     var start = new Date(end);
     start.setDate(start.getDate() - (totalDays - 1));
 
@@ -178,8 +201,8 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
       });
       cur.setDate(cur.getDate() + 1);
     }
-    return cells;
-  }, [stats.dayCounts, rangeStart]);
+    return { mode: "grid", weeks: weeks, cells: cells };
+  }, [stats.dayCounts, rangeStart, range]);
 
   // Footer context line — a light, human read on the windowed data.
   var footer = useMemo(function () {
@@ -209,6 +232,30 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
     if (c.muted) return dateStr;
     if (!c.count)  return dateStr + " · no matches";
     return dateStr + " · " + c.count + " match" + (c.count === 1 ? "" : "es");
+  }
+
+  // One heatmap square — shared by the grid + row layouts. Carries
+  // the hover/touch tooltip handlers.
+  function heatSquare(c, i) {
+    function show(e) {
+      var pt = (e.touches && e.touches[0]) || e;
+      setTip({ x: pt.clientX, y: pt.clientY, text: cellLabel(c) });
+    }
+    return (
+      <div key={i}
+        onMouseEnter={show}
+        onMouseMove={show}
+        onMouseLeave={function () { setTip(null); }}
+        onTouchStart={show}
+        onTouchEnd={function () { setTip(null); }}
+        style={{
+          width:        "100%",
+          aspectRatio:  "1 / 1",
+          borderRadius: 3,
+          background:   cellColor(c.count, c.muted),
+          cursor:       "pointer",
+        }}/>
+    );
   }
 
   var firstName = profile && profile.name ? profile.name.split(/\s+/)[0] : null;
@@ -289,34 +336,48 @@ export default function HomeDashboard({ history, profile, setScrolledPastHero, o
         borderRadius: 14,
         padding:      "14px 14px 12px",
       }}>
-        <div style={{
-          display:             "grid",
-          gridTemplateRows:    "repeat(7, 1fr)",
-          gridAutoFlow:        "column",
-          gridAutoColumns:     "1fr",
-          gap:                 4,
-        }}>
-          {heatCells.map(function (c, i) {
-            function show(e) {
-              var pt = (e.touches && e.touches[0]) || e;
-              setTip({ x: pt.clientX, y: pt.clientY, text: cellLabel(c) });
-            }
-            return (
-              <div key={i}
-                onMouseEnter={show}
-                onMouseMove={show}
-                onMouseLeave={function () { setTip(null); }}
-                onTouchStart={show}
-                onTouchEnd={function () { setTip(null); }}
-                style={{
-                  aspectRatio:  "1 / 1",
-                  borderRadius: 3,
-                  background:   cellColor(c.count, c.muted),
-                  cursor:       "pointer",
-                }}/>
-            );
-          })}
-        </div>
+        {heatmap.mode === "row" ? (
+          /* 7D — a single labelled row of day squares. */
+          <div style={{
+            display:             "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gap:                 8,
+          }}>
+            {heatmap.cells.map(function (c, i) {
+              return (
+                <div key={i} style={{
+                  display:        "flex",
+                  flexDirection:  "column",
+                  alignItems:     "center",
+                  gap:            6,
+                }}>
+                  <div style={{
+                    fontFamily:    ED_TOK.mono,
+                    fontSize:      10,
+                    fontWeight:    700,
+                    letterSpacing: "0.06em",
+                    color:         ED_TOK.muted,
+                  }}>{c.label}</div>
+                  {heatSquare(c, i)}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* All / 30D — a 7-row contribution grid. Capped + centred
+             when zoomed in so the 30D squares don't balloon. */
+          <div style={{
+            display:             "grid",
+            gridTemplateRows:    "repeat(7, 1fr)",
+            gridAutoFlow:        "column",
+            gridAutoColumns:     "1fr",
+            gap:                 4,
+            maxWidth:            heatmap.weeks <= 8 ? heatmap.weeks * 46 : "none",
+            margin:              "0 auto",
+          }}>
+            {heatmap.cells.map(function (c, i) { return heatSquare(c, i); })}
+          </div>
+        )}
         <div style={{
           marginTop:  12,
           fontFamily: ED_TOK.sans,
