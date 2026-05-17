@@ -43,6 +43,7 @@ import { buildFinishedMatch } from "../features/matches/data/sampleMatches.js";
 import { FORMATS } from "../features/matches/utils/tennisEngine.js";
 import { SAMPLE_HISTORY } from "../features/matches/data/sampleHistory.js";
 import { useV2Profile, useV2History, useV2Competitions, useV2Friends, logV2Match } from "../data/index.js";
+import PlayerProfileScreen from "../features/profile/PlayerProfileScreen.jsx";
 import { emitRatingMatchInviteDM } from "../../features/people/services/dmWidgets.js";
 // useDMs is NOT imported here — it would race v1's instance for the
 // same realtime channel name (`convs:<uid>`) and crash Supabase
@@ -193,6 +194,17 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
 
   const [route, setRoute] = React.useState("home");
   const [, force] = React.useReducer((x) => x + 1, 0);
+
+  // Friend-profile route carries the target user's id alongside the
+  // string route. onOpenProfile(userId) stashes the id and switches
+  // to the "profile" route; onGo() to any other route leaves the id
+  // in place (harmless — only read while route === "profile").
+  const [profileUserId, setProfileUserId] = React.useState(null);
+  const onOpenProfile = React.useCallback(function (uid) {
+    if (!uid) return;
+    setProfileUserId(uid);
+    setRoute("profile");
+  }, []);
 
   // Live match — single source of truth. Held in a ref so navigation
   // doesn't reset it; persisted to localStorage so a page refresh /
@@ -502,6 +514,8 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onCreateLiveMatch={onCreateLiveMatch}
             onSaveLiveMatch={onSaveLiveMatch}
             onEndSet={onEndSet} onTagPoint={onTagPoint}
+            profileUserId={profileUserId} viewerId={v2UserId}
+            onOpenProfile={onOpenProfile}
             onCancel={onCancelLiveMatch}
           />
         </div>
@@ -561,6 +575,8 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
             onCreateLiveMatch={onCreateLiveMatch}
             onSaveLiveMatch={onSaveLiveMatch}
             onEndSet={onEndSet} onTagPoint={onTagPoint}
+            profileUserId={profileUserId} viewerId={v2UserId}
+            onOpenProfile={onOpenProfile}
             onCancel={onCancelLiveMatch}
           />
         </div>
@@ -593,6 +609,7 @@ function RouteView({
   onMessagePlayer, onInvitePlayer,
   onCreateLiveMatch, onSaveLiveMatch,
   onEndSet, onTagPoint, onCancel,
+  profileUserId, viewerId, onOpenProfile,
 }) {
   switch (route) {
     case "home":
@@ -631,8 +648,10 @@ function RouteView({
         everyonePlayers={everyonePlayers} friends={friends} authUser={authUser}
         onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
       />;
+    case "profile":
+      return <PlayerProfileScreen theme={theme} accent={accent} userId={profileUserId} viewerId={viewerId} onBack={() => onGo("home")} isPhone={false} />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={false} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} onOpenProfile={onOpenProfile} />;
     case "changeover":
       // Changeover only makes sense mid-match — bounce to the live
       // tab (which renders the setup card when there's no match).
@@ -692,6 +711,7 @@ function MobileRouteView({
   onMessagePlayer, onInvitePlayer,
   onCreateLiveMatch, onSaveLiveMatch,
   onEndSet, onTagPoint, onCancel,
+  profileUserId, viewerId, onOpenProfile,
 }) {
   switch (route) {
     case "home":
@@ -734,8 +754,10 @@ function MobileRouteView({
         everyonePlayers={everyonePlayers} friends={friends} authUser={authUser}
         onMessagePlayer={onMessagePlayer} onInvitePlayer={onInvitePlayer}
       />;
+    case "profile":
+      return <PlayerProfileScreen theme={theme} accent={accent} userId={profileUserId} viewerId={viewerId} onBack={() => onGo("home")} isPhone={true} />;
     case "messages":
-      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} />;
+      return <MessagesScreen theme={theme} accent={accent} isPhone={true} dms={dms} authUser={authUser} everyonePlayers={everyonePlayers} onOpenProfile={onOpenProfile} />;
     case "changeover":
       if (!liveMatch) return <LiveSetupCard theme={theme} accent={accent} court={court} viewerName={viewerName} friends={friends} onStart={onCreateLiveMatch} isPhone={true} />;
       return <ChangeoverScreen match={liveMatch} theme={theme} accent={accent} court={court} onResume={() => onGo("live")} totalSec={90} />;

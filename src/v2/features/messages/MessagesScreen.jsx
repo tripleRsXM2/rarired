@@ -37,7 +37,7 @@ var GROUP_AVATAR_MAX_MB = (MAX_AVATAR_BYTES / (1024 * 1024)).toFixed(0);
 var EMPTY_CONVS = [];
 var EMPTY_MSGS  = [];
 
-export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser, everyonePlayers }) {
+export default function MessagesScreen({ theme, accent, isPhone = false, dms, authUser, everyonePlayers, onOpenProfile }) {
   const [activeConvoId, setActiveConvoId] = React.useState(null);
   const [composing, setComposing] = React.useState(false);
   const meId = (authUser && authUser.id) || null;
@@ -130,6 +130,7 @@ export default function MessagesScreen({ theme, accent, isPhone = false, dms, au
         conversations={conversations}
         dms={dms} meId={meId}
         onBack={function () { setActiveConvoId(null); }}
+        onOpenProfile={onOpenProfile}
       />
     );
   }
@@ -280,7 +281,7 @@ function ConvoRow({ c, theme, accent, onOpen }) {
   );
 }
 
-function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack, isPhone }) {
+function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack, isPhone, onOpenProfile }) {
   // Group rename sheet — open/close state + draft + saving state.
   // Only relevant when the thread is a group; the header makes itself
   // tappable to open the sheet, the sheet calls dms.renameConversation
@@ -507,20 +508,32 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
             <span style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: "50%", background: accent, border: `2px solid ${theme.bg}` }} />
           )}
         </div>
+        {/* Header name button — group: opens rename/avatar settings.
+            1:1: opens the partner's profile (when we have their id +
+            an onOpenProfile handler). */}
+        {(function () {
+          var partnerId = (rawConv && rawConv.partner && rawConv.partner.id) || null;
+          var isGroup   = c.type === "group";
+          var canProfile = !isGroup && !!onOpenProfile && !!partnerId;
+          return (
         <button
-          onClick={c.type === "group" ? function () {
-            setRenameDraft((rawConv && rawConv.name) || "");
-            setRenameOpen(true);
-          } : undefined}
-          disabled={c.type !== "group"}
+          onClick={
+            isGroup
+              ? function () {
+                  setRenameDraft((rawConv && rawConv.name) || "");
+                  setRenameOpen(true);
+                }
+              : (canProfile ? function () { onOpenProfile(partnerId); } : undefined)
+          }
+          disabled={isGroup ? false : !canProfile}
           className="t-btn"
           style={{
             flex: 1, minWidth: 0, appearance: "none", border: 0,
             background: "transparent", padding: 0, textAlign: "left",
-            cursor: c.type === "group" ? "pointer" : "default",
+            cursor: (isGroup || canProfile) ? "pointer" : "default",
             color: "inherit", display: "flex", flexDirection: "column",
           }}
-          aria-label={c.type === "group" ? "Group settings" : undefined}
+          aria-label={isGroup ? "Group settings" : (canProfile ? "View profile" : undefined)}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 14, color: theme.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
@@ -532,6 +545,8 @@ function ThreadScreen({ theme, accent, convoId, conversations, dms, meId, onBack
           </div>
           <div style={{ fontFamily: "Inter", fontSize: 11, color: c.activeNow ? accent : theme.inkSoft }}>{subLabel}</div>
         </button>
+          );
+        })()}
       </div>
 
       {renameOpen && c.type === "group" && (
