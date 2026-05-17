@@ -7,12 +7,15 @@
 //   1. Avatar XL + region/level + joined date row (this is the hero
 //      block — when it scrolls out of view, the global top bar fades
 //      "Profile" in)
-//   2. Big rating numeral (clamp 78–104px) + ▲ delta + "CourtSync
-//      rating" microlabel
-//   3. 2x2 stat grid — Rank / Win rate / Time on court / Win streak
-//   4. Best win callout
-//   5. Achievements chip row (placeholder until the trust badge
+//   2. Big rating numeral (clamp 78–104px) + ▲ delta + "ELO Rating"
+//      microlabel
+//   3. Achievements chip row (placeholder until the trust badge
 //      system is wired in — Module 10 territory)
+//
+// 2026-05-17: dropped the 2x2 stat grid + the "Best win recently"
+// callout — the Activity tab embeds this screen above its own stat
+// strip + match list, so those duplicated what the host already
+// shows. Achievements now sits directly under the rating.
 //
 // 2026-05-02: dropped the EditorialScreen wrapper + the redundant
 // 56px "Profile" hero title — the global top mob-nav now handles
@@ -86,25 +89,12 @@ export default function ProfileScreen({
       if (confirmed[i].result === "win") streak++;
       else break;
     }
-    // Best win — confirmed ranked wins, sorted by opponent rating
-    // when we have it. Falls back to most-recent ranked win if rating
-    // wasn't surfaced on the row.
-    var bestWin = null;
-    var rankedWins = rankedConfirmed.filter(function (m) { return m.result === "win"; });
-    if (rankedWins.length) {
-      bestWin = rankedWins.slice().sort(function (a, b) {
-        var ar = a.opponent_rating != null ? a.opponent_rating : 0;
-        var br = b.opponent_rating != null ? b.opponent_rating : 0;
-        return br - ar;
-      })[0];
-    }
     return {
       played:  confirmed.length,
       wins:    wins,
       losses:  losses,
       winrate: winrate,
       streak:  streak,
-      bestWin: bestWin,
     };
   }, [history]);
 
@@ -191,7 +181,7 @@ export default function ProfileScreen({
             fontFamily: ED_TOK.mono,
             flexWrap:   "wrap",
           }}>
-            <MicroLabel>CourtSync rating</MicroLabel>
+            <MicroLabel>ELO Rating</MicroLabel>
             {ratingDelta != null && ratingDelta !== 0 && (
               <span style={{
                 fontFamily:    ED_TOK.mono,
@@ -212,64 +202,7 @@ export default function ProfileScreen({
         </>
       )}
 
-      {/* 2x2 stat grid. */}
-      <div style={{ padding: "12px 22px" }}>
-        <div style={{
-          display:             "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap:                 1,
-          background:          ED_TOK.line,
-          border:              "1px solid " + ED_TOK.line,
-          borderRadius:        16,
-          overflow:            "hidden",
-          marginBottom:        4,
-        }}>
-          <PStat
-            big={rating != null ? "—" : "—"}
-            label={"In " + (region || "your area")}
-            sub={stats.played + " confirmed"}
-            highlight
-          />
-          <PStat
-            big={stats.winrate != null ? stats.winrate + "%" : "—"}
-            label="Win rate"
-            sub={stats.wins + "–" + stats.losses}
-          />
-          <PStat
-            big={stats.played}
-            label="Matches"
-            sub="all time"
-          />
-          <PStat
-            big={stats.streak}
-            label="Win streak"
-            sub="current"
-            highlight
-          />
-        </div>
-      </div>
-
       <EdDivider style={{ margin: "14px 22px" }}/>
-
-      {/* Best win this month. */}
-      {stats.bestWin && (
-        <>
-          <div style={{ padding: "4px 22px 8px" }}>
-            <MicroLabel>Best win recently</MicroLabel>
-            <div style={{
-              fontFamily:    ED_TOK.display,
-              fontSize:      22,
-              letterSpacing: "-0.01em",
-              marginTop:     6,
-              fontStyle:     "italic",
-              color:         ED_TOK.ink,
-            }}>
-              vs. {stats.bestWin.friendName || stats.bestWin.opponentName || stats.bestWin.oppName || stats.bestWin.playerName || "—"}
-            </div>
-          </div>
-          <EdDivider style={{ margin: "14px 22px" }}/>
-        </>
-      )}
 
       {/* Achievements row (placeholder until trust badges + streak
           milestones are surfaced from the profile object — see
@@ -306,39 +239,6 @@ export default function ProfileScreen({
             );
           })}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// 2x2 grid cell.
-function PStat({ big, label, sub, highlight }) {
-  return (
-    <div style={{
-      background: highlight ? ED_TOK.bg2 : ED_TOK.bg,
-      padding:    "18px 16px",
-    }}>
-      <div style={{
-        fontFamily:    ED_TOK.display,
-        fontSize:      32,
-        fontWeight:    700,
-        letterSpacing: "-0.03em",
-        lineHeight:    1,
-        marginBottom:  8,
-        color:         ED_TOK.ink,
-      }}>
-        {big}
-      </div>
-      <div style={{ display: "block", marginBottom: 4 }}>
-        <MicroLabel>{label}</MicroLabel>
-      </div>
-      <div style={{
-        fontFamily:    ED_TOK.mono,
-        fontSize:      11,
-        color:         ED_TOK.ink2,
-        letterSpacing: "0.02em",
-      }}>
-        {sub}
       </div>
     </div>
   );
