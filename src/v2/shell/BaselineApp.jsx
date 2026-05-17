@@ -193,6 +193,24 @@ function BaselineAppInner({ onBack, authUser, dms, everyonePlayers }) {
   const court = courts[courtId] || courts.grass;
   const accent = court.accent;
 
+  // Paint <html>/<body> with the v2 theme background while v2 is
+  // mounted. On iOS standalone the status-bar notch strip shows the
+  // body element's background — v1's Providers leave it cream
+  // (#F0E9DA), so without this the v2 (white) page had a cream strip
+  // under the clock/battery. Restore on unmount so v1 keeps its cream.
+  React.useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.background;
+    const prevBody = body.style.background;
+    html.style.background = theme.bg;
+    body.style.background = theme.bg;
+    return () => {
+      html.style.background = prevHtml;
+      body.style.background = prevBody;
+    };
+  }, [theme.bg]);
+
   const [route, setRoute] = React.useState("home");
   const [, force] = React.useReducer((x) => x + 1, 0);
 
