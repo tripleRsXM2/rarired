@@ -76,6 +76,10 @@ function shapeRow(m, viewerIsSubmitter, profileMap) {
     id:      m.id,
     date:    formatRelDate(when),
     opp:     oppName,
+    // oppId — the opposite party's user id (null for a free-text
+    // unlinked opponent). Lets the history row deep-link to that
+    // player's v2 profile.
+    oppId:   otherId || null,
     score:   formatSetsV2(viewerSets) || "—",
     win:     win,
     surface: deriveSurfaceKey(m.court || m.venue),

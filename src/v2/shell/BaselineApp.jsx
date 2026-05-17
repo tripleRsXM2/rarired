@@ -660,7 +660,7 @@ function RouteView({
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
     case "history":
-      return <HistoryScreen theme={theme} accent={accent} matches={history} />;
+      return <HistoryScreen theme={theme} accent={accent} matches={history} onOpenProfile={onOpenProfile} />;
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":
@@ -764,7 +764,7 @@ function MobileRouteView({
     case "summary":
       return <SummaryScreen match={finishedMatch} theme={theme} accent={accent} court={court} onShare={() => {}} onNew={onNewMatch} />;
     case "history":
-      return <HistoryScreen theme={theme} accent={accent} matches={history} />;
+      return <HistoryScreen theme={theme} accent={accent} matches={history} onOpenProfile={onOpenProfile} />;
     case "quicklog":
       return <QuickLogScreen theme={theme} accent={accent} onSave={() => onGo("home")} friends={friends} viewerName={viewerName} onSubmit={onQuickLogSubmit} />;
     case "desktop":

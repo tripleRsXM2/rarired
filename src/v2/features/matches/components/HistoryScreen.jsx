@@ -6,7 +6,7 @@ import React from "react";
 import { CourtMini, Eyebrow } from "./atoms.jsx";
 import { COURTS } from "../utils/tokens.js";
 
-export default function HistoryScreen({ theme, accent, matches }) {
+export default function HistoryScreen({ theme, accent, matches, onOpenProfile }) {
   // Filter chip — All / Wins / Losses. Singles + Doubles dropped for
   // now (no singles/doubles flag on match_history yet). Wins/Losses
   // count only SETTLED matches: a pending / disputed row has no final
@@ -58,7 +58,7 @@ export default function HistoryScreen({ theme, accent, matches }) {
           </div>
         ) : (
           visible.map((m, i) => (
-            <HistoryRow key={m.id || i} {...m} theme={theme} accent={accent} />
+            <HistoryRow key={m.id || i} {...m} theme={theme} accent={accent} onOpenProfile={onOpenProfile} />
           ))
         )}
       </div>
@@ -88,8 +88,11 @@ function Chip({ children, active, onClick, theme }) {
   );
 }
 
-function HistoryRow({ date, opp, score, win, surface, status, pending, theme, accent }) {
+function HistoryRow({ date, opp, oppId, score, win, surface, status, pending, theme, accent, onOpenProfile }) {
   const surfaceColor = COURTS[surface]?.surface || "#1a4d2e";
+  // The row deep-links to the opponent's profile when we have their
+  // linked user id (free-text opponents have none — non-tappable).
+  const canOpen = !!onOpenProfile && !!oppId;
   // Pill copy + colors. Pending matches show their real lifecycle
   // status (Pending / Disputed) instead of a final W/L, because the
   // result isn't settled until the opponent acts or the 72h window
@@ -111,15 +114,34 @@ function HistoryRow({ date, opp, score, win, surface, status, pending, theme, ac
   }
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "40px 1fr auto auto", gap: 12, alignItems: "center",
+      display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "center",
       padding: "12px 14px", background: theme.bgRaised, border: `1px solid ${theme.line}`, borderRadius: 14,
       opacity: pending ? 0.92 : 1,
     }}>
-      <CourtMini surface={surfaceColor} size={32} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, color: theme.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>vs {opp}</div>
-        <div style={{ fontSize: 11, color: theme.inkSoft, fontFamily: "Inter" }}>{date}</div>
-      </div>
+      {/* Opponent identity — court chip + name + date. Tappable when
+          we have the opponent's linked id; opens their v2 profile. */}
+      <button
+        type="button"
+        onClick={canOpen ? function () { onOpenProfile(oppId); } : undefined}
+        disabled={!canOpen}
+        className="t-btn"
+        style={{
+          appearance: "none", border: 0, background: "transparent", padding: 0,
+          margin: 0, textAlign: "left", color: "inherit",
+          display: "flex", alignItems: "center", gap: 12, minWidth: 0,
+          cursor: canOpen ? "pointer" : "default",
+        }}>
+        <CourtMini surface={surfaceColor} size={32} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            fontFamily: "Inter", fontWeight: 600, fontSize: 14, color: theme.ink,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            vs <span style={{ borderBottom: canOpen ? `1px solid ${theme.line}` : "none" }}>{opp}</span>
+          </div>
+          <div style={{ fontSize: 11, color: theme.inkSoft, fontFamily: "Inter" }}>{date}</div>
+        </div>
+      </button>
       <span className="t-num" style={{ fontSize: 14, color: theme.ink, fontWeight: 500 }}>{score}</span>
       <span style={{
         padding: "3px 8px", borderRadius: 999,
