@@ -40,6 +40,9 @@ function PlayerCard({
   // small explanatory tags render under the name so the user knows
   // why this player is being suggested.
   matchReasons,
+  // Compact rows drop the hairline divider + tighten the padding —
+  // used by Discover so a long suggestion list stays dense.
+  compact,
 }) {
   var rel = friendRelationLabel(u.id);
   var loading = !!socialLoading[u.id];
@@ -51,15 +54,15 @@ function PlayerCard({
     <div style={{
       display:        "flex",
       alignItems:     "center",
-      gap:            12,
-      padding:        "14px 4px",
-      borderBottom:   "1px solid " + ED_TOK.line,
+      gap:            compact ? 10 : 12,
+      padding:        compact ? "8px 4px" : "14px 4px",
+      borderBottom:   compact ? "none" : "1px solid " + ED_TOK.line,
       fontFamily:     ED_TOK.sans,
     }}>
       <div
         onClick={clickable ? goToProfile : undefined}
         style={{ position: "relative", flexShrink: 0, cursor: clickable ? "pointer" : "default" }}>
-        <PlayerAvatar name={u.name} avatar={u.avatar} profile={u} size={44}/>
+        <PlayerAvatar name={u.name} avatar={u.avatar} profile={u} size={compact ? 40 : 44}/>
         <PresenceDot profile={u} t={t}/>
       </div>
 
@@ -759,26 +762,27 @@ export default function PeopleTab({
       </div>
 
       {/* Sub-tabs — plain mono uppercase text (no pill chrome). Active
-          tab reads in ink, the rest in muted. Order: Messages,
-          Discover, Requests. */}
+          tab reads in ink, the rest in muted. Pinned to a 3-column
+          grid so Messages stays left, Discover centred, Requests
+          right regardless of label widths / counts. */}
       <div style={{ padding: "0 22px 6px" }}>
         <div style={{
-          display:        "flex",
-          gap:            22,
-          paddingBottom:  10,
-          borderBottom:   "1px solid " + ED_TOK.line,
+          display:             "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          paddingBottom:       10,
+          borderBottom:        "1px solid " + ED_TOK.line,
         }}>
           {[
-            { id: "messages",  label: "Messages",  count: dmBadge || null },
-            { id: "suggested", label: "Discover",  count: null },
-            { id: "requests",  label: "Requests",  count: receivedRequests.length + sentRequests.length },
+            { id: "messages",  label: "Messages",  count: dmBadge || null,                              align: "start"  },
+            { id: "suggested", label: "Discover",  count: null,                                          align: "center" },
+            { id: "requests",  label: "Requests",  count: receivedRequests.length + sentRequests.length, align: "end"    },
           ].map(function (tb) {
             var on = peopleTab === tb.id;
             return (
               <button key={tb.id}
                 onClick={function () { setPeopleTab(tb.id); if (tb.id !== "messages" && dms) dms.closeConversation(); }}
                 style={{
-                  flex:          "0 0 auto",
+                  justifySelf:   tb.align,
                   padding:       0,
                   border:        "none",
                   background:    "transparent",
@@ -926,6 +930,7 @@ export default function PeopleTab({
                       <PlayerCard
                         key={u.id}
                         u={u}
+                        compact
                         {...cardProps}
                         onMessage={handleMessage}
                         matchReasons={u._matchReasons}/>

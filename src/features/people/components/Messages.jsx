@@ -803,7 +803,7 @@ export default function Messages({ t, authUser, dms, openProfile }) {
           <div>
             {pinned.length > 0 && sectionHeader("Pinned")}
             {pinned.map(function (c) { return renderConvRow(c, true); })}
-            {others.length > 0 && sectionHeader(pinned.length ? "All messages" : "Recent")}
+            {others.length > 0 && pinned.length > 0 && sectionHeader("All messages")}
             {others.map(function (c) { return renderConvRow(c, false); })}
           </div>
         )}
