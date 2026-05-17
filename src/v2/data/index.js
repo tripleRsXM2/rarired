@@ -11,3 +11,4 @@ export { useV2Competitions } from "./useV2Competitions.js";
 export { useV2Friends }      from "./useV2Friends.js";
 export { logV2Match }        from "./logV2Match.js";
 export { useV2PlayerProfile } from "./useV2PlayerProfile.js";
+export { useV2LeagueDetail }  from "./useV2LeagueDetail.js";

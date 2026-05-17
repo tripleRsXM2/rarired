@@ -7,6 +7,7 @@
 
 import React from "react";
 import { avColor } from "../../../lib/utils/avatar.js";
+import { useV2LeagueDetail } from "../../data/index.js";
 
 // Deterministic per-name avatar tint. Wraps the v1 avColor helper so
 // the Players directory matches the rest of v1's chrome (same shade
@@ -81,7 +82,7 @@ export default function CompetitionsScreen({
     return <CreateTournamentScreen theme={theme} accent={accent} court={court} onBack={() => setView("list")} onCreate={() => setView("list")} />;
   }
   if (view === "detail" && activeTournament) {
-    return <TournamentDetailScreen t={activeTournament} theme={theme} accent={accent} court={court} onBack={() => setView("list")} onLog={onLog || (() => {})} />;
+    return <TournamentDetailScreen t={activeTournament} theme={theme} accent={accent} court={court} onBack={() => setView("list")} onLog={onLog || (() => {})} viewerId={(authUser && authUser.id) || null} />;
   }
   return <CompetitionsList theme={theme} accent={accent} court={court}
     myList={myList}
@@ -815,13 +816,19 @@ function Summary({ theme, label, value }) {
   );
 }
 
-function TournamentDetailScreen({ t, theme, accent, court, onBack, onLog }) {
+function TournamentDetailScreen({ t, theme, accent, court, onBack, onLog, viewerId }) {
   const [view, setView] = React.useState(t.kind === "ladder" || t.kind === "roundrobin" ? "standings" : "bracket");
   const views = [
     ...(t.kind === "bracket" || t.kind === "groups" ? [["bracket", "Bracket"]] : []),
     ["standings", "Standings"],
     ["matches",   "Matches"],
   ];
+
+  // Real Supabase leagues carry a uuid id; the SAMPLE_TOURNAMENTS
+  // seed uses "t1"/"t2"/… — only fetch live standings + matches for
+  // a real league so the demo tournaments don't fire empty queries.
+  const isRealLeague = !!(t && typeof t.id === "string" && t.id.indexOf("-") >= 0 && t.id.length >= 30);
+  const detail = useV2LeagueDetail(isRealLeague ? t.id : null, viewerId);
   return (
     <div style={{ width: "100%", height: "100%", overflowY: "auto", background: theme.bg, color: theme.ink }}>
       <div style={{ padding: "16px 18px 18px", background: court.surface, color: "#fbf6e9" }}>
@@ -865,8 +872,20 @@ function TournamentDetailScreen({ t, theme, accent, court, onBack, onLog }) {
       </div>
       <div style={{ padding: "16px 18px" }}>
         {view === "bracket"   && <BracketView theme={theme} accent={accent} />}
-        {view === "standings" && <StandingsView theme={theme} accent={accent} />}
-        {view === "matches"   && <MatchesView theme={theme} accent={accent} onLog={onLog} />}
+        {view === "standings" && (
+          <StandingsView
+            theme={theme} accent={accent}
+            standings={detail.standings} loading={isRealLeague && detail.loading}
+            isRealLeague={isRealLeague}
+          />
+        )}
+        {view === "matches"   && (
+          <MatchesView
+            theme={theme} accent={accent} onLog={onLog}
+            matches={detail.matches} loading={isRealLeague && detail.loading}
+            isRealLeague={isRealLeague}
+          />
+        )}
       </div>
     </div>
   );
@@ -921,17 +940,30 @@ function BracketRow({ name, won, sa, sb, theme }) {
     </div>
   );
 }
-function StandingsView({ theme, accent }) {
-  const rows = [
-    { rank: 1, name: "A. Volkov",  w: 5, l: 1, pts: 15, you: false },
-    { rank: 2, name: "M. Carter",  w: 4, l: 2, pts: 12, you: false },
-    { rank: 3, name: "You",        w: 3, l: 2, pts: 9,  you: true  },
-    { rank: 4, name: "L. Tanaka",  w: 3, l: 3, pts: 9,  you: false },
-    { rank: 5, name: "D. Marin",   w: 2, l: 3, pts: 6,  you: false },
-    { rank: 6, name: "P. Solis",   w: 2, l: 4, pts: 6,  you: false },
-    { rank: 7, name: "B. Lin",     w: 1, l: 4, pts: 3,  you: false },
-    { rank: 8, name: "R. Hassan",  w: 1, l: 5, pts: 3,  you: false },
-  ];
+// EmptyHint — shared placeholder for the standings / matches tabs
+// when there's no live data (still loading, or a league with no
+// confirmed matches yet, or a SAMPLE demo tournament).
+function EmptyHint({ theme, children }) {
+  return (
+    <div style={{
+      padding: "28px 14px", textAlign: "center",
+      color: theme.inkSoft, fontFamily: "Inter", fontSize: 13, lineHeight: 1.5,
+    }}>{children}</div>
+  );
+}
+
+function StandingsView({ theme, accent, standings, loading, isRealLeague }) {
+  if (loading) return <EmptyHint theme={theme}>Loading standings…</EmptyHint>;
+  var rows = standings || [];
+  if (rows.length === 0) {
+    return (
+      <EmptyHint theme={theme}>
+        {isRealLeague
+          ? "No standings yet — they populate once league matches are confirmed."
+          : "Standings will show here once the league is live."}
+      </EmptyHint>
+    );
+  }
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 36px 36px 48px", gap: 8, padding: "6px 10px", borderBottom: `0.5px solid ${theme.line}` }}>
@@ -942,54 +974,60 @@ function StandingsView({ theme, accent }) {
         <span className="t-cap" style={{ color: theme.inkSoft, textAlign: "right" }}>Pts</span>
       </div>
       {rows.map((r, i) => (
-        <div key={i} style={{
+        <div key={r.userId || i} style={{
           display: "grid", gridTemplateColumns: "24px 1fr 36px 36px 48px", gap: 8,
           padding: "10px", borderBottom: `0.5px solid ${theme.line}`,
-          background: r.you ? accent + "18" : "transparent",
+          background: r.isYou ? accent + "18" : "transparent",
           alignItems: "center",
         }}>
           <span className="t-num" style={{ fontSize: 12, fontWeight: 700, color: r.rank <= 3 ? accent : theme.inkSoft }}>{r.rank}</span>
-          <span style={{ fontSize: 13, fontFamily: "Inter", fontWeight: r.you ? 700 : 500 }}>{r.name}{r.you && <span style={{ color: theme.inkSoft, fontSize: 10, marginLeft: 6, fontWeight: 500 }}>· you</span>}</span>
-          <span className="t-num" style={{ fontSize: 12, fontWeight: 600, textAlign: "right" }}>{r.w}</span>
-          <span className="t-num" style={{ fontSize: 12, fontWeight: 600, textAlign: "right", color: theme.inkSoft }}>{r.l}</span>
-          <span className="t-num" style={{ fontSize: 13, fontWeight: 700, textAlign: "right" }}>{r.pts}</span>
+          <span style={{ fontSize: 13, fontFamily: "Inter", fontWeight: r.isYou ? 700 : 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {r.name}{r.isYou && <span style={{ color: theme.inkSoft, fontSize: 10, marginLeft: 6, fontWeight: 500 }}>· you</span>}
+          </span>
+          <span className="t-num" style={{ fontSize: 12, fontWeight: 600, textAlign: "right" }}>{r.wins}</span>
+          <span className="t-num" style={{ fontSize: 12, fontWeight: 600, textAlign: "right", color: theme.inkSoft }}>{r.losses}</span>
+          <span className="t-num" style={{ fontSize: 13, fontWeight: 700, textAlign: "right" }}>{r.points}</span>
         </div>
       ))}
     </div>
   );
 }
-function MatchesView({ theme, accent, onLog }) {
-  const matches = [
-    { round: "QF", a: "You",       b: "B. Lin",    score: "6-4 6-3", when: "Mon · done", status: "done" },
-    { round: "QF", a: "A. Volkov", b: "D. Marin",  score: "7-6 6-4", when: "Mon · done", status: "done" },
-    { round: "SF", a: "You",       b: "A. Volkov", score: null,      when: "Today · 6pm", status: "next" },
-    { round: "SF", a: "L. Tanaka", b: "M. Carter", score: null,      when: "Today · 8pm", status: "upcoming" },
-    { round: "F",  a: "TBD",       b: "TBD",       score: null,      when: "Sun · 4pm",   status: "upcoming" },
-  ];
+
+function MatchesView({ theme, accent, onLog, matches, loading, isRealLeague }) {
+  void onLog; // league matches have no inline "score" CTA yet
+  if (loading) return <EmptyHint theme={theme}>Loading matches…</EmptyHint>;
+  var rows = matches || [];
+  if (rows.length === 0) {
+    return (
+      <EmptyHint theme={theme}>
+        {isRealLeague
+          ? "No matches logged in this league yet."
+          : "Matches will show here once the league is live."}
+      </EmptyHint>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {matches.map((m, i) => (
-        <div key={i} style={{
-          background: theme.bgRaised, border: `0.5px solid ${m.status === "next" ? accent : theme.line}`,
+      {rows.map((m, i) => (
+        <div key={m.id || i} style={{
+          background: theme.bgRaised, border: `0.5px solid ${theme.line}`,
           borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-            <span style={{ width: 28, fontSize: 10, fontFamily: "JetBrains Mono", fontWeight: 700, color: theme.inkSoft, letterSpacing: "0.06em" }}>{m.round}</span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontFamily: "Inter", fontWeight: 600 }}>{m.a} <span style={{ color: theme.inkFaint }}>vs</span> {m.b}</div>
-              <div style={{ fontSize: 11, color: theme.inkSoft }}>{m.when}{m.score && " · " + m.score}</div>
+              <div style={{ fontSize: 13, fontFamily: "Inter", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {m.aName} <span style={{ color: theme.inkFaint }}>vs</span> {m.bName}
+              </div>
+              <div style={{ fontSize: 11, color: theme.inkSoft }}>
+                {m.date}{m.score ? " · " + m.score : ""}
+              </div>
             </div>
           </div>
-          {m.status === "next" && (
-            <button onClick={onLog} className="t-btn" style={{
-              appearance: "none", border: 0, borderRadius: 999, padding: "6px 12px",
-              background: accent, color: "#0f1410",
-              fontFamily: "Inter", fontWeight: 700, fontSize: 10, letterSpacing: "0.04em",
-              cursor: "pointer", flexShrink: 0,
-            }}>SCORE</button>
-          )}
-          {m.status === "done"     && <span style={{ fontSize: 10, color: theme.inkFaint, fontFamily: "Inter", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>Done</span>}
-          {m.status === "upcoming" && <span style={{ fontSize: 10, color: theme.inkFaint, fontFamily: "Inter", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>Soon</span>}
+          <span style={{
+            fontSize: 10, color: m.status === "done" ? theme.inkFaint : accent,
+            fontFamily: "Inter", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+            flexShrink: 0,
+          }}>{m.status === "done" ? "Done" : "Pending"}</span>
         </div>
       ))}
     </div>
